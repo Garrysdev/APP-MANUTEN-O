@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Forçar Light Mode do AI Studio */
+  body {
+    @apply bg-background text-industrial-blue font-sans antialiased transition-colors duration-300;
+  }
+}
+
+@layer components {
+  /* Botões AI Studio Style */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-safety-orange px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-safety-orange-dark active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-industrial-blue px-4 py-2 text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Inputs */
+  .input {
+    @apply block w-full rounded-lg border border-outline bg-surface px-3 py-2.5 text-sm text-industrial-blue shadow-sm placeholder-industrial-blue-light focus:border-safety-orange focus:outline-none focus:ring-1 focus:ring-safety-orange disabled:bg-slate-50 disabled:cursor-not-allowed transition-all;
+  }
+
+  /* Card */
+  .card, .industrial-card {
+    @apply rounded-lg bg-surface shadow-sm border border-outline transition-colors;
+  }
+
+  /* Badges */
+  .badge-pending    { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-50 text-slate-700 border border-slate-200; }
+  .badge-in_progress{ @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200; }
+  .badge-done       { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-green-50 text-green-700 border border-green-200; }
+  .badge-cancelled  { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-red-50 text-red-700 border border-red-200; }
+  
+  .badge-urgent     { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-red-50 text-red-700 border border-red-200; }
+  .badge-high       { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-orange-50 text-orange-700 border border-orange-200; }
+  .badge-medium     { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200; }
+  .badge-low        { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-50 text-slate-700 border border-slate-200; }
+}

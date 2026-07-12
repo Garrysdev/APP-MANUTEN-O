@@ -1,0 +1,46 @@
+# Dependências
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Build
+/.next/
+/out/
+
+# Ambiente (NUNCA commitar este ficheiro)
+.env.local
+.env.*.local
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+*.pem
+Thumbs.db
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# PWA (gerados em build)
+public/sw.js
+public/sw.js.map
+public/swe-worker-*.js
+public/workbox-*.js
+public/workbox-*.js.map
+
+.vercel
+
+# Chaves de service account (NUNCA commitar)
+*adminsdk*.json
+*service-account*.json
+
+# Área de rascunho
+/scratch/

@@ -1,0 +1,56 @@
+rules_version = '2';
+
+// RG Maintenance — regras de segurança Firestore (multi-tenant por companyId).
+// Defesa em profundidade: a app escreve via Admin SDK (que ignora estas regras),
+// mas estas regras protegem qualquer acesso direto do cliente.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // company_id do utilizador autenticado (lê o doc do próprio user)
+    function myCompanyId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId;
+    }
+
+    function sameCompany(companyId) {
+      return isSignedIn() && companyId == myCompanyId();
+    }
+
+    function isManager() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager';
+    }
+
+    // COMPANIES: só lê a própria empresa
+    match /companies/{companyId} {
+      allow read: if isSignedIn() && companyId == myCompanyId();
+      allow write: if false; // gerido pelo servidor (Admin SDK)
+    }
+
+    // USERS: vê utilizadores da mesma empresa; só o gestor altera
+    match /users/{userId} {
+      allow read: if isSignedIn() && resource.data.companyId == myCompanyId();
+      allow write: if false; // gerido pelo servidor
+    }
+
+    // Coleções de negócio scoped por companyId
+    match /assets/{id} {
+      allow read: if sameCompany(resource.data.companyId);
+      allow write: if false;
+    }
+    match /tasks/{id} {
+      allow read: if sameCompany(resource.data.companyId);
+      allow write: if false;
+    }
+    match /interventions/{id} {
+      allow read: if sameCompany(resource.data.companyId);
+      allow write: if false;
+    }
+    match /materials/{id} {
+      allow read: if sameCompany(resource.data.companyId);
+      allow write: if false;
+    }
+  }
+}
