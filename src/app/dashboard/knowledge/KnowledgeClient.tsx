@@ -60,9 +60,9 @@ export default function KnowledgeClient({ isAdmin }: { isAdmin: boolean }) {
               </button>
             </div>
             
-            <div className="mt-4 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800/30">
-              <p className="text-xs text-green-800 dark:text-green-300 flex items-start gap-2">
-                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <div className="mt-4 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50">
+              <p className="text-xs text-gray-700 dark:text-gray-200 flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0 text-green-600 dark:text-green-400" />
                 <span>O RAG (Retrieval-Augmented Generation) está ativo. O Consultor IA aprende automaticamente com estes ficheiros.</span>
               </p>
             </div>
