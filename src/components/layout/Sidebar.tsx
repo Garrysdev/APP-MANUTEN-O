@@ -8,9 +8,9 @@ import { signOut } from 'firebase/auth'
 import { getFirebaseAuth } from '@/lib/firebase/client'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard, ClipboardList, Package, History, LogOut, Menu, X,
-  Users, FileBarChart, Bell, CreditCard, Lock, UserCircle, Calendar, Wrench, Boxes, Store, Activity, DollarSign, Brain, BookOpen,
-  Plus
+  LayoutDashboard, ClipboardList, Package, History, LogOut, X,
+  Users, FileBarChart, CreditCard, Lock, UserCircle, Calendar, Wrench, Boxes, Activity, DollarSign, Brain, BookOpen,
+  Plus, ShieldCheck
 } from 'lucide-react'
 import { planHas, type FeatureKey } from '@/lib/plans'
 import type { PlanName } from '@/types/models'
@@ -19,7 +19,7 @@ import { dictionaries, type Language } from '@/lib/i18n/dictionaries'
 
 interface NavItem {
   href: string
-  label: string
+  key: string
   icon: React.ElementType
   feature?: FeatureKey
 }
@@ -32,6 +32,8 @@ interface SidebarProps {
     company?: { name: string; plan?: string } | null
     language?: string
   }
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 interface NavGroup {
@@ -74,6 +76,12 @@ const managerNavGroups: NavGroup[] = [
     ]
   },
   {
+    groupName: 'Módulos Enterprise',
+    items: [
+      { href: '/dashboard/compliance', key: 'compliance', icon: ShieldCheck, feature: 'compliance' },
+    ]
+  },
+  {
     groupName: 'Configurações',
     items: [
       { href: '/dashboard/profile',            key: 'profile',         icon: UserCircle },
@@ -88,11 +96,17 @@ const techNavKeys: NavItem[] = [
   { href: '/dashboard/profile', key: 'profile', icon: UserCircle },
 ]
 
-export default function Sidebar({ user }: SidebarProps) {
+export default function Sidebar({ user, open: externalOpen, onOpenChange }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
   const [lockedFeature, setLockedFeature] = useState<FeatureKey | null>(null)
+
+  const open = externalOpen !== undefined ? externalOpen : internalOpen
+  function setOpen(v: boolean) {
+    setInternalOpen(v)
+    onOpenChange?.(v)
+  }
 
   const plan = (user.company?.plan ?? 'free') as PlanName
   const lang = (user.language || 'pt') as Language
@@ -207,7 +221,6 @@ export default function Sidebar({ user }: SidebarProps) {
         </div>
       </aside>
 
-      {/* Mobile top bar is now handled in TopHeader but we keep the drawer trigger logic here if needed, or we just rely on TopHeader. We will keep a small floating button for mobile if TopHeader doesn't have it, but TopHeader DOES have it. So we only need the drawer itself here. */}
       {/* Mobile drawer */}
       {open && (
         <div className="lg:hidden fixed inset-0 z-[60] flex">
@@ -246,16 +259,6 @@ export default function Sidebar({ user }: SidebarProps) {
         </div>
       )}
       
-      {/* Add a global listener for TopHeader's menu click. We pass setOpen to it if it was in the same file, but they are siblings. */}
-      {/* Actually we removed the top header from the Sidebar file to keep it modular, but now the TopHeader is a sibling in layout.tsx. The easiest way to link them is to move TopHeader inside Sidebar or pass a state from layout. */}
-      {/* For simplicity without context, I'll render a mobile menu button here that's floating if TopHeader is hidden on mobile, OR better yet, just let the user use the mobile menu we can inject into TopHeader by exporting a TopHeader that accepts the prop. Since layout is a server component, we cannot pass state. Let's just render the mobile header here inside Sidebar to keep it self-contained. */}
-      
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between bg-white border-b border-outline px-4 py-2">
-        <Image src="/logo-rg.png" alt="RG Maintenance" width={100} height={56} className="h-8 w-auto" />
-        <button onClick={() => setOpen(true)} className="p-2 text-industrial-blue-light hover:bg-slate-100 rounded-lg transition-colors">
-          <Menu size={20} />
-        </button>
-      </div>
     </>
   )
 }

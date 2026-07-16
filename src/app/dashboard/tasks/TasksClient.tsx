@@ -142,7 +142,7 @@ function DynamicList({
       <button
         type="button"
         onClick={add}
-        className="mt-2 text-xs text-[#2E86C1] hover:underline flex items-center gap-1"
+        className="mt-2 text-xs font-bold text-safety-orange hover:text-safety-orange/80 transition-colors flex items-center gap-1"
       >
         <Plus className="h-3 w-3" /> {addLabel}
       </button>
@@ -213,7 +213,7 @@ function StockMaterialsList({
           <button
             type="button"
             onClick={add}
-            className="mt-2 text-xs text-[#2E86C1] hover:underline flex items-center gap-1"
+            className="mt-2 text-xs font-bold text-safety-orange hover:text-safety-orange/80 transition-colors flex items-center gap-1"
           >
             <Plus className="h-3 w-3" /> Adicionar material
           </button>
@@ -417,16 +417,17 @@ export default function TasksClient({
   const tipos: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-6 max-w-6xl mx-auto animate-fade-in-up">
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-outline/60">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">
+          <h1 className="text-3xl font-extrabold text-industrial-blue tracking-tight">
             {isManager ? dict.tasks.managerTasks : dict.tasks.myTasks}
           </h1>
-          <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">{tasks.length} OT(s)</p>
+          <p className="text-sm font-medium text-industrial-blue-light mt-1">{tasks.length} OT(s)</p>
         </div>
-        <button onClick={openCreate} className="btn-primary flex items-center gap-2">
-          <Plus className="h-4 w-4" /> {dict.tasks.newTask}
+        <button onClick={openCreate} className="h-11 px-5 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+          <Plus size={18} className="stroke-[2.5]" />
+          <span>{dict.tasks.newTask}</span>
         </button>
       </div>
 
@@ -436,8 +437,8 @@ export default function TasksClient({
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              filter === s ? 'bg-[#1B4F72] text-white dark:bg-[#2E86C1] dark:text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
+              filter === s ? 'bg-industrial-blue text-white' : 'bg-white border border-outline text-industrial-blue-light hover:bg-slate-50 hover:text-industrial-blue'
             }`}
           >
             {s === 'all' ? dict.tasks.allTasks : STATUS_LABELS[s]}
@@ -454,30 +455,30 @@ export default function TasksClient({
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50">
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide w-6" />
-                <SortableTh label={dict.tasks.colOrder} sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-gray-500 dark:text-slate-400" />
-                <SortableTh label={dict.tasks.colType} sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden sm:table-cell text-gray-500 dark:text-slate-400" />
-                <SortableTh label={dict.tasks.colAsset} sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden md:table-cell text-gray-500 dark:text-slate-400" />
+              <tr className="border-b border-outline bg-slate-50/50">
+                <th className="px-5 py-3 text-left text-xs font-bold text-industrial-blue-light uppercase tracking-wider w-6" />
+                <SortableTh label={dict.tasks.colOrder} sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
+                <SortableTh label={dict.tasks.colType} sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden sm:table-cell font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
+                <SortableTh label={dict.tasks.colAsset} sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden md:table-cell font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
                 {isManager && (
-                  <SortableTh label={dict.tasks.colAssignee} sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden lg:table-cell text-gray-500 dark:text-slate-400" />
+                  <SortableTh label={dict.tasks.colAssignee} sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden lg:table-cell font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
                 )}
-                <SortableTh label={dict.tasks.colStatus} sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-gray-500 dark:text-slate-400" />
-                <SortableTh label={dict.tasks.colDueDate} sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden md:table-cell text-gray-500 dark:text-slate-400" />
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">{dict.tasks.colActions}</th>
+                <SortableTh label={dict.tasks.colStatus} sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
+                <SortableTh label={dict.tasks.colDueDate} sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden md:table-cell font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
+                <th className="px-3 py-3 text-right font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider">{dict.tasks.colActions}</th>
               </tr>
             </thead>
             <tbody>
               {shown.map((t) => (
-                <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50 dark:border-slate-800/50 dark:hover:bg-slate-800/30 transition-colors">
+                <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors group">
                   <td className="px-5 py-3.5">
                     <span
                       title={CRITICIDADE_LABELS[t.criticidade]}
                       className={`inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 ${CRITICIDADE_DOT[t.criticidade]}`}
                     />
                   </td>
-                  <td className="px-3 py-3.5 font-medium text-gray-800 dark:text-slate-200">
-                    <Link href={`/dashboard/tasks/${t.id}`} className="hover:text-[#2E86C1] hover:underline">
+                  <td className="px-3 py-3.5">
+                    <Link href={`/dashboard/tasks/${t.id}`} className="font-bold text-industrial-blue group-hover:text-safety-orange transition-colors">
                       {t.title}
                     </Link>
                     <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold sm:hidden ${CRITICIDADE_BADGE[t.criticidade]}`}>
@@ -563,9 +564,9 @@ export default function TasksClient({
 
       {/* Modal criar / editar */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={closeModal} />
-          <div className="card relative w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="card relative w-full max-w-lg p-6 shadow-2xl max-h-[calc(100vh-2rem)] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100">{editing ? dict.tasks.modalEdit : dict.tasks.modalNew}</h2>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"><X className="h-5 w-5" /></button>
@@ -582,7 +583,7 @@ export default function TasksClient({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Tipo de tarefa *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Tipo de OT *</label>
                   <select name="tipo" value={tipo} onChange={(e) => setTipo(e.target.value as TipoTarefa)} className="input">
                     {tipos.map((t) => <option key={t} value={t}>{TIPO_LABELS[t]}</option>)}
                   </select>
@@ -622,12 +623,12 @@ export default function TasksClient({
                 <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3">
                   <div className="flex items-center gap-1.5 text-sm font-medium text-blue-800 mb-2">
                     <ClipboardList className="h-4 w-4" />
-                    Tarefas do Plano de Manutenção para este equipamento
+                    OTs do Plano de Manutenção para este equipamento
                   </div>
                   {plansLoading && !plansLoaded ? (
                     <p className="text-xs text-gray-500">A carregar planos…</p>
                   ) : planosDoEquipamento.length === 0 ? (
-                    <p className="text-xs text-gray-500">Não há tarefas de plano definidas para este equipamento.</p>
+                    <p className="text-xs text-gray-500">Não há OTs de plano definidas para este equipamento.</p>
                   ) : (
                     <ul className="space-y-1.5 max-h-56 overflow-y-auto">
                       {planosDoEquipamento.map((p) => {
@@ -679,14 +680,14 @@ export default function TasksClient({
                   {!maintenancePlanId && (
                     <div className="mt-3 pt-3 border-t border-blue-200">
                       <label className="block text-xs font-medium text-blue-800 mb-1.5">
-                        Ou define a periodicidade — cria automaticamente um novo Plano de Manutenção ligado a esta tarefa
+                        Ou define a periodicidade — cria automaticamente um novo Plano de Manutenção ligado a esta OT
                       </label>
                       <select
                         value={novaPeriodicidade}
                         onChange={(e) => setNovaPeriodicidade(e.target.value as Periodicidade | '')}
                         className="input text-sm"
                       >
-                        <option value="">— tarefa pontual, sem periodicidade —</option>
+                        <option value="">— OT pontual, sem periodicidade —</option>
                         {PERIODICIDADE_OPTIONS.map((p) => <option key={p} value={p}>{PERIODICIDADE_LABELS[p]}</option>)}
                       </select>
                     </div>

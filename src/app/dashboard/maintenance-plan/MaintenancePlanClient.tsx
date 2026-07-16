@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useMemo, useEffect, useRef, useTransition, useId } from 'react'
 import { useRouter } from 'next/navigation'
@@ -486,7 +486,7 @@ export default function MaintenancePlanClient({
 
       {/* Modal criar/editar */}
       {creating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={closeModal} />
           <div className="card relative w-full max-w-xl p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">

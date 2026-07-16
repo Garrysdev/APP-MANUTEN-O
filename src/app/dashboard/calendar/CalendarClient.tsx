@@ -1,9 +1,9 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useTransition, useId } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Wrench, ClipboardList, ShieldAlert, X, Plus, Minus, Package } from 'lucide-react'
-import type { Task, MaintenancePlan, TaskCriticidade, TipoTarefa, RecurrenceType } from '@/types/models'
+import type { Task, MaintenancePlan, TaskCriticidade, TipoTarefa, RecurrenceType, UserRole } from '@/types/models'
 import { CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS } from '@/types/models'
 import { createTaskFromPlanAction } from './actions'
 import { createTaskAction } from '@/app/dashboard/tasks/actions'
@@ -546,7 +546,7 @@ export default function CalendarClient({
 
       {/* New task modal */}
       {newTaskOpen && selectedDate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setNewTaskOpen(false)} />
           <div className="card relative w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
@@ -642,7 +642,7 @@ export default function CalendarClient({
 
       {/* Create task from plan modal */}
       {selectedPlan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setSelectedPlan(null)} />
           <div className="card relative w-full max-w-md p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">

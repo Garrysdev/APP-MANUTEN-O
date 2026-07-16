@@ -6,18 +6,25 @@ import { useRouter } from 'next/navigation'
 
 export default function TopHeader({ user, onMenuClick }: { user: any, onMenuClick?: () => void }) {
   const router = useRouter()
-  
+
   return (
-    <header className="flex justify-between items-center w-full px-6 h-16 bg-white border-b border-outline shrink-0 sticky top-0 z-50">
-      <div className="flex items-center gap-6">
+    <header className="flex justify-between items-center w-full px-4 lg:px-6 h-16 bg-white border-b border-outline shrink-0 sticky top-0 z-40">
+      <div className="flex items-center gap-3 lg:gap-6">
         {onMenuClick && (
-          <button 
+          <button
             onClick={onMenuClick}
             className="lg:hidden p-2 text-industrial-blue-light hover:bg-slate-100 rounded-lg transition-colors"
           >
             <Menu size={20} />
           </button>
         )}
+        <Image
+          src="/logo-rg.png"
+          alt="RG Maintenance"
+          width={100}
+          height={56}
+          className="lg:hidden h-8 w-auto"
+        />
         <div className="hidden lg:flex items-center">
           <span className="font-mono text-xs font-bold text-industrial-blue-light tracking-widest uppercase">ID: 442-B</span>
         </div>

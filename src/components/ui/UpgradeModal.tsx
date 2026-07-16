@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { X, Zap } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -36,7 +36,7 @@ export default function UpgradeModal({ feature, onClose, isTeaser = false }: Upg
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
         <button

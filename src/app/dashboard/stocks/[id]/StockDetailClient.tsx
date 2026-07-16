@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -185,7 +185,7 @@ export default function StockDetailClient({
 
       {/* MODAL COMPRA */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setModalOpen(false)} />
           <div className="card relative w-full max-w-md p-6 shadow-2xl">
             <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4">Registar Compra</h2>

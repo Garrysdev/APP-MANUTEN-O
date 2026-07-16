@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
@@ -279,8 +279,8 @@ export default function TaskDetailClient({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-gray-800">Registos ({interventions.length})</h2>
+      <div className="flex items-center justify-between mb-3 pb-3 border-b border-outline/60">
+        <h2 className="font-extrabold text-industrial-blue tracking-tight">Registos ({interventions.length})</h2>
         <div className="flex items-center gap-2">
           {isPending && (
             <button
@@ -306,9 +306,9 @@ export default function TaskDetailClient({
       )}
 
       {interventions.length === 0 ? (
-        <div className="card px-5 py-10 text-center text-gray-400">
-          <Wrench className="h-9 w-9 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">Sem registos de trabalho para esta OT.</p>
+        <div className="bg-white border border-outline rounded-lg px-5 py-10 text-center text-industrial-blue-light shadow-sm">
+          <Wrench className="h-9 w-9 mx-auto mb-3 opacity-40 text-industrial-blue-light" />
+          <p className="text-sm font-medium">Sem registos de trabalho para esta OT.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -316,12 +316,12 @@ export default function TaskDetailClient({
             const mats = materialsByIntervention[iv.id] ?? []
             const showMatForm = matOpen === iv.id
             return (
-              <div key={iv.id} className="card p-4">
+              <div key={iv.id} className="bg-white border border-outline rounded-lg p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="text-sm">
                     <div className="flex items-center gap-1.5">
                       <Avatar name={userName(iv.technicianId)} avatarUrl={userRef(iv.technicianId)?.avatarUrl} size={20} />
-                      <p className="font-medium text-gray-800">{userName(iv.technicianId)}</p>
+                      <p className="font-bold text-industrial-blue">{userName(iv.technicianId)}</p>
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {formatDateTime(iv.startedAt ?? null)}
@@ -388,7 +388,7 @@ export default function TaskDetailClient({
                     </span>
                     <button
                       onClick={() => { setMatOpen(showMatForm ? null : iv.id); setMatError('') }}
-                      className="text-xs text-[#2E86C1] hover:underline flex items-center gap-0.5"
+                      className="text-xs font-bold text-safety-orange hover:text-safety-orange/80 transition-colors flex items-center gap-0.5"
                     >
                       <Plus className="h-3 w-3" /> Adicionar
                     </button>
@@ -451,12 +451,12 @@ export default function TaskDetailClient({
 
       {/* Modal de nova intervenção */}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="card relative w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900">Registar trabalho</h2>
-              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
+          <div className="bg-white border border-outline rounded-lg relative w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+              <h2 className="text-lg font-bold text-industrial-blue">Registar trabalho</h2>
+              <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -532,7 +532,7 @@ export default function TaskDetailClient({
                     </div>
                   ))}
                 </div>
-                <button type="button" onClick={addItem} className="mt-2 text-sm text-[#2E86C1] hover:underline flex items-center gap-1">
+                <button type="button" onClick={addItem} className="mt-2 text-sm font-bold text-safety-orange hover:text-safety-orange/80 flex items-center gap-1">
                   <Plus className="h-3.5 w-3.5" /> Adicionar ponto
                 </button>
               </div>
@@ -551,7 +551,7 @@ export default function TaskDetailClient({
                   <button
                     type="button"
                     onClick={addInlineMat}
-                    className="text-sm text-[#2E86C1] hover:underline flex items-center gap-1"
+                    className="text-sm font-bold text-safety-orange hover:text-safety-orange/80 flex items-center gap-1"
                   >
                     <Plus className="h-3.5 w-3.5" /> Adicionar
                   </button>
@@ -658,14 +658,14 @@ export default function TaskDetailClient({
                     <button
                       type="button"
                       onClick={() => cameraInputRef.current?.click()}
-                      className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:border-[#2E86C1] hover:text-[#2E86C1] transition-colors"
+                      className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-outline text-industrial-blue hover:border-safety-orange hover:text-safety-orange font-bold transition-all"
                     >
                       <Camera className="h-4 w-4" /> Câmera
                     </button>
                     <button
                       type="button"
                       onClick={() => galleryInputRef.current?.click()}
-                      className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:border-[#2E86C1] hover:text-[#2E86C1] transition-colors"
+                      className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-outline text-industrial-blue hover:border-safety-orange hover:text-safety-orange font-bold transition-all"
                     >
                       <Images className="h-4 w-4" /> Galeria
                     </button>

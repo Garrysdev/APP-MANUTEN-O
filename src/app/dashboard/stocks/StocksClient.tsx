@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -17,6 +17,7 @@ function StockForm({
   defaultValues,
   onSave,
   onCancel,
+  dict,
 }: {
   defaultValues?: Partial<StockItem>
   onSave: (formData: FormData) => Promise<void>
@@ -229,7 +230,7 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
       )}
 
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setModal(null)} />
           <div className="card relative w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
