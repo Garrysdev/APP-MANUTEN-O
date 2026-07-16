@@ -144,15 +144,16 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-gray-800 dark:text-slate-100">
+      <div className="flex items-center justify-between mb-4 gap-2">
+        <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-100 truncate">
           {dict.stocks.title}
-        </h2>
+        </h1>
         <button
           onClick={openCreate}
-          className="btn-primary flex items-center gap-2"
+          className="btn-primary flex items-center gap-1.5 shrink-0"
         >
-          <Plus className="h-4 w-4" /> {dict.stocks.newItem}
+          <Plus className="h-4 w-4 shrink-0" />
+          <span className="hidden sm:inline">{dict.stocks.newItem}</span>
         </button>
       </div>
 

@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation'
+﻿import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listMaintenancePlans, listAssetRefs, listUsers } from '@/lib/firebase/data'
 import type { PlanName } from '@/types/models'
@@ -19,9 +19,9 @@ export default async function MaintenancePlanPage() {
   ])
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Plano de Manutenção</h1>
+        <h1 className="text-lg sm:text-2xl font-bold text-gray-900">Plano de Manutenção</h1>
         <p className="text-sm text-gray-500 mt-0.5">
           Define tarefas recorrentes com periodicidade, equipamento e regras de segurança.
         </p>

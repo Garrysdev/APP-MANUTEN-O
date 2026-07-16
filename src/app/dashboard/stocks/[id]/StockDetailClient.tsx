@@ -42,7 +42,7 @@ export default function StockDetailClient({
   const isLow = item.minQuantity != null && item.quantity <= item.minQuantity
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* HEADER */}
       <div className="flex items-center gap-4 mb-8">
         <Link href="/dashboard/stocks" className="p-2 -ml-2 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">

@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation'
+﻿import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listUsers } from '@/lib/firebase/data'
 import UsersClient from './UsersClient'
@@ -14,7 +14,7 @@ export default async function UsersPage() {
   const sorted = [...users].sort((a, b) => a.name.localeCompare(b.name, 'pt'))
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Utilizadores</h1>
       <p className="text-sm text-gray-500 mb-6">
         {users.filter(u => u.active).length} ativos · {users.length} total

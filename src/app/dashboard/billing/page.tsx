@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation'
+﻿import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { CheckCircle, Star, AlertTriangle } from 'lucide-react'
 import { UpgradeButton, ManageButton } from './BillingClient'
@@ -6,6 +6,7 @@ import { UpgradeButton, ManageButton } from './BillingClient'
 export const dynamic = 'force-dynamic'
 
 const PLAN_LABELS: Record<string, string> = {
+  free: 'Free',
   starter: 'Starter',
   pro: 'Pro',
   business: 'Business',
@@ -13,6 +14,7 @@ const PLAN_LABELS: Record<string, string> = {
 }
 
 const PLAN_COLORS: Record<string, string> = {
+  free: 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300',
   starter: 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300',
   pro: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   business: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
@@ -46,10 +48,10 @@ export default async function BillingPage({
   if (profile.role !== 'manager') redirect('/dashboard')
 
   const params = await searchParams
-  const currentPlan = profile.company?.plan ?? 'starter'
+  const currentPlan = profile.company?.plan ?? 'free'
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-black text-[#1B4F72] dark:text-slate-100 tracking-tight leading-tight">
           Faturação &<br />Plano
@@ -82,16 +84,16 @@ export default async function BillingPage({
                 {PLAN_LABELS[currentPlan] ?? currentPlan}
               </h2>
               <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${PLAN_COLORS[currentPlan] ?? 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300'}`}>
-                {currentPlan === 'starter' ? 'Grátis' : 'Pago'}
+                {(currentPlan === 'free' || currentPlan === 'starter') ? 'Grátis' : 'Pago'}
               </span>
             </div>
           </div>
-          {currentPlan !== 'starter' && currentPlan !== 'enterprise' && (
+          {currentPlan !== 'free' && currentPlan !== 'starter' && currentPlan !== 'enterprise' && (
             <ManageButton />
           )}
         </div>
 
-        {currentPlan === 'starter' && (
+        {(currentPlan === 'free' || currentPlan === 'starter') && (
           <p className="text-sm text-gray-500 dark:text-slate-400">
             Estás no plano gratuito. Faz upgrade para desbloquear mais funcionalidades.
           </p>
@@ -112,7 +114,7 @@ export default async function BillingPage({
       {currentPlan !== 'enterprise' && (
         <div>
           <h2 className="font-bold text-gray-800 dark:text-slate-200 text-base uppercase tracking-wide mb-4">
-            {currentPlan === 'starter' ? 'Fazer Upgrade' : 'Mudar de Plano'}
+            {(currentPlan === 'free' || currentPlan === 'starter') ? 'Fazer Upgrade' : 'Mudar de Plano'}
           </h2>
           <div className="grid md:grid-cols-2 gap-5">
             {upgradePlans

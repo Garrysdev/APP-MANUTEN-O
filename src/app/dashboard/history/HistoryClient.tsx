@@ -69,11 +69,11 @@ export default function HistoryClient({
   function limpar() { setTecnico(''); setEquipamento(''); setDe(''); setAte('') }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-4 flex items-start justify-between gap-4 no-print">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">{dict.history.title}</h1>
-          <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">
+    <div className="max-w-5xl mx-auto">
+      <div className="mb-4 flex items-start justify-between gap-3 no-print">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-100 truncate">{dict.history.title}</h1>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-0.5">
             {filtered.length} / {interventions.length} {isTechnician ? 'suas' : ''}
           </p>
         </div>

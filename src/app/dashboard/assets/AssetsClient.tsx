@@ -227,27 +227,29 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
   const currentShown = shown.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       {lockedFeature && (
         <UpgradeModal feature={lockedFeature} isTeaser={true} onClose={() => setLockedFeature(null)} />
       )}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">{dict.assets.title}</h1>
-          <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">
+      <div className="flex items-center justify-between mb-6 gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-100 truncate">{dict.assets.title}</h1>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-0.5">
             {shown.length} / {assets.length}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => importInputRef.current?.click()}
             disabled={importing}
-            className="btn-secondary flex items-center gap-2"
+            className="btn-secondary flex items-center gap-1.5"
           >
-            <Upload className="h-4 w-4" /> {importing ? dict.common.importing : dict.common.import}
+            <Upload className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{importing ? dict.common.importing : dict.common.import}</span>
           </button>
-          <button onClick={openCreate} className="btn-primary flex items-center gap-2">
-            <Plus className="h-4 w-4" /> {dict.assets.newAsset}
+          <button onClick={openCreate} className="btn-primary flex items-center gap-1.5">
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{dict.assets.newAsset}</span>
           </button>
         </div>
         <input

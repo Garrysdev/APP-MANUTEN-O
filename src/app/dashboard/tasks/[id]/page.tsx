@@ -1,4 +1,4 @@
-import { notFound, redirect } from 'next/navigation'
+﻿import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, FileText } from 'lucide-react'
 import { getCurrentProfile } from '@/lib/firebase/session'
@@ -48,7 +48,7 @@ export default async function TaskDetailPage({
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <Link href="/dashboard/tasks" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#2E86C1] mb-4">
         <ArrowLeft className="h-4 w-4" /> Voltar às OTs
       </Link>

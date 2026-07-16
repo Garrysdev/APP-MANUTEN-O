@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useRef } from 'react'
 import Image from 'next/image'
@@ -92,7 +92,7 @@ export default function AssetDetailClient({
   const uptime = 98.4
 
   return (
-    <div className="p-6 max-w-7xl mx-auto animate-fade-in-up">
+    <div className="max-w-7xl mx-auto animate-fade-in-up">
       {/* HEADER */}
       <div className="flex items-center gap-4 mb-6">
         <button onClick={() => router.push('/dashboard/assets')} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors text-gray-600 dark:text-slate-300">

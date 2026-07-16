@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation'
+﻿import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listTasks, listAssets, listInterventions, listUsers } from '@/lib/firebase/data'
 import { STATUS_LABELS, CRITICIDADE_LABELS, TIPO_LABELS, type TipoTarefa } from '@/types/models'
@@ -57,7 +57,7 @@ export default async function ReportsPage() {
         }
       ` }} />
 
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         {/* Cabeçalho (ecrã) */}
         <div className="flex items-start justify-between mb-6 no-print">
           <div>

@@ -116,17 +116,19 @@ export default function HistoryExportButtons({
   }
 
   return (
-    <div className="relative flex gap-2">
-      <button onClick={handlePrint} className="btn-secondary flex items-center gap-2">
-        <Printer className="h-4 w-4" /> Imprimir
+    <div className="relative flex gap-2 shrink-0">
+      <button onClick={handlePrint} className="btn-secondary flex items-center gap-1.5">
+        <Printer className="h-4 w-4 shrink-0" />
+        <span className="hidden sm:inline">Imprimir</span>
       </button>
 
       <div className="relative">
         <button
           onClick={() => setOpen((v) => !v)}
-          className="btn-secondary flex items-center gap-2"
+          className="btn-secondary flex items-center gap-1.5"
         >
-          <Download className="h-4 w-4" /> Exportar
+          <Download className="h-4 w-4 shrink-0" />
+          <span className="hidden sm:inline">Exportar</span>
         </button>
 
         {open && (

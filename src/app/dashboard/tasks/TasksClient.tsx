@@ -417,17 +417,17 @@ export default function TasksClient({
   const tipos: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 
   return (
-    <div className="p-6 max-w-6xl mx-auto animate-fade-in-up">
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-outline/60">
-        <div>
-          <h1 className="text-3xl font-extrabold text-industrial-blue tracking-tight">
+    <div className="max-w-6xl mx-auto animate-fade-in-up">
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-outline/60 gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-2xl font-extrabold text-industrial-blue tracking-tight truncate">
             {isManager ? dict.tasks.managerTasks : dict.tasks.myTasks}
           </h1>
-          <p className="text-sm font-medium text-industrial-blue-light mt-1">{tasks.length} OT(s)</p>
+          <p className="text-xs sm:text-sm font-medium text-industrial-blue-light mt-1">{tasks.length} OT(s)</p>
         </div>
-        <button onClick={openCreate} className="h-11 px-5 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
-          <Plus size={18} className="stroke-[2.5]" />
-          <span>{dict.tasks.newTask}</span>
+        <button onClick={openCreate} className="shrink-0 h-9 sm:h-11 px-3 sm:px-5 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+          <Plus size={16} className="stroke-[2.5] shrink-0" />
+          <span className="hidden sm:inline">{dict.tasks.newTask}</span>
         </button>
       </div>
 

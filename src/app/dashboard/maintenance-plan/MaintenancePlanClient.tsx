@@ -250,24 +250,27 @@ export default function MaintenancePlanClient({
       {lockedFeature && (
         <UpgradeModal feature={lockedFeature} isTeaser={true} onClose={() => setLockedFeature(null)} />
       )}
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500 dark:text-slate-400">
+      <div className="flex items-center justify-between mb-4 gap-2">
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 shrink-0">
           {shown.length} / {plans.length}
         </p>
-        <div className="flex items-center gap-2">
-          <button onClick={handleExportCSV} className="btn-secondary flex items-center gap-2">
-            <Download className="h-4 w-4" /> Exportar
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button onClick={handleExportCSV} className="btn-secondary flex items-center gap-1.5">
+            <Download className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Exportar</span>
           </button>
           <button
             onClick={() => importInputRef.current?.click()}
             disabled={importing}
-            className="btn-secondary flex items-center gap-2"
+            className="btn-secondary flex items-center gap-1.5"
           >
-            <Upload className="h-4 w-4" /> {importing ? dict.common.importing : dict.common.import}
+            <Upload className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{importing ? dict.common.importing : dict.common.import}</span>
           </button>
           <input ref={importInputRef} type="file" accept=".xlsx" onChange={handleImportFile} className="hidden" />
-          <button onClick={openCreate} className="btn-primary flex items-center gap-2">
-            <Plus className="h-4 w-4" /> {dict.maintenancePlan.newPlan}
+          <button onClick={openCreate} className="btn-primary flex items-center gap-1.5">
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{dict.maintenancePlan.newPlan}</span>
           </button>
         </div>
       </div>

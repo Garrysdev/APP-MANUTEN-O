@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation'
+﻿import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listTasks, listMaintenancePlans, listAssets, listUsers } from '@/lib/firebase/data'
 import { planHas } from '@/lib/plans'
@@ -26,7 +26,7 @@ export default async function CalendarPage() {
     : tasks
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Calendário</h1>
         <p className="text-sm text-gray-500 mt-0.5">
