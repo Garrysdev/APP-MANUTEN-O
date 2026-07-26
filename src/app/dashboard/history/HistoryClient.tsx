@@ -120,7 +120,7 @@ export default function HistoryClient({
 
     // 2. OTs importadas da folha UR (source: folha_ur_historico) ou concluídas
     for (const t of tasks) {
-      if (t.source === 'folha_ur_historico' || t.status === 'done') {
+      if ((t as any).source === 'folha_ur_historico' || t.status === 'done') {
         if (!existingTaskIds.has(t.id)) {
           const asset = t.assetId ? assetObjMap.get(t.assetId) : null
           const formattedId = format3DigitId(t.id, index++)
