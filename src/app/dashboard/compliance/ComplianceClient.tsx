@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 import { ShieldCheck, CheckCircle2, Clock, AlertTriangle, FileText, ChevronDown, ChevronRight } from 'lucide-react'
@@ -112,6 +112,45 @@ export default function ComplianceClient({ companyName }: { companyName: string 
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Próxima Auditoria</p>
           <p className="text-3xl font-black text-[#1B4F72] dark:text-slate-100">—</p>
           <p className="text-xs text-gray-500 mt-1">Não agendada</p>
+        </div>
+      </div>
+
+      {/* Seção de Documentos de Norma e Procedimentos Oficiais */}
+      <div className="card p-5 border border-slate-200 dark:border-slate-800">
+        <h2 className="text-base font-bold text-gray-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+          <FileText className="h-5 w-5 text-industrial-blue" />
+          Documentos & Normas de Conformidade
+        </h2>
+        <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
+          Clica em &ldquo;Abrir Documento&rdquo; para consultar a regulamentação completa.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between">
+            <div>
+              <p className="font-bold text-sm text-gray-900 dark:text-slate-100">NP EN 13306 — Terminologia</p>
+              <p className="text-xs text-gray-500">Definições de MP, MC, PM e disponibilidade</p>
+            </div>
+            <a
+              href="/dashboard/knowledge"
+              className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1"
+            >
+              Abrir Documento ↗
+            </a>
+          </div>
+
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between">
+            <div>
+              <p className="font-bold text-sm text-gray-900 dark:text-slate-100">ISO 9001 — Requisitos Mant.</p>
+              <p className="text-xs text-gray-500">§7.1.3 Infraestrutura & §7.5 Registos</p>
+            </div>
+            <a
+              href="/dashboard/knowledge"
+              className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1"
+            >
+              Abrir Documento ↗
+            </a>
+          </div>
         </div>
       </div>
 

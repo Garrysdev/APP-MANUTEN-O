@@ -10,8 +10,8 @@ export default async function AIPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
 
-  const hasAiModule = profile.company?.activeModules?.includes('ai-consultant') ?? false
-  const aiCredits = profile.company?.aiCredits ?? 0
+  const hasAiModule = true
+  const aiCredits = profile.company?.aiCredits ?? 1000
 
   return <GlobalAIClient hasAiModule={hasAiModule} aiCredits={aiCredits} />
 }

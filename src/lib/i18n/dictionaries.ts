@@ -188,6 +188,7 @@ export const dictionaries = {
       company: 'Company Profile',
       logout: 'Logout',
       knowledgeBase: 'Knowledge Base',
+      safetyRules: 'Safety Rules',
     },
     common: {
       save: 'Save',
@@ -353,6 +354,7 @@ export const dictionaries = {
       company: 'Perfil Empresa',
       logout: 'Cerrar sesión',
       knowledgeBase: 'Base de Conocimiento',
+      safetyRules: 'Reglas de Seguridad',
     },
     common: {
       save: 'Guardar',
@@ -518,6 +520,7 @@ export const dictionaries = {
       company: 'Profil Entreprise',
       logout: 'Déconnexion',
       knowledgeBase: 'Base de Connaissances',
+      safetyRules: 'Règles de Sécurité',
     },
     common: {
       save: 'Enregistrer',
