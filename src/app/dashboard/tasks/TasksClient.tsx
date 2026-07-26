@@ -586,7 +586,7 @@ export default function TasksClient({
                           </Link>
                           {isManager && (
                             <>
-                              <button onClick={() => openEdit(t)} className="p-1 text-slate-500 hover:text-blue-600 rounded" title="Editar">
+                              <button onClick={() => setEditing(t)} className="p-1 text-slate-500 hover:text-blue-600 rounded" title="Editar">
                                 <Pencil className="h-4 w-4" />
                               </button>
                               <button onClick={() => handleDelete(t)} className="p-1 text-slate-500 hover:text-red-600 rounded" title="Eliminar">
