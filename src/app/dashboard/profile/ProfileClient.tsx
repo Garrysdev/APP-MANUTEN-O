@@ -230,12 +230,12 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
       <div className="card p-6">
         <h2 className="font-semibold text-gray-800 dark:text-slate-200 mb-2 text-base flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-gray-400 dark:text-slate-500" />
-          Alterar password
+          Alterar Password
         </h2>
         <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">
-          Será enviado um e-mail para <strong>{profile.email}</strong> com instruções de recuperação.
+          Define uma nova password para a tua conta diretamente aqui, ou envia o pedido via WhatsApp ao teu gestor.
         </p>
-        <ResetPasswordButton email={profile.email} />
+        <ChangePasswordForm profileName={profile.name} abbreviation={profile.abbreviation} />
       </div>
 
       <div className="card p-6">
@@ -291,28 +291,98 @@ function WebPushButton({ userId, isSubscribed }: { userId: string, isSubscribed:
   )
 }
 
-function ResetPasswordButton({ email }: { email: string }) {
-  const [sent, setSent] = useState(false)
+function ChangePasswordForm({ profileName, abbreviation }: { profileName: string; abbreviation?: string | null }) {
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
 
-  async function handleReset() {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (newPassword.length < 6) {
+      setError('A nova password deve ter pelo menos 6 caracteres.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('As passwords não coincidem.')
+      return
+    }
+
     setBusy(true)
-    try {
-      const { getFirebaseAuth } = await import('@/lib/firebase/client')
-      const { sendPasswordResetEmail } = await import('firebase/auth')
-      await sendPasswordResetEmail(getFirebaseAuth(), email)
-      setSent(true)
-    } catch {
-      setSent(true)
-    } finally {
-      setBusy(false)
+    setError('')
+    setSuccess(false)
+
+    const { changeUserPasswordAction } = await import('./actions')
+    const res = await changeUserPasswordAction(newPassword)
+    setBusy(false)
+
+    if (res.error) {
+      setError(res.error)
+    } else {
+      setSuccess(true)
+      setNewPassword('')
+      setConfirmPassword('')
     }
   }
 
-  if (sent) return <p className="text-sm text-green-600">E-mail de recuperação enviado. Verifica a tua caixa de entrada.</p>
+  const waMessage = `Olá! Sou o(a) ${profileName}${abbreviation ? ` (${abbreviation})` : ''} e pretendo alterar/recuperar a minha password no RG Maintenance.`
+  const waUrl = `https://wa.me/?text=${encodeURIComponent(waMessage)}`
+
   return (
-    <button onClick={handleReset} disabled={busy} className="btn-secondary">
-      {busy ? 'A enviar…' : 'Enviar e-mail de recuperação'}
-    </button>
+    <div className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-3 max-w-sm">
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1">
+            Nova Password *
+          </label>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="input"
+            placeholder="Mínimo 6 caracteres"
+            required
+            minLength={6}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1">
+            Confirmar Password *
+          </label>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="input"
+            placeholder="Repete a nova password"
+            required
+            minLength={6}
+          />
+        </div>
+
+        {error && <p className="text-xs font-bold text-red-600 dark:text-red-400">{error}</p>}
+        {success && <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">✓ Password alterada com sucesso!</p>}
+
+        <button type="submit" disabled={busy} className="btn-primary w-full py-2.5 text-xs font-bold shadow-md">
+          {busy ? 'A alterar…' : 'Guardar Nova Password'}
+        </button>
+      </form>
+
+      <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+        <p className="text-xs font-medium text-slate-500 mb-2">Preferes enviar o pedido ao teu gestor via WhatsApp?</p>
+        <a
+          href={waUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 py-2 px-4 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all shadow-sm"
+        >
+          <svg className="w-4 h-4 fill-emerald-600" viewBox="0 0 24 24">
+            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+          </svg>
+          Pedir Alteração de Password via WhatsApp
+        </a>
+      </div>
+    </div>
   )
 }

@@ -40,3 +40,18 @@ export async function updateProfileAction(
     return { error: e instanceof Error ? e.message : 'Erro ao atualizar perfil.' }
   }
 }
+
+import { adminAuth } from '@/lib/firebase/admin'
+
+export async function changeUserPasswordAction(newPassword: string): Promise<ProfileFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (!newPassword || newPassword.length < 6) return { error: 'A password deve ter pelo menos 6 caracteres.' }
+
+  try {
+    await adminAuth().updateUser(profile.id, { password: newPassword })
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao alterar password.' }
+  }
+}

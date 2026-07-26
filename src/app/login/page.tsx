@@ -125,13 +125,21 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-5 pt-5 border-t border-slate-200 text-center space-y-1.5">
+          <div className="mt-5 pt-5 border-t border-slate-200 text-center space-y-3">
+            <a
+              href="https://wa.me/?text=Ol%C3%A1,%20esqueci-me%20da%20minha%20password%20no%20RG%20Maintenance%20e%20pretendo%20alterar/recuperar%20o%20acesso."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full inline-flex items-center justify-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 py-2.5 px-4 rounded-xl hover:bg-emerald-100 transition-all shadow-sm"
+            >
+              <svg className="w-4 h-4 fill-emerald-600" viewBox="0 0 24 24">
+                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+              </svg>
+              Recuperar / Alterar Password via WhatsApp
+            </a>
             <p className="text-xs font-medium text-slate-700">
               Ainda não tens conta?{' '}
               <a href="/register" className="text-[#1B4F72] hover:text-safety-orange hover:underline font-bold">Criar conta</a>
-            </p>
-            <p className="text-[11px] text-slate-600 font-medium">
-              Problemas de acesso? Entre em contacto com o gestor da sua empresa.
             </p>
           </div>
         </div>
