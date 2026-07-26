@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useTransition, useRef } from 'react'
+import { useState, useTransition, useRef, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { UserPlus, UserX, ShieldCheck, Wrench, X, Eye, EyeOff, Link2, Copy, Check, Camera } from 'lucide-react'
+import { UserPlus, UserX, ShieldCheck, Wrench, X, Eye, EyeOff, Link2, Copy, Check, Camera, Filter } from 'lucide-react'
 import { DEFAULT_TECHNICIAN_TYPES, type User } from '@/types/models'
 import { createUserDirectAction, deactivateUserAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction, toggleUserActiveAction } from './actions'
 import Avatar from '@/components/ui/Avatar'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
 import { useLanguage } from '@/components/providers/LanguageProvider'
+import { useTableSort, SortableTh } from '@/lib/useTableSort'
 
 export default function UsersClient({
   users,
@@ -56,6 +57,54 @@ export default function UsersClient({
   const [typesList, setTypesList] = useState<string[]>(technicianTypes)
   const [newTypeName, setNewTypeName] = useState('')
   const [savingTypes, setSavingTypes] = useState(false)
+
+  // Filtros por Colunas
+  const [searchName, setSearchName] = useState('')
+  const [searchAbbr, setSearchAbbr] = useState('')
+  const [filterRole, setFilterRole] = useState<'all' | 'manager' | 'technician'>('all')
+  const [filterSpecialty, setFilterSpecialty] = useState<string>('all')
+  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all')
+  const [pageSize, setPageSize] = useState<number>(20)
+  const [currentPage, setCurrentPage] = useState<number>(1)
+
+  useEffect(() => { setCurrentPage(1) }, [searchName, searchAbbr, filterRole, filterSpecialty, filterActive, pageSize])
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      if (filterActive === 'active' && !u.active) return false
+      if (filterActive === 'inactive' && u.active) return false
+      if (filterRole !== 'all' && u.role !== filterRole) return false
+      if (filterSpecialty !== 'all' && (u.specialty || '') !== filterSpecialty) return false
+      if (searchAbbr.trim() && !(u.abbreviation || '').toLowerCase().includes(searchAbbr.toLowerCase().trim())) return false
+      if (searchName.trim()) {
+        const q = searchName.toLowerCase().trim()
+        const haystack = `${u.name || ''} ${u.email || ''}`.toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+      return true
+    })
+  }, [users, filterActive, filterRole, filterSpecialty, searchAbbr, searchName])
+
+  const { sorted: sortedUsers, sortKey, sortDir, toggleSort } = useTableSort<User>(
+    filteredUsers,
+    {
+      name: (u) => u.name?.toLowerCase(),
+      abbreviation: (u) => u.abbreviation?.toLowerCase() || '',
+      email: (u) => u.email?.toLowerCase(),
+      role: (u) => u.role,
+      active: (u) => (u.active ? 1 : 0),
+      hourlyRate: (u) => u.hourlyRate ?? 0,
+    },
+    null,
+  )
+
+  const effectivePageSize = pageSize === -1 ? (sortedUsers.length || 1) : pageSize
+  const totalPages = Math.ceil(sortedUsers.length / effectivePageSize) || 1
+  const currentUsers = useMemo(() => {
+    if (pageSize === -1) return sortedUsers
+    const start = (currentPage - 1) * pageSize
+    return sortedUsers.slice(start, start + pageSize)
+  }, [sortedUsers, currentPage, pageSize])
 
   async function handleNewAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const original = e.target.files?.[0]
@@ -417,145 +466,230 @@ export default function UsersClient({
         </div>
       )}
 
+      {/* Barra Superior de Contagem e Filtros Rápidos */}
+      <div className="flex items-center justify-between gap-3 mb-3 px-1 flex-wrap">
+        <div className="text-xs font-semibold text-gray-500 dark:text-slate-400 flex items-center gap-2">
+          <Filter size={14} className="text-[#2E86C1]" />
+          <span>A mostrar <strong>{sortedUsers.length}</strong> de <strong>{users.length}</strong> utilizadores</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+          <span>Por página:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            className="input !py-1 !px-2 text-xs w-auto"
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={-1}>Todos ({users.length})</option>
+          </select>
+        </div>
+      </div>
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[550px] md:min-w-0">
+          <table className="w-full text-sm min-w-[700px] md:min-w-0">
             <thead>
-              <tr className="bg-gray-50/50 dark:bg-slate-900/50 border-b border-gray-100 dark:border-slate-800">
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">{dict.users.colName}</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-slate-400">Cód.</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 hidden md:table-cell">E-mail</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">{dict.users.colRole}</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">Estado</th>
-                {isManager && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">{dict.users.colCost}</th>}
-                {isManager && <th className="px-4 py-3" />}
+              {/* Linha 1: Cabeçalhos com Ordenação */}
+              <tr className="bg-slate-100/90 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                <SortableTh label={dict.users.colName} sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="Cód." sortableKey="abbreviation" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-center" />
+                <SortableTh label="E-mail" sortableKey="email" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden md:table-cell" />
+                <SortableTh label={dict.users.colRole} sortableKey="role" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="Estado" sortableKey="active" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                {isManager && <SortableTh label={dict.users.colCost} sortableKey="hourlyRate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />}
+                {isManager && <th className="px-4 py-3 text-right">AÇÕES</th>}
+              </tr>
+
+              {/* Linha 2: Filtros por Colunas */}
+              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                <td className="px-2 py-1.5">
+                  <input
+                    type="text"
+                    value={searchName}
+                    onChange={(e) => setSearchName(e.target.value)}
+                    placeholder="Filtrar nome..."
+                    className="input !text-xs !py-1 !px-2 w-full"
+                  />
+                </td>
+                <td className="px-2 py-1.5 text-center">
+                  <input
+                    type="text"
+                    value={searchAbbr}
+                    onChange={(e) => setSearchAbbr(e.target.value)}
+                    placeholder="Cód..."
+                    className="input !text-xs !py-1 !px-2 w-16 text-center font-mono uppercase"
+                  />
+                </td>
+                <td className="px-2 py-1.5 hidden md:table-cell">
+                  <input
+                    type="text"
+                    value={searchName}
+                    onChange={(e) => setSearchName(e.target.value)}
+                    placeholder="Filtrar email..."
+                    className="input !text-xs !py-1 !px-2 w-full"
+                  />
+                </td>
+                <td className="px-2 py-1.5">
+                  <div className="flex gap-1 flex-wrap">
+                    <select
+                      value={filterRole}
+                      onChange={(e) => setFilterRole(e.target.value as any)}
+                      className="input !text-xs !py-1 !px-1.5 w-24"
+                    >
+                      <option value="all">Todos papéis</option>
+                      <option value="manager">Gestor</option>
+                      <option value="technician">Técnico</option>
+                    </select>
+                    <select
+                      value={filterSpecialty}
+                      onChange={(e) => setFilterSpecialty(e.target.value)}
+                      className="input !text-xs !py-1 !px-1.5 flex-1 min-w-[100px]"
+                    >
+                      <option value="all">Todas especialidades</option>
+                      {typesList.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                </td>
+                <td className="px-2 py-1.5">
+                  <select
+                    value={filterActive}
+                    onChange={(e) => setFilterActive(e.target.value as any)}
+                    className="input !text-xs !py-1 !px-1.5 w-28"
+                  >
+                    <option value="all">Todos estados</option>
+                    <option value="active">Ativos</option>
+                    <option value="inactive">Inativos</option>
+                  </select>
+                </td>
+                {isManager && <td className="px-2 py-1.5" />}
+                {isManager && <td className="px-2 py-1.5" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
-              {users.map((u) => (
-                <tr 
-                  key={u.id} 
-                  onClick={() => { if (isManager) setEditingUser(u) }}
-                  className={`hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors ${isManager ? 'cursor-pointer' : ''} ${!u.active ? 'opacity-50' : ''}`}
-                >
-                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-slate-200">
-                    <div className="flex items-center gap-2">
-                      <Avatar name={u.name} avatarUrl={u.avatarUrl} size={24} />
-                      <span>
-                        {u.name}
-                        {u.id === currentUserId && (
-                          <span className="ml-2 text-xs text-gray-400">(tu)</span>
+              {currentUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={isManager ? 7 : 5} className="px-4 py-8 text-center text-gray-400">
+                    <Filter className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-xs font-semibold">Nenhum utilizador encontrado com estes filtros.</p>
+                  </td>
+                </tr>
+              ) : (
+                currentUsers.map((u) => (
+                  <tr 
+                    key={u.id} 
+                    onClick={() => { if (isManager) setEditingUser(u) }}
+                    className={`hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors ${isManager ? 'cursor-pointer' : ''} ${!u.active ? 'opacity-50' : ''}`}
+                  >
+                    <td className="px-4 py-3 font-medium text-gray-800 dark:text-slate-200">
+                      <div className="flex items-center gap-2">
+                        <Avatar name={u.name} avatarUrl={u.avatarUrl} size={24} />
+                        <span>
+                          {u.name}
+                          {u.id === currentUserId && (
+                            <span className="ml-2 text-xs text-gray-400">(tu)</span>
+                          )}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700">
+                        {u.abbreviation || '—'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-slate-400 hidden md:table-cell">{u.email}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                          u.role === 'manager'
+                            ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                            : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400'
+                        }`}>
+                          {u.role === 'manager'
+                            ? <><ShieldCheck className="h-3 w-3" /> Gestor</>
+                            : <><Wrench className="h-3 w-3" /> Técnico</>
+                          }
+                        </span>
+                        {u.specialty && (
+                          <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">
+                            {u.specialty}
+                          </span>
                         )}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700">
-                      {u.abbreviation || '—'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-slate-400 hidden md:table-cell">{u.email}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-                        u.role === 'manager'
-                          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                          : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400'
-                      }`}>
-                        {u.role === 'manager'
-                          ? <><ShieldCheck className="h-3 w-3" /> Gestor</>
-                          : <><Wrench className="h-3 w-3" /> Técnico</>
-                        }
-                      </span>
-                      {u.specialty && (
-                        <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">
-                          {u.specialty}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      {isManager && u.id !== currentUserId ? (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await toggleUserActiveAction(u.id, !u.active)
+                            router.refresh()
+                          }}
+                          className={`text-xs font-bold px-2.5 py-1 rounded-full border transition-all shadow-sm ${
+                            u.active
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400'
+                              : 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-400'
+                          }`}
+                          title="Clique para alternar entre Ativo e Inativo"
+                        >
+                          {u.active ? '✓ Ativo' : '✕ Inativo'}
+                        </button>
+                      ) : (
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${u.active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {u.active ? 'Ativo' : 'Inativo'}
                         </span>
                       )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    {isManager && u.id !== currentUserId ? (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await toggleUserActiveAction(u.id, !u.active)
-                          router.refresh()
-                        }}
-                        className={`text-xs font-bold px-2.5 py-1 rounded-full border transition-all shadow-sm ${
-                          u.active
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400'
-                            : 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-400'
-                        }`}
-                        title="Clique para alternar entre Ativo e Inativo"
-                      >
-                        {u.active ? '✓ Ativo' : '✕ Inativo'}
-                      </button>
-                    ) : (
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${u.active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {u.active ? 'Ativo' : 'Inativo'}
-                      </span>
+                    </td>
+                    {isManager && (
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        {editingRateId === u.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              className="input !py-1 !px-2 w-20 text-sm"
+                              value={tempRate}
+                              onChange={(e) => setTempRate(e.target.value)}
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveRate(u.id)
+                                if (e.key === 'Escape') setEditingRateId(null)
+                              }}
+                            />
+                            <button onClick={() => handleSaveRate(u.id)} disabled={isPending} className="text-green-600 hover:text-green-700">
+                              <Check className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 group cursor-pointer" onClick={() => {
+                            setEditingRateId(u.id)
+                            setTempRate(String(u.hourlyRate ?? ''))
+                          }}>
+                            <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">
+                              {u.hourlyRate != null && u.hourlyRate > 0 ? `${u.hourlyRate} €/h` : '—'}
+                            </span>
+                          </div>
+                        )}
+                      </td>
                     )}
-                  </td>
-                  {isManager && (
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      {editingRateId === u.id ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            className="input !py-1 !px-2 w-20 text-sm"
-                            value={tempRate}
-                            onChange={(e) => setTempRate(e.target.value)}
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveRate(u.id)
-                              if (e.key === 'Escape') setEditingRateId(null)
-                            }}
-                          />
-                          <button onClick={() => handleSaveRate(u.id)} disabled={isPending} className="text-green-600 hover:text-green-700">
-                            <Check className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 group cursor-pointer" onClick={() => {
-                          setEditingRateId(u.id)
-                          setTempRate(u.hourlyRate?.toString() || '0')
-                        }}>
-                          <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
-                            {u.hourlyRate ? `${u.hourlyRate}€` : '--'}
-                          </span>
-                          <span className="text-xs text-[#2E86C1] opacity-0 group-hover:opacity-100 transition-opacity">
-                            Editar
-                          </span>
-                        </div>
-                      )}
-                    </td>
-                  )}
-                  {isManager && (
-                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      {u.active && u.id !== currentUserId && (
+                    {isManager && (
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => handleDeactivate(u.id, u.name)}
-                          disabled={isPending}
-                          className="text-gray-400 hover:text-red-600 p-1 transition-colors"
-                          title="Desativar utilizador"
+                          onClick={() => setEditingUser(u)}
+                          className="text-xs text-[#2E86C1] hover:underline font-bold"
                         >
-                          <UserX className="h-4 w-4" />
+                          Editar
                         </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-
-        {users.length === 0 && (
-          <div className="px-4 py-10 text-center text-gray-400 text-sm">
-            Nenhum utilizador encontrado.
-          </div>
-        )}
       </div>
 
       {/* Modal Editar Utilizador */}
