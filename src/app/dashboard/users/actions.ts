@@ -151,6 +151,9 @@ export async function updateUserByManagerAction(
   const abbreviationRaw = formData.get('abbreviation')
   const abbreviation = abbreviationRaw !== null ? String(abbreviationRaw).trim().toUpperCase() || null : undefined
 
+  const activeRaw = formData.get('active')
+  const active = activeRaw !== null ? activeRaw === 'true' || activeRaw === 'on' : undefined
+
   const avatarUrl = formData.has('avatarUrl')
     ? String(formData.get('avatarUrl') ?? '').trim() || null
     : undefined
@@ -159,6 +162,7 @@ export async function updateUserByManagerAction(
     const updateData: any = { name }
     if (language) updateData.language = language
     if (role && userId !== profile.id) updateData.role = role
+    if (active !== undefined && userId !== profile.id) updateData.active = active
     if (specialty !== undefined) updateData.specialty = specialty
     if (abbreviation !== undefined) updateData.abbreviation = abbreviation
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl
@@ -185,5 +189,23 @@ export async function updateUserByManagerAction(
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao atualizar perfil do utilizador.' }
+  }
+}
+
+export async function toggleUserActiveAction(userId: string, active: boolean): Promise<UserActionState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  if (userId === profile.id) return { error: 'Não podes alterar o teu próprio estado.' }
+
+  try {
+    await updateUserProfile(userId, { active })
+    try {
+      await adminAuth().updateUser(userId, { disabled: !active })
+    } catch { /* ignore auth error for fallback users */ }
+    revalidatePath('/dashboard/users')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao alterar estado do utilizador.' }
   }
 }

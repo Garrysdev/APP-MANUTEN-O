@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { UserPlus, UserX, ShieldCheck, Wrench, X, Eye, EyeOff, Link2, Copy, Check, Camera } from 'lucide-react'
 import { DEFAULT_TECHNICIAN_TYPES, type User } from '@/types/models'
-import { createUserDirectAction, deactivateUserAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction } from './actions'
+import { createUserDirectAction, deactivateUserAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction, toggleUserActiveAction } from './actions'
 import Avatar from '@/components/ui/Avatar'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
@@ -474,10 +474,28 @@ export default function UsersClient({
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium ${u.active ? 'text-green-600 dark:text-emerald-400' : 'text-gray-400 dark:text-slate-500'}`}>
-                      {u.active ? 'Ativo' : 'Inativo'}
-                    </span>
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    {isManager && u.id !== currentUserId ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await toggleUserActiveAction(u.id, !u.active)
+                          router.refresh()
+                        }}
+                        className={`text-xs font-bold px-2.5 py-1 rounded-full border transition-all shadow-sm ${
+                          u.active
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400'
+                            : 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-400'
+                        }`}
+                        title="Clique para alternar entre Ativo e Inativo"
+                      >
+                        {u.active ? '✓ Ativo' : '✕ Inativo'}
+                      </button>
+                    ) : (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${u.active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {u.active ? 'Ativo' : 'Inativo'}
+                      </span>
+                    )}
                   </td>
                   {isManager && (
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -600,12 +618,19 @@ export default function UsersClient({
                 <input type="email" name="email" defaultValue={editingUser.email} className="input" required />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Papel</label>
                   <select name="role" defaultValue={editingUser.role} className="input" disabled={editingUser.id === currentUserId}>
                     <option value="technician">Técnico</option>
                     <option value="manager">Gestor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Estado</label>
+                  <select name="active" defaultValue={editingUser.active ? 'true' : 'false'} className="input font-bold" disabled={editingUser.id === currentUserId}>
+                    <option value="true">Ativo</option>
+                    <option value="false">Inativo</option>
                   </select>
                 </div>
                 <div>
