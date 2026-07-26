@@ -612,7 +612,7 @@ export default function CalendarClient({
             <div className="flex items-center gap-2">
               {selectedDate >= todayStr && (
                 <button
-                  onClick={openNewTask}
+                  onClick={() => openNewTaskForDate(selectedDate)}
                   className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
                 >
                   <Plus className="h-3.5 w-3.5" /> Nova OT
