@@ -5,6 +5,7 @@ export const dictionaries = {
     sidebar: {
       dashboard: 'Dashboard',
       tasks: 'OTs',
+      projects: 'Projetos',
       calendar: 'Calendário',
       maintenancePlan: 'Plano Manutenção',
       assets: 'Equipamentos',
@@ -168,7 +169,8 @@ export const dictionaries = {
   en: {
     sidebar: {
       dashboard: 'Dashboard',
-      tasks: 'Tasks (WO)',
+      tasks: 'Work Orders',
+      projects: 'Projects',
       calendar: 'Calendar',
       maintenancePlan: 'Maintenance Plan',
       assets: 'Assets',
@@ -333,6 +335,7 @@ export const dictionaries = {
     sidebar: {
       dashboard: 'Panel',
       tasks: 'Tareas',
+      projects: 'Proyectos',
       calendar: 'Calendario',
       maintenancePlan: 'Planes Mant.',
       assets: 'Activos',
@@ -497,6 +500,7 @@ export const dictionaries = {
     sidebar: {
       dashboard: 'Tableau de bord',
       tasks: 'Tâches',
+      projects: 'Projets',
       calendar: 'Calendrier',
       maintenancePlan: 'Plans Maint.',
       assets: 'Actifs',

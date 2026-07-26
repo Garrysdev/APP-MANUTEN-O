@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, ClipboardList, Package, History, LogOut, X,
   Users, FileBarChart, CreditCard, Lock, UserCircle, Calendar, Wrench, Boxes, Activity, DollarSign, Brain, BookOpen,
-  Plus, ShieldCheck
+  Plus, ShieldCheck, FolderKanban
 } from 'lucide-react'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import type { PlanName } from '@/types/models'
@@ -47,6 +47,7 @@ const managerNavGroups: NavGroup[] = [
     items: [
       { href: '/dashboard',                    key: 'dashboard',       icon: LayoutDashboard },
       { href: '/dashboard/tasks',              key: 'tasks',           icon: ClipboardList },
+      { href: '/dashboard/projects',           key: 'projects',        icon: FolderKanban },
       { href: '/dashboard/users',              key: 'users',           icon: Users,          feature: 'users' },
       { href: '/dashboard/history',            key: 'history',         icon: History,        feature: 'history' },
     ]
@@ -91,9 +92,10 @@ const managerNavGroups: NavGroup[] = [
 ]
 
 const techNavKeys: NavItem[] = [
-  { href: '/dashboard/tasks',   key: 'tasks',   icon: ClipboardList },
-  { href: '/dashboard/history', key: 'history', icon: History },
-  { href: '/dashboard/profile', key: 'profile', icon: UserCircle },
+  { href: '/dashboard/tasks',   key: 'tasks',    icon: ClipboardList },
+  { href: '/dashboard/projects', key: 'projects', icon: FolderKanban },
+  { href: '/dashboard/history', key: 'history',  icon: History },
+  { href: '/dashboard/profile', key: 'profile',  icon: UserCircle },
 ]
 
 export default function Sidebar({ user, open: externalOpen, onOpenChange }: SidebarProps) {
