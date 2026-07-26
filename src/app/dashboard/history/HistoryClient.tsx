@@ -49,6 +49,8 @@ export function format3DigitId(rawId: string | number | undefined | null, index:
     return String(num % 1000).padStart(3, '0')
   }
   return String(index + 1).padStart(3, '0')
+}
+
 const formatTiCode = (rawTipo?: string | null) => {
   if (!rawTipo) return 'MP'
   const lower = rawTipo.toLowerCase()
