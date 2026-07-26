@@ -549,7 +549,7 @@ export default function TasksClient({
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
-                          {t.tipo?.toUpperCase()}
+                          {t.tipo === 'preventiva' ? 'MP' : t.tipo === 'curativa' ? 'MC' : t.tipo === 'plano' ? 'PM' : (TIPO_LABELS[t.tipo] || t.tipo?.toUpperCase() || 'MP')}
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-slate-900 font-semibold max-w-[280px]">
