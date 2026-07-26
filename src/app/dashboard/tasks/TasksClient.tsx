@@ -33,8 +33,8 @@ import { createMaintenancePlanAction } from '../maintenance-plan/actions'
 
 const PERIODICIDADE_OPTIONS: Periodicidade[] = ['semanal', 'mensal', 'trimestral', 'bianual', 'anual', 'bienal', 'trianual', 'horas', 'pontual']
 
-type Ref = { id: string; name: string }
-type UserRef = Ref & { avatarUrl?: string | null }
+type Ref = { id: string; name: string; tag?: string | null }
+type UserRef = Ref & { avatarUrl?: string | null; active?: boolean }
 type PlanRef = {
   id: string
   title: string
