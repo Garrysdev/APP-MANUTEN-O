@@ -480,10 +480,10 @@ export default function ProjectsClient({
         <div className="min-w-0">
           <h1 className="text-lg sm:text-2xl font-extrabold text-industrial-blue tracking-tight truncate flex items-center gap-2">
             <FolderKanban size={26} className="text-safety-orange" />
-            Projetos & OTs de Projeto
+            Projetos
           </h1>
           <p className="text-xs sm:text-sm font-medium text-industrial-blue-light mt-1">
-            A mostrar {shown.length} / {tasks.length} tarefa(s) de projeto
+            A mostrar {shown.length} / {tasks.length} projeto(s)
           </p>
         </div>
         <button onClick={openCreate} className="shrink-0 h-9 sm:h-11 px-3 sm:px-5 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
@@ -537,7 +537,7 @@ export default function ProjectsClient({
         {shown.length === 0 ? (
           <div className="px-5 py-12 text-center text-gray-400">
             <FolderKanban className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p className="text-sm">Sem tarefas de projeto neste filtro.</p>
+            <p className="text-sm">Sem projetos neste filtro.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -556,6 +556,21 @@ export default function ProjectsClient({
                   <SortableTh label="CAUSA / OBS" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
                   <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <th className="px-3 py-2 text-right font-mono text-xs font-bold text-slate-700 uppercase tracking-wider">AÇÕES</th>
+                </tr>
+                {/* Linha de Filtro por Coluna */}
+                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filtrar..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Data..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Área..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="TAG..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="TI..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Projeto..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Técnico..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1 hidden xl:table-cell" />
+                  <td className="p-1 hidden xl:table-cell" />
+                  <td className="p-1 hidden lg:table-cell" />
+                  <td className="p-1" />
+                  <td className="p-1" />
                 </tr>
               </thead>
               <tbody>

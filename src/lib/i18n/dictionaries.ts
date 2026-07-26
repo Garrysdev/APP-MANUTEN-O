@@ -41,7 +41,7 @@ export const dictionaries = {
     },
     tasks: {
       myTasks: 'As minhas OTs',
-      managerTasks: 'OTs & Plano',
+      managerTasks: 'OTs',
       newTask: 'Nova OT',
       allTasks: 'Todas',
       empty: 'Sem OTs neste filtro.',

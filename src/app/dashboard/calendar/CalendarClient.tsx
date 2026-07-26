@@ -318,6 +318,14 @@ export default function CalendarClient({
     })
   }
 
+  function goToToday() {
+    const t = new Date()
+    setYear(t.getFullYear())
+    setMonth(t.getMonth())
+    setWeekStart(getWeekStart(t))
+    setSelectedDate(toYMD(t))
+  }
+
   function assetName(id?: string | null) { return assets.find((a) => a.id === id)?.name ?? '—' }
   function userName(id?: string | null) { return users.find((u) => u.id === id)?.name ?? '—' }
   function userRef(id?: string | null) { return users.find((u) => u.id === id) }
@@ -325,49 +333,55 @@ export default function CalendarClient({
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 gap-2">
-        <button onClick={prevPeriod} className="p-1.5 text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 rounded hover:bg-gray-100 dark:hover:bg-slate-800">
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <div className="flex items-center gap-3 flex-1 justify-center flex-wrap">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-100">{headerLabel}</h2>
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <button onClick={prevPeriod} className="p-2 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button onClick={goToToday} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700">
+            Hoje
+          </button>
+          <button onClick={nextPeriod} className="p-2 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800">
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 justify-center flex-wrap">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-slate-100">{headerLabel}</h2>
           <div className="flex rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden text-xs">
             <button
               onClick={() => { setViewMode('month'); setSelectedDate(null) }}
-              className={`px-3 py-1.5 font-medium transition-colors ${viewMode === 'month' ? 'bg-[#1B4F72] text-white' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
+              className={`px-3.5 py-1.5 font-bold transition-colors ${viewMode === 'month' ? 'bg-[#1B4F72] text-white' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
             >
               Mês
             </button>
             <button
               onClick={() => { setViewMode('week'); setSelectedDate(null) }}
-              className={`px-3 py-1.5 font-medium transition-colors ${viewMode === 'week' ? 'bg-[#1B4F72] text-white' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
+              className={`px-3.5 py-1.5 font-bold transition-colors ${viewMode === 'week' ? 'bg-[#1B4F72] text-white' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
             >
               Semana
             </button>
           </div>
         </div>
-        <button onClick={nextPeriod} className="p-1.5 text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 rounded hover:bg-gray-100 dark:hover:bg-slate-800">
-          <ChevronRight className="h-5 w-5" />
-        </button>
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 mb-3 text-xs text-gray-500">
-        <span className="flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5 text-[#2E86C1]" /> OT atribuída</span>
-        <span className="flex items-center gap-1"><Wrench className="h-3.5 w-3.5 text-amber-500" /> Plano de manutenção</span>
+      <div className="flex items-center gap-4 mb-3 text-xs font-semibold text-gray-500">
+        <span className="flex items-center gap-1.5"><ClipboardList className="h-4 w-4 text-[#2E86C1]" /> OT atribuída (Clique para abrir)</span>
+        <span className="flex items-center gap-1.5"><Wrench className="h-4 w-4 text-amber-500" /> Plano de manutenção</span>
       </div>
 
       {/* Month grid */}
       {viewMode === 'month' && (
-        <div className="card overflow-hidden">
-          <div className="grid grid-cols-7 border-b border-gray-100 dark:border-slate-800">
+        <div className="card overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800">
+          <div className="grid grid-cols-7 border-b border-gray-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-900">
             {WEEK_DAYS.map((d) => (
-              <div key={d} className="text-center text-xs font-medium text-gray-400 dark:text-slate-500 py-2">{d}</div>
+              <div key={d} className="text-center text-xs font-extrabold text-slate-700 dark:text-slate-300 py-3 uppercase tracking-wider">{d}</div>
             ))}
           </div>
           <div className="grid grid-cols-7">
             {monthCells.map((day, i) => {
-              if (day === null) return <div key={i} className="border-b border-r border-gray-50 dark:border-slate-800/50 min-h-[72px]" />
+              if (day === null) return <div key={i} className="border-b border-r border-gray-100 dark:border-slate-800/50 min-h-[110px] lg:min-h-[135px] bg-slate-50/40 dark:bg-slate-950/40" />
               const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
               const events = eventMap.get(dateStr) ?? []
               const isToday = dateStr === todayStr
@@ -377,24 +391,51 @@ export default function CalendarClient({
                 <div
                   key={i}
                   onClick={() => setSelectedDate(isSelected ? null : dateStr)}
-                  className={`border-b border-r border-gray-50 dark:border-slate-800/50 min-h-[72px] p-1 cursor-pointer transition-colors ${
-                    isSelected ? 'bg-[#EAF4FB] dark:bg-blue-900/20' : isPast ? 'bg-gray-50/60 dark:bg-slate-900/40 hover:bg-gray-100/60 dark:hover:bg-slate-800/40' : 'hover:bg-gray-50 dark:hover:bg-slate-800/30'
+                  className={`border-b border-r border-slate-100 dark:border-slate-800 min-h-[110px] lg:min-h-[135px] p-2 cursor-pointer transition-all flex flex-col justify-between ${
+                    isSelected ? 'bg-blue-50/80 dark:bg-blue-900/30 ring-2 ring-blue-400 z-10' : isPast ? 'bg-gray-50/60 dark:bg-slate-900/40 hover:bg-gray-100/60 dark:hover:bg-slate-800/40' : 'hover:bg-gray-50 dark:hover:bg-slate-800/40'
                   }`}
                 >
-                  <p className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
-                    isToday ? 'bg-[#2E86C1] text-white' : isPast ? 'text-gray-300 dark:text-slate-600' : 'text-gray-600 dark:text-slate-300'
-                  }`}>
-                    {day}
-                  </p>
-                  <div className="space-y-0.5">
-                    {events.slice(0, 3).map((ev, j) => (
-                      <div key={j} className={`text-[10px] rounded px-1 py-0.5 truncate ${
-                        ev.type === 'task' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className={`text-xs font-extrabold w-7 h-7 flex items-center justify-center rounded-full shadow-sm ${
+                        isToday ? 'bg-[#2E86C1] text-white font-bold ring-2 ring-blue-300' : isPast ? 'text-gray-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'
                       }`}>
-                        {ev.label}
-                      </div>
-                    ))}
-                    {events.length > 3 && <p className="text-[10px] text-gray-400 dark:text-slate-500">+{events.length - 3}</p>}
+                        {day}
+                      </span>
+                      {events.length > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          {events.length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      {events.slice(0, 4).map((ev, j) => (
+                        <div
+                          key={j}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (ev.type === 'task' && ev.task) {
+                              router.push(`/dashboard/tasks/${ev.task.id}`)
+                            } else {
+                              setSelectedDate(dateStr)
+                            }
+                          }}
+                          title={`Clique para abrir: ${ev.label}`}
+                          className={`text-[11px] font-medium rounded-md px-1.5 py-1 truncate transition-transform hover:scale-[1.02] active:scale-95 shadow-sm border ${
+                            ev.type === 'task'
+                              ? 'bg-blue-100/90 text-blue-900 border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-700'
+                              : 'bg-amber-100/90 text-amber-900 border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700'
+                          }`}
+                        >
+                          {ev.label}
+                        </div>
+                      ))}
+                      {events.length > 4 && (
+                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 text-center">
+                          +{events.length - 4} mais
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )

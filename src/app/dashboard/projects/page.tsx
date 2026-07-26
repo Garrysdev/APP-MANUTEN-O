@@ -17,7 +17,11 @@ export default async function ProjectsPage() {
 
   // Filtrar apenas tarefas da secção de projetos
   const projectTasks = allTasks.filter(
-    (t) => (t as any).source === 'folha_projetos' || (t as any).isProject === true
+    (t) =>
+      (t as any).source === 'folha_projetos' ||
+      (t as any).isProject === true ||
+      (t.description || '').toLowerCase().includes('projecto') ||
+      (t.description || '').toLowerCase().includes('projeto')
   )
 
   const tasks = profile.role === 'technician'

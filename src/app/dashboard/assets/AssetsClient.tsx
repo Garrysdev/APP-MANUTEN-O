@@ -377,6 +377,21 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                   <SortableTh label={dict.common.status} sortableKey="active" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
                   <th className="px-3 py-3 text-right text-xs font-bold text-slate-700 uppercase tracking-wide">{dict.common.actions}</th>
                 </tr>
+                {/* Linha de Filtro por Colunas em Equipamentos */}
+                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
+                  <td className="p-1" />
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filtrar Área..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-mono" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filtrar TAG..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-mono" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filtrar Nome..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1">
+                    <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value as any)} className="input !text-[11px] !py-0.5 !px-1 w-full">
+                      <option value="all">Todos</option>
+                      <option value="active">Ativo</option>
+                      <option value="inactive">Inativo</option>
+                    </select>
+                  </td>
+                  <td className="p-1" />
+                </tr>
               </thead>
               <tbody>
                 {currentShown.map((a) => (

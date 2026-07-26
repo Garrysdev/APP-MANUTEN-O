@@ -250,7 +250,7 @@ export default function TasksClient({
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [filter, setFilter] = useState<'all' | TaskStatus>('all')
+  const [filter, setFilter] = useState<'open' | 'all' | TaskStatus>('open')
   const [statusPending, startStatusTransition] = useTransition()
 
   const [safetyRules, setSafetyRules] = useState<string[]>([''])
@@ -410,7 +410,8 @@ export default function TasksClient({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return tasks.filter((t) => {
-      if (filter !== 'all' && t.status !== filter) return false
+      if (filter === 'open' && t.status === 'done') return false
+      if (filter !== 'open' && filter !== 'all' && t.status !== filter) return false
       if (q) {
         const aName = assetName(t.assetId)
         const uName = userName(t.assignedTo)
@@ -466,7 +467,23 @@ export default function TasksClient({
       {/* Filtros por estado, pesquisa e tamanho de página */}
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div className="flex gap-2 flex-wrap items-center">
-          {(['all', ...statuses] as const).map((s) => (
+          <button
+            onClick={() => setFilter('open')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
+              filter === 'open' ? 'bg-industrial-blue text-white' : 'bg-white border border-outline text-industrial-blue-light hover:bg-slate-50 hover:text-industrial-blue'
+            }`}
+          >
+            Não Concluídas
+          </button>
+          <button
+            onClick={() => setFilter('all')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
+              filter === 'all' ? 'bg-industrial-blue text-white' : 'bg-white border border-outline text-industrial-blue-light hover:bg-slate-50 hover:text-industrial-blue'
+            }`}
+          >
+            Todas as OTs
+          </button>
+          {statuses.map((s) => (
             <button
               key={s}
               onClick={() => setFilter(s)}
@@ -474,7 +491,7 @@ export default function TasksClient({
                 filter === s ? 'bg-industrial-blue text-white' : 'bg-white border border-outline text-industrial-blue-light hover:bg-slate-50 hover:text-industrial-blue'
               }`}
             >
-              {s === 'all' ? dict.tasks.allTasks : STATUS_LABELS[s]}
+              {STATUS_LABELS[s]}
             </button>
           ))}
         </div>
@@ -527,6 +544,21 @@ export default function TasksClient({
                   <SortableTh label="CAUSA / OBS" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
                   <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <th className="px-3 py-2 text-right font-mono text-xs font-bold text-slate-700 uppercase tracking-wider">AÇÕES</th>
+                </tr>
+                {/* Linha de Filtro por Coluna */}
+                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filtrar..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Data..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Área..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="TAG..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="TI..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Avaria..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Técnico..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1 hidden xl:table-cell" />
+                  <td className="p-1 hidden xl:table-cell" />
+                  <td className="p-1 hidden lg:table-cell" />
+                  <td className="p-1" />
+                  <td className="p-1" />
                 </tr>
               </thead>
               <tbody>
