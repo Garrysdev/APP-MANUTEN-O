@@ -82,8 +82,9 @@ export default async function BillingPage({
   const availableUpgrades = ALL_PLANS.filter((p) => p.tier > currentPlanObj.tier)
 
   // Data de validade do plano (calculada ou renovação)
-  const planValidityDate = profile.company?.createdAt
-    ? new Date(new Date(profile.company.createdAt).setFullYear(new Date(profile.company.createdAt).getFullYear() + 1)).toLocaleDateString('pt-PT')
+  const compCreatedAt = (profile.company as any)?.createdAt
+  const planValidityDate = compCreatedAt
+    ? new Date(new Date(compCreatedAt).setFullYear(new Date(compCreatedAt).getFullYear() + 1)).toLocaleDateString('pt-PT')
     : '31/12/2026'
 
   return (
