@@ -66,6 +66,8 @@ function parseTask(formData: FormData) {
     tipo: TIPOS.includes(tipo) ? tipo : 'preventiva',
     status: STATUSES.includes(status) ? status : 'pending',
     dueDate: String(formData.get('dueDate') ?? '').trim() || null,
+    plannedStartDate: String(formData.get('plannedStartDate') ?? '').trim() || null,
+    observacoes: String(formData.get('observacoes') ?? '').trim() || null,
     safetyRules: parseStringArray('safetyRules'),
     materialsRequired: parseStringArray('materialsRequired'),
     maintenancePlanId,

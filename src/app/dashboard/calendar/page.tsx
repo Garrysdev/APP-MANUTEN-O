@@ -33,8 +33,8 @@ export default async function CalendarPage() {
       <CalendarClient
         tasks={tasks}
         plans={plans}
-        assets={assets.map((a) => ({ id: a.id, name: a.name }))}
-        users={users.map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl }))}
+        assets={assets.map((a) => ({ id: a.id, name: a.name, tag: a.tag }))}
+        users={users.map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl, active: u.active }))}
         role={profile.role}
         userId={profile.id}
       />

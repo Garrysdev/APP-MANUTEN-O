@@ -111,6 +111,8 @@ export interface Task {
   tipo: TipoTarefa
   status: TaskStatus
   dueDate?: string | null // ISO date
+  plannedStartDate?: string | null // ISO date/datetime: Data planeada de início
+  observacoes?: string | null // Observações adicionais da OT
   safetyRules?: string[] | null
   materialsRequired?: string[] | null
   maintenancePlanId?: string | null
@@ -118,6 +120,16 @@ export interface Task {
   createdBy: string
   createdAt: string
   updatedAt: string
+}
+
+export interface SafetyRule {
+  id: string
+  companyId: string
+  title: string
+  description?: string | null
+  category?: string | null
+  active: boolean
+  createdAt: string
 }
 
 export interface ChecklistItem {

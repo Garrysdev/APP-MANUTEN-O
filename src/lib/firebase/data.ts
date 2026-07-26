@@ -7,7 +7,7 @@ import type { DocumentSnapshot } from 'firebase-admin/firestore'
 import { adminDb, adminAuth } from './admin'
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { calculateTotalCost } from '../finance'
-import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type TaskCriticidade, type Periodicidade, type Executor } from '@/types/models'
+import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
   return { id: doc.id, ...doc.data() } as T
@@ -894,4 +894,59 @@ export async function calculateTaskCost(companyId: string, taskId: string): Prom
   const totalCost = calculateTotalCost(interventions, materials, userRates)
 
   await adminDb().collection('tasks').doc(taskId).update({ totalCost })
+}
+
+// ── SAFETY RULES (REGRAS DE SEGURANÇA) ──────────────────────────────────────
+const DEFAULT_SAFETY_RULES: SafetyRule[] = [
+  { id: 'sr_1', companyId: 'default', title: 'Uso obrigatório de EPI (Capacete, Luvas, Calçado de Segurança)', category: 'Geral', active: true, createdAt: new Date().toISOString() },
+  { id: 'sr_2', companyId: 'default', title: 'Bloqueio e Etiquetagem de Energia (LOTO)', category: 'Elétrico', active: true, createdAt: new Date().toISOString() },
+  { id: 'sr_3', companyId: 'default', title: 'Verificar ausência de tensão antes de intervir', category: 'Elétrico', active: true, createdAt: new Date().toISOString() },
+  { id: 'sr_4', companyId: 'default', title: 'Utilizar arnês e linha de vida para trabalhos em altura (> 2m)', category: 'Trabalho em Altura', active: true, createdAt: new Date().toISOString() },
+  { id: 'sr_5', companyId: 'default', title: 'Despressurizar circuitos hidráulicos e pneumáticos antes da desmontagem', category: 'Mecânico', active: true, createdAt: new Date().toISOString() },
+  { id: 'sr_6', companyId: 'default', title: 'Ventilar e testar atmosfera em espaços confinados', category: 'Espaços Confinados', active: true, createdAt: new Date().toISOString() },
+]
+
+export const listSafetyRules = cache(async function(companyId: string): Promise<SafetyRule[]> {
+  try {
+    const snap = await adminDb()
+      .collection('safety_rules')
+      .where('companyId', '==', companyId)
+      .get()
+    const docs = snap.docs.map((d) => serialize<SafetyRule>(d))
+    if (docs.length > 0) return docs.sort((a, b) => a.title.localeCompare(b.title))
+  } catch (err) {
+    console.error('[listSafetyRules] Error / Quota Exceeded:', err)
+  }
+  return DEFAULT_SAFETY_RULES
+})
+
+export async function createSafetyRule(
+  companyId: string,
+  data: Omit<SafetyRule, 'id' | 'companyId' | 'createdAt'>
+): Promise<string> {
+  const now = new Date().toISOString()
+  const ref = await adminDb().collection('safety_rules').add({
+    ...data,
+    companyId,
+    createdAt: now,
+  })
+  return ref.id
+}
+
+export async function updateSafetyRule(
+  companyId: string,
+  id: string,
+  data: Partial<Omit<SafetyRule, 'id' | 'companyId' | 'createdAt'>>
+): Promise<void> {
+  const doc = await adminDb().collection('safety_rules').doc(id).get()
+  if (doc.exists && doc.data()?.companyId === companyId) {
+    await doc.ref.update(data)
+  }
+}
+
+export async function deleteSafetyRule(companyId: string, id: string): Promise<void> {
+  const doc = await adminDb().collection('safety_rules').doc(id).get()
+  if (doc.exists && doc.data()?.companyId === companyId) {
+    await doc.ref.delete()
+  }
 }

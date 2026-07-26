@@ -9,9 +9,9 @@ import { createTaskFromPlanAction } from './actions'
 import { createTaskAction } from '@/app/dashboard/tasks/actions'
 import Avatar from '@/components/ui/Avatar'
 
-type Ref = { id: string; name: string }
-type UserRef = Ref & { avatarUrl?: string | null }
-type ViewMode = 'month' | 'week'
+type Ref = { id: string; name: string; tag?: string | null }
+type UserRef = Ref & { avatarUrl?: string | null; active?: boolean }
+type ViewMode = 'month' | 'week' | 'day'
 
 interface CalendarEvent {
   date: string
@@ -101,7 +101,8 @@ const MONTH_NAMES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ]
 const WEEK_DAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-const TIPOS: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
+// Sem o Tipo PM na criação manual de OT (apenas no Plano de Manutenção)
+const TIPOS_CREATION: TipoTarefa[] = ['preventiva', 'curativa', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
 
 export const PREDEFINED_SAFETY_RULES = [
@@ -136,9 +137,11 @@ function DynamicList({ label, icon, items, onChange, suggestions }: {
   function remove(i: number) { onChange(items.filter((_, j) => j !== i)) }
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
-        {icon}{label}
-      </label>
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
+          {icon}{label}
+        </label>
+      )}
       <div className="space-y-1.5">
         {items.map((item, i) => (
           <div key={i} className="flex items-center gap-1.5">
@@ -211,7 +214,9 @@ export default function CalendarClient({
   const [ntCriticidade, setNtCriticidade] = useState<TaskCriticidade>('verde')
   const [ntAsset, setNtAsset] = useState('')
   const [ntAssigned, setNtAssigned] = useState(role === 'technician' ? userId : '')
+  const [ntPlannedStartDate, setNtPlannedStartDate] = useState('')
   const [ntDescription, setNtDescription] = useState('')
+  const [ntObservacoes, setNtObservacoes] = useState('')
   const [ntSafetyRules, setNtSafetyRules] = useState<string[]>([''])
   const [ntMaterials, setNtMaterials] = useState<string[]>([''])
   const [ntBusy, startNtTransition] = useTransition()
@@ -223,8 +228,15 @@ export default function CalendarClient({
     if (viewMode === 'month') {
       if (month === 0) { setYear((y) => y - 1); setMonth(11) }
       else setMonth((m) => m - 1)
-    } else {
+    } else if (viewMode === 'week') {
       setWeekStart((ws) => { const d = new Date(ws); d.setDate(d.getDate() - 7); return d })
+    } else {
+      // Day view: recuar 1 dia
+      if (selectedDate) {
+        const d = new Date(selectedDate + 'T12:00:00')
+        d.setDate(d.getDate() - 1)
+        setSelectedDate(toYMD(d))
+      }
     }
   }
   function nextPeriod() {
@@ -232,8 +244,15 @@ export default function CalendarClient({
     if (viewMode === 'month') {
       if (month === 11) { setYear((y) => y + 1); setMonth(0) }
       else setMonth((m) => m + 1)
-    } else {
+    } else if (viewMode === 'week') {
       setWeekStart((ws) => { const d = new Date(ws); d.setDate(d.getDate() + 7); return d })
+    } else {
+      // Day view: avançar 1 dia
+      if (selectedDate) {
+        const d = new Date(selectedDate + 'T12:00:00')
+        d.setDate(d.getDate() + 1)
+        setSelectedDate(toYMD(d))
+      }
     }
   }
 
@@ -246,6 +265,7 @@ export default function CalendarClient({
     : buildEventMap(tasks, plans, weekStart, weekEnd)
 
   const todayStr = toYMD(today)
+  const activeSelectedDate = selectedDate || todayStr
   const selectedEvents = selectedDate ? (eventMap.get(selectedDate) ?? []) : []
 
   // Month grid cells
@@ -263,12 +283,14 @@ export default function CalendarClient({
   // Header label
   const headerLabel = viewMode === 'month'
     ? `${MONTH_NAMES[month]} ${year}`
-    : (() => {
+    : viewMode === 'week'
+    ? (() => {
         const ws = weekStart.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' })
         const we = new Date(weekStart); we.setDate(we.getDate() + 6)
         const weStr = we.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' })
         return `${ws} — ${weStr}`
       })()
+    : new Date(activeSelectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   async function handleCreateFromPlan() {
     if (!selectedPlan || !selectedDate) return
@@ -287,16 +309,18 @@ export default function CalendarClient({
     })
   }
 
-  function openNewTask() {
+  function openNewTaskForDate(targetDate: string) {
+    setSelectedDate(targetDate)
     setNtTitle(''); setNtTipo('preventiva'); setNtCriticidade('verde')
-    setNtAsset(''); setNtAssigned(role === 'technician' ? userId : ''); setNtDescription('')
+    setNtAsset(''); setNtAssigned(role === 'technician' ? userId : '')
+    setNtPlannedStartDate(`${targetDate}T09:00`)
+    setNtDescription(''); setNtObservacoes('')
     setNtSafetyRules(['']); setNtMaterials(['']); setNtError('')
     setNewTaskOpen(true)
   }
 
   async function handleCreateNewTask() {
     if (!selectedDate || !ntTitle.trim()) { setNtError('O título é obrigatório.'); return }
-    if (selectedDate < todayStr) { setNtError('Não é possível agendar tarefas em datas passadas.'); return }
     startNtTransition(async () => {
       const fd = new FormData()
       fd.set('title', ntTitle.trim())
@@ -304,7 +328,9 @@ export default function CalendarClient({
       fd.set('criticidade', ntCriticidade)
       fd.set('status', 'pending')
       fd.set('dueDate', selectedDate)
+      if (ntPlannedStartDate) fd.set('plannedStartDate', ntPlannedStartDate)
       if (ntDescription.trim()) fd.set('description', ntDescription.trim())
+      if (ntObservacoes.trim()) fd.set('observacoes', ntObservacoes.trim())
       if (ntAsset) fd.set('assetId', ntAsset)
       if (ntAssigned) fd.set('assignedTo', ntAssigned)
       const validSafety = ntSafetyRules.filter((r) => r.trim())
@@ -330,10 +356,13 @@ export default function CalendarClient({
   function userName(id?: string | null) { return users.find((u) => u.id === id)?.name ?? '—' }
   function userRef(id?: string | null) { return users.find((u) => u.id === id) }
 
+  // Horas para vista Dia (08:00 às 20:00)
+  const HOURS = Array.from({ length: 13 }, (_, i) => String(i + 8).padStart(2, '0') + ':00')
+
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+      {/* Header com botão + Nova OT no topo */}
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <button onClick={prevPeriod} className="p-2 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800">
             <ChevronLeft className="h-5 w-5" />
@@ -347,28 +376,47 @@ export default function CalendarClient({
         </div>
 
         <div className="flex items-center gap-3 justify-center flex-wrap">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-slate-100">{headerLabel}</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-slate-100 capitalize">{headerLabel}</h2>
           <div className="flex rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden text-xs">
             <button
-              onClick={() => { setViewMode('month'); setSelectedDate(null) }}
+              onClick={() => setViewMode('month')}
               className={`px-3.5 py-1.5 font-bold transition-colors ${viewMode === 'month' ? 'bg-[#1B4F72] text-white' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
             >
               Mês
             </button>
             <button
-              onClick={() => { setViewMode('week'); setSelectedDate(null) }}
+              onClick={() => setViewMode('week')}
               className={`px-3.5 py-1.5 font-bold transition-colors ${viewMode === 'week' ? 'bg-[#1B4F72] text-white' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
             >
               Semana
             </button>
+            <button
+              onClick={() => {
+                setViewMode('day')
+                if (!selectedDate) setSelectedDate(todayStr)
+              }}
+              className={`px-3.5 py-1.5 font-bold transition-colors ${viewMode === 'day' ? 'bg-[#1B4F72] text-white' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
+            >
+              Dia
+            </button>
           </div>
         </div>
+
+        {/* Botão + Nova OT colocado no topo */}
+        <button
+          onClick={() => openNewTaskForDate(selectedDate || todayStr)}
+          className="h-9 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+        >
+          <Plus size={16} />
+          <span>+ Nova OT</span>
+        </button>
       </div>
 
       {/* Legend */}
       <div className="flex items-center gap-4 mb-3 text-xs font-semibold text-gray-500">
-        <span className="flex items-center gap-1.5"><ClipboardList className="h-4 w-4 text-[#2E86C1]" /> OT atribuída (Clique para abrir)</span>
+        <span className="flex items-center gap-1.5"><ClipboardList className="h-4 w-4 text-[#2E86C1]" /> OT atribuída</span>
         <span className="flex items-center gap-1.5"><Wrench className="h-4 w-4 text-amber-500" /> Plano de manutenção</span>
+        <span className="text-[11px] text-slate-400 italic">(Clique em qualquer dia/hora para abrir logo a criação de OT)</span>
       </div>
 
       {/* Month grid */}
@@ -390,7 +438,7 @@ export default function CalendarClient({
               return (
                 <div
                   key={i}
-                  onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                  onClick={() => openNewTaskForDate(dateStr)}
                   className={`border-b border-r border-slate-100 dark:border-slate-800 min-h-[110px] lg:min-h-[135px] p-2 cursor-pointer transition-all flex flex-col justify-between ${
                     isSelected ? 'bg-blue-50/80 dark:bg-blue-900/30 ring-2 ring-blue-400 z-10' : isPast ? 'bg-gray-50/60 dark:bg-slate-900/40 hover:bg-gray-100/60 dark:hover:bg-slate-800/40' : 'hover:bg-gray-50 dark:hover:bg-slate-800/40'
                   }`}
@@ -417,7 +465,7 @@ export default function CalendarClient({
                             if (ev.type === 'task' && ev.task) {
                               router.push(`/dashboard/tasks/${ev.task.id}`)
                             } else {
-                              setSelectedDate(dateStr)
+                              openNewTaskForDate(dateStr)
                             }
                           }}
                           title={`Clique para abrir: ${ev.label}`}
@@ -473,7 +521,7 @@ export default function CalendarClient({
               return (
                 <div
                   key={i}
-                  onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                  onClick={() => openNewTaskForDate(dateStr)}
                   className={`min-h-[140px] p-1.5 cursor-pointer transition-colors ${
                     isSelected ? 'bg-[#EAF4FB] dark:bg-blue-900/20' : isPast ? 'bg-gray-50/60 dark:bg-slate-900/40 hover:bg-gray-100/60 dark:hover:bg-slate-800/40' : 'hover:bg-gray-50 dark:hover:bg-slate-800/30'
                   }`}
@@ -487,7 +535,64 @@ export default function CalendarClient({
                       </div>
                     ))}
                     {events.length === 0 && (
-                      <p className="text-[10px] text-gray-300 dark:text-slate-600 text-center mt-4">—</p>
+                      <p className="text-[10px] text-gray-300 dark:text-slate-600 text-center mt-4">+</p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Day View (Grelha de Horas estilo Gmail / Google Calendar) */}
+      {viewMode === 'day' && (
+        <div className="card overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800">
+          <div className="p-3 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="font-extrabold text-sm text-slate-800 dark:text-slate-100">
+              Agenda do Dia: {new Date(activeSelectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </h3>
+            <button
+              onClick={() => openNewTaskForDate(activeSelectedDate)}
+              className="px-3 py-1 bg-safety-orange text-white text-xs font-bold rounded-lg hover:bg-safety-orange/90 transition-all flex items-center gap-1"
+            >
+              <Plus size={14} /> + Nova OT Neste Dia
+            </button>
+          </div>
+
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {HOURS.map((hour) => {
+              const events = selectedEvents
+              return (
+                <div
+                  key={hour}
+                  onClick={() => openNewTaskForDate(activeSelectedDate)}
+                  className="flex items-start gap-4 p-3 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors cursor-pointer group min-h-[56px]"
+                >
+                  <div className="w-14 font-mono text-xs font-bold text-slate-400 dark:text-slate-500 shrink-0">
+                    {hour}
+                  </div>
+                  <div className="flex-1 flex flex-wrap gap-2 items-center">
+                    {events.map((ev, idx) => (
+                      <div
+                        key={idx}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (ev.type === 'task' && ev.task) router.push(`/dashboard/tasks/${ev.task.id}`)
+                        }}
+                        className={`text-xs font-bold px-2.5 py-1 rounded-lg border shadow-sm ${
+                          ev.type === 'task'
+                            ? 'bg-blue-50 text-blue-900 border-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700'
+                            : 'bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
+                        }`}
+                      >
+                        {ev.label}
+                      </div>
+                    ))}
+                    {events.length === 0 && (
+                      <span className="text-xs text-slate-300 dark:text-slate-600 group-hover:text-safety-orange font-medium transition-colors">
+                        + Clique para agendar OT às {hour}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -626,7 +731,7 @@ export default function CalendarClient({
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Tipo *</label>
                   <select value={ntTipo} onChange={(e) => setNtTipo(e.target.value as TipoTarefa)} className="input">
-                    {TIPOS.map((t) => <option key={t} value={t}>{TIPO_LABELS[t]}</option>)}
+                    {TIPOS_CREATION.map((t) => <option key={t} value={t}>{TIPO_LABELS[t]}</option>)}
                   </select>
                 </div>
                 <div>
@@ -636,35 +741,87 @@ export default function CalendarClient({
                   </select>
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Equipamento</label>
                   <select value={ntAsset} onChange={(e) => setNtAsset(e.target.value)} className="input">
                     <option value="">— Nenhum —</option>
-                    {assets.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    {assets.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.tag ? `[${a.tag}] ${a.name}` : a.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Responsável</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Responsável (Ativos)</label>
                   <select value={ntAssigned} onChange={(e) => setNtAssigned(e.target.value)} className="input">
                     <option value="">— Ninguém —</option>
-                    {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    {users.filter((u) => u.active !== false).map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {(u as any).abbreviation ? `[${(u as any).abbreviation}] ${u.name}` : u.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
-              <DynamicList
-                label="Regras de segurança"
-                icon={<ShieldAlert className="h-4 w-4 text-amber-500" />}
-                items={ntSafetyRules}
-                onChange={setNtSafetyRules}
-                suggestions={PREDEFINED_SAFETY_RULES}
-              />
-              <DynamicList
-                label="Materiais a utilizar"
-                icon={<Package className="h-4 w-4 text-gray-500" />}
-                items={ntMaterials}
-                onChange={setNtMaterials}
-              />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data Planeada de Início</label>
+                <input
+                  type="datetime-local"
+                  value={ntPlannedStartDate}
+                  onChange={(e) => setNtPlannedStartDate(e.target.value)}
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Observações</label>
+                <textarea
+                  value={ntObservacoes}
+                  onChange={(e) => setNtObservacoes(e.target.value)}
+                  className="input"
+                  rows={2}
+                  placeholder="Observações ou detalhes da intervenção..."
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                    <ShieldAlert className="h-3.5 w-3.5 text-amber-500" /> Regras de Segurança
+                  </span>
+                  <a href="/dashboard/safety-rules" target="_blank" className="text-[11px] font-bold text-safety-orange hover:underline">
+                    Gerir Itens de Segurança ↗
+                  </a>
+                </div>
+                <DynamicList
+                  label=""
+                  icon={null}
+                  items={ntSafetyRules}
+                  onChange={setNtSafetyRules}
+                  suggestions={PREDEFINED_SAFETY_RULES}
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                    <Package className="h-3.5 w-3.5 text-slate-500" /> Materiais a utilizar
+                  </span>
+                  <a href="/dashboard/stocks" target="_blank" className="text-[11px] font-bold text-safety-orange hover:underline">
+                    Se não existir no stock, crie primeiro no Stock ↗
+                  </a>
+                </div>
+                <DynamicList
+                  label=""
+                  icon={null}
+                  items={ntMaterials}
+                  onChange={setNtMaterials}
+                />
+              </div>
             </div>
 
             {ntError && (

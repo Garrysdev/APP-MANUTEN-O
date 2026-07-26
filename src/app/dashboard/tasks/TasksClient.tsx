@@ -445,7 +445,7 @@ export default function TasksClient({
 
   const statuses: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
   const criticidades: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
-  const tipos: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
+  const tipos: TipoTarefa[] = ['preventiva', 'curativa', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in-up">
@@ -706,7 +706,11 @@ export default function TasksClient({
                     required
                   >
                     <option value="">— Selecionar Equipamento —</option>
-                    {assets.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    {assets.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.tag ? `[${a.tag}] ${a.name}` : a.name}
+                      </option>
+                    ))}
                   </select>
                   {assets.length === 0 && (
                     <p className="text-[10px] text-red-500 font-medium mt-1">
@@ -715,127 +719,82 @@ export default function TasksClient({
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Responsável</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Responsável (Ativos)</label>
                   <select name="assignedTo" defaultValue={editing ? (editing.assignedTo ?? '') : (role === 'technician' ? userId : '')} className="input">
                     <option value="">— Ninguém —</option>
-                    {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    {users.filter((u) => u.active !== false).map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {(u as any).abbreviation ? `[${(u as any).abbreviation}] ${u.name}` : u.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
-              {/* Tarefas do Plano de Manutenção para o equipamento escolhido */}
-              {tipo === 'plano' && assetId && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3">
-                  <div className="flex items-center gap-1.5 text-sm font-medium text-blue-800 mb-2">
-                    <ClipboardList className="h-4 w-4" />
-                    OTs do Plano de Manutenção para este equipamento
-                  </div>
-                  {plansLoading && !plansLoaded ? (
-                    <p className="text-xs text-gray-500">A carregar planos…</p>
-                  ) : planosDoEquipamento.length === 0 ? (
-                    <p className="text-xs text-gray-500">Não há OTs de plano definidas para este equipamento.</p>
-                  ) : (
-                    <ul className="space-y-1.5 max-h-56 overflow-y-auto">
-                      {planosDoEquipamento.map((p) => {
-                        const sel = maintenancePlanId === p.id
-                        return (
-                          <li key={p.id}>
-                            <button
-                              type="button"
-                              onClick={() => aplicarPlano(p)}
-                              className={`w-full text-left rounded-md border px-2.5 py-2 text-sm transition-colors ${
-                                sel ? 'border-blue-500 bg-white ring-1 ring-blue-300' : 'border-gray-200 bg-white hover:border-blue-300'
-                              }`}
-                            >
-                              <span className="font-medium text-gray-800">{p.title}</span>
-                              <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-                                {p.periodicidade && (
-                                  <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">
-                                    <CalendarClock className="h-3 w-3" />
-                                    {PERIODICIDADE_LABELS[p.periodicidade]}
-                                  </span>
-                                )}
-                                {p.executor === 'externo' && (
-                                  <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">
-                                    <Building2 className="h-3 w-3" /> Externo
-                                  </span>
-                                )}
-                                {p.legal && (
-                                  <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-red-700">
-                                    <Scale className="h-3 w-3" /> Legal
-                                  </span>
-                                )}
-                                {p.months && <span className="text-gray-400">{p.months}</span>}
-                              </span>
-                            </button>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                  {maintenancePlanId && (
-                    <button
-                      type="button"
-                      onClick={() => setMaintenancePlanId('')}
-                      className="mt-2 text-xs text-gray-500 hover:text-gray-700 underline"
-                    >
-                      Limpar plano selecionado
-                    </button>
-                  )}
-                  {!maintenancePlanId && (
-                    <div className="mt-3 pt-3 border-t border-blue-200">
-                      <label className="block text-xs font-medium text-blue-800 mb-1.5">
-                        Ou define a periodicidade — cria automaticamente um novo Plano de Manutenção ligado a esta OT
-                      </label>
-                      <select
-                        value={novaPeriodicidade}
-                        onChange={(e) => setNovaPeriodicidade(e.target.value as Periodicidade | '')}
-                        className="input text-sm"
-                      >
-                        <option value="">— OT pontual, sem periodicidade —</option>
-                        {PERIODICIDADE_OPTIONS.map((p) => <option key={p} value={p}>{PERIODICIDADE_LABELS[p]}</option>)}
-                      </select>
-                    </div>
-                  )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data Planeada de Início</label>
+                  <input type="datetime-local" name="plannedStartDate" defaultValue={editing?.plannedStartDate ?? ''} className="input" />
                 </div>
-              )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Prazo / Conclusão</label>
+                  <input type="date" name="dueDate" defaultValue={editing?.dueDate ?? ''} className="input" />
+                </div>
+              </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Descrição</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Descrição da Intervenção</label>
                 <textarea name="description" defaultValue={editing?.description ?? ''} className="input" rows={2} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Observações Adicionais</label>
+                <textarea name="observacoes" defaultValue={editing?.observacoes ?? ''} className="input" rows={2} placeholder="Instruções específicas ou notas sobre a intervenção..." />
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Estado</label>
                   <select name="status" defaultValue={editing?.status ?? 'pending'} className="input">
                     {statuses.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Prazo</label>
-                  <input type="date" name="dueDate" defaultValue={editing?.dueDate ?? ''} className="input" />
-                </div>
               </div>
 
-              {/* Regras de segurança */}
-              <DynamicList
-                label="Regras de segurança"
-                icon={ShieldAlert}
-                items={safetyRules}
-                onChange={setSafetyRules}
-                placeholder="Ex.: Usar EPI, desligar máquina antes…"
-                addLabel="Adicionar regra"
-                suggestions={PREDEFINED_SAFETY_RULES}
-              />
+              {/* Regras de segurança com link para gestão dedicada */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Regras de Segurança</span>
+                  <a href="/dashboard/safety-rules" target="_blank" className="text-[11px] font-bold text-safety-orange hover:underline">
+                    Gerir Itens de Segurança ↗
+                  </a>
+                </div>
+                <DynamicList
+                  label=""
+                  icon={ShieldAlert}
+                  items={safetyRules}
+                  onChange={setSafetyRules}
+                  placeholder="Ex.: Usar EPI, desligar máquina antes…"
+                  addLabel="Adicionar regra"
+                  suggestions={PREDEFINED_SAFETY_RULES}
+                />
+              </div>
 
-              {/* Materiais a utilizar — vêm da BD Stocks, não texto livre (tarefa 09) */}
-              <StockMaterialsList
-                items={materialsRequired}
-                onChange={setMaterialsRequired}
-                stockRefs={stockRefs}
-                stockLoading={stockLoading}
-              />
+              {/* Materiais a utilizar com aviso para criar no stock primeiro se não existir */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Materiais a utilizar</span>
+                  <a href="/dashboard/stocks" target="_blank" className="text-[11px] font-bold text-safety-orange hover:underline">
+                    Se não existir no stock, crie primeiro no Stock ↗
+                  </a>
+                </div>
+                <StockMaterialsList
+                  items={materialsRequired}
+                  onChange={setMaterialsRequired}
+                  stockRefs={stockRefs}
+                  stockLoading={stockLoading}
+                />
+              </div>
 
               {error && <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">{error}</div>}
 

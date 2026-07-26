@@ -80,6 +80,7 @@ const managerNavGroups: NavGroup[] = [
     groupName: 'Módulos Enterprise',
     items: [
       { href: '/dashboard/compliance', key: 'compliance', icon: ShieldCheck, feature: 'compliance' },
+      { href: '/dashboard/safety-rules', key: 'safetyRules', icon: ShieldCheck, feature: 'compliance' },
     ]
   },
   {
