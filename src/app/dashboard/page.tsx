@@ -3,20 +3,10 @@ import Link from 'next/link'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listTasks, listUsers } from '@/lib/firebase/data'
 import { formatDate } from '@/lib/utils'
-import { ClipboardList, Users, Timer, ArrowUp, ArrowDown, Filter, MoreVertical, AlertTriangle, Plus, Check, Calendar as CalendarIcon, AlertCircle, X, ChevronRight, ArrowLeft, Clock } from 'lucide-react'
+import { ClipboardList, Users, Timer, ArrowUp, ArrowDown, Plus, AlertCircle, FolderKanban } from 'lucide-react'
+import DashboardTablesClient from './DashboardTablesClient'
 
 export const dynamic = 'force-dynamic'
-
-const getStatusStyles = (status: string) => {
-  switch (status) {
-    case 'in_progress': return 'bg-blue-50 text-blue-700 border-blue-200';
-    case 'pending': return 'bg-slate-50 text-slate-700 border-slate-200';
-    case 'vermelho': return 'bg-red-50 text-red-700 border-red-200';
-    case 'done': return 'bg-green-50 text-green-700 border-green-200';
-    case 'cancelled': return 'bg-slate-50 text-slate-700 border-slate-200';
-    default: return 'bg-slate-50 text-slate-700 border-slate-200';
-  }
-};
 
 const StatCard = ({ label, value, icon: Icon, trend, sub, href }: { label: string; value: string; icon: any; trend?: string; sub?: string; href?: string }) => {
   const content = (
@@ -56,33 +46,47 @@ export default async function DashboardPage() {
 
   const technicians = usersList.filter(u => u.role === 'technician');
   
-  const activeTasks = tasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled');
-  const completedTasks = tasks.filter((t) => t.status === 'done');
+  const isProject = (t: any) =>
+    t.source === 'folha_projetos' ||
+    t.isProject === true ||
+    (t.description || '').toLowerCase().includes('projecto') ||
+    (t.description || '').toLowerCase().includes('projeto')
+
+  const normalActiveTasks = tasks.filter((t) => !isProject(t) && t.status !== 'done' && t.status !== 'cancelled')
+  const projectActiveTasks = tasks.filter((t) => isProject(t) && t.status !== 'done' && t.status !== 'cancelled')
+  const completedTasks = tasks.filter((t) => t.status === 'done')
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-outline/60 pb-5">
         <h1 className="text-3xl font-extrabold text-industrial-blue tracking-tight">Dashboard de Manutenção</h1>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
           <Link 
             href="/dashboard/tasks"
-            className="flex-1 sm:flex-initial h-11 px-5 bg-white border border-outline text-industrial-blue rounded-xl font-bold text-sm shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+            className="flex-1 sm:flex-initial h-11 px-4 bg-white border border-outline text-industrial-blue rounded-xl font-bold text-sm shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
           >
             <ClipboardList size={18} className="text-industrial-blue-light" />
-            <span>Gestão de Tarefas</span>
+            <span>Gestão de OTs</span>
           </Link>
           <Link 
             href="/dashboard/tasks?create=true"
-            className="flex-1 sm:flex-initial h-11 px-5 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+            className="flex-1 sm:flex-initial h-11 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
           >
             <Plus size={18} className="stroke-[2.5]" />
-            <span>Nova Intervenção</span>
+            <span>+ Nova OT</span>
+          </Link>
+          <Link 
+            href="/dashboard/projects?create=true"
+            className="flex-1 sm:flex-initial h-11 px-4 bg-industrial-blue hover:bg-industrial-blue/90 text-white rounded-xl font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+          >
+            <FolderKanban size={18} />
+            <span>+ Novo Projeto</span>
           </Link>
         </div>
       </div>
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard label="Ordens Ativas" value={activeTasks.length.toString()} icon={ClipboardList} trend="+12%" href="/dashboard/tasks" />
+        <StatCard label="Ordens Ativas" value={normalActiveTasks.length.toString()} icon={ClipboardList} trend="+12%" href="/dashboard/tasks" />
         <StatCard 
           label="Técnicos Online" 
           value={Math.round(technicians.length * 0.8).toString()} 
@@ -93,115 +97,12 @@ export default async function DashboardPage() {
         <StatCard label="Tempo Médio Resolução" value="4.2" icon={Timer} sub="hrs" trend="-0.5h" href="/dashboard/history" />
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <section className="lg:col-span-2 bg-white border border-outline rounded-lg overflow-hidden flex flex-col shadow-sm">
-          <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-industrial-blue">Tarefas Ativas e Atribuídas</h3>
-              <p className="text-xs text-industrial-blue-light font-medium mt-1">Lista de ordens em curso ou aguardando início.</p>
-            </div>
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <Link 
-                href="/dashboard/tasks"
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 h-10 px-4 bg-slate-50 border border-outline text-sm font-bold text-industrial-blue rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                Geral de Tarefas
-              </Link>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[800px]">
-              <thead className="bg-slate-50 border-b border-outline">
-                <tr>
-                  <th className="font-mono text-xs font-bold text-industrial-blue-light py-3 px-6 uppercase tracking-wider">ID Ordem</th>
-                  <th className="font-mono text-xs font-bold text-industrial-blue-light py-3 px-6 uppercase tracking-wider">Equipamento</th>
-                  <th className="font-mono text-xs font-bold text-industrial-blue-light py-3 px-6 uppercase tracking-wider">Técnico</th>
-                  <th className="font-mono text-xs font-bold text-industrial-blue-light py-3 px-6 uppercase tracking-wider">Estado</th>
-                  <th className="font-mono text-xs font-bold text-industrial-blue-light py-3 px-6 uppercase tracking-wider">Data Agendada</th>
-                  <th className="font-mono text-xs font-bold text-industrial-blue-light py-3 px-6 uppercase tracking-wider text-center">Prioridade</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm font-medium text-industrial-blue">
-                {activeTasks.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-400">Nenhuma ordem de serviço ativa.</td>
-                  </tr>
-                ) : activeTasks.slice(0, 8).map((order) => (
-                  <tr 
-                    key={order.id} 
-                    className="border-b border-slate-100 hover:bg-slate-50 transition-colors group cursor-pointer"
-                  >
-                    <td className="py-4 px-6 font-mono text-industrial-blue-light uppercase">
-                      <Link href="/dashboard/tasks" className="block hover:underline">{order.id.slice(0, 8)}</Link>
-                    </td>
-                    <td className="py-4 px-6 font-bold group-hover:text-safety-orange transition-colors">
-                      <Link href="/dashboard/tasks" className="block">{order.title}</Link>
-                    </td>
-                    <td className="py-4 px-6 text-industrial-blue-light hover:text-safety-orange font-bold">
-                      <Link href="/dashboard/users" className="block font-mono">
-                        {usersList.find(u => u.id === order.assignedTo)?.abbreviation || usersList.find(u => u.id === order.assignedTo)?.name || order.assignedTo || 'Sem Atribuição'}
-                      </Link>
-                    </td>
-                    <td className="py-4 px-6">
-                      <Link href="/dashboard/tasks" className="block">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getStatusStyles(order.status === 'in_progress' && order.criticidade === 'vermelho' ? 'vermelho' : order.status)}`}>
-                          {order.status === 'in_progress' ? (order.criticidade === 'vermelho' ? 'Emergência' : 'Em Curso') : 
-                           order.status === 'pending' ? 'Atribuída' : 'Desconhecido'}
-                        </span>
-                      </Link>
-                    </td>
-                    <td className="py-4 px-6 text-industrial-blue-light text-xs font-mono">
-                      <Link href="/dashboard/tasks" className="block">{formatDate(order.createdAt)}</Link>
-                    </td>
-                    <td className="py-4 px-6 text-center">
-                      <Link href="/dashboard/tasks" className="block">
-                        {order.criticidade === 'vermelho' ? (
-                          <AlertTriangle size={18} className="text-red-500 mx-auto" />
-                        ) : (
-                          <div className={`w-1.5 h-1.5 rounded-full mx-auto ${order.criticidade === 'amarelo' ? 'bg-amber-400' : 'bg-slate-300'}`} />
-                        )}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="bg-white border border-outline rounded-lg p-6 shadow-sm flex flex-col gap-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-3">
-              <CalendarIcon className="text-safety-orange" size={24} />
-              <div>
-                <h3 className="font-bold text-industrial-blue">Próximas Tarefas</h3>
-                <p className="text-[10px] font-bold text-industrial-blue-light uppercase tracking-widest">A aguardar início</p>
-              </div>
-            </div>
-            <Link href="/dashboard/tasks" className="text-xs font-bold text-safety-orange hover:underline">Ver Todas →</Link>
-          </div>
-          
-          <div className="flex flex-col gap-3">
-            {activeTasks.filter(o => o.status === 'pending').slice(0, 5).map(order => (
-              <Link 
-                key={order.id} 
-                href="/dashboard/tasks"
-                className="flex flex-col gap-1 p-3 bg-slate-50 hover:bg-orange-50/50 hover:border-safety-orange/50 transition-all rounded-lg border border-slate-100 cursor-pointer group"
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-mono font-bold text-industrial-blue-light">{formatDate(order.createdAt)}</span>
-                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${getStatusStyles(order.status)}`}>Pendente</span>
-                </div>
-                <p className="text-xs font-bold text-industrial-blue group-hover:text-safety-orange transition-colors truncate">{order.title}</p>
-                <div className="flex justify-between items-center text-[10px] mt-1">
-                  <span className="text-industrial-blue-light italic">Técnico: {usersList.find(u => u.id === order.assignedTo)?.name || 'Sem Atribuição'}</span>
-                  <span className="text-safety-orange font-bold group-hover:translate-x-0.5 transition-transform">Ver OT →</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      </div>
+      {/* Quadros Lado a Lado: OTs Ativas e Atribuídas (Esquerdo) + Projetos (Direito) com Filtros por Colunas */}
+      <DashboardTablesClient
+        normalTasks={normalActiveTasks}
+        projectTasks={projectActiveTasks}
+        usersList={usersList}
+      />
 
       <section className="bg-white border border-outline rounded-lg overflow-hidden flex flex-col shadow-sm">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/30">
