@@ -163,16 +163,20 @@ export async function updateUserByManagerAction(
     if (abbreviation !== undefined) updateData.abbreviation = abbreviation
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl
 
-    // Se o email foi fornecido e é válido, atualiza no Firebase Auth e no Firestore
+    // Se o email foi fornecido e é válido, atualiza no Firebase Auth (se mudou) e no Firestore
     if (emailRaw && emailRaw.includes('@')) {
       try {
-        await adminAuth().updateUser(userId, { email: emailRaw })
+        const authUser = await adminAuth().getUser(userId).catch(() => null)
+        if (authUser && authUser.email?.toLowerCase() !== emailRaw.toLowerCase()) {
+          await adminAuth().updateUser(userId, { email: emailRaw })
+        }
         updateData.email = emailRaw
       } catch (authErr: any) {
         if (authErr.code === 'auth/email-already-exists') {
           return { error: 'Este e-mail já está a ser utilizado por outra conta.' }
         }
-        return { error: 'Erro ao atualizar e-mail de autenticação.' }
+        // Se for user fallback ou sem conta no Auth, atualiza no Firestore sem travar
+        updateData.email = emailRaw
       }
     }
 

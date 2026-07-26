@@ -626,14 +626,15 @@ export async function createUserDirect(
   companyId: string,
   data: { email: string; name: string; role: UserRole; tempPassword: string; avatarUrl?: string | null; specialty?: string | null; abbreviation?: string | null }
 ): Promise<string> {
+  const finalEmail = data.email.includes('@') ? data.email.trim().toLowerCase() : `${data.email.trim().toLowerCase()}@rgmaintenance.pt`
   const authUser = await adminAuth().createUser({
-    email: data.email,
+    email: finalEmail,
     password: data.tempPassword,
     displayName: data.name,
   })
   await adminDb().collection('users').doc(authUser.uid).set({
     companyId,
-    email: data.email,
+    email: finalEmail,
     name: data.name.trim(),
     abbreviation: data.abbreviation ? data.abbreviation.trim().toUpperCase() : null,
     role: data.role,
