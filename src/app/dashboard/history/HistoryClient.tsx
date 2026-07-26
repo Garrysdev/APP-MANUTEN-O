@@ -111,7 +111,7 @@ export default function HistoryClient({
         avaria: t?.title || iv.observations || '—',
         tecnicos: resolveTechName(iv.technicianId || t?.assignedTo),
         inicio: formatDateTime(iv.startedAt || iv.createdAt),
-        fim: formatDateTime(iv.endedAt || iv.updatedAt || iv.createdAt),
+        fim: formatDateTime(iv.endedAt || (iv as any).updatedAt || iv.createdAt),
         causa: iv.observations || t?.description || '—',
         rawIntervention: iv,
         rawTask: t
