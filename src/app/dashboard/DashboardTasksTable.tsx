@@ -33,7 +33,8 @@ export default function DashboardTasksTable({ tasks, users }: { tasks: Task[]; u
   }
 
   return (
-    <table className="w-full text-sm">
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm min-w-[500px] md:min-w-0">
       <thead>
         <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50">
           <SortableTh label="ID da OT" sortableKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-gray-500 dark:text-slate-400" />
@@ -71,7 +72,8 @@ export default function DashboardTasksTable({ tasks, users }: { tasks: Task[]; u
           )
         })}
       </tbody>
-    </table>
+      </table>
+    </div>
   )
 }
 

@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Mail, Building2, Shield, Save, KeyRound, Camera } from 'lucide-react'
+import { Mail, Building2, Shield, Save, KeyRound, Camera, Lock } from 'lucide-react'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
 import { useLanguage } from '@/components/providers/LanguageProvider'
@@ -138,34 +138,39 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 text-sm">
-          <div>
-            <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">E-mail</p>
-            <p className="flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
-              <Mail className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-              {profile.email}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">Papel</p>
-            <p className="flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
-              <Shield className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-              {ROLE_LABELS[profile.role]}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">Empresa</p>
-            <p className="flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
-              <Building2 className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-              {profile.company?.name ?? '—'}
-            </p>
-          </div>
-          {profile.role === 'manager' && profile.company?.plan && (
+        <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 p-4 mb-6">
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-bold mb-3 flex items-center gap-1.5">
+            <Lock className="h-3 w-3" /> Informação da conta · gerida pelo sistema
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div>
-              <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">Plano</p>
-              <p className="text-[#2E86C1] dark:text-blue-400 font-semibold capitalize">{profile.company.plan}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">E-mail</p>
+              <p className="flex items-center gap-1.5 text-gray-600 dark:text-slate-400">
+                <Mail className="h-3.5 w-3.5 text-gray-300 dark:text-slate-600 flex-shrink-0" />
+                {profile.email}
+              </p>
             </div>
-          )}
+            <div>
+              <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">Papel</p>
+              <p className="flex items-center gap-1.5 text-gray-600 dark:text-slate-400">
+                <Shield className="h-3.5 w-3.5 text-gray-300 dark:text-slate-600 flex-shrink-0" />
+                {ROLE_LABELS[profile.role]}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">Empresa</p>
+              <p className="flex items-center gap-1.5 text-gray-600 dark:text-slate-400">
+                <Building2 className="h-3.5 w-3.5 text-gray-300 dark:text-slate-600 flex-shrink-0" />
+                {profile.company?.name ?? '—'}
+              </p>
+            </div>
+            {profile.role === 'manager' && profile.company?.plan && (
+              <div>
+                <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">Plano</p>
+                <p className="text-[#2E86C1] dark:text-blue-400 font-semibold capitalize">{profile.company.plan}</p>
+              </div>
+            )}
+          </div>
         </div>
 
         <form onSubmit={handleSave} className="space-y-4 border-t border-gray-100 dark:border-slate-800 pt-5">
@@ -183,7 +188,7 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.profile.language}</label>
             <select
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
+              onChange={(e) => setLanguage(e.target.value as typeof language)}
               className="input max-w-sm"
             >
               <option value="pt">Português (PT)</option>
@@ -232,10 +237,12 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
 function WebPushButton({ userId, isSubscribed }: { userId: string, isSubscribed: boolean }) {
   const [busy, setBusy] = useState(false)
   const [success, setSuccess] = useState(isSubscribed)
+  const [error, setError] = useState('')
   const router = useRouter()
 
   async function handleSubscribe() {
     setBusy(true)
+    setError('')
     try {
       const { subscribeToPushNotifications } = await import('@/lib/webpush-client')
       const result = await subscribeToPushNotifications(userId)
@@ -243,21 +250,24 @@ function WebPushButton({ userId, isSubscribed }: { userId: string, isSubscribed:
         setSuccess(true)
         router.refresh()
       } else {
-        alert('Falha ao ativar notificações. Verifica as permissões do teu browser.')
+        setError('Falha ao ativar notificações. Verifica as permissões do browser.')
       }
-    } catch (err: any) {
-      alert(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao ativar notificações.')
     } finally {
       setBusy(false)
     }
   }
 
-  if (success) return <p className="text-sm text-green-600 font-medium">✓ Notificações ativas neste dispositivo</p>
-  
+  if (success) return <p className="text-sm text-green-600 dark:text-emerald-400 font-medium">✓ Notificações ativas neste dispositivo</p>
+
   return (
-    <button onClick={handleSubscribe} disabled={busy} className="btn-primary">
-      {busy ? 'A ativar...' : 'Ativar Notificações'}
-    </button>
+    <div className="space-y-2">
+      <button onClick={handleSubscribe} disabled={busy} className="btn-primary">
+        {busy ? 'A ativar...' : 'Ativar Notificações'}
+      </button>
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+    </div>
   )
 }
 

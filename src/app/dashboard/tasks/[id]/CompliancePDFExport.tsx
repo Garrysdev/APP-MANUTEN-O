@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { FileText, Loader2, ShieldCheck } from 'lucide-react'
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatDateTime } from '@/lib/utils'
 
 type Props = {
   task: any
@@ -103,7 +103,7 @@ export default function CompliancePDFExport({ task, interventions, materialsByIn
                         <div><span className="text-gray-500">Técnico ID:</span> {inv.technicianId}</div>
                         <div>
                           <span className="text-gray-500">Duração:</span>{' '}
-                          {inv.startedAt && inv.endedAt ? `${formatDate(inv.startedAt, true)} a ${formatDate(inv.endedAt, true)}` : 'N/A'}
+                          {inv.startedAt && inv.endedAt ? `${formatDateTime(inv.startedAt)} a ${formatDateTime(inv.endedAt)}` : 'N/A'}
                         </div>
                       </div>
                       

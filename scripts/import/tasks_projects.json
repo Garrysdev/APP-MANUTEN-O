@@ -1,0 +1,386 @@
+[
+ {
+  "section": "PROJECTOS URGENTES",
+  "area": "70",
+  "tag": "70 N1",
+  "tipo": "curativa",
+  "title": "Reparar gradil da rampa",
+  "technicians": "LM+LI"
+ },
+ {
+  "section": "PROJECTOS URGENTES",
+  "area": "80",
+  "tag": "80 T5",
+  "tipo": "curativa",
+  "title": "Acrescentar 2 células de carga ao 80 T5",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS URGENTES",
+  "area": "121B",
+  "tag": "121B R6 C1",
+  "tipo": "curativa",
+  "title": "Limpeza do Condensador do R6 (ver com produção)",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS URGENTES",
+  "area": "130EST",
+  "tag": "130EST U2",
+  "tipo": "curativa",
+  "title": "Trocar botões da botoneira de elevação das paletes",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS URGENTES",
+  "area": "130INK",
+  "tag": "130INK U#",
+  "tipo": "curativa",
+  "title": "Procurar sensor de posição para pneumáticos descarga fenólicas",
+  "technicians": null
+ },
+ {
+  "section": "PLANO MANUTENÇÃO",
+  "area": "130EST",
+  "tag": "130EST L1",
+  "tipo": "plano",
+  "title": "Verificar sensores pressão - EMM (pressão filtro)",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "30",
+  "tag": "30 Q3  PT",
+  "tipo": "curativa",
+  "title": "Substituição liquido refrigeração/anti-congelante do Gerador",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "101",
+  "tag": "101 Y1 B1",
+  "tipo": "curativa",
+  "title": "Empanque bomba água 1 fuga",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "101",
+  "tag": "100 IE1 Q1",
+  "tipo": "curativa",
+  "title": "Trocar QE Torres Arrefecimento (?)",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "120B",
+  "tag": "120B R3 V#",
+  "tipo": "curativa",
+  "title": "Fuga resina na junta tubagem de descarga R3",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "121B",
+  "tag": "121B R4 M1",
+  "tipo": "curativa",
+  "title": "Montar pás R4 (?)",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "121B",
+  "tag": "121B R3",
+  "tipo": "curativa",
+  "title": "Trocar válvula vapor DN 25 reator 3, não veda - confirmar se temos em stock",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "121B",
+  "tag": "121B R3 V#",
+  "tipo": "curativa",
+  "title": "Fuga colofónia 121B R3 V",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "121B",
+  "tag": "121B",
+  "tipo": "curativa",
+  "title": "QE - Ventiladores dos Moto-Redutores dos Agitadores - Ligação",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "130",
+  "tag": "130 IE1 Q6",
+  "tipo": "curativa",
+  "title": "Manutenção QE 130 - Q. Floculador IR",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "130EST",
+  "tag": "130EST T1",
+  "tipo": "curativa",
+  "title": "Junta motor reactor tem que ser trocada, tanque 130EST",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "90",
+  "tag": "90 H3",
+  "tipo": "curativa",
+  "title": "Fuga termofluido pressostato barrilete Caldeira",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "90",
+  "tag": "90 H3",
+  "tipo": "curativa",
+  "title": "Arranque Caldeira Nova",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "130INK",
+  "tag": "130INK F2",
+  "tipo": "curativa",
+  "title": "Pintar estrutura da descarga por baixo.",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS PRÓXIMA PARAGEM",
+  "area": "130INK",
+  "tag": "130INK F1",
+  "tipo": "curativa",
+  "title": "Aplicar \"gravilha\" na tela 1 (ver com produção)",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "20",
+  "tag": "20 ED",
+  "tipo": "curativa",
+  "title": "Limpeza e substituição das Lâmpadas do Hall Principal - Montagem de Andaime",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "60",
+  "tag": "60 A1 B2",
+  "tipo": "curativa",
+  "title": "Acabar QE para se ligarem as duas bombas",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "11",
+  "tag": "ED 11",
+  "tipo": "curativa",
+  "title": "Iluminação escadas exteriores",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "120A",
+  "tag": "120A",
+  "tipo": "curativa",
+  "title": "Colocar iluminação de emergência no 120B",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "120B",
+  "tag": "120B",
+  "tipo": "curativa",
+  "title": "Colocar iluminação de emergência no 120A",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "121A",
+  "tag": "121A",
+  "tipo": "curativa",
+  "title": "Colocar iluminação de emergência no 121A",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "121B",
+  "tag": "121B",
+  "tipo": "curativa",
+  "title": "Colocar iluminação de emergência no 121B",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "13 ED",
+  "tag": "13 ED",
+  "tipo": "curativa",
+  "title": "Substituir Iluminação de Emergência porta Scrubber",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "140",
+  "tag": "BL-301",
+  "tipo": "curativa",
+  "title": "Colocação de Corta Corrente no blower 1 ETAR",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "140",
+  "tag": "BL-302",
+  "tipo": "curativa",
+  "title": "Colocação de Corta Corrente no blower 2 ETAR",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "121B",
+  "tag": "121B R V",
+  "tipo": "curativa",
+  "title": "Colocar volante na válvula de despressurização",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "120B",
+  "tag": "120B R V",
+  "tipo": "curativa",
+  "title": "Instalar sistema de aspiração dos fumos das válvulas das amostras",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "121B",
+  "tag": "121B R2",
+  "tipo": "curativa",
+  "title": "Desmontar cone da coluna do R2 ???",
+  "technicians": "LI"
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "130INK",
+  "tag": "130INK F2",
+  "tipo": "curativa",
+  "title": "Trocar correntes e carretos  tambores da tela 2",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "130INK",
+  "tag": "130INK F1",
+  "tipo": "curativa",
+  "title": "Trocar correntes e carretos  tambores da tela 1",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "130INK",
+  "tag": "130INK U1",
+  "tipo": "curativa",
+  "title": "Trocar correntes 130INK saída BB tela 1",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "130INK",
+  "tag": "130INK U2",
+  "tipo": "curativa",
+  "title": "Trocar correntes 130INK saída BB tela 2",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "130EST",
+  "tag": "130EST F3",
+  "tipo": "curativa",
+  "title": "CorrigIr braçadeiras descarga",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "130INK",
+  "tag": "130INK F#",
+  "tipo": "curativa",
+  "title": "Revisão do sistema de roletes de afinação da chapa das telas",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "130EST",
+  "tag": "130EST F3",
+  "tipo": "curativa",
+  "title": "Ester cortar e soldar tela 3",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "130EST",
+  "tag": "130EST F3",
+  "tipo": "curativa",
+  "title": "Trocar botões do elevador dos sacos",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS ELÉCTRICOS",
+  "area": "130EST",
+  "tag": "130EST",
+  "tipo": "curativa",
+  "title": "Casquilhos do elevador de paletes dos sacos, com desgaste.",
+  "technicians": "LM"
+ },
+ {
+  "section": "PROJECTOS UB",
+  "area": "20",
+  "tag": "20 EX1",
+  "tipo": "curativa",
+  "title": "Instalação de sistema de medição de pressão, temperatura e amperagem na extrusora de pellets",
+  "technicians": "RG"
+ },
+ {
+  "section": "PROJECTOS UB",
+  "area": "20",
+  "tag": "20 MS1",
+  "tipo": "curativa",
+  "title": "PEDIDO DE INTERVENÇÃO - Máquina de solda Polystar laboratório",
+  "technicians": "Coelho e Cortesão (André)"
+ },
+ {
+  "section": "PROJECTOS UB",
+  "area": "40",
+  "tag": "40 EX1",
+  "tipo": "curativa",
+  "title": "PEDIDO DE INTERVENÇÃO - Secador de Pellets Edifício 4. é necessário reparar a tubagem de ar quente e ar frio.",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS UB",
+  "area": "40",
+  "tag": "40 EX1",
+  "tipo": "curativa",
+  "title": "Revisão da Extrusora:  Sondas de temperatura, válvulas de retenção, electro-válvulas",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS UB",
+  "area": "40",
+  "tag": "40 EX1",
+  "tipo": "curativa",
+  "title": "PEDIDO DE INTERVENÇÃO - Balança de pesagem de pós do edifício VT40 necessita de um extrator de pós",
+  "technicians": null
+ },
+ {
+  "section": "PROJECTOS UB",
+  "area": "PG",
+  "tag": "Glicerina",
+  "tipo": "curativa",
+  "title": "Ligação bomba glicerina",
+  "technicians": null
+ }
+]

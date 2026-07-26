@@ -20,8 +20,8 @@ export default function GlobalAIClient({ hasAiModule, aiCredits }: { hasAiModule
         <p className="text-gray-500 mb-6">
           Para aceder ao Consultor IA global, deves ativar este módulo no Marketplace.
         </p>
-        <Link href="/dashboard/marketplace" className="btn-primary inline-block">
-          Ir para o Marketplace
+        <Link href="/dashboard/billing" className="btn-primary inline-block">
+          Ver Planos
         </Link>
       </div>
     )

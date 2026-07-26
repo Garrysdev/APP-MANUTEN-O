@@ -1,0 +1,68 @@
+﻿
+> rg-maintenance@0.1.0 build
+> next build
+
+   ▲ Next.js 15.5.19
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ (pwa) Compiling for server...
+ ✓ (pwa) Compiling for server...
+ ✓ (pwa) Compiling for client (static)...
+ ○ (pwa) Service worker: G:\rg-maintenance\public\sw.js
+ ○ (pwa)   URL: /sw.js
+ ○ (pwa)   Scope: /
+ ✓ (pwa) Found a custom worker implementation at G:\rg-maintenance\worker\index.ts.
+ ✓ (pwa) Building the custom worker to G:\rg-maintenance\public\worker-a1de5ff3179ec112.js...
+ ✓ Compiled successfully in 101s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/10) ...
+   Generating static pages (2/10) 
+   Generating static pages (4/10) 
+   Generating static pages (7/10) 
+ ✓ Generating static pages (10/10)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS
+┌ ƒ /                                      178 B         114 kB
+├ ○ /_not-found                             1 kB         106 kB
+├ ƒ /api/auth/logout                       151 B         105 kB
+├ ƒ /api/auth/register                     151 B         105 kB
+├ ƒ /api/auth/session                      151 B         105 kB
+├ ƒ /api/stripe/checkout                   151 B         105 kB
+├ ƒ /api/stripe/portal                     151 B         105 kB
+├ ƒ /api/stripe/webhook                    151 B         105 kB
+├ ƒ /dashboard                             167 B         108 kB
+├ ƒ /dashboard/ai                        2.96 kB         111 kB
+├ ƒ /dashboard/assets                    16.2 kB         134 kB
+├ ƒ /dashboard/assets/[id]               15.3 kB         216 kB
+├ ƒ /dashboard/billing                   1.53 kB         106 kB
+├ ƒ /dashboard/calendar                   7.8 kB         125 kB
+├ ƒ /dashboard/finance                   2.44 kB         107 kB
+├ ƒ /dashboard/history                   4.96 kB         130 kB
+├ ƒ /dashboard/knowledge                  2.6 kB         107 kB
+├ ƒ /dashboard/maintenance-plan          7.56 kB         142 kB
+├ ƒ /dashboard/profile                   5.79 kB         120 kB
+├ ƒ /dashboard/reliability                 24 kB         219 kB
+├ ƒ /dashboard/reports                   2.47 kB         107 kB
+├ ƒ /dashboard/stocks                    5.22 kB         118 kB
+├ ƒ /dashboard/stocks/[id]               11.1 kB         119 kB
+├ ƒ /dashboard/tasks                       179 B         135 kB
+├ ƒ /dashboard/tasks/[id]                 186 kB         307 kB
+├ ƒ /dashboard/users                     6.86 kB         129 kB
+├ ○ /login                               2.61 kB         150 kB
+├ ƒ /register                            2.99 kB         148 kB
+└ ƒ /report/task/[id]                      519 B         105 kB
++ First Load JS shared by all             105 kB
+  ├ chunks/4696-f6f196a3312208bd.js      48.4 kB
+  ├ chunks/4bd1b696-100b9d70ed4e49c1.js  54.2 kB
+  └ other shared chunks (total)          2.23 kB
+
+
+ƒ Middleware                             32.5 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

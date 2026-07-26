@@ -12,7 +12,7 @@ import {
   Users, FileBarChart, CreditCard, Lock, UserCircle, Calendar, Wrench, Boxes, Activity, DollarSign, Brain, BookOpen,
   Plus, ShieldCheck
 } from 'lucide-react'
-import { planHas, type FeatureKey } from '@/lib/plans'
+import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import type { PlanName } from '@/types/models'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { dictionaries, type Language } from '@/lib/i18n/dictionaries'
@@ -124,32 +124,55 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
       {user.role === 'manager' ? (
         managerNavGroups.map((group, idx) => (
           <div key={idx} className="mb-4 last:mb-0">
-            <h3 className="px-4 text-[10px] font-mono font-bold text-industrial-blue-light uppercase tracking-widest mb-1.5">
+            <h3 className="px-4 text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest mb-1.5">
               {group.groupName}
             </h3>
             <div className="flex flex-col gap-1">
               {group.items.map(({ href, key, icon: Icon, feature }) => {
                 const isLocked = !!feature && !planHas(plan, feature)
+                const isTeaser = !!feature && (TEASER_LIMITS[feature] ?? 0) > 0
+                const shouldBlockClick = isLocked && !isTeaser
                 const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
                 const label = dict.sidebar[key as keyof typeof dict.sidebar] || key
+
+                const linkContent = (
+                  <>
+                    <Icon size={18} className={cn('flex-shrink-0', active ? 'fill-current/20' : '')} />
+                    <span className="text-xs uppercase tracking-wider font-mono font-bold flex-1 text-left">{label}</span>
+                    {isLocked && !active && (
+                      <Lock className="h-3.5 w-3.5 text-slate-400 opacity-70 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </>
+                )
+
+                const linkClassName = cn(
+                  'flex items-center gap-3 px-4 py-2.5 rounded-xl font-bold transition-all duration-200 group w-full text-left',
+                  active
+                    ? 'bg-safety-orange text-white font-bold shadow-md shadow-safety-orange/20 translate-x-1'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                )
+
+                if (shouldBlockClick && !active) {
+                  return (
+                    <button
+                      key={href}
+                      type="button"
+                      onClick={() => { setOpen(false); setLockedFeature(feature); }}
+                      className={linkClassName}
+                    >
+                      {linkContent}
+                    </button>
+                  )
+                }
 
                 return (
                   <Link
                     key={href}
                     href={href}
                     onClick={() => setOpen(false)}
-                    className={cn(
-                      'flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium transition-all duration-200 group',
-                      active
-                        ? 'bg-safety-orange text-white shadow-md shadow-safety-orange/20 translate-x-1'
-                        : 'text-industrial-blue-light hover:text-industrial-blue hover:bg-slate-100'
-                    )}
+                    className={linkClassName}
                   >
-                    <Icon size={18} className={cn('flex-shrink-0', active ? 'fill-current/20' : '')} />
-                    <span className="text-xs uppercase tracking-wider font-mono font-semibold flex-1 text-left">{label}</span>
-                    {isLocked && !active && (
-                      <Lock className="h-3.5 w-3.5 text-slate-300 opacity-50 group-hover:opacity-100 transition-opacity" />
-                    )}
+                    {linkContent}
                   </Link>
                 )
               })}

@@ -138,6 +138,87 @@ def parse_plano():
     return plans
 
 
+# ─────────────────────────── UR (tasks_ur) ────────────────────────────────────
+def parse_ur():
+    from pyxlsb import open_workbook
+    wb = open_workbook(XLSB)
+    tasks = []
+    with wb.get_sheet("UR") as sh:
+        for i, row in enumerate(sh.rows()):
+            if i < 2:
+                continue
+            v = [c.v for c in row]
+            id_val = clean(v[0]) if len(v) > 0 else None
+            sts_val = clean(v[2]) if len(v) > 2 else None
+            area = clean(v[4]) if len(v) > 4 else None
+            tag = clean(v[5]) if len(v) > 5 else None
+            ti = clean(v[6]) if len(v) > 6 else None
+            avaria = clean(v[7]) if len(v) > 7 else None
+            tecnicos = clean(v[8]) if len(v) > 8 else None
+            if not avaria and not tag:
+                continue
+            
+            status = "pending"
+            if sts_val:
+                s_up = sts_val.upper()
+                if "EM CURSO" in s_up: status = "in_progress"
+                elif "CONCLU" in s_up: status = "done"
+                elif "CANCEL" in s_up: status = "cancelled"
+            
+            tipo = "curativa"
+            if ti:
+                t_up = ti.upper()
+                if "PI" in t_up: tipo = "inspecao"
+                elif "PM" in t_up or "PREV" in t_up: tipo = "preventiva"
+
+            tasks.append({
+                "sourceId": id_val,
+                "status": status,
+                "rawStatus": sts_val,
+                "area": area,
+                "tag": tag,
+                "tipo": tipo,
+                "title": avaria or f"OT {id_val}",
+                "technicians": tecnicos,
+            })
+    return tasks
+
+
+# ─────────────────────────── PROJECTOS (tasks_projects) ──────────────────────
+def parse_projectos():
+    from pyxlsb import open_workbook
+    wb = open_workbook(XLSB)
+    projects = []
+    with wb.get_sheet("PROJECTOS_UR") as sh:
+        current_section = "PROJETOS URGENTES"
+        for i, row in enumerate(sh.rows()):
+            v = [c.v for c in row]
+            col0 = clean(v[0]) if len(v) > 0 else None
+            col7 = clean(v[7]) if len(v) > 7 else None
+            if col0 and ("PROJECTOS" in col0.upper() or "PLANO" in col0.upper()):
+                current_section = col0
+                continue
+            if i < 2:
+                continue
+            area = clean(v[3]) if len(v) > 3 else None
+            tag = clean(v[4]) if len(v) > 4 else None
+            ti = clean(v[5]) if len(v) > 5 else None
+            avaria = col7
+            tecnicos = clean(v[8]) if len(v) > 8 else None
+            if not avaria and not tag:
+                continue
+            
+            projects.append({
+                "section": current_section,
+                "area": area,
+                "tag": tag,
+                "tipo": "plano" if "PLANO" in (current_section or "").upper() else "curativa",
+                "title": avaria or f"Projeto {tag}",
+                "technicians": tecnicos,
+            })
+    return projects
+
+
 def main():
     for f in (XLSB, XLSX):
         if not os.path.exists(f):
@@ -145,27 +226,22 @@ def main():
             sys.exit(1)
     assets = parse_cadastro()
     plans = parse_plano()
+    tasks_ur = parse_ur()
+    tasks_projects = parse_projectos()
 
     with open(os.path.join(BASE, "assets.json"), "w", encoding="utf-8") as f:
         json.dump(assets, f, ensure_ascii=False, indent=1)
     with open(os.path.join(BASE, "plans.json"), "w", encoding="utf-8") as f:
         json.dump(plans, f, ensure_ascii=False, indent=1)
+    with open(os.path.join(BASE, "tasks_ur.json"), "w", encoding="utf-8") as f:
+        json.dump(tasks_ur, f, ensure_ascii=False, indent=1)
+    with open(os.path.join(BASE, "tasks_projects.json"), "w", encoding="utf-8") as f:
+        json.dump(tasks_projects, f, ensure_ascii=False, indent=1)
 
-    # ── Resumo ──
-    tags_assets = {a["tag"] for a in assets if a["tag"]}
-    tags_plans = {p["tag"] for p in plans if p["tag"]}
-    orfaos = sorted(tags_plans - tags_assets)
-    per = {}
-    for p in plans:
-        per[p["periodicidade"]] = per.get(p["periodicidade"], 0) + 1
-    print(f"ASSETS: {len(assets)}  (TAGs unicas: {len(tags_assets)})")
-    print(f"PLANS : {len(plans)}  (TAGs com plano: {len(tags_plans)})")
-    print(f"Periodicidades: {per}")
-    print(f"Planos externos (-STP): {sum(1 for p in plans if p['executor']=='externo')}")
-    print(f"Planos legais: {sum(1 for p in plans if p['legal'])}")
-    print(f"TAGs com plano SEM equipamento no cadastro: {len(orfaos)}")
-    if orfaos:
-        print("  amostra:", orfaos[:15])
+    print(f"ASSETS       : {len(assets)}")
+    print(f"PLANS        : {len(plans)}")
+    print(f"TASKS UR     : {len(tasks_ur)}")
+    print(f"PROJECTS UR  : {len(tasks_projects)}")
 
 
 if __name__ == "__main__":

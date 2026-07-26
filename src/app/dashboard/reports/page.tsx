@@ -1,10 +1,11 @@
-﻿import { redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listTasks, listAssets, listInterventions, listUsers } from '@/lib/firebase/data'
 import { STATUS_LABELS, CRITICIDADE_LABELS, TIPO_LABELS, type TipoTarefa } from '@/types/models'
 import { formatDate, formatDateTime, formatDuration } from '@/lib/utils'
 import PrintButton from './PrintButton'
 import CSVExportButton from './CSVExportButton'
+import { planHas } from '@/lib/plans'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +13,9 @@ export default async function ReportsPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
   if (profile.role === 'technician') redirect('/dashboard/tasks')
+
+  const plan = profile.company?.plan ?? 'free'
+  if (!planHas(plan, 'reports')) redirect('/dashboard/billing')
 
   const [tasks, assets, interventions, users] = await Promise.all([
     listTasks(profile.companyId),
@@ -142,7 +146,8 @@ export default async function ReportsPage() {
               OTs Pendentes — Todos os Tipos
             </h2>
             <div className="card overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[500px] md:min-w-0">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-slate-900/60 border-b border-gray-100 dark:border-slate-800">
                     <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Ordem de Trabalho (OT)</th>
@@ -184,7 +189,8 @@ export default async function ReportsPage() {
               </table>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* Histórico de intervenções */}
         <div className="page-break">
@@ -200,42 +206,44 @@ export default async function ReportsPage() {
             </div>
           ) : (
             <div className="card overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 dark:bg-slate-900/60 border-b border-gray-100 dark:border-slate-800">
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Data</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Técnico</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 hidden md:table-cell">Equipamento</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Duração</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 hidden lg:table-cell">Observações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
-                  {interventions.map((iv) => {
-                    const task = tasks.find((t) => t.id === iv.taskId)
-                    const asset = task?.assetId ? assets.find((a) => a.id === task.assetId) : null
-                    return (
-                      <tr key={iv.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30">
-                        <td className="px-4 py-2.5 text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                          {formatDateTime(iv.startedAt ?? iv.createdAt)}
-                        </td>
-                        <td className="px-4 py-2.5 font-medium text-gray-800 dark:text-slate-200">
-                          {userMap[iv.technicianId] ?? '—'}
-                        </td>
-                        <td className="px-4 py-2.5 text-gray-600 dark:text-slate-400 hidden md:table-cell">
-                          {asset?.name ?? task?.title ?? '—'}
-                        </td>
-                        <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 whitespace-nowrap">
-                          {formatDuration(iv.startedAt ?? null, iv.endedAt ?? null)}
-                        </td>
-                        <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 text-xs hidden lg:table-cell max-w-xs truncate">
-                          {iv.observations ?? '—'}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[500px] md:min-w-0">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-slate-900/60 border-b border-gray-100 dark:border-slate-800">
+                      <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Data</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Técnico</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 hidden md:table-cell">Equipamento</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Duração</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 hidden lg:table-cell">Observações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
+                    {interventions.map((iv) => {
+                      const task = tasks.find((t) => t.id === iv.taskId)
+                      const asset = task?.assetId ? assets.find((a) => a.id === task.assetId) : null
+                      return (
+                        <tr key={iv.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30">
+                          <td className="px-4 py-2.5 text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                            {formatDateTime(iv.startedAt ?? iv.createdAt)}
+                          </td>
+                          <td className="px-4 py-2.5 font-medium text-gray-800 dark:text-slate-200">
+                            {userMap[iv.technicianId] ?? '—'}
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-600 dark:text-slate-400 hidden md:table-cell">
+                            {asset?.name ?? task?.title ?? '—'}
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 whitespace-nowrap">
+                            {formatDuration(iv.startedAt ?? null, iv.endedAt ?? null)}
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 text-xs hidden lg:table-cell max-w-xs truncate">
+                            {iv.observations ?? '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

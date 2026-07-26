@@ -1,4 +1,4 @@
-﻿import { redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listTasks, listMaintenancePlans, listAssets, listUsers } from '@/lib/firebase/data'
 import { planHas } from '@/lib/plans'
@@ -10,20 +10,17 @@ export const dynamic = 'force-dynamic'
 export default async function CalendarPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
+  if (profile.role === 'technician') redirect('/dashboard/tasks')
 
   const plan = (profile.company?.plan ?? 'free') as PlanName
   if (!planHas(plan, 'calendar')) redirect('/dashboard/billing')
 
   const [tasks, plans, assets, users] = await Promise.all([
     listTasks(profile.companyId),
-    profile.role === 'manager' ? listMaintenancePlans(profile.companyId) : Promise.resolve([]),
+    listMaintenancePlans(profile.companyId),
     listAssets(profile.companyId),
     listUsers(profile.companyId),
   ])
-
-  const visibleTasks = profile.role === 'technician'
-    ? tasks.filter((t) => t.assignedTo === profile.id || t.createdBy === profile.id)
-    : tasks
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -34,7 +31,7 @@ export default async function CalendarPage() {
         </p>
       </div>
       <CalendarClient
-        tasks={visibleTasks}
+        tasks={tasks}
         plans={plans}
         assets={assets.map((a) => ({ id: a.id, name: a.name }))}
         users={users.map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl }))}

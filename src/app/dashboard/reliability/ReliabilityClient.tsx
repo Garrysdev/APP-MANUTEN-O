@@ -21,7 +21,7 @@ export default function ReliabilityClient({ assets, tasks }: Props) {
     
     const assetStats = assets.map(a => {
       const assetTasks = tasks.filter(t => t.assetId === a.id)
-      const correctives = assetTasks.filter(t => t.tipo === 'corretiva')
+      const correctives = assetTasks.filter(t => t.tipo === 'curativa')
       
       const breakdowns = correctives.length
       totalCorrectives += breakdowns

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
@@ -66,16 +67,24 @@ export default function RegisterForm({ inviteToken, inviteCompanyName, inviteRol
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#1B4F72] px-4 py-10">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white px-4 py-10">
+      {/* Top accent bar */}
+      <div className="fixed top-0 left-0 right-0 h-1 bg-[#1B4F72]" />
+
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg mb-4">
-            <span className="text-2xl font-black text-[#1B4F72] tracking-tight">RG</span>
-          </div>
-          <h1 className="text-2xl font-bold text-white">
+          <Image
+            src="/logo-rg.png"
+            alt="RG Maintenance"
+            width={200}
+            height={112}
+            className="mx-auto mb-2"
+            priority
+          />
+          <h1 className="text-2xl font-bold text-gray-900">
             {isInvite ? 'Aceitar convite' : 'Criar conta'}
           </h1>
-          <p className="mt-1 text-sm text-blue-200">
+          <p className="mt-1 text-sm text-gray-500">
             {isInvite
               ? 'Cria a tua conta para te juntares à equipa'
               : 'Começa a gerir a manutenção da tua empresa'}
@@ -83,15 +92,15 @@ export default function RegisterForm({ inviteToken, inviteCompanyName, inviteRol
         </div>
 
         {isInvite && inviteCompanyName && (
-          <div className="mb-4 rounded-xl bg-white/10 border border-white/20 px-4 py-3 flex items-center gap-3">
-            <Building2 className="h-5 w-5 text-blue-200 flex-shrink-0" />
+          <div className="mb-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 flex items-center gap-3">
+            <Building2 className="h-5 w-5 text-[#1B4F72] flex-shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-white">{inviteCompanyName}</p>
-              <p className="text-xs text-blue-200">
+              <p className="text-sm font-semibold text-gray-900">{inviteCompanyName}</p>
+              <p className="text-xs text-gray-600">
                 {inviteRole === 'manager' ? 'Papel: Gestor' : 'Papel: Técnico'}
               </p>
             </div>
-            <UserCheck className="h-5 w-5 text-green-300 ml-auto flex-shrink-0" />
+            <UserCheck className="h-5 w-5 text-green-600 ml-auto flex-shrink-0" />
           </div>
         )}
 

@@ -1,4 +1,4 @@
-﻿import { redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listMaintenancePlans, listAssetRefs, listUsers } from '@/lib/firebase/data'
 import type { PlanName } from '@/types/models'
@@ -28,7 +28,7 @@ export default async function MaintenancePlanPage() {
       </div>
       <MaintenancePlanClient
         plans={plans}
-        assets={assets.map((a) => ({ id: a.id, name: a.name }))}
+        assets={assets}
         users={users.map((u) => ({ id: u.id, name: u.name }))}
         plan={plan}
       />

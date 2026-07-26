@@ -20,15 +20,13 @@ const config: Config = {
           900: '#154360',
         },
         brand: '#1B4F72',
-        
-        /* Novas Cores do Design AI Studio */
         'industrial-blue': {
-          DEFAULT: '#0d3a5c',
-          light: '#526c84',
+          DEFAULT: '#1B4F72',
+          light: '#475569',
         },
         'safety-orange': {
-          DEFAULT: '#F97316', /* Laranja Real para maior contraste */
-          dark: '#C2410C',
+          DEFAULT: '#F97316',
+          dark: '#EA580C',
         },
         background: '#f0f4f8',
         surface: '#ffffff',

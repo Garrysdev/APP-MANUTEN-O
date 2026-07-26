@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useTransition, useId } from 'react'
+import { useState, useEffect, useTransition, useId, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Plus, Pencil, Trash2, ClipboardList, X, Play, CheckCircle2,
-  ShieldAlert, Package, CalendarClock, Building2, Scale,
+  ShieldAlert, Package, CalendarClock, Building2, Scale, Eye,
 } from 'lucide-react'
+import { format3DigitId } from '../history/HistoryClient'
 import {
   type Task,
   type TaskStatus,
@@ -20,7 +21,7 @@ import {
   TIPO_LABELS,
   PERIODICIDADE_LABELS,
 } from '@/types/models'
-import { formatDate, taskDelayLevel, DELAY_CLASSES, DELAY_LABELS } from '@/lib/utils'
+import { formatDate, formatDateTime, taskDelayLevel, DELAY_CLASSES, DELAY_LABELS } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
@@ -393,11 +394,32 @@ export default function TasksClient({
     })
   }
 
-  const assetName = (id?: string | null) => assets.find((a) => a.id === id)?.name ?? '—'
-  const userName = (id?: string | null) => users.find((u) => u.id === id)?.name ?? '—'
+  const [search, setSearch] = useState('')
+  const [pageSize, setPageSize] = useState(20)
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
+  const userMap = useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
+
+  const assetName = (id?: string | null) => (id ? assetMap.get(id) ?? '—' : '—')
+  const userName = (id?: string | null) => (id ? userMap.get(id) ?? '—' : '—')
   const userRef = (id?: string | null) => users.find((u) => u.id === id)
 
-  const filtered = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter)
+  useEffect(() => { setCurrentPage(1) }, [search, filter, pageSize])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return tasks.filter((t) => {
+      if (filter !== 'all' && t.status !== filter) return false
+      if (q) {
+        const aName = assetName(t.assetId)
+        const uName = userName(t.assignedTo)
+        const haystack = `${t.title || ''} ${t.description || ''} ${(t as any).tag || ''} ${(t as any).area || ''} ${aName} ${uName}`.toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+      return true
+    })
+  }, [tasks, filter, search, assetMap, userMap])
 
   // Ordenação por coluna (tarefa 15)
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Task>(
@@ -412,6 +434,14 @@ export default function TasksClient({
     },
     null,
   )
+
+  const effectivePageSize = pageSize === -1 ? (shown.length || 1) : pageSize
+  const totalPages = Math.ceil(shown.length / effectivePageSize) || 1
+  const currentShown = useMemo(() => {
+    if (pageSize === -1) return shown
+    return shown.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  }, [shown, currentPage, pageSize])
+
   const statuses: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
   const criticidades: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
   const tipos: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
@@ -423,7 +453,9 @@ export default function TasksClient({
           <h1 className="text-lg sm:text-2xl font-extrabold text-industrial-blue tracking-tight truncate">
             {isManager ? dict.tasks.managerTasks : dict.tasks.myTasks}
           </h1>
-          <p className="text-xs sm:text-sm font-medium text-industrial-blue-light mt-1">{tasks.length} OT(s)</p>
+          <p className="text-xs sm:text-sm font-medium text-industrial-blue-light mt-1">
+            A mostrar {shown.length} / {tasks.length} OT(s)
+          </p>
         </div>
         <button onClick={openCreate} className="shrink-0 h-9 sm:h-11 px-3 sm:px-5 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
           <Plus size={16} className="stroke-[2.5] shrink-0" />
@@ -431,134 +463,169 @@ export default function TasksClient({
         </button>
       </div>
 
-      {/* Filtros por estado */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        {(['all', ...statuses] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilter(s)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
-              filter === s ? 'bg-industrial-blue text-white' : 'bg-white border border-outline text-industrial-blue-light hover:bg-slate-50 hover:text-industrial-blue'
-            }`}
-          >
-            {s === 'all' ? dict.tasks.allTasks : STATUS_LABELS[s]}
-          </button>
-        ))}
+      {/* Filtros por estado, pesquisa e tamanho de página */}
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          {(['all', ...statuses] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilter(s)}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
+                filter === s ? 'bg-industrial-blue text-white' : 'bg-white border border-outline text-industrial-blue-light hover:bg-slate-50 hover:text-industrial-blue'
+              }`}
+            >
+              {s === 'all' ? dict.tasks.allTasks : STATUS_LABELS[s]}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Pesquisar OT, TAG, Equipamento..."
+            className="input text-xs py-1.5 px-3 w-48 sm:w-64"
+          />
+          <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
+            <span>Por página:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="input text-xs py-1 px-2 w-auto"
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={250}>250</option>
+              <option value={-1}>Todas ({tasks.length})</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      <div className="card">
+      <div className="card overflow-hidden">
         {shown.length === 0 ? (
           <div className="px-5 py-12 text-center text-gray-400">
             <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />
             <p className="text-sm">{dict.tasks.empty}</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-outline bg-slate-50/50">
-                <th className="px-5 py-3 text-left text-xs font-bold text-industrial-blue-light uppercase tracking-wider w-6" />
-                <SortableTh label={dict.tasks.colOrder} sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
-                <SortableTh label={dict.tasks.colType} sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden sm:table-cell font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
-                <SortableTh label={dict.tasks.colAsset} sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden md:table-cell font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
-                {isManager && (
-                  <SortableTh label={dict.tasks.colAssignee} sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden lg:table-cell font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
-                )}
-                <SortableTh label={dict.tasks.colStatus} sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
-                <SortableTh label={dict.tasks.colDueDate} sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left hidden md:table-cell font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider" />
-                <th className="px-3 py-3 text-right font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider">{dict.tasks.colActions}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((t) => (
-                <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors group">
-                  <td className="px-5 py-3.5">
-                    <span
-                      title={CRITICIDADE_LABELS[t.criticidade]}
-                      className={`inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 ${CRITICIDADE_DOT[t.criticidade]}`}
-                    />
-                  </td>
-                  <td className="px-3 py-3.5">
-                    <Link href={`/dashboard/tasks/${t.id}`} className="font-bold text-industrial-blue group-hover:text-safety-orange transition-colors">
-                      {t.title}
-                    </Link>
-                    <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold sm:hidden ${CRITICIDADE_BADGE[t.criticidade]}`}>
-                      {CRITICIDADE_LABELS[t.criticidade]}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3.5 text-gray-500 dark:text-slate-400 hidden sm:table-cell text-xs">
-                    {TIPO_LABELS[t.tipo] ?? t.tipo}
-                  </td>
-                  <td className="px-3 py-3.5 text-gray-500 dark:text-slate-400 hidden md:table-cell">{assetName(t.assetId)}</td>
-                  {isManager && (
-                    <td className="px-3 py-3.5 text-gray-500 dark:text-slate-400 hidden lg:table-cell text-xs">
-                      {t.assignedTo ? (
-                        <div className="flex items-center gap-1.5">
-                          <Avatar name={userName(t.assignedTo)} avatarUrl={userRef(t.assignedTo)?.avatarUrl} size={20} />
-                          <span>{userName(t.assignedTo)}</span>
-                        </div>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  )}
-                  <td className="px-3 py-3.5">
-                    <span className={`badge-${t.status}`}>{STATUS_LABELS[t.status]}</span>
-                  </td>
-                  <td className="px-3 py-3.5 hidden md:table-cell">
-                    {(() => {
-                      const lvl = taskDelayLevel(t.dueDate, t.status)
-                      if (lvl === 'none') return <span className="text-gray-500 dark:text-slate-400">{formatDate(t.dueDate ?? null)}</span>
-                      return (
-                        <span
-                          title={DELAY_LABELS[lvl]}
-                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${DELAY_CLASSES[lvl]}`}
-                        >
-                          {formatDate(t.dueDate ?? null)}
-                        </span>
-                      )
-                    })()}
-                  </td>
-                  <td className="px-3 py-3.5 text-right">
-                    {isManager ? (
-                      <>
-                        <button onClick={() => setEditing(t)} className="text-gray-400 hover:text-[#2E86C1] p-1.5" aria-label="Editar">
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button onClick={() => handleDelete(t)} className="text-gray-400 hover:text-red-600 p-1.5" aria-label="Eliminar">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        {t.status === 'pending' && (
-                          <button
-                            onClick={() => handleStatusChange(t.id, 'in_progress')}
-                            disabled={statusPending}
-                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium transition-colors disabled:opacity-50"
-                          >
-                            <Play className="h-3 w-3" /> {dict.tasks.btnStart}
-                          </button>
-                        )}
-                        {t.status === 'in_progress' && (
-                          <Link
-                            href={`/dashboard/tasks/${t.id}?concluir=1`}
-                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 font-medium transition-colors"
-                          >
-                            <CheckCircle2 className="h-3 w-3" /> {dict.tasks.btnComplete}
-                          </Link>
-                        )}
-                        {t.status === 'done' && (
-                          <span className="text-xs text-green-600 font-medium flex items-center gap-1 justify-end">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> {dict.tasks.lblCompleted}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[1000px]">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
+                  <SortableTh label="ID" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="DATA" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="ÁREA" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="EQUIPAMENTO / TAG" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="TI" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="AVARIA / DESCRIÇÃO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="TÉCNICOS" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="INÍCIO" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
+                  <SortableTh label="FIM" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
+                  <SortableTh label="CAUSA / OBS" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
+                  <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <th className="px-3 py-2 text-right font-mono text-xs font-bold text-slate-700 uppercase tracking-wider">AÇÕES</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {currentShown.map((t, idx) => {
+                  const asset = assets.find((a) => a.id === t.assetId)
+                  const formattedId = format3DigitId(t.id, idx)
+                  return (
+                    <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors group">
+                      <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
+                        <span className="bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200">{formattedId}</span>
+                      </td>
+                      <td className="px-3 py-2.5 font-mono font-semibold text-slate-800 whitespace-nowrap">
+                        {formatDate(t.createdAt)}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
+                        {(t as any).area || (asset as any)?.area || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">
+                        {(asset as any)?.tag || asset?.name || (t as any).tag || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
+                          {t.tipo?.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-900 font-semibold max-w-[280px]">
+                        <Link href={`/dashboard/tasks/${t.id}`} className="hover:text-safety-orange transition-colors underline-offset-2 hover:underline">
+                          {t.title}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">
+                        {userName(t.assignedTo)}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">
+                        {formatDateTime(t.createdAt)}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">
+                        {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-700 hidden lg:table-cell max-w-[200px]">
+                        <span className="line-clamp-2" title={t.description ?? ''}>{t.description || '—'}</span>
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                          t.status === 'done' ? 'bg-green-100 text-green-900 border border-green-300' :
+                          t.status === 'in_progress' ? 'bg-blue-100 text-blue-900 border border-blue-300' :
+                          t.status === 'cancelled' ? 'bg-slate-100 text-slate-700 border border-slate-300' :
+                          'bg-amber-100 text-amber-900 border border-amber-300'
+                        }`}>
+                          {STATUS_LABELS[t.status]}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1">
+                          <Link href={`/dashboard/tasks/${t.id}`} className="p-1 text-slate-500 hover:text-blue-600 rounded" title="Ver Detalhes">
+                            <Eye className="h-4 w-4" />
+                          </Link>
+                          {isManager && (
+                            <>
+                              <button onClick={() => openEdit(t)} className="p-1 text-slate-500 hover:text-blue-600 rounded" title="Editar">
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button onClick={() => handleDelete(t)} className="p-1 text-slate-500 hover:text-red-600 rounded" title="Eliminar">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {totalPages > 1 && pageSize !== -1 && (
+          <div className="flex items-center justify-between border-t border-gray-100 dark:border-slate-800 px-4 py-3 bg-gray-50/50 dark:bg-slate-900/50">
+            <span className="text-xs text-gray-500 dark:text-slate-400">
+              Página {currentPage} de {totalPages} ({shown.length} OTs)
+            </span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="btn-secondary text-xs py-1 px-2.5 disabled:opacity-40"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="btn-secondary text-xs py-1 px-2.5 disabled:opacity-40"
+              >
+                Seguinte
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -604,10 +671,16 @@ export default function TasksClient({
                     value={assetId}
                     onChange={(e) => { setAssetId(e.target.value); setMaintenancePlanId('') }}
                     className="input"
+                    required
                   >
-                    <option value="">— Sem Equipamento —</option>
+                    <option value="">— Selecionar Equipamento —</option>
                     {assets.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
+                  {assets.length === 0 && (
+                    <p className="text-[10px] text-red-500 font-medium mt-1">
+                      Não tens equipamentos criados. Deves criar pelo menos um equipamento no módulo de Equipamentos antes de registar uma OT.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Responsável</label>

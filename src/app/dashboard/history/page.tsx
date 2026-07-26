@@ -2,12 +2,16 @@ import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listInterventions, listInterventionsByTechnician, listTasks, listAssets, listUsers, listMaterialsForInterventions } from '@/lib/firebase/data'
 import HistoryClient from './HistoryClient'
+import { planHas } from '@/lib/plans'
 
 export const dynamic = 'force-dynamic'
 
 export default async function HistoryPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
+
+  const plan = profile.company?.plan ?? 'free'
+  if (profile.role === 'manager' && !planHas(plan, 'history')) redirect('/dashboard/billing')
 
   const isTechnician = profile.role === 'technician'
 

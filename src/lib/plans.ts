@@ -25,14 +25,14 @@ export const LIMITS: Record<PlanName, PlanLimits> = {
 }
 
 export const TEASER_LIMITS: Record<FeatureKey, number> = {
-  assets: 1,
+  assets: 3,
   history: 0,
   users: 2,
   reports: 0,
   'maintenance-plan': 1,
-  calendar: 1,
+  calendar: 0,
   stocks: 1,
-  finance: 1,
+  finance: 0,
   aiConsultant: 0,
   reliability: 0,
   compliance: 0,

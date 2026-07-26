@@ -29,6 +29,16 @@ export type Periodicidade =
   | 'horas' // por horas de funcionamento / condição
   | 'pontual' // ficha de registo / plano avulso
 
+/** Tipos de técnico / especialidades padrão. */
+export const DEFAULT_TECHNICIAN_TYPES = [
+  'Mecânico',
+  'Eletricista',
+  'HVAC / Climatização',
+  'Automação & Eletrónica',
+  'Serralharia / Tubagem',
+  'Multidisciplinar',
+]
+
 /** Quem executa a tarefa de plano: interno (RG) ou prestador externo (sufixo -STP). */
 export type Executor = 'interno' | 'externo'
 
@@ -41,6 +51,7 @@ export interface Company {
   logoUrl?: string | null
   activeModules?: string[]
   aiCredits?: number
+  technicianTypes?: string[]
   createdAt: string // ISO
 }
 
@@ -51,6 +62,7 @@ export interface User {
   name: string
   role: UserRole
   avatarUrl?: string | null
+  specialty?: string | null // Especialidade / Tipo de técnico
   active: boolean
   createdAt: string
   hourlyRate?: number // Custo hora do técnico

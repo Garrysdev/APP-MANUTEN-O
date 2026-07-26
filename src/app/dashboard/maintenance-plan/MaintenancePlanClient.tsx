@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useMemo, useEffect, useRef, useTransition, useId } from 'react'
 import { useRouter } from 'next/navigation'
@@ -48,7 +48,7 @@ function downloadCSV(content: string, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-type Ref = { id: string; name: string }
+type Ref = { id: string; name: string; tag?: string | null }
 
 const CRITICIDADE_DOT: Record<TaskCriticidade, string> = {
   vermelho: 'bg-red-500',
@@ -94,15 +94,20 @@ export default function MaintenancePlanClient({
   const datalistId = useId()
 
   // Filtros por coluna (estilo Excel)
-  const emptyCol = { title: '', description: '', asset: '', tag: '', period: '', executor: '', months: '', estado: '', crit: '' }
+  // Filtros por coluna (estilo Excel - alinhados com a folha PM)
+  const emptyCol = { area: '', tag: '', system: '', asset: '', title: '', description: '', period: '', months: '', crit: '', executor: '', estado: '' }
   const [colF, setColF] = useState(emptyCol)
   const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
   const [fLegal, setFLegal] = useState(false)
   const anyFilter = fLegal || Object.values(colF).some(Boolean)
   function clearFilters() { setColF(emptyCol); setFLegal(false) }
 
-  const assetName = (id?: string | null) => assets.find((a) => a.id === id)?.name ?? '—'
-  const userName = (id?: string | null) => users.find((u) => u.id === id)?.name ?? '—'
+  const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
+  const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
+  const getPlanTag = (p: MaintenancePlan) => p.tag || (p.assetId ? assetTagMap.get(p.assetId) || '' : '')
+
+  const assetName = (id?: string | null) => (id ? assetMap.get(id) ?? '—' : '—')
+  const userName = (id?: string | null) => (id ? users.find((u) => u.id === id)?.name ?? '—' : '—')
 
   function openCreate() {
     if (!planHas(plan, 'maintenance-plan') && plans.length >= TEASER_LIMITS['maintenance-plan']) {
@@ -181,19 +186,18 @@ export default function MaintenancePlanClient({
   }
 
   function handleExportCSV() {
-    const header = ['TAG', 'ÁREA', 'SISTEMA', 'TAREFA', 'DESCRIÇÃO', 'EQUIPAMENTO', 'PERIODICIDADE', 'EXECUTOR', 'LEGAL', 'MESES', 'CRITICIDADE', 'ESTADO']
+    const header = ['ÁREA', 'TAG', 'SISTEMA', 'EQUIPAMENTO', 'AÇÃO / TAREFA', 'DESCRIÇÃO', 'PERIODICIDADE', 'MESES', 'CAT', 'EXECUTOR', 'ESTADO']
     const rows = shown.map((p) => [
-      p.tag ?? '',
       p.area ?? '',
+      getPlanTag(p),
       p.system ?? '',
+      assetName(p.assetId),
       p.title,
       p.description ?? '',
-      assetName(p.assetId),
       p.periodicidade ? PERIODICIDADE_LABELS[p.periodicidade] : '',
-      p.executor ? EXECUTOR_LABELS[p.executor] : EXECUTOR_LABELS.interno,
-      p.legal ? 'Sim' : 'Não',
       p.months ?? '',
       CRITICIDADE_LABELS[p.criticidade],
+      p.executor ? EXECUTOR_LABELS[p.executor] : EXECUTOR_LABELS.interno,
       p.active ? 'Ativo' : 'Inativo',
     ])
     const date = new Date().toISOString().split('T')[0]
@@ -201,49 +205,59 @@ export default function MaintenancePlanClient({
   }
 
   // ── Filtragem por coluna (estilo Excel) ──
+  const norm = (s: string | null | undefined) => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
   const inc = (val: string | null | undefined, f: string) =>
-    !f || String(val ?? '').toLowerCase().includes(f.toLowerCase())
+    !f || norm(val).includes(norm(f))
 
   const filtered = useMemo(() => {
     return plans.filter((p) => {
+      if (!inc(p.area, colF.area)) return false
+      if (!inc(getPlanTag(p), colF.tag)) return false
+      if (!inc(p.system, colF.system)) return false
+      if (!inc(assetName(p.assetId), colF.asset)) return false
+      if (!inc(p.title, colF.title)) return false
+      if (!inc(p.description, colF.description)) return false
+      if (!inc(periodLabel(p), colF.period)) return false
+      if (!inc(p.months, colF.months)) return false
       if (colF.crit && p.criticidade !== colF.crit) return false
-      if (colF.period && p.periodicidade !== colF.period) return false
       if (colF.executor && (p.executor ?? 'interno') !== colF.executor) return false
       if (colF.estado === 'ativo' && !p.active) return false
       if (colF.estado === 'inativo' && p.active) return false
       if (fLegal && !p.legal) return false
-      if (!inc(p.title, colF.title)) return false
-      if (!inc(p.description, colF.description)) return false
-      if (!inc(assetName(p.assetId), colF.asset)) return false
-      if (!inc(p.tag, colF.tag)) return false
-      if (!inc(p.months, colF.months)) return false
       return true
     })
-  }, [plans, colF, fLegal]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plans, colF, fLegal, assetMap, assetTagMap])
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
-  useEffect(() => { setCurrentPage(1) }, [colF, fLegal])
+  useEffect(() => { setCurrentPage(1) }, [colF, fLegal, pageSize])
 
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<MaintenancePlan>(
     filtered,
     {
+      area: (p) => p.area ?? null,
+      tag: (p) => getPlanTag(p),
+      system: (p) => p.system ?? null,
+      asset: (p) => assetName(p.assetId),
       title: (p) => p.title?.toLowerCase(),
       description: (p) => p.description?.toLowerCase() ?? null,
-      asset: (p) => assetName(p.assetId),
-      tag: (p) => p.tag ?? null,
       period: (p) => periodLabel(p),
-      executor: (p) => (p.executor ? EXECUTOR_LABELS[p.executor] : ''),
       months: (p) => p.months ?? null,
+      crit: (p) => p.criticidade,
+      executor: (p) => (p.executor ? EXECUTOR_LABELS[p.executor] : ''),
       estado: (p) => (p.active ? 0 : 1),
     },
     'title',
   )
 
-  const totalPages = Math.ceil(shown.length / pageSize)
-  const currentShown = shown.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const effectivePageSize = pageSize === -1 ? (shown.length || 1) : pageSize
+  const totalPages = Math.ceil(shown.length / effectivePageSize) || 1
+  const currentShown = useMemo(() => {
+    if (pageSize === -1) return shown
+    return shown.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  }, [shown, currentPage, pageSize])
 
-  const colFilterCls = 'w-full rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-1 text-xs text-gray-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-[#2E86C1]'
+  const colFilterCls = 'w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-safety-orange shadow-sm'
 
   return (
     <div>
@@ -254,7 +268,21 @@ export default function MaintenancePlanClient({
         <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 shrink-0">
           {shown.length} / {plans.length}
         </p>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+          <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 mr-2">
+            <span>Por página:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="input text-xs py-1 px-2 w-auto"
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={250}>250</option>
+              <option value={-1}>Todos ({plans.length})</option>
+            </select>
+          </div>
           <button onClick={handleExportCSV} className="btn-secondary flex items-center gap-1.5">
             <Download className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Exportar</span>
@@ -296,144 +324,175 @@ export default function MaintenancePlanClient({
         </div>
       )}
 
-      {/* Filtros por estado — mesma lógica (pills) da página Tarefas */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        {(['', 'ativo', 'inativo'] as const).map((s) => (
+      {/* Filtros por estado */}
+      <div className="flex gap-1.5 mb-3 flex-wrap">
+        {[
+          { key: 'todos', label: 'Todos' },
+          { key: 'ativo', label: 'Ativo' },
+          { key: 'inativo', label: 'Inativo' },
+        ].map(({ key, label }) => (
           <button
-            key={s || 'all'}
-            onClick={() => setCol('estado', s)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              colF.estado === s ? 'bg-[#1B4F72] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+            key={key}
+            onClick={() => setCol('estado', key === 'todos' ? '' : key)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${
+              (colF.estado === key || (key === 'todos' && !colF.estado))
+                ? 'bg-[#1B4F72] text-white'
+                : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900'
             }`}
           >
-            {s === '' ? 'Todos' : s === 'ativo' ? 'Ativo' : 'Inativo'}
+            {label}
           </button>
         ))}
       </div>
 
-      {/* Barra fina: toggle legais + limpar (filtros detalhados estão por coluna, em baixo) */}
+      {/* Barra de filtros: checkbox legais + limpar */}
       <div className="flex flex-wrap items-center gap-3 mb-3">
-        <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400 cursor-pointer select-none">
-          <input type="checkbox" checked={fLegal} onChange={(e) => setFLegal(e.target.checked)} className="rounded border-gray-300 dark:border-slate-700 dark:bg-slate-800" />
-          <Scale className="h-3.5 w-3.5" /> Só legais
+        <label className="flex items-center gap-1.5 text-xs text-slate-900 font-bold cursor-pointer select-none bg-white px-2.5 py-1 rounded-lg border border-slate-300 shadow-sm hover:bg-slate-50">
+          <input type="checkbox" checked={fLegal} onChange={(e) => setFLegal(e.target.checked)} className="rounded border-slate-300 text-safety-orange focus:ring-safety-orange w-3.5 h-3.5" />
+          <Scale className="h-3.5 w-3.5 text-red-600" />
+          <span>Só legais</span>
         </label>
         {anyFilter && (
-          <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400">
+          <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-red-600 hover:underline font-bold">
             <X className="h-3.5 w-3.5" /> Limpar filtros
           </button>
         )}
-        <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">Filtra por coluna na linha abaixo dos títulos (estilo Excel).</span>
+        <span className="text-xs font-semibold text-slate-700 ml-auto">Filtra por coluna na linha abaixo dos títulos (estilo Excel).</span>
       </div>
 
       <div className="card overflow-x-auto">
         {shown.length === 0 ? (
-          <div className="px-5 py-12 text-center text-gray-400 dark:text-slate-500">
+          <div className="px-5 py-12 text-center text-slate-400">
             <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />
             <p className="text-sm">{dict.maintenancePlan.empty}</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-xs min-w-[1000px]">
             <thead>
-              <tr className="border-b border-gray-100 dark:border-slate-800">
+              <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
+                <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <th className="px-3 py-3 w-6" />
-                <SortableTh label={dict.maintenancePlan.colTask} sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="Descrição" sortableKey="description" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
-                <SortableTh label={dict.maintenancePlan.colAsset} sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden md:table-cell" />
-                <SortableTh label={dict.maintenancePlan.colRecurrence} sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label={dict.maintenancePlan.colAssignee} sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden sm:table-cell" />
-                <SortableTh label="Meses" sortableKey="months" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
-                <SortableTh label={dict.common.status} sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">{dict.common.actions}</th>
+                <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden md:table-cell" />
+                <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden sm:table-cell" />
+                <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="DESCRIÇÃO" sortableKey="description" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
+                <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="MESES" sortableKey="months" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
+                <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden sm:table-cell" />
+                <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <th className="px-3 py-2 text-right text-xs font-bold text-slate-700 uppercase tracking-wide">AÇÕES</th>
               </tr>
               {/* Linha de filtros por coluna (estilo Excel) */}
-              <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50/60 dark:bg-slate-900/60">
-                <th className="px-2 py-1.5">
+              <tr className="border-b border-slate-200 bg-slate-50">
+                <th className="px-1.5 py-1">
+                  <input value={colF.area} onChange={(e) => setCol('area', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+                </th>
+                <th className="px-1.5 py-1">
                   <input value={colF.tag} onChange={(e) => setCol('tag', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-2 py-1.5">
-                  <select value={colF.crit} onChange={(e) => setCol('crit', e.target.value)} className={colFilterCls} title="Filtrar criticidade">
-                    <option value="">—</option>
-                    {CRITICIDADE_OPTIONS.map((c) => <option key={c} value={c}>{CRITICIDADE_LABELS[c]}</option>)}
-                  </select>
+                <th className="px-1.5 py-1 hidden md:table-cell">
+                  <input value={colF.system} onChange={(e) => setCol('system', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-2 py-1.5">
-                  <input value={colF.title} onChange={(e) => setCol('title', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
-                </th>
-                <th className="px-2 py-1.5 hidden lg:table-cell">
-                  <input value={colF.description} onChange={(e) => setCol('description', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
-                </th>
-                <th className="px-2 py-1.5 hidden md:table-cell">
+                <th className="px-1.5 py-1 hidden sm:table-cell">
                   <input value={colF.asset} onChange={(e) => setCol('asset', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-2 py-1.5">
+                <th className="px-1.5 py-1">
+                  <input value={colF.title} onChange={(e) => setCol('title', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+                </th>
+                <th className="px-1.5 py-1 hidden lg:table-cell">
+                  <input value={colF.description} onChange={(e) => setCol('description', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+                </th>
+                <th className="px-1.5 py-1">
                   <select value={colF.period} onChange={(e) => setCol('period', e.target.value)} className={colFilterCls} title="Filtrar periodicidade">
                     <option value="">Todas</option>
                     {PERIODICIDADE_OPTIONS.map((p) => <option key={p} value={p}>{PERIODICIDADE_LABELS[p]}</option>)}
                   </select>
                 </th>
-                <th className="px-2 py-1.5 hidden sm:table-cell">
+                <th className="px-1.5 py-1 hidden xl:table-cell">
+                  <input value={colF.months} onChange={(e) => setCol('months', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+                </th>
+                <th className="px-1.5 py-1">
+                  <select value={colF.crit} onChange={(e) => setCol('crit', e.target.value)} className={colFilterCls} title="Filtrar criticidade">
+                    <option value="">—</option>
+                    {CRITICIDADE_OPTIONS.map((c) => <option key={c} value={c}>{CRITICIDADE_LABELS[c]}</option>)}
+                  </select>
+                </th>
+                <th className="px-1.5 py-1 hidden sm:table-cell">
                   <select value={colF.executor} onChange={(e) => setCol('executor', e.target.value)} className={colFilterCls} title="Filtrar executor">
                     <option value="">Todos</option>
                     <option value="interno">Interno</option>
                     <option value="externo">Externo</option>
                   </select>
                 </th>
-                <th className="px-2 py-1.5 hidden xl:table-cell">
-                  <input value={colF.months} onChange={(e) => setCol('months', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+                <th className="px-1.5 py-1">
+                  <select value={colF.estado} onChange={(e) => setCol('estado', e.target.value)} className={colFilterCls} title="Filtrar estado">
+                    <option value="">Todos</option>
+                    <option value="ativo">Ativo</option>
+                    <option value="inativo">Inativo</option>
+                  </select>
                 </th>
-                <th className="px-2 py-1.5" title="Filtra pelos separadores acima da tabela" />
-                <th className="px-2 py-1.5" />
+                <th className="px-1.5 py-1" />
               </tr>
             </thead>
             <tbody>
               {currentShown.map((p) => (
-                <tr key={p.id} className={`border-b border-gray-50 dark:border-slate-800/50 hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors ${!p.active ? 'opacity-50' : ''}`}>
-                  <td className="px-3 py-3.5 text-gray-600 dark:text-slate-400 text-xs font-mono whitespace-nowrap">{p.tag ?? '—'}</td>
-                  <td className="px-3 py-3.5">
-                    <span title={CRITICIDADE_LABELS[p.criticidade]} className={`inline-block w-2.5 h-2.5 rounded-full ${CRITICIDADE_DOT[p.criticidade]}`} />
+                <tr key={p.id} className={`border-b border-slate-100 hover:bg-slate-50/80 transition-colors ${!p.active ? 'opacity-50' : ''}`}>
+                  <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">{p.area || '—'}</td>
+                  <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
+                    <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{getPlanTag(p) || '—'}</span>
                   </td>
-                  <td className="px-3 py-3.5 font-medium text-gray-800 dark:text-slate-200">
+                  <td className="px-3 py-2.5 text-slate-800 font-semibold hidden md:table-cell whitespace-nowrap">{p.system || '—'}</td>
+                  <td className="px-3 py-2.5 text-slate-900 hidden sm:table-cell font-bold whitespace-nowrap">{assetName(p.assetId)}</td>
+                  <td className="px-3 py-2.5 font-bold text-slate-900">
                     <div className="flex items-center gap-1.5">
                       <span>{p.title}</span>
                       {p.legal && (
-                        <span title="Inspeção legal/obrigatória" className="inline-flex items-center gap-0.5 rounded bg-red-100 dark:bg-red-900/30 px-1 py-0.5 text-[10px] text-red-700 dark:text-red-400">
+                        <span title="Inspeção legal/obrigatória" className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[10px] text-red-800 font-bold border border-red-300">
                           <Scale className="h-3 w-3" /> Legal
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-3.5 text-gray-500 dark:text-slate-400 text-xs hidden lg:table-cell">
+                  <td className="px-3 py-2.5 text-slate-700 text-xs hidden lg:table-cell">
                     {p.description ? <span className="line-clamp-2 max-w-[240px]" title={p.description}>{p.description}</span> : '—'}
                   </td>
-                  <td className="px-3 py-3.5 text-gray-500 dark:text-slate-400 hidden md:table-cell">{assetName(p.assetId)}</td>
-                  <td className="px-3 py-3.5 text-gray-600 dark:text-slate-400">
-                    <span className="inline-flex items-center gap-1 text-xs">
-                      <CalendarClock className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500" />
+                  <td className="px-3 py-2.5 text-slate-800 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold">
+                      <CalendarClock className="h-3.5 w-3.5 text-slate-500" />
                       {periodLabel(p)}
                     </span>
                   </td>
-                  <td className="px-3 py-3.5 hidden sm:table-cell text-xs">
+                  <td className="px-3 py-2.5 text-slate-800 hidden xl:table-cell text-xs font-mono font-semibold whitespace-nowrap">{p.months ?? '—'}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <span title={CRITICIDADE_LABELS[p.criticidade]} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                      p.criticidade === 'vermelho' ? 'bg-red-100 text-red-800 border border-red-300' :
+                      p.criticidade === 'amarelo' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                      'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    }`}>
+                      {CRITICIDADE_LABELS[p.criticidade]}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 hidden sm:table-cell text-xs whitespace-nowrap">
                     {p.executor === 'externo' ? (
-                      <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-500"><Building2 className="h-3.5 w-3.5" /> Externo</span>
+                      <span className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200"><Building2 className="h-3.5 w-3.5" /> Externo</span>
                     ) : (
-                      <span className="text-gray-400 dark:text-slate-500">Interno</span>
+                      <span className="text-slate-600 font-medium">Interno</span>
                     )}
                   </td>
-                  <td className="px-3 py-3.5 text-gray-400 dark:text-slate-500 hidden xl:table-cell text-xs">{p.months ?? '—'}</td>
-                  <td className="px-3 py-3.5">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${p.active ? 'bg-green-50 text-green-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${p.active ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-slate-100 text-slate-600 border border-slate-300'}`}>
                       {p.active ? 'Ativo' : 'Inativo'}
                     </span>
                   </td>
-                  <td className="px-3 py-3.5 text-right whitespace-nowrap">
-                    <button onClick={() => handleToggleActive(p)} disabled={isPending} className={`p-1.5 rounded ${p.active ? 'text-green-600 dark:text-emerald-500 hover:text-gray-400 dark:hover:text-slate-400' : 'text-gray-300 dark:text-slate-600 hover:text-green-600 dark:hover:text-emerald-500'}`} title={p.active ? 'Desativar' : 'Ativar'}>
+                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                    <button onClick={() => handleToggleActive(p)} disabled={isPending} className={`p-1 rounded ${p.active ? 'text-green-600 hover:text-slate-400' : 'text-slate-400 hover:text-green-600'}`} title={p.active ? 'Desativar' : 'Ativar'}>
                       {p.active ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
                     </button>
-                    <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-[#2E86C1] rounded" title="Editar">
+                    <button onClick={() => openEdit(p)} className="p-1 text-slate-500 hover:text-blue-600 rounded" title="Editar">
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <button onClick={() => handleDelete(p)} className="p-1.5 text-gray-400 hover:text-red-600 rounded" title="Eliminar">
+                    <button onClick={() => handleDelete(p)} className="p-1 text-slate-500 hover:text-red-600 rounded" title="Eliminar">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </td>
@@ -452,10 +511,11 @@ export default function MaintenancePlanClient({
                 onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
                 className="bg-transparent border border-gray-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#2E86C1]"
               >
-                <option value={10}>10</option>
                 <option value={20}>20</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
+                <option value={250}>250</option>
+                <option value={-1}>Todos ({plans.length})</option>
               </select>
             </div>
             

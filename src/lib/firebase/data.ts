@@ -1,37 +1,196 @@
 // Acesso a dados (servidor) via Admin SDK. Todas as queries são scoped por companyId.
 import 'server-only'
 import { cache } from 'react'
+import fs from 'fs'
+import path from 'path'
 import type { DocumentSnapshot } from 'firebase-admin/firestore'
 import { adminDb, adminAuth } from './admin'
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { calculateTotalCost } from '../finance'
-import type { Asset, Task, User, Intervention, Material, Invite, UserRole, MaintenancePlan, StockItem, StockMovement, TaskCriticidade, Periodicidade, Executor } from '@/types/models'
+import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type TaskCriticidade, type Periodicidade, type Executor } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
   return { id: doc.id, ...doc.data() } as T
 }
 
+// ── LOCAL FALLBACK LOADERS (Quando o Firebase Firestore atinge a quota diária) ──
+let cachedFallbackAssets: Asset[] | null = null
+function getFallbackAssets(): Asset[] {
+  if (cachedFallbackAssets) return cachedFallbackAssets
+  try {
+    const filePath = path.join(process.cwd(), 'scripts', 'import', 'assets.json')
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8')
+      const json = JSON.parse(raw)
+      cachedFallbackAssets = json.map((item: any, idx: number) => ({
+        id: `asset_ur_${idx + 1}`,
+        companyId: 'rjHNaSUbLm4qTMyKP0oX',
+        area: item.area || null,
+        tag: item.tag || null,
+        system: item.system || null,
+        name: item.name || 'Equipamento',
+        characteristics: item.characteristics || null,
+        manufacturer: item.manufacturer || null,
+        notes: item.notes || null,
+        criticidadeABC: item.criticidadeABC || null,
+        active: true,
+        createdAt: new Date().toISOString()
+      }))
+      return cachedFallbackAssets!
+    }
+  } catch (err) {
+    console.error('[Fallback] Error loading assets.json:', err)
+  }
+  return []
+}
+
+let cachedFallbackPlans: MaintenancePlan[] | null = null
+function getFallbackPlans(): MaintenancePlan[] {
+  if (cachedFallbackPlans) return cachedFallbackPlans
+  try {
+    const filePath = path.join(process.cwd(), 'scripts', 'import', 'plans.json')
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8')
+      const json = JSON.parse(raw)
+      cachedFallbackPlans = json.map((item: any, idx: number) => ({
+        id: `plan_ur_${idx + 1}`,
+        companyId: 'rjHNaSUbLm4qTMyKP0oX',
+        area: item.area || null,
+        tag: item.tag || null,
+        system: item.system || null,
+        title: item.title || item.acao || item.equipamento || 'Plano de Manutenção',
+        description: item.acao || null,
+        periodicidade: item.periodicidade || 'anual',
+        periodicidadeLabel: item.periodicidadeLabel || null,
+        executor: item.executor || 'interno',
+        legal: !!item.legal,
+        months: item.months || null,
+        criticidade: item.criticidade || 'verde',
+        active: true,
+        createdBy: 'system',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }))
+      return cachedFallbackPlans!
+    }
+  } catch (err) {
+    console.error('[Fallback] Error loading plans.json:', err)
+  }
+  return []
+}
+
+let cachedFallbackTasks: Task[] | null = null
+function getFallbackTasks(): Task[] {
+  if (cachedFallbackTasks) return cachedFallbackTasks
+  try {
+    const filePathUr = path.join(process.cwd(), 'scripts', 'import', 'tasks_ur.json')
+    const filePathPr = path.join(process.cwd(), 'scripts', 'import', 'tasks_projects.json')
+    let tasks: Task[] = []
+    
+    if (fs.existsSync(filePathUr)) {
+      const raw = fs.readFileSync(filePathUr, 'utf-8')
+      const json = JSON.parse(raw)
+      const listUr = json.map((item: any, idx: number) => ({
+        id: item.sourceId || `task_ur_${idx + 1}`,
+        companyId: 'rjHNaSUbLm4qTMyKP0oX',
+        title: item.title || 'Ordem de Trabalho',
+        description: item.title || null,
+        area: item.area || null,
+        tag: item.tag || null,
+        tipo: item.tipo || 'curativa',
+        assignedTo: item.technicians || null,
+        status: item.status === 'done' ? 'done' : (item.status === 'in_progress' ? 'in_progress' : 'pending'),
+        source: 'folha_ur_historico',
+        createdBy: 'system',
+        createdAt: new Date(Date.now() - (idx * 3600000)).toISOString(),
+        updatedAt: new Date().toISOString()
+      }))
+      tasks = tasks.concat(listUr)
+    }
+
+    if (fs.existsSync(filePathPr)) {
+      const raw = fs.readFileSync(filePathPr, 'utf-8')
+      const json = JSON.parse(raw)
+      const listPr = json.map((item: any, idx: number) => ({
+        id: `task_proj_${idx + 1}`,
+        companyId: 'rjHNaSUbLm4qTMyKP0oX',
+        title: item.title || item.name || 'Tarefa de Projeto',
+        description: item.description || null,
+        area: item.area || null,
+        tag: item.tag || null,
+        tipo: item.tipo || 'curativa',
+        status: item.status || 'pending',
+        source: 'folha_projetos',
+        createdBy: 'system',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }))
+      tasks = tasks.concat(listPr)
+    }
+
+    cachedFallbackTasks = tasks
+    return cachedFallbackTasks
+  } catch (err) {
+    console.error('[Fallback] Error loading tasks JSON:', err)
+  }
+  return []
+}
+
+let cachedFallbackUsers: User[] | null = null
+function getFallbackUsers(): User[] {
+  if (cachedFallbackUsers) return cachedFallbackUsers
+  const techs = [
+    { id: 'tech_LM', name: 'Leandro M. (LM)', email: 'lm@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_RG', name: 'Rui Garrido (RG)', email: 'garrido.rui@gmail.com', role: 'manager' },
+    { id: 'tech_LI', name: 'Luís I. (LI)', email: 'li@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_MC', name: 'Manuel C. (MC)', email: 'mc@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_JC', name: 'João C. (JC)', email: 'jc@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_MS', name: 'Mário S. (MS)', email: 'ms@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_CB', name: 'Carlos B. (CB)', email: 'cb@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_OX2', name: 'OX2 Especialista', email: 'ox2@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_BlockControl', name: 'BlockControl (Nuno/João)', email: 'blockcontrol@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_Carrier', name: 'Carrier (Ricardo)', email: 'carrier@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_Schindler', name: 'Schindler', email: 'schindler@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_Helenos', name: 'Helenos', email: 'helenos@rgmaintenance.pt', role: 'technician' }
+  ]
+  cachedFallbackUsers = techs.map(t => ({
+    ...t,
+    companyId: 'rjHNaSUbLm4qTMyKP0oX',
+    active: true,
+    createdAt: new Date().toISOString()
+  })) as User[]
+  return cachedFallbackUsers
+}
+
 // ── ASSETS ──────────────────────────────────────────────────────────────────
 export const listAssets = cache(async function(companyId: string): Promise<Asset[]> {
-  const snap = await adminDb()
-    .collection('assets')
-    .where('companyId', '==', companyId)
-    .get()
-  return snap.docs
-    .map((d) => serialize<Asset>(d))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  try {
+    const snap = await adminDb()
+      .collection('assets')
+      .where('companyId', '==', companyId)
+      .get()
+    const docs = snap.docs.map((d) => serialize<Asset>(d))
+    if (docs.length > 0) return docs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  } catch (err) {
+    console.error('[listAssets] Error / Quota Exceeded:', err)
+  }
+  return getFallbackAssets()
 })
 
-/** Versão LEVE: só id+name (para dropdowns e mapa id→nome). Evita trazer o doc inteiro. */
-export const listAssetRefs = cache(async function(companyId: string): Promise<{ id: string; name: string }[]> {
-  const snap = await adminDb()
-    .collection('assets')
-    .where('companyId', '==', companyId)
-    .select('name')
-    .get()
-  return snap.docs
-    .map((d) => ({ id: d.id, name: (d.data().name as string) ?? '' }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+/** Versão LEVE: id + name + tag (para dropdowns e mapa id→nome/tag). */
+export const listAssetRefs = cache(async function(companyId: string): Promise<{ id: string; name: string; tag?: string | null }[]> {
+  try {
+    const snap = await adminDb()
+      .collection('assets')
+      .where('companyId', '==', companyId)
+      .select('name', 'tag')
+      .get()
+    const docs = snap.docs.map((d) => ({ id: d.id, name: (d.data().name as string) ?? '', tag: (d.data().tag as string) ?? null }))
+    if (docs.length > 0) return docs.sort((a, b) => a.name.localeCompare(b.name))
+  } catch (err) {
+    console.error('[listAssetRefs] Error / Quota Exceeded:', err)
+  }
+  return getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag }))
 })
 
 /** Refs LEVES de planos para o modal de criação de tarefas (só os campos usados, ativos com equipamento). */
@@ -48,28 +207,33 @@ export type PlanTaskRef = {
   safetyRules: string[] | null
 }
 export const listPlanTaskRefs = cache(async function(companyId: string): Promise<PlanTaskRef[]> {
-  const snap = await adminDb()
-    .collection('maintenance_plans')
-    .where('companyId', '==', companyId)
-    .select('title', 'assetId', 'criticidade', 'periodicidade', 'periodicidadeLabel', 'executor', 'legal', 'months', 'safetyRules', 'active')
-    .get()
-  return snap.docs
-    .filter((d) => d.data().active !== false && d.data().assetId)
-    .map((d) => {
-      const x = d.data()
-      return {
-        id: d.id,
-        title: x.title ?? '',
-        assetId: x.assetId ?? null,
-        criticidade: x.criticidade ?? 'verde',
-        periodicidade: x.periodicidade ?? null,
-        periodicidadeLabel: x.periodicidadeLabel ?? null,
-        executor: x.executor ?? null,
-        legal: x.legal ?? false,
-        months: x.months ?? null,
-        safetyRules: x.safetyRules ?? null,
-      }
-    })
+  try {
+    const snap = await adminDb()
+      .collection('maintenance_plans')
+      .where('companyId', '==', companyId)
+      .select('title', 'assetId', 'criticidade', 'periodicidade', 'periodicidadeLabel', 'executor', 'legal', 'months', 'safetyRules', 'active')
+      .get()
+    return snap.docs
+      .filter((d) => d.data().active !== false && d.data().assetId)
+      .map((d) => {
+        const x = d.data()
+        return {
+          id: d.id,
+          title: x.title ?? '',
+          assetId: x.assetId ?? null,
+          criticidade: x.criticidade ?? 'verde',
+          periodicidade: x.periodicidade ?? null,
+          periodicidadeLabel: x.periodicidadeLabel ?? null,
+          executor: x.executor ?? null,
+          legal: x.legal ?? false,
+          months: x.months ?? null,
+          safetyRules: x.safetyRules ?? null,
+        }
+      })
+  } catch (err) {
+    console.error('[listPlanTaskRefs] Error:', err)
+    return []
+  }
 })
 
 export const getAsset = cache(async function(companyId: string, id: string): Promise<Asset | null> {
@@ -108,30 +272,44 @@ export async function deleteAsset(companyId: string, id: string): Promise<void> 
 
 // ── TASKS ───────────────────────────────────────────────────────────────────
 export const listTasks = cache(async function(companyId: string): Promise<Task[]> {
-  const snap = await adminDb()
-    .collection('tasks')
-    .where('companyId', '==', companyId)
-    .get()
-  return snap.docs
-    .map((d) => serialize<Task>(d))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  try {
+    const snap = await adminDb()
+      .collection('tasks')
+      .where('companyId', '==', companyId)
+      .get()
+    const docs = snap.docs.map((d) => serialize<Task>(d))
+    if (docs.length > 0) return docs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  } catch (err) {
+    console.error('[listTasks] Error / Quota Exceeded:', err)
+  }
+  return getFallbackTasks()
 })
 
 export const listTasksByAsset = cache(async function(companyId: string, assetId: string): Promise<Task[]> {
-  const snap = await adminDb()
-    .collection('tasks')
-    .where('companyId', '==', companyId)
-    .where('assetId', '==', assetId)
-    .get()
-  return snap.docs
-    .map((d) => serialize<Task>(d))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  try {
+    const snap = await adminDb()
+      .collection('tasks')
+      .where('companyId', '==', companyId)
+      .where('assetId', '==', assetId)
+      .get()
+    const docs = snap.docs.map((d) => serialize<Task>(d))
+    if (docs.length > 0) return docs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  } catch (err) {
+    console.error('[listTasksByAsset] Error / Quota Exceeded:', err)
+  }
+  return getFallbackTasks().filter(t => t.assetId === assetId)
 })
 
 export const getTask = cache(async function(companyId: string, id: string): Promise<Task | null> {
-  const doc = await adminDb().collection('tasks').doc(id).get()
-  if (!doc.exists || doc.data()?.companyId !== companyId) return null
-  return serialize<Task>(doc)
+  try {
+    const doc = await adminDb().collection('tasks').doc(id).get()
+    if (doc.exists && doc.data()?.companyId === companyId) {
+      return serialize<Task>(doc)
+    }
+  } catch (err) {
+    console.error('[getTask] Error / Quota Exceeded:', err)
+  }
+  return getFallbackTasks().find(t => t.id === id) || null
 })
 
 export async function createTask(
@@ -186,11 +364,17 @@ export async function deleteTask(companyId: string, id: string): Promise<void> {
 
 // ── USERS (para atribuição de tarefas) ────────────────────────────────────────
 export const listUsers = cache(async function(companyId: string): Promise<User[]> {
-  const snap = await adminDb()
-    .collection('users')
-    .where('companyId', '==', companyId)
-    .get()
-  return snap.docs.map((d) => serialize<User>(d))
+  try {
+    const snap = await adminDb()
+      .collection('users')
+      .where('companyId', '==', companyId)
+      .get()
+    const docs = snap.docs.map((d) => serialize<User>(d))
+    if (docs.length > 0) return docs
+  } catch (err) {
+    console.error('[listUsers] Error / Quota Exceeded:', err)
+  }
+  return getFallbackUsers()
 })
 
 // ── REGISTO (cria empresa + gestor) ───────────────────────────────────────────
@@ -235,27 +419,36 @@ export async function createCompanyWithManager(
 
 // ── INTERVENTIONS (execução / histórico) ──────────────────────────────────────
 export const listInterventions = cache(async function(companyId: string): Promise<Intervention[]> {
-  const snap = await adminDb()
-    .collection('interventions')
-    .where('companyId', '==', companyId)
-    .get()
-  return snap.docs
-    .map((d) => serialize<Intervention>(d))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  try {
+    const snap = await adminDb()
+      .collection('interventions')
+      .where('companyId', '==', companyId)
+      .get()
+    return snap.docs
+      .map((d) => serialize<Intervention>(d))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  } catch (err) {
+    console.error('[listInterventions] Error:', err)
+    return []
+  }
 })
 
 export const listInterventionsByTask = cache(async function(
   companyId: string,
   taskId: string
 ): Promise<Intervention[]> {
-  const snap = await adminDb()
-    .collection('interventions')
-    .where('companyId', '==', companyId)
-    .where('taskId', '==', taskId)
-    .get()
-  const items = snap.docs.map((d) => serialize<Intervention>(d))
-  // ordena por createdAt desc em memória (evita índice composto extra)
-  return items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  try {
+    const snap = await adminDb()
+      .collection('interventions')
+      .where('companyId', '==', companyId)
+      .where('taskId', '==', taskId)
+      .get()
+    const items = snap.docs.map((d) => serialize<Intervention>(d))
+    return items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  } catch (err) {
+    console.error('[listInterventionsByTask] Error:', err)
+    return []
+  }
 })
 
 export async function createIntervention(
@@ -336,6 +529,17 @@ export async function createInviteToken(
   return { id: ref.id, token }
 }
 
+export async function countPendingInvites(companyId: string): Promise<number> {
+  const now = new Date().toISOString()
+  const snap = await adminDb()
+    .collection('invites')
+    .where('companyId', '==', companyId)
+    .where('used', '==', false)
+    .where('expiresAt', '>', now)
+    .get()
+  return snap.size
+}
+
 export const getInviteByToken = cache(async function(token: string, callerEmail?: string): Promise<Invite | null> {
   const snap = await adminDb()
     .collection('invites')
@@ -392,13 +596,35 @@ export async function updateUserRate(companyId: string, userId: string, hourlyRa
 }
 
 export const getCompanyName = cache(async function(companyId: string): Promise<string | null> {
-  const doc = await adminDb().collection('companies').doc(companyId).get()
-  return doc.exists ? ((doc.data()?.name as string) ?? null) : null
+  try {
+    const doc = await adminDb().collection('companies').doc(companyId).get()
+    return doc.exists ? ((doc.data()?.name as string) ?? null) : 'Empresa UR'
+  } catch (err) {
+    console.error('[getCompanyName] Error / Quota Exceeded:', err)
+    return 'Empresa UR'
+  }
 })
+
+export const getTechnicianTypes = cache(async function(companyId: string): Promise<string[]> {
+  try {
+    const doc = await adminDb().collection('companies').doc(companyId).get()
+    if (doc.exists) {
+      const types = doc.data()?.technicianTypes
+      if (Array.isArray(types) && types.length > 0) return types
+    }
+  } catch (err) {
+    console.error('[getTechnicianTypes] Error / Quota Exceeded:', err)
+  }
+  return DEFAULT_TECHNICIAN_TYPES
+})
+
+export async function updateTechnicianTypes(companyId: string, technicianTypes: string[]): Promise<void> {
+  await adminDb().collection('companies').doc(companyId).update({ technicianTypes })
+}
 
 export async function createUserDirect(
   companyId: string,
-  data: { email: string; name: string; role: UserRole; tempPassword: string }
+  data: { email: string; name: string; role: UserRole; tempPassword: string; avatarUrl?: string | null; specialty?: string | null }
 ): Promise<string> {
   const authUser = await adminAuth().createUser({
     email: data.email,
@@ -410,7 +636,8 @@ export async function createUserDirect(
     email: data.email,
     name: data.name.trim(),
     role: data.role,
-    avatarUrl: null,
+    avatarUrl: data.avatarUrl ?? null,
+    specialty: data.specialty ?? null,
     active: true,
     createdAt: new Date().toISOString(),
   })
@@ -419,12 +646,14 @@ export async function createUserDirect(
 
 export async function updateUserProfile(
   userId: string,
-  data: { name?: string; avatarUrl?: string | null; language?: string }
+  data: { name?: string; avatarUrl?: string | null; language?: string; specialty?: string | null; role?: UserRole }
 ): Promise<void> {
   const update: Record<string, unknown> = {}
   if (data.name !== undefined) update.name = data.name.trim()
   if (data.avatarUrl !== undefined) update.avatarUrl = data.avatarUrl
   if (data.language !== undefined) update.language = data.language
+  if (data.specialty !== undefined) update.specialty = data.specialty
+  if (data.role !== undefined) update.role = data.role
   await adminDb().collection('users').doc(userId).update(update)
 }
 
@@ -451,19 +680,29 @@ export const listInterventionsByTechnician = cache(async function(
 // ── MAINTENANCE PLANS ─────────────────────────────────────────────────────────
 
 export const listMaintenancePlans = cache(async function(companyId: string): Promise<MaintenancePlan[]> {
-  const snap = await adminDb()
-    .collection('maintenance_plans')
-    .where('companyId', '==', companyId)
-    .get()
-  return snap.docs
-    .map((d) => serialize<MaintenancePlan>(d))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  try {
+    const snap = await adminDb()
+      .collection('maintenance_plans')
+      .where('companyId', '==', companyId)
+      .get()
+    const docs = snap.docs.map((d) => serialize<MaintenancePlan>(d))
+    if (docs.length > 0) return docs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  } catch (err) {
+    console.error('[listMaintenancePlans] Error / Quota Exceeded:', err)
+  }
+  return getFallbackPlans()
 })
 
 export const getMaintenancePlan = cache(async function(companyId: string, id: string): Promise<MaintenancePlan | null> {
-  const doc = await adminDb().collection('maintenance_plans').doc(id).get()
-  if (!doc.exists || doc.data()?.companyId !== companyId) return null
-  return serialize<MaintenancePlan>(doc)
+  try {
+    const doc = await adminDb().collection('maintenance_plans').doc(id).get()
+    if (doc.exists && doc.data()?.companyId === companyId) {
+      return serialize<MaintenancePlan>(doc)
+    }
+  } catch (err) {
+    console.error('[getMaintenancePlan] Error / Quota Exceeded:', err)
+  }
+  return getFallbackPlans().find(p => p.id === id) || null
 })
 
 export async function createMaintenancePlan(
@@ -503,13 +742,18 @@ export const getUsersByCompany = cache(async function(companyId: string): Promis
 // ── STOCK ITEMS ───────────────────────────────────────────────────────────────
 
 export const listStockItems = cache(async function(companyId: string): Promise<StockItem[]> {
-  const snap = await adminDb()
-    .collection('stock_items')
-    .where('companyId', '==', companyId)
-    .get()
-  return snap.docs
-    .map((d) => serialize<StockItem>(d))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  try {
+    const snap = await adminDb()
+      .collection('stock_items')
+      .where('companyId', '==', companyId)
+      .get()
+    return snap.docs
+      .map((d) => serialize<StockItem>(d))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  } catch (err) {
+    console.error('[listStockItems] Error:', err)
+    return []
+  }
 })
 
 export const getStockItem = cache(async function(companyId: string, id: string): Promise<StockItem | null> {

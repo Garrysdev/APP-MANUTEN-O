@@ -1,13 +1,18 @@
-﻿import { BookOpen } from 'lucide-react'
+import { BookOpen } from 'lucide-react'
 import KnowledgeClient from './KnowledgeClient'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { redirect } from 'next/navigation'
+import { planHas } from '@/lib/plans'
 
 export const dynamic = 'force-dynamic'
 
 export default async function KnowledgePage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
+  if (profile.role === 'technician') redirect('/dashboard/tasks')
+
+  const plan = profile.company?.plan ?? 'free'
+  if (!planHas(plan, 'aiConsultant')) redirect('/dashboard/billing')
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">

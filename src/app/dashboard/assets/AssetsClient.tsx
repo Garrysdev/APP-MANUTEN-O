@@ -1,6 +1,6 @@
-﻿'use client'
+'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -188,20 +188,18 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
 
   const showForm = creating || editing !== null
 
-  const filtered = assets.filter((a) => {
-    if (estadoFilter === 'active' && !a.active) return false
-    if (estadoFilter === 'inactive' && a.active) return false
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      const haystack = [a.name, a.location, a.type, a.area, a.tag, a.manufacturer, ...(a.tags ?? [])]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      if (!haystack.includes(q)) return false
-    }
-    return true
-  })
-
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return assets.filter((a) => {
+      if (estadoFilter === 'active' && !a.active) return false
+      if (estadoFilter === 'inactive' && a.active) return false
+      if (q) {
+        const haystack = `${a.name || ''} ${a.location || ''} ${a.type || ''} ${a.area || ''} ${a.tag || ''} ${a.manufacturer || ''} ${(a.tags || []).join(' ')}`.toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+      return true
+    })
+  }, [assets, search, estadoFilter])
 
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Asset>(
     filtered,
@@ -221,10 +219,14 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [search, estadoFilter])
+  }, [search, estadoFilter, pageSize])
 
-  const totalPages = Math.ceil(shown.length / pageSize)
-  const currentShown = shown.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const effectivePageSize = pageSize === -1 ? (shown.length || 1) : pageSize
+  const totalPages = Math.ceil(shown.length / effectivePageSize) || 1
+  const currentShown = useMemo(() => {
+    if (pageSize === -1) return shown
+    return shown.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  }, [shown, currentPage, pageSize])
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -303,14 +305,36 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={dict.assets.searchPlaceholder}
-                className="input text-sm py-1.5 pl-7 w-56"
+                className="input text-sm py-1.5 pl-7 pr-7 w-56 sm:w-64"
               />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
             <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value as typeof estadoFilter)} className="input text-sm py-1.5 w-auto">
               <option value="all">{dict.assets.allStatus}</option>
               <option value="active">{dict.assets.activeOnly}</option>
               <option value="inactive">{dict.assets.inactiveOnly}</option>
             </select>
+            <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 ml-auto">
+              <span>Por página:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="input text-xs py-1 px-2 w-auto"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={250}>250</option>
+                <option value={-1}>Todos ({assets.length})</option>
+              </select>
+            </div>
             {temFiltro && (
               <button onClick={limparFiltros} className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400">
                 <X className="h-3.5 w-3.5" /> {dict.common.clear}
@@ -333,76 +357,78 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
         </div>
       )}
 
-      <div className="card">
+      <div className="card overflow-hidden">
         {shown.length === 0 ? (
           <div className="px-5 py-12 text-center text-gray-400">
             <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
             <p className="text-sm">{temFiltro ? dict.assets.emptyFilter : dict.assets.empty}</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50">
-                <th className="px-3 py-3 w-10">
-                  <input type="checkbox" checked={shown.length > 0 && selectedAssets.size === shown.length} onChange={toggleSelectAll} className="rounded border-gray-300 dark:border-slate-700 dark:bg-slate-800" />
-                </th>
-                <SortableTh label={dict.assets.colArea} sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-gray-500 dark:text-slate-400" />
-                <SortableTh label={dict.assets.colTag} sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-gray-500 dark:text-slate-400" />
-                <SortableTh label={dict.assets.colName} sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-gray-500 dark:text-slate-400" />
-                <SortableTh label={dict.common.status} sortableKey="active" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-gray-500 dark:text-slate-400" />
-                <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">{dict.common.actions}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentShown.map((a) => (
-                <tr key={a.id} className="border-b border-gray-50 dark:border-slate-800/50 hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
-                  <td className="px-3 py-2.5">
-                    <input type="checkbox" checked={selectedAssets.has(a.id)} onChange={() => toggleSelection(a.id)} className="rounded border-gray-300 dark:border-slate-700 dark:bg-slate-800" />
-                  </td>
-                  <td className="px-3 py-3.5 text-gray-500 dark:text-slate-400 font-medium">{a.area ?? '—'}</td>
-                  <td className="px-3 py-3.5 text-gray-500 dark:text-slate-400">
-                    {a.tag ? (
-                      <span className="inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300">
-                        <Tag className="h-3 w-3" />{a.tag}
-                      </span>
-                    ) : '—'}
-                  </td>
-                  <td className="px-3 py-3.5 font-bold text-gray-800 dark:text-slate-200">
-                    <div className="flex items-center gap-2">
-                      {a.photoUrl ? (
-                        <div className="relative w-7 h-7 rounded overflow-hidden border border-gray-200 dark:border-slate-700 flex-shrink-0">
-                          <Image src={a.photoUrl} alt={a.name} fill className="object-cover" sizes="28px" />
-                        </div>
-                      ) : (
-                        <div className="w-7 h-7 rounded bg-gray-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
-                          <Package className="h-3.5 w-3.5 text-gray-300 dark:text-slate-500" />
-                        </div>
-                      )}
-                      <Link href={`/dashboard/assets/${a.id}`} className="hover:text-[#2E86C1] hover:underline transition-colors">
-                        {a.name}
-                      </Link>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3.5">
-                    <span className={a.active ? 'badge-done' : 'badge-cancelled'}>
-                      {a.active ? dict.assets.lblActive : dict.assets.lblInactive}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3.5 text-right">
-                    <button onClick={() => setPrintQRAsset(a)} className="text-gray-400 hover:text-purple-600 p-1.5" aria-label="Imprimir QR Code">
-                      <QrCode className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => openEdit(a)} className="text-gray-400 hover:text-[#2E86C1] p-1.5" aria-label="Editar">
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => handleDelete(a)} className="text-gray-400 hover:text-red-600 p-1.5" aria-label="Eliminar">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[600px] md:min-w-0">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
+                  <th className="px-3 py-3 w-10">
+                    <input type="checkbox" checked={shown.length > 0 && selectedAssets.size === shown.length} onChange={toggleSelectAll} className="rounded border-slate-300 bg-white" />
+                  </th>
+                  <SortableTh label={dict.assets.colArea} sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
+                  <SortableTh label={dict.assets.colTag} sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
+                  <SortableTh label={dict.assets.colName} sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
+                  <SortableTh label={dict.common.status} sortableKey="active" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
+                  <th className="px-3 py-3 text-right text-xs font-bold text-slate-700 uppercase tracking-wide">{dict.common.actions}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {currentShown.map((a) => (
+                  <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                    <td className="px-3 py-2.5">
+                      <input type="checkbox" checked={selectedAssets.has(a.id)} onChange={() => toggleSelection(a.id)} className="rounded border-slate-300 bg-white" />
+                    </td>
+                    <td className="px-3 py-3.5 text-slate-900 font-mono font-bold">{a.area ?? '—'}</td>
+                    <td className="px-3 py-3.5 text-slate-900 font-bold">
+                      {a.tag ? (
+                        <span className="inline-flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded bg-slate-100/90 border border-slate-200 text-slate-900">
+                          <Tag className="h-3 w-3" />{a.tag}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td className="px-3 py-3.5 font-bold text-slate-900">
+                      <div className="flex items-center gap-2">
+                        {a.photoUrl ? (
+                          <div className="relative w-7 h-7 rounded overflow-hidden border border-slate-300 flex-shrink-0">
+                            <Image src={a.photoUrl} alt={a.name} fill className="object-cover" sizes="28px" />
+                          </div>
+                        ) : (
+                          <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center flex-shrink-0">
+                            <Package className="h-3.5 w-3.5 text-slate-500" />
+                          </div>
+                        )}
+                        <Link href={`/dashboard/assets/${a.id}`} className="hover:text-safety-orange hover:underline transition-colors">
+                          {a.name}
+                        </Link>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3.5">
+                      <span className={a.active ? 'badge-done' : 'badge-cancelled'}>
+                        {a.active ? dict.assets.lblActive : dict.assets.lblInactive}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3.5 text-right">
+                      <button onClick={() => setPrintQRAsset(a)} className="text-slate-600 hover:text-purple-700 p-1.5" aria-label="Imprimir QR Code">
+                        <QrCode className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => openEdit(a)} className="text-slate-600 hover:text-blue-700 p-1.5" aria-label="Editar">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => handleDelete(a)} className="text-slate-600 hover:text-red-700 p-1.5" aria-label="Eliminar">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {shown.length > 0 && (

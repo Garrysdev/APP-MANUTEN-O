@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
 
 export default withPWA({
   dest: 'public',
-  customWorkerDir: 'worker',
+  customWorkerSrc: 'worker',
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,

@@ -7,7 +7,8 @@ import StockDetailClient from './StockDetailClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function StockItemPage({ params }: { params: { id: string } }) {
+export default async function StockItemPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
   if (profile.role !== 'manager') redirect('/dashboard/tasks')
@@ -15,10 +16,10 @@ export default async function StockItemPage({ params }: { params: { id: string }
   const plan = (profile.company?.plan ?? 'free') as PlanName
   if (!planHas(plan, 'stocks')) redirect('/dashboard')
 
-  const item = await getStockItem(profile.companyId, params.id)
+  const item = await getStockItem(profile.companyId, id)
   if (!item) notFound()
 
-  const movements = await listStockMovements(profile.companyId, params.id)
+  const movements = await listStockMovements(profile.companyId, id)
   const usages = await listMaterialsByName(profile.companyId, item.name)
 
   return <StockDetailClient item={item} movements={movements} usages={usages} />

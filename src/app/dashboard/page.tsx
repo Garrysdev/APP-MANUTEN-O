@@ -18,24 +18,31 @@ const getStatusStyles = (status: string) => {
   }
 };
 
-const StatCard = ({ label, value, icon: Icon, trend, sub }: { label: string; value: string; icon: any; trend?: string; sub?: string }) => (
-  <div className="bg-white border border-outline rounded-lg p-6 flex flex-col justify-between h-[150px] shadow-sm">
-    <div className="flex justify-between items-start">
-      <span className="font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider">{label}</span>
-      <Icon size={20} className="text-slate-300" />
+const StatCard = ({ label, value, icon: Icon, trend, sub, href }: { label: string; value: string; icon: any; trend?: string; sub?: string; href?: string }) => {
+  const content = (
+    <div className="bg-white border border-outline rounded-lg p-6 flex flex-col justify-between h-[150px] shadow-sm hover:shadow-md hover:border-safety-orange/40 transition-all cursor-pointer group">
+      <div className="flex justify-between items-start">
+        <span className="font-mono text-xs font-bold text-industrial-blue-light uppercase tracking-wider group-hover:text-safety-orange transition-colors">{label}</span>
+        <Icon size={20} className="text-slate-300 group-hover:text-safety-orange transition-colors" />
+      </div>
+      <div className="flex items-end gap-3">
+        <span className="text-4xl font-bold text-industrial-blue">{value}</span>
+        {trend && (
+          <span className={`text-sm font-bold flex items-center mb-1 ${trend.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+            {trend.startsWith('+') ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+            {trend.replace(/[+-]/, '')}
+          </span>
+        )}
+        {sub && <span className="text-xs font-medium text-industrial-blue-light mb-1">{sub}</span>}
+      </div>
     </div>
-    <div className="flex items-end gap-3">
-      <span className="text-4xl font-bold text-industrial-blue">{value}</span>
-      {trend && (
-        <span className={`text-sm font-bold flex items-center mb-1 ${trend.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-          {trend.startsWith('+') ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-          {trend.replace(/[+-]/, '')}
-        </span>
-      )}
-      {sub && <span className="text-xs font-medium text-industrial-blue-light mb-1">{sub}</span>}
-    </div>
-  </div>
-);
+  )
+
+  if (href) {
+    return <Link href={href} className="block">{content}</Link>
+  }
+  return content
+};
 
 export default async function DashboardPage() {
   const profile = await getCurrentProfile()
@@ -75,14 +82,15 @@ export default async function DashboardPage() {
       </div>
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard label="Ordens Ativas" value={activeTasks.length.toString()} icon={ClipboardList} trend="+12%" />
+        <StatCard label="Ordens Ativas" value={activeTasks.length.toString()} icon={ClipboardList} trend="+12%" href="/dashboard/tasks" />
         <StatCard 
           label="Técnicos Online" 
           value={Math.round(technicians.length * 0.8).toString()} 
           icon={Users} 
           sub={`/ ${technicians.length} Ativos`} 
+          href="/dashboard/users"
         />
-        <StatCard label="Tempo Médio Resolução" value="4.2" icon={Timer} sub="hrs" trend="-0.5h" />
+        <StatCard label="Tempo Médio Resolução" value="4.2" icon={Timer} sub="hrs" trend="-0.5h" href="/dashboard/history" />
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -121,32 +129,38 @@ export default async function DashboardPage() {
                 ) : activeTasks.slice(0, 8).map((order) => (
                   <tr 
                     key={order.id} 
-                    className="border-b border-slate-100 hover:bg-slate-50 transition-colors group"
+                    className="border-b border-slate-100 hover:bg-slate-50 transition-colors group cursor-pointer"
                   >
                     <td className="py-4 px-6 font-mono text-industrial-blue-light uppercase">
-                      <Link href={`/dashboard/tasks/${order.id}`}>{order.id.slice(0, 8)}</Link>
+                      <Link href="/dashboard/tasks" className="block hover:underline">{order.id.slice(0, 8)}</Link>
                     </td>
                     <td className="py-4 px-6 font-bold group-hover:text-safety-orange transition-colors">
-                      <Link href={`/dashboard/tasks/${order.id}`}>{order.title}</Link>
+                      <Link href="/dashboard/tasks" className="block">{order.title}</Link>
                     </td>
-                    <td className="py-4 px-6 text-industrial-blue-light">
-                      {usersList.find(u => u.id === order.assignedTo)?.name || 'Sem Atribuição'}
+                    <td className="py-4 px-6 text-industrial-blue-light hover:text-safety-orange font-bold">
+                      <Link href="/dashboard/users" className="block">
+                        {usersList.find(u => u.id === order.assignedTo)?.name || 'Sem Atribuição'}
+                      </Link>
                     </td>
                     <td className="py-4 px-6">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getStatusStyles(order.status === 'in_progress' && order.criticidade === 'vermelho' ? 'vermelho' : order.status)}`}>
-                        {order.status === 'in_progress' ? (order.criticidade === 'vermelho' ? 'Emergência' : 'Em Curso') : 
-                         order.status === 'pending' ? 'Atribuída' : 'Desconhecido'}
-                      </span>
+                      <Link href="/dashboard/tasks" className="block">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getStatusStyles(order.status === 'in_progress' && order.criticidade === 'vermelho' ? 'vermelho' : order.status)}`}>
+                          {order.status === 'in_progress' ? (order.criticidade === 'vermelho' ? 'Emergência' : 'Em Curso') : 
+                           order.status === 'pending' ? 'Atribuída' : 'Desconhecido'}
+                        </span>
+                      </Link>
                     </td>
                     <td className="py-4 px-6 text-industrial-blue-light text-xs font-mono">
-                      {formatDate(order.createdAt)}
+                      <Link href="/dashboard/tasks" className="block">{formatDate(order.createdAt)}</Link>
                     </td>
                     <td className="py-4 px-6 text-center">
-                      {order.criticidade === 'vermelho' ? (
-                        <AlertTriangle size={18} className="text-red-500 mx-auto" />
-                      ) : (
-                        <div className={`w-1.5 h-1.5 rounded-full mx-auto ${order.criticidade === 'amarelo' ? 'bg-amber-400' : 'bg-slate-300'}`} />
-                      )}
+                      <Link href="/dashboard/tasks" className="block">
+                        {order.criticidade === 'vermelho' ? (
+                          <AlertTriangle size={18} className="text-red-500 mx-auto" />
+                        ) : (
+                          <div className={`w-1.5 h-1.5 rounded-full mx-auto ${order.criticidade === 'amarelo' ? 'bg-amber-400' : 'bg-slate-300'}`} />
+                        )}
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -156,24 +170,34 @@ export default async function DashboardPage() {
         </section>
 
         <section className="bg-white border border-outline rounded-lg p-6 shadow-sm flex flex-col gap-6">
-          <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-            <CalendarIcon className="text-safety-orange" size={24} />
-            <div>
-              <h3 className="font-bold text-industrial-blue">Próximas Tarefas</h3>
-              <p className="text-[10px] font-bold text-industrial-blue-light uppercase tracking-widest">A aguardar início</p>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-3">
+              <CalendarIcon className="text-safety-orange" size={24} />
+              <div>
+                <h3 className="font-bold text-industrial-blue">Próximas Tarefas</h3>
+                <p className="text-[10px] font-bold text-industrial-blue-light uppercase tracking-widest">A aguardar início</p>
+              </div>
             </div>
+            <Link href="/dashboard/tasks" className="text-xs font-bold text-safety-orange hover:underline">Ver Todas →</Link>
           </div>
           
           <div className="flex flex-col gap-3">
             {activeTasks.filter(o => o.status === 'pending').slice(0, 5).map(order => (
-              <div key={order.id} className="flex flex-col gap-1 p-3 bg-slate-50 rounded-lg border border-slate-100">
+              <Link 
+                key={order.id} 
+                href="/dashboard/tasks"
+                className="flex flex-col gap-1 p-3 bg-slate-50 hover:bg-orange-50/50 hover:border-safety-orange/50 transition-all rounded-lg border border-slate-100 cursor-pointer group"
+              >
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-mono font-bold text-industrial-blue-light">{formatDate(order.createdAt)}</span>
                   <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${getStatusStyles(order.status)}`}>Pendente</span>
                 </div>
-                <p className="text-xs font-bold text-industrial-blue truncate">{order.title}</p>
-                <p className="text-[10px] text-industrial-blue-light italic">Técnico: {usersList.find(u => u.id === order.assignedTo)?.name || 'Sem Atribuição'}</p>
-              </div>
+                <p className="text-xs font-bold text-industrial-blue group-hover:text-safety-orange transition-colors truncate">{order.title}</p>
+                <div className="flex justify-between items-center text-[10px] mt-1">
+                  <span className="text-industrial-blue-light italic">Técnico: {usersList.find(u => u.id === order.assignedTo)?.name || 'Sem Atribuição'}</span>
+                  <span className="text-safety-orange font-bold group-hover:translate-x-0.5 transition-transform">Ver OT →</span>
+                </div>
+              </Link>
             ))}
           </div>
         </section>
@@ -185,14 +209,17 @@ export default async function DashboardPage() {
             <h3 className="text-lg font-bold text-industrial-blue">Histórico Recente para Revisão (Admin)</h3>
             <p className="text-xs text-industrial-blue-light font-medium mt-1">Ordens concluídas que podem necessitar de reabertura ou auditoria.</p>
           </div>
-          <AlertCircle size={20} className="text-safety-orange/50" />
+          <Link href="/dashboard/history" className="flex items-center gap-2 text-xs font-bold text-safety-orange hover:underline">
+            <span>Ver Histórico Completo</span>
+            <AlertCircle size={18} className="text-safety-orange" />
+          </Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50/50 border-b border-outline">
               <tr>
                 <th className="font-mono text-xs font-bold text-industrial-blue-light py-3 px-6 uppercase tracking-wider">ID Ordem</th>
-                <th className="font-mono text-xs font-bold text-industrial-blue-light py-3 px-6 uppercase tracking-wider">Equipamento</th>
+                <th className="font-mono text-xs font-bold text-industrial-blue-light py-3 px-6 uppercase tracking-wider">Equipamento / Tarefa</th>
                 <th className="font-mono text-xs font-bold text-industrial-blue-light py-3 px-6 uppercase tracking-wider">Data de Conclusão</th>
                 <th className="font-mono text-xs font-bold text-industrial-blue-light py-3 px-6 uppercase tracking-wider text-right">Ações</th>
               </tr>
@@ -205,19 +232,21 @@ export default async function DashboardPage() {
               ) : completedTasks.slice(0, 5).map((order) => (
                 <tr key={order.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
                   <td className="py-4 px-6 font-mono text-industrial-blue-light uppercase">
-                    <Link href={`/dashboard/tasks/${order.id}`}>{order.id.slice(0, 8)}</Link>
+                    <Link href="/dashboard/history" className="hover:underline">{order.id.slice(0, 8)}</Link>
                   </td>
-                  <td className="py-4 px-6 font-bold">{order.title}</td>
+                  <td className="py-4 px-6 font-bold">
+                    <Link href="/dashboard/history" className="hover:text-safety-orange transition-colors">{order.title}</Link>
+                  </td>
                   <td className="py-4 px-6 text-industrial-blue-light text-xs font-mono">
                     {order.updatedAt ? formatDate(order.updatedAt) : '-'}
                   </td>
                   <td className="py-4 px-6 text-right">
                     <Link 
-                      href={`/dashboard/tasks/${order.id}`}
+                      href="/dashboard/history"
                       className="px-4 py-2 bg-safety-orange text-white text-[10px] font-bold uppercase rounded-lg hover:bg-safety-orange/90 transition-all shadow-lg shadow-safety-orange/10 inline-flex items-center gap-2"
                     >
                       <Plus size={14} className="rotate-45" />
-                      Ver Detalhes
+                      Ver Histórico
                     </Link>
                   </td>
                 </tr>

@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       if (companyId && plan) {
         const active = sub.status === 'active' || sub.status === 'trialing'
         await db.collection('companies').doc(companyId).update({
-          plan: active ? plan : 'starter',
+          plan: active ? plan : 'free',
         })
       }
       break
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       const companyId = sub.metadata?.companyId
       if (companyId) {
         await db.collection('companies').doc(companyId).update({
-          plan: 'starter',
+          plan: 'free',
           stripeSubscriptionId: null,
         })
       }

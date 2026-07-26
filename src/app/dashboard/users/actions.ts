@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { createUserDirect, deactivateUser, countActiveUsers, createInviteToken, updateUserRate } from '@/lib/firebase/data'
+import { createUserDirect, deactivateUser, countActiveUsers, countPendingInvites, createInviteToken, updateUserRate } from '@/lib/firebase/data'
 import { LIMITS } from '@/lib/plans'
 import type { UserRole, PlanName } from '@/types/models'
 
@@ -18,10 +18,11 @@ export async function createUserDirectAction(
 
   const plan = (profile.company?.plan ?? 'free') as PlanName
   const activeCount = await countActiveUsers(profile.companyId)
+  const pendingCount = await countPendingInvites(profile.companyId)
   const { maxUsers } = LIMITS[plan]
-  if (activeCount >= maxUsers) {
+  if (activeCount + pendingCount >= maxUsers) {
     return {
-      error: `Limite de ${maxUsers} utilizador(es) atingido no plano ${plan}. Faz upgrade para adicionar mais.`,
+      error: `Limite de ${maxUsers} utilizador(es) atingido no plano ${plan} (Ativos: ${activeCount}, Convites pendentes: ${pendingCount}). Faz upgrade para adicionar mais.`,
     }
   }
 
@@ -29,12 +30,14 @@ export async function createUserDirectAction(
   const email = String(formData.get('email') ?? '').trim()
   const role = String(formData.get('role') ?? 'technician') as UserRole
   const tempPassword = String(formData.get('tempPassword') ?? '').trim()
+  const avatarUrl = String(formData.get('avatarUrl') ?? '').trim() || null
+  const specialty = String(formData.get('specialty') ?? '').trim() || null
 
   if (!name || !email || !tempPassword) return { error: 'Preenche todos os campos.' }
   if (tempPassword.length < 6) return { error: 'A password deve ter pelo menos 6 caracteres.' }
 
   try {
-    await createUserDirect(profile.companyId, { email, name, role, tempPassword })
+    await createUserDirect(profile.companyId, { email, name, role, tempPassword, avatarUrl, specialty })
     revalidatePath('/dashboard/users')
     return { ok: true }
   } catch (e) {
@@ -53,6 +56,16 @@ export async function generateInviteAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+
+  const plan = (profile.company?.plan ?? 'free') as PlanName
+  const activeCount = await countActiveUsers(profile.companyId)
+  const pendingCount = await countPendingInvites(profile.companyId)
+  const { maxUsers } = LIMITS[plan]
+  if (activeCount + pendingCount >= maxUsers) {
+    return {
+      error: `Limite de ${maxUsers} utilizador(es) atingido no plano ${plan} (Ativos: ${activeCount}, Convites pendentes: ${pendingCount}). Faz upgrade para poder gerar mais convites.`,
+    }
+  }
 
   const role = String(formData.get('role') ?? 'technician') as UserRole
   const email = String(formData.get('email') ?? '').trim().toLowerCase() || undefined
@@ -96,8 +109,22 @@ export async function updateUserRateAction(userId: string, hourlyRate: number): 
   }
 }
 
-import { updateUserProfile } from '@/lib/firebase/data'
+import { updateUserProfile, updateTechnicianTypes } from '@/lib/firebase/data'
 import { adminAuth } from '@/lib/firebase/admin'
+
+export async function updateTechnicianTypesAction(types: string[]): Promise<UserActionState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+
+  try {
+    await updateTechnicianTypes(profile.companyId, types)
+    revalidatePath('/dashboard/users')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao atualizar tipos de técnico.' }
+  }
+}
 
 export async function updateUserByManagerAction(
   userId: string,
@@ -117,6 +144,9 @@ export async function updateUserByManagerAction(
   const roleRaw = formData.get('role')
   const role = roleRaw ? String(roleRaw) as UserRole : undefined
 
+  const specialtyRaw = formData.get('specialty')
+  const specialty = specialtyRaw !== null ? String(specialtyRaw).trim() || null : undefined
+
   const avatarUrl = formData.has('avatarUrl')
     ? String(formData.get('avatarUrl') ?? '').trim() || null
     : undefined
@@ -125,6 +155,7 @@ export async function updateUserByManagerAction(
     const updateData: any = { name }
     if (language) updateData.language = language
     if (role && userId !== profile.id) updateData.role = role
+    if (specialty !== undefined) updateData.specialty = specialty
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl
 
     // Se o email foi fornecido e é válido, atualiza no Firebase Auth e no Firestore

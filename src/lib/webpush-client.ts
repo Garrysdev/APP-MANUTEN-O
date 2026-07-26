@@ -1,5 +1,5 @@
 import { getFirestore, doc, updateDoc } from 'firebase/firestore'
-import { app } from './firebase/client'
+import { getFirebaseApp } from './firebase/client'
 
 // Converte a VAPID key para Uint8Array
 function urlBase64ToUint8Array(base64String: string) {
@@ -33,7 +33,7 @@ export async function subscribeToPushNotifications(userId: string) {
     })
 
     // Guarda a subscrição no perfil do utilizador (Firestore)
-    const db = getFirestore(app)
+    const db = getFirestore(getFirebaseApp())
     await updateDoc(doc(db, 'users', userId), {
       pushSubscription: JSON.parse(JSON.stringify(subscription)),
     })
@@ -41,6 +41,6 @@ export async function subscribeToPushNotifications(userId: string) {
     return true
   } catch (err) {
     console.error('Falha ao subscrever push:', err)
-    return false
+    throw err
   }
 }
