@@ -5,6 +5,7 @@ import { STATUS_LABELS, CRITICIDADE_LABELS, TIPO_LABELS, type TipoTarefa } from 
 import { formatDate, formatDateTime, formatDuration } from '@/lib/utils'
 import PrintButton from './PrintButton'
 import CSVExportButton from './CSVExportButton'
+import ReportsChartsClient from './ReportsChartsClient'
 import { planHas } from '@/lib/plans'
 
 export const dynamic = 'force-dynamic'
@@ -33,13 +34,9 @@ export default async function ReportsPage() {
   const urgentOpen = tasks.filter(
     (t) => t.criticidade === 'vermelho' && t.status !== 'done' && t.status !== 'cancelled'
   ).length
-  // Tarefas pendentes/em curso de TODOS os tipos (tarefa 14: incluir os restantes tipos)
-  const openTasks = tasks
-    .filter((t) => t.status === 'pending' || t.status === 'in_progress')
-    .sort((a, b) => (a.dueDate ?? '9999') < (b.dueDate ?? '9999') ? -1 : 1)
 
-  // Distribuição por tipo de tarefa (todas as tarefas)
-  const TIPOS_ORDEM: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
+  // Distribuição por tipo de tarefa (incluindo PI - Pedido de Intervenção)
+  const TIPOS_ORDEM: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'pi', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
   const porTipo = TIPOS_ORDEM
     .map((tipo) => ({ tipo, total: tasks.filter((t) => t.tipo === tipo).length }))
     .filter((x) => x.total > 0)
@@ -65,7 +62,7 @@ export default async function ReportsPage() {
         {/* Cabeçalho (ecrã) */}
         <div className="flex items-start justify-between mb-6 no-print">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Relatórios</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Estatísticas & Relatórios</h1>
             <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">{companyName} · gerado em {generatedAt}</p>
           </div>
           <div className="flex gap-2">
@@ -84,13 +81,13 @@ export default async function ReportsPage() {
           <div className="flex items-center justify-between border-b-2 border-[#1B4F72] pb-3 mb-4">
             <div>
               <h1 className="text-xl font-bold text-[#1B4F72]">RG Maintenance — {companyName}</h1>
-              <p className="text-xs text-gray-500">Relatório de manutenção · {generatedAt}</p>
+              <p className="text-xs text-gray-500">Relatório de estatísticas & KPIs · {generatedAt}</p>
             </div>
             <span className="text-xs font-black text-[#1B4F72] border-2 border-[#1B4F72] px-2 py-1 rounded">RG</span>
           </div>
         </div>
 
-        {/* KPIs */}
+        {/* KPIs principais */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
             { label: 'Total OTs', value: tasks.length, color: 'text-[#1B4F72]' },
@@ -105,95 +102,15 @@ export default async function ReportsPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8 text-center">
-          <div className="card p-3">
-            <p className="text-xl font-bold text-gray-800 dark:text-slate-200">{interventions.length}</p>
-            <p className="text-xs text-gray-500 dark:text-slate-400">Intervenções registadas</p>
-          </div>
-          <div className="card p-3">
-            <p className="text-xl font-bold text-gray-800 dark:text-slate-200">{assets.filter(a => a.active).length}</p>
-            <p className="text-xs text-gray-500 dark:text-slate-400">Equipamentos ativos</p>
-          </div>
-          <div className="card p-3">
-            <p className="text-xl font-bold text-gray-800 dark:text-slate-200">{tasks.filter(t => t.tipo === 'preventiva').length}</p>
-            <p className="text-xs text-gray-500 dark:text-slate-400">OTs preventivas</p>
-          </div>
-        </div>
-
-        {/* Distribuição por tipo de tarefa (todos os tipos) */}
-        {porTipo.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-3 flex items-center gap-2">
-              <span className="inline-block w-1 h-5 bg-[#1B4F72] rounded" />
-              OTs por Tipo
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {porTipo.map(({ tipo, total }) => (
-                <div key={tipo} className="card p-3">
-                  <p className="text-xl font-bold text-gray-800 dark:text-slate-200">{total}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">{TIPO_LABELS[tipo]}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Tarefas pendentes — todos os tipos */}
-        {openTasks.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-3 flex items-center gap-2">
-              <span className="inline-block w-1 h-5 bg-[#1B4F72] rounded" />
-              OTs Pendentes — Todos os Tipos
-            </h2>
-            <div className="card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[500px] md:min-w-0">
-                <thead>
-                  <tr className="bg-gray-50 dark:bg-slate-900/60 border-b border-gray-100 dark:border-slate-800">
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Ordem de Trabalho (OT)</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 hidden sm:table-cell">Tipo</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 hidden md:table-cell">Equipamento</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Prazo</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Estado</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 hidden md:table-cell">Criticidade</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
-                  {openTasks.map((t) => {
-                    const isOverdue = t.dueDate && t.dueDate < new Date().toISOString().split('T')[0]
-                    return (
-                      <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30">
-                        <td className="px-4 py-2.5 font-medium text-gray-800 dark:text-slate-200">{t.title}</td>
-                        <td className="px-4 py-2.5 text-gray-600 dark:text-slate-400 text-xs hidden sm:table-cell">{TIPO_LABELS[t.tipo] ?? t.tipo}</td>
-                        <td className="px-4 py-2.5 text-gray-600 dark:text-slate-400 hidden md:table-cell">{assetMap[t.assetId ?? ''] ?? '—'}</td>
-                        <td className={`px-4 py-2.5 ${isOverdue ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-slate-400'}`}>
-                          {formatDate(t.dueDate ?? null)}
-                          {isOverdue && ' ⚠'}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span className={`badge-${t.status}`}>{STATUS_LABELS[t.status]}</span>
-                        </td>
-                        <td className="px-4 py-2.5 hidden md:table-cell">
-                          <span className="inline-flex items-center gap-1 text-xs font-medium">
-                            <span className={`inline-block w-2 h-2 rounded-full ${
-                              t.criticidade === 'vermelho' ? 'bg-red-500' :
-                              t.criticidade === 'amarelo' ? 'bg-yellow-400' : 'bg-green-500'
-                            }`} />
-                            {CRITICIDADE_LABELS[t.criticidade]}
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+        {/* Seção Exclusiva de Gráficos e Valores Mensais de KPI */}
+        <ReportsChartsClient
+          tasks={tasks}
+          assets={assets}
+          interventions={interventions}
+        />
 
         {/* Histórico de intervenções */}
-        <div className="page-break">
+        <div className="page-break mt-8">
           <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-3 flex items-center gap-2">
             <span className="inline-block w-1 h-5 bg-[#1B4F72] rounded" />
             Histórico de Intervenções

@@ -445,7 +445,7 @@ export default function TasksClient({
 
   const statuses: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
   const criticidades: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
-  const tipos: TipoTarefa[] = ['preventiva', 'curativa', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
+  const tipos: TipoTarefa[] = ['preventiva', 'curativa', 'pi', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in-up">

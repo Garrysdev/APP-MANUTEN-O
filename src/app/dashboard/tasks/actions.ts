@@ -29,7 +29,7 @@ export async function loadPlanTaskRefsAction(): Promise<PlanTaskRef[]> {
 }
 
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
-const TIPOS: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
+const TIPOS: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'pi', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 const STATUSES: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
 
 function parseTask(formData: FormData) {

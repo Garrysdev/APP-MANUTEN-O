@@ -102,7 +102,7 @@ const MONTH_NAMES = [
 ]
 const WEEK_DAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 // Sem o Tipo PM na criação manual de OT (apenas no Plano de Manutenção)
-const TIPOS_CREATION: TipoTarefa[] = ['preventiva', 'curativa', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
+const TIPOS_CREATION: TipoTarefa[] = ['preventiva', 'curativa', 'pi', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
 
 export const PREDEFINED_SAFETY_RULES = [

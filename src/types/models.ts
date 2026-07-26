@@ -10,6 +10,7 @@ export type TipoTarefa =
   | 'preventiva'
   | 'curativa'
   | 'plano'
+  | 'pi'
   | 'inspecao'
   | 'lubrificacao'
   | 'calibracao'
@@ -253,6 +254,7 @@ export const TIPO_LABELS: Record<TipoTarefa, string> = {
   preventiva: 'MP',
   curativa: 'MC',
   plano: 'PM',
+  pi: 'PI',
   inspecao: 'INS',
   lubrificacao: 'LUB',
   calibracao: 'CAL',
