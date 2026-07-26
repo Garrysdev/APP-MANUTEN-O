@@ -49,6 +49,17 @@ export function format3DigitId(rawId: string | number | undefined | null, index:
     return String(num % 1000).padStart(3, '0')
   }
   return String(index + 1).padStart(3, '0')
+const formatTiCode = (rawTipo?: string | null) => {
+  if (!rawTipo) return 'MP'
+  const lower = rawTipo.toLowerCase()
+  if (lower === 'mc' || lower.includes('curat')) return 'MC'
+  if (lower === 'mp' || lower.includes('prev')) return 'MP'
+  if (lower === 'pm' || lower.includes('plan')) return 'PM'
+  if (lower === 'ins' || lower.includes('insp')) return 'INS'
+  if (lower === 'lub' || lower.includes('lubr')) return 'LUB'
+  if (lower === 'cal' || lower.includes('calib')) return 'CAL'
+  if (lower === 'out' || lower.includes('outr')) return 'OUT'
+  return rawTipo.toUpperCase().slice(0, 4)
 }
 
 export default function HistoryClient({
@@ -107,7 +118,7 @@ export default function HistoryClient({
         data: (iv.startedAt || iv.createdAt || '').slice(0, 10),
         area: (asset as any)?.area || (t as any)?.area || '—',
         equiTag: (asset as any)?.tag || asset?.name || (t as any)?.tag || '—',
-        ti: t?.tipo?.toUpperCase() || 'MP',
+        ti: formatTiCode(t?.tipo || 'MP'),
         avaria: t?.title || iv.observations || '—',
         tecnicos: resolveTechName(iv.technicianId || t?.assignedTo),
         inicio: formatDateTime(iv.startedAt || iv.createdAt),
@@ -130,7 +141,7 @@ export default function HistoryClient({
             data: (t.createdAt || '').slice(0, 10),
             area: (t as any).area || (asset as any)?.area || '—',
             equiTag: (asset as any)?.tag || (t as any).tag || asset?.name || '—',
-            ti: (t as any).tipo || (t as any).ti || 'MI',
+            ti: formatTiCode((t as any).tipo || (t as any).ti || 'MC'),
             avaria: t.title || t.description || '—',
             tecnicos: resolveTechName(t.assignedTo),
             inicio: formatDateTime(t.createdAt),

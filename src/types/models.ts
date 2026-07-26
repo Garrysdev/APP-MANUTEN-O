@@ -238,13 +238,13 @@ export const CRITICIDADE_LABELS: Record<TaskCriticidade, string> = {
 }
 
 export const TIPO_LABELS: Record<TipoTarefa, string> = {
-  preventiva: 'Manutenção Preventiva',
-  curativa: 'Manutenção Curativa',
-  plano: 'Plano de Manutenção',
-  inspecao: 'Inspeção',
-  lubrificacao: 'Lubrificação',
-  calibracao: 'Calibração',
-  outro: 'Outro',
+  preventiva: 'MP',
+  curativa: 'MC',
+  plano: 'PM',
+  inspecao: 'INS',
+  lubrificacao: 'LUB',
+  calibracao: 'CAL',
+  outro: 'OUT',
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {
