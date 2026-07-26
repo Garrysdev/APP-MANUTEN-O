@@ -60,6 +60,7 @@ export interface User {
   companyId: string
   email: string
   name: string
+  abbreviation?: string | null // Abreviatura / Código de 3 dígitos (ex: LM, RG, MS, CB)
   role: UserRole
   avatarUrl?: string | null
   specialty?: string | null // Especialidade / Tipo de técnico

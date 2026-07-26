@@ -140,18 +140,18 @@ let cachedFallbackUsers: User[] | null = null
 function getFallbackUsers(): User[] {
   if (cachedFallbackUsers) return cachedFallbackUsers
   const techs = [
-    { id: 'tech_LM', name: 'Leandro M. (LM)', email: 'lm@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_RG', name: 'Rui Garrido (RG)', email: 'garrido.rui@gmail.com', role: 'manager' },
-    { id: 'tech_LI', name: 'Luís I. (LI)', email: 'li@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_MC', name: 'Manuel C. (MC)', email: 'mc@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_JC', name: 'João C. (JC)', email: 'jc@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_MS', name: 'Mário S. (MS)', email: 'ms@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_CB', name: 'Carlos B. (CB)', email: 'cb@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_OX2', name: 'OX2 Especialista', email: 'ox2@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_BlockControl', name: 'BlockControl (Nuno/João)', email: 'blockcontrol@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_Carrier', name: 'Carrier (Ricardo)', email: 'carrier@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_Schindler', name: 'Schindler', email: 'schindler@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_Helenos', name: 'Helenos', email: 'helenos@rgmaintenance.pt', role: 'technician' }
+    { id: 'tech_LM', name: 'Leandro M. (LM)', abbreviation: 'LM', email: 'lm@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_RG', name: 'Rui Garrido (RG)', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager' },
+    { id: 'tech_LI', name: 'Luís I. (LI)', abbreviation: 'LI', email: 'li@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_MC', name: 'Manuel C. (MC)', abbreviation: 'MC', email: 'mc@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_JC', name: 'João C. (JC)', abbreviation: 'JC', email: 'jc@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_MS', name: 'Mário S. (MS)', abbreviation: 'MS', email: 'ms@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_CB', name: 'Carlos B. (CB)', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_OX2', name: 'OX2 Especialista', abbreviation: 'OX2', email: 'ox2@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_BlockControl', name: 'BlockControl (Nuno/João)', abbreviation: 'BLK', email: 'blockcontrol@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_Carrier', name: 'Carrier (Ricardo)', abbreviation: 'CAR', email: 'carrier@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_Schindler', name: 'Schindler', abbreviation: 'SCH', email: 'schindler@rgmaintenance.pt', role: 'technician' },
+    { id: 'tech_Helenos', name: 'Helenos', abbreviation: 'HEL', email: 'helenos@rgmaintenance.pt', role: 'technician' }
   ]
   cachedFallbackUsers = techs.map(t => ({
     ...t,
@@ -624,7 +624,7 @@ export async function updateTechnicianTypes(companyId: string, technicianTypes: 
 
 export async function createUserDirect(
   companyId: string,
-  data: { email: string; name: string; role: UserRole; tempPassword: string; avatarUrl?: string | null; specialty?: string | null }
+  data: { email: string; name: string; role: UserRole; tempPassword: string; avatarUrl?: string | null; specialty?: string | null; abbreviation?: string | null }
 ): Promise<string> {
   const authUser = await adminAuth().createUser({
     email: data.email,
@@ -635,6 +635,7 @@ export async function createUserDirect(
     companyId,
     email: data.email,
     name: data.name.trim(),
+    abbreviation: data.abbreviation ? data.abbreviation.trim().toUpperCase() : null,
     role: data.role,
     avatarUrl: data.avatarUrl ?? null,
     specialty: data.specialty ?? null,
@@ -646,10 +647,11 @@ export async function createUserDirect(
 
 export async function updateUserProfile(
   userId: string,
-  data: { name?: string; avatarUrl?: string | null; language?: string; specialty?: string | null; role?: UserRole }
+  data: { name?: string; avatarUrl?: string | null; language?: string; specialty?: string | null; role?: UserRole; abbreviation?: string | null }
 ): Promise<void> {
   const update: Record<string, unknown> = {}
   if (data.name !== undefined) update.name = data.name.trim()
+  if (data.abbreviation !== undefined) update.abbreviation = data.abbreviation ? data.abbreviation.trim().toUpperCase() : null
   if (data.avatarUrl !== undefined) update.avatarUrl = data.avatarUrl
   if (data.language !== undefined) update.language = data.language
   if (data.specialty !== undefined) update.specialty = data.specialty

@@ -18,7 +18,7 @@ const TEST_ACCOUNTS = [
 export default function LoginPage() {
   const router = useRouter()
 
-  const [email, setEmail] = useState('')
+  const [usernameInput, setUsernameInput] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -29,7 +29,20 @@ export default function LoginPage() {
     setError('')
 
     try {
-      const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email, password)
+      let resolvedEmail = usernameInput.trim()
+      if (!resolvedEmail.includes('@')) {
+        const resResolve = await fetch('/api/auth/resolve-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: resolvedEmail })
+        })
+        const dataResolve = await resResolve.json()
+        if (dataResolve.email) {
+          resolvedEmail = dataResolve.email
+        }
+      }
+
+      const cred = await signInWithEmailAndPassword(getFirebaseAuth(), resolvedEmail, password)
       const idToken = await cred.user.getIdToken()
 
       const res = await fetch('/api/auth/session', {
@@ -41,8 +54,9 @@ export default function LoginPage() {
 
       router.push('/dashboard')
       router.refresh()
-    } catch {
-      setError('E-mail ou password incorrectos.')
+    } catch (err) {
+      console.error('[handleLogin] error:', err)
+      setError('Utilizador / Código ou password incorretos.')
       setLoading(false)
     }
   }
@@ -65,18 +79,18 @@ export default function LoginPage() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-7">
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-1.5">
-                E-mail
+              <label htmlFor="username" className="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-1.5">
+                Utilizador / Código ou E-mail
               </label>
               <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                value={usernameInput}
+                onChange={e => setUsernameInput(e.target.value)}
                 className="input"
-                placeholder="garrido.rui@gmail.com"
+                placeholder="Ex: RG, garrido.rui, LM ou email"
                 required
-                autoComplete="email"
+                autoComplete="username"
               />
             </div>
 
@@ -130,7 +144,7 @@ export default function LoginPage() {
               <button
                 key={acc.email}
                 type="button"
-                onClick={() => { setEmail(acc.email); setPassword(acc.password); setError('') }}
+                onClick={() => { setUsernameInput(acc.email); setPassword(acc.password); setError('') }}
                 className="text-center rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-2 py-2 transition-all shadow-sm"
               >
                 <p className="text-xs font-bold text-slate-900">{acc.label}</p>

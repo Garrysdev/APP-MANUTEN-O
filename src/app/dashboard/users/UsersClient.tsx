@@ -269,15 +269,20 @@ export default function UsersClient({
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Nome *</label>
                   <input name="name" className="input" placeholder="Nome completo" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">E-mail *</label>
-                  <input name="email" type="email" className="input" placeholder="nome@empresa.pt" required />
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Abreviatura (3 dígitos)</label>
+                  <input name="abbreviation" className="input font-mono uppercase font-bold" placeholder="Ex: LM" maxLength={6} />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">E-mail *</label>
+                <input name="email" type="email" className="input" placeholder="nome@empresa.pt" required />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -418,6 +423,7 @@ export default function UsersClient({
             <thead>
               <tr className="bg-gray-50/50 dark:bg-slate-900/50 border-b border-gray-100 dark:border-slate-800">
                 <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">{dict.users.colName}</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-slate-400">Cód.</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 hidden md:table-cell">E-mail</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">{dict.users.colRole}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">Estado</th>
@@ -442,6 +448,11 @@ export default function UsersClient({
                         )}
                       </span>
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700">
+                      {u.abbreviation || '—'}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-slate-400 hidden md:table-cell">{u.email}</td>
                   <td className="px-4 py-3">
@@ -573,9 +584,15 @@ export default function UsersClient({
                 {avatarFile && <span className="text-[10px] text-blue-500 mt-1">Nova foto selecionada</span>}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Nome *</label>
-                <input name="name" defaultValue={editingUser.name} className="input" required />
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Nome *</label>
+                  <input name="name" defaultValue={editingUser.name} className="input" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Abreviatura</label>
+                  <input name="abbreviation" defaultValue={editingUser.abbreviation || ''} className="input font-mono uppercase font-bold" maxLength={6} placeholder="Ex: LM" />
+                </div>
               </div>
 
               <div>

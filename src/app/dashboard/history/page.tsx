@@ -29,8 +29,8 @@ export default async function HistoryPage() {
     interventions.map((i) => i.id)
   )
   const assetMap = Object.fromEntries(assets.map((a) => [a.id, a.name]))
-  const userMap = Object.fromEntries(users.map((u) => [u.id, u.name]))
-  const userRefs = users.map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl }))
+  const userMap = Object.fromEntries(users.map((u) => [u.id, u.abbreviation || u.name]))
+  const userRefs = users.map((u) => ({ id: u.id, name: u.name, abbreviation: u.abbreviation || u.name, avatarUrl: u.avatarUrl }))
   const assetRefs = assets.map((a) => ({ id: a.id, name: a.name }))
 
   return (

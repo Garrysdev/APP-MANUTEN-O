@@ -138,8 +138,8 @@ export default async function DashboardPage() {
                       <Link href="/dashboard/tasks" className="block">{order.title}</Link>
                     </td>
                     <td className="py-4 px-6 text-industrial-blue-light hover:text-safety-orange font-bold">
-                      <Link href="/dashboard/users" className="block">
-                        {usersList.find(u => u.id === order.assignedTo)?.name || 'Sem Atribuição'}
+                      <Link href="/dashboard/users" className="block font-mono">
+                        {usersList.find(u => u.id === order.assignedTo)?.abbreviation || usersList.find(u => u.id === order.assignedTo)?.name || order.assignedTo || 'Sem Atribuição'}
                       </Link>
                     </td>
                     <td className="py-4 px-6">

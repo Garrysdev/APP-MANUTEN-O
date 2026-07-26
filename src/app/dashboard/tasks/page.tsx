@@ -24,7 +24,7 @@ export default async function TasksPage() {
     <TasksClient
       tasks={tasks}
       assets={assets}
-      users={users.map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl }))}
+      users={users.map((u) => ({ id: u.id, name: u.name, abbreviation: u.abbreviation || u.name, avatarUrl: u.avatarUrl }))}
       role={profile.role}
       userId={profile.id}
     />

@@ -15,6 +15,7 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
   const router = useRouter()
   const { dict } = useLanguage()
   const [name, setName] = useState(profile.name)
+  const [abbreviation, setAbbreviation] = useState(profile.abbreviation || '')
   const [language, setLanguage] = useState(profile.language || 'pt')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -34,7 +35,7 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const original = e.target.files?.[0]
     if (!original) return
-    const file = await compressImage(original, 512) // avatar pequeno; comprime antes do upload
+    const file = await compressImage(original, 512)
     setAvatarFile(file)
     setAvatarPreview(URL.createObjectURL(file))
   }
@@ -50,8 +51,6 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
 
       let avatarFailed = false
       if (avatarFile) {
-        // O avatar NÃO bloqueia a gravação do perfil: se o Storage falhar,
-        // o nome é guardado na mesma e o utilizador é avisado. (bug 08)
         setUploadingAvatar(true)
         try {
           avatarUrl = await uploadImage(avatarFile, 'avatars')
@@ -64,6 +63,7 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
 
       const fd = new FormData()
       fd.set('name', name)
+      fd.set('abbreviation', abbreviation)
       fd.set('language', language)
       if (avatarUrl) fd.set('avatarUrl', avatarUrl)
       const result = await updateProfileAction({}, fd)
@@ -71,7 +71,7 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
       setBusy(false)
       if (result.error) setError(result.error)
       else if (avatarFailed) {
-        setError('Perfil guardado, mas a foto não foi carregada (serviço de imagens indisponível). Tenta novamente mais tarde.')
+        setError('Perfil guardado, mas a foto não foi carregada. Tenta novamente.')
         setAvatarFile(null)
         router.refresh()
       }
@@ -130,7 +130,14 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
             />
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-700 dark:text-slate-200">{profile.name}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-bold text-gray-800 dark:text-slate-200">{profile.name}</p>
+              {profile.abbreviation && (
+                <span className="font-mono font-bold text-xs bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600">
+                  {profile.abbreviation}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-400 dark:text-slate-500">{ROLE_LABELS[profile.role]}</p>
             {avatarFile && (
               <p className="text-xs text-[#2E86C1] dark:text-blue-400 mt-0.5">Nova foto selecionada</p>
@@ -174,16 +181,51 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
         </div>
 
         <form onSubmit={handleSave} className="space-y-4 border-t border-gray-100 dark:border-slate-800 pt-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Nome</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="input max-w-sm"
-              required
-              minLength={2}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Nome completo</label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="input"
+                required
+                minLength={2}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Abreviatura / Código (3 dígitos)</label>
+              <input
+                value={abbreviation}
+                onChange={(e) => setAbbreviation(e.target.value.toUpperCase())}
+                className="input font-mono font-bold uppercase"
+                placeholder="Ex: RG, LM, MS"
+                maxLength={6}
+              />
+            </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.profile.language}</label>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as typeof language)}
+              className="input max-w-sm"
+            >
+              <option value="pt">Português (PT)</option>
+              <option value="en">English (EN)</option>
+              <option value="es">Español (ES)</option>
+              <option value="fr">Français (FR)</option>
+            </select>
+          </div>
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {success && <p className="text-sm text-green-600 dark:text-emerald-400">Perfil atualizado com sucesso.</p>}
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={busy || uploadingAvatar} className="btn-primary">
+              {uploadingAvatar ? dict.common.loading : busy ? dict.common.loading : dict.common.save}
+            </button>
+          </div>
+        </form>
+      </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.profile.language}</label>
             <select

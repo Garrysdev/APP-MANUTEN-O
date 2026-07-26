@@ -20,12 +20,16 @@ export async function updateProfileAction(
     ? String(formData.get('avatarUrl') ?? '').trim() || null
     : undefined
 
+  const abbreviationRaw = formData.get('abbreviation')
+  const abbreviation = abbreviationRaw !== null ? String(abbreviationRaw).trim().toUpperCase() || null : undefined
+
   const languageRaw = formData.get('language')
   const language = languageRaw ? String(languageRaw) as 'pt' | 'en' | 'es' | 'fr' : undefined
 
   try {
     await updateUserProfile(profile.id, { 
       name, 
+      ...(abbreviation !== undefined ? { abbreviation } : {}),
       ...(avatarUrl !== undefined ? { avatarUrl } : {}),
       ...(language !== undefined ? { language } : {})
     })

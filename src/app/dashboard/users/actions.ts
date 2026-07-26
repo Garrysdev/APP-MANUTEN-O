@@ -32,12 +32,13 @@ export async function createUserDirectAction(
   const tempPassword = String(formData.get('tempPassword') ?? '').trim()
   const avatarUrl = String(formData.get('avatarUrl') ?? '').trim() || null
   const specialty = String(formData.get('specialty') ?? '').trim() || null
+  const abbreviation = String(formData.get('abbreviation') ?? '').trim().toUpperCase() || null
 
   if (!name || !email || !tempPassword) return { error: 'Preenche todos os campos.' }
   if (tempPassword.length < 6) return { error: 'A password deve ter pelo menos 6 caracteres.' }
 
   try {
-    await createUserDirect(profile.companyId, { email, name, role, tempPassword, avatarUrl, specialty })
+    await createUserDirect(profile.companyId, { email, name, role, tempPassword, avatarUrl, specialty, abbreviation })
     revalidatePath('/dashboard/users')
     return { ok: true }
   } catch (e) {
@@ -147,6 +148,9 @@ export async function updateUserByManagerAction(
   const specialtyRaw = formData.get('specialty')
   const specialty = specialtyRaw !== null ? String(specialtyRaw).trim() || null : undefined
 
+  const abbreviationRaw = formData.get('abbreviation')
+  const abbreviation = abbreviationRaw !== null ? String(abbreviationRaw).trim().toUpperCase() || null : undefined
+
   const avatarUrl = formData.has('avatarUrl')
     ? String(formData.get('avatarUrl') ?? '').trim() || null
     : undefined
@@ -156,6 +160,7 @@ export async function updateUserByManagerAction(
     if (language) updateData.language = language
     if (role && userId !== profile.id) updateData.role = role
     if (specialty !== undefined) updateData.specialty = specialty
+    if (abbreviation !== undefined) updateData.abbreviation = abbreviation
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl
 
     // Se o email foi fornecido e é válido, atualiza no Firebase Auth e no Firestore

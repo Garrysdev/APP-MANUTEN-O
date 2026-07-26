@@ -399,10 +399,10 @@ export default function TasksClient({
   const [currentPage, setCurrentPage] = useState(1)
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
-  const userMap = useMemo(() => new Map(users.map((u) => [u.id, u.name])), [users])
+  const userMap = useMemo(() => new Map(users.map((u) => [u.id, (u as any).abbreviation || u.name])), [users])
 
   const assetName = (id?: string | null) => (id ? assetMap.get(id) ?? '—' : '—')
-  const userName = (id?: string | null) => (id ? userMap.get(id) ?? '—' : '—')
+  const userName = (id?: string | null) => (id ? userMap.get(id) ?? id ?? '—' : '—')
   const userRef = (id?: string | null) => users.find((u) => u.id === id)
 
   useEffect(() => { setCurrentPage(1) }, [search, filter, pageSize])
