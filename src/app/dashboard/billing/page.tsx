@@ -135,7 +135,7 @@ export default async function BillingPage({
         </div>
 
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-gray-600 dark:text-slate-300">
-          <span>Técnicos Ativos: <strong>{profile.company?.maxTechnicians || 'Ilimitados'}</strong></span>
+          <span>Técnicos Ativos: <strong>{(profile.company as any)?.maxTechnicians || 'Ilimitados'}</strong></span>
           <span>Módulos Ativos: <strong>Todos Incluídos</strong></span>
           {currentPlanId !== 'free' && currentPlanId !== 'enterprise' && (
             <ManageButton />
