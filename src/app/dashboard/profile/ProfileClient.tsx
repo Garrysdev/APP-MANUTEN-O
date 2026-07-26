@@ -226,28 +226,6 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
           </div>
         </form>
       </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.profile.language}</label>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as typeof language)}
-              className="input max-w-sm"
-            >
-              <option value="pt">Português (PT)</option>
-              <option value="en">English (EN)</option>
-              <option value="es">Español (ES)</option>
-              <option value="fr">Français (FR)</option>
-            </select>
-          </div>
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-          {success && <p className="text-sm text-green-600 dark:text-emerald-400">Perfil atualizado com sucesso.</p>}
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={busy || uploadingAvatar} className="btn-primary">
-              {uploadingAvatar ? dict.common.loading : busy ? dict.common.loading : dict.common.save}
-            </button>
-          </div>
-        </form>
-      </div>
 
       <div className="card p-6">
         <h2 className="font-semibold text-gray-800 dark:text-slate-200 mb-2 text-base flex items-center gap-2">
