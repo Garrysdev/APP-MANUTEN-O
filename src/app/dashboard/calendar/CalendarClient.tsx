@@ -8,6 +8,7 @@ import { CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS } from '@/types/mode
 import { createTaskFromPlanAction } from './actions'
 import { createTaskAction } from '@/app/dashboard/tasks/actions'
 import Avatar from '@/components/ui/Avatar'
+import MaterialsSelector from '@/components/ui/MaterialsSelector'
 
 type Ref = { id: string; name: string; tag?: string | null }
 type UserRef = Ref & { avatarUrl?: string | null; active?: boolean }
@@ -806,22 +807,10 @@ export default function CalendarClient({
                 />
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                    <Package className="h-3.5 w-3.5 text-slate-500" /> Materiais a utilizar
-                  </span>
-                  <a href="/dashboard/stocks" target="_blank" className="text-[11px] font-bold text-safety-orange hover:underline">
-                    Se não existir no stock, crie primeiro no Stock ↗
-                  </a>
-                </div>
-                <DynamicList
-                  label=""
-                  icon={null}
-                  items={ntMaterials}
-                  onChange={setNtMaterials}
-                />
-              </div>
+              <MaterialsSelector
+                items={ntMaterials}
+                onChange={setNtMaterials}
+              />
             </div>
 
             {ntError && (

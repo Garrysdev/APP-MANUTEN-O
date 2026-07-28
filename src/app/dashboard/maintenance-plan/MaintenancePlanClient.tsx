@@ -95,7 +95,7 @@ export default function MaintenancePlanClient({
 
   // Filtros por coluna (estilo Excel)
   // Filtros por coluna (estilo Excel - alinhados com a folha PM)
-  const emptyCol = { area: '', tag: '', system: '', asset: '', title: '', description: '', period: '', months: '', crit: '', executor: '', estado: '' }
+  const emptyCol = { area: '', tag: '', system: '', asset: '', title: '', description: '', period: '', crit: '', executor: '', estado: '' }
   const [colF, setColF] = useState(emptyCol)
   const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
   const [fLegal, setFLegal] = useState(false)
@@ -105,6 +105,28 @@ export default function MaintenancePlanClient({
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
   const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
   const getPlanTag = (p: MaintenancePlan) => p.tag || (p.assetId ? assetTagMap.get(p.assetId) || '' : '')
+
+  // Áreas únicas dos planos
+  const uniqueAreas = useMemo(() => {
+    const set = new Set<string>()
+    plans.forEach((p) => {
+      if (p.area && p.area.trim()) set.add(p.area.trim())
+    })
+    return Array.from(set).sort()
+  }, [plans])
+
+  // TAGs únicas em cascata com a ÁREA selecionada
+  const availableTags = useMemo(() => {
+    const set = new Set<string>()
+    plans.forEach((p) => {
+      if (colF.area && p.area && p.area.trim().toLowerCase() !== colF.area.trim().toLowerCase()) {
+        return
+      }
+      const t = getPlanTag(p)
+      if (t && t.trim()) set.add(t.trim())
+    })
+    return Array.from(set).sort()
+  }, [plans, colF.area, assetTagMap])
 
   const assetName = (id?: string | null) => (id ? assetMap.get(id) ?? '—' : '—')
   const userName = (id?: string | null) => (id ? users.find((u) => u.id === id)?.name ?? '—' : '—')
@@ -186,7 +208,7 @@ export default function MaintenancePlanClient({
   }
 
   function handleExportCSV() {
-    const header = ['ÁREA', 'TAG', 'SISTEMA', 'EQUIPAMENTO', 'AÇÃO / TAREFA', 'DESCRIÇÃO', 'PERIODICIDADE', 'MESES', 'CAT', 'EXECUTOR', 'ESTADO']
+    const header = ['ÁREA', 'TAG', 'SISTEMA', 'EQUIPAMENTO', 'AÇÃO / TAREFA', 'DESCRIÇÃO', 'PERIODICIDADE', 'CAT', 'EXECUTOR', 'ESTADO']
     const rows = shown.map((p) => [
       p.area ?? '',
       getPlanTag(p),
@@ -195,7 +217,6 @@ export default function MaintenancePlanClient({
       p.title,
       p.description ?? '',
       p.periodicidade ? PERIODICIDADE_LABELS[p.periodicidade] : '',
-      p.months ?? '',
       CRITICIDADE_LABELS[p.criticidade],
       p.executor ? EXECUTOR_LABELS[p.executor] : EXECUTOR_LABELS.interno,
       p.active ? 'Ativo' : 'Inativo',
@@ -211,14 +232,13 @@ export default function MaintenancePlanClient({
 
   const filtered = useMemo(() => {
     return plans.filter((p) => {
-      if (!inc(p.area, colF.area)) return false
-      if (!inc(getPlanTag(p), colF.tag)) return false
+      if (colF.area && norm(p.area) !== norm(colF.area)) return false
+      if (colF.tag && norm(getPlanTag(p)) !== norm(colF.tag)) return false
       if (!inc(p.system, colF.system)) return false
       if (!inc(assetName(p.assetId), colF.asset)) return false
       if (!inc(p.title, colF.title)) return false
       if (!inc(p.description, colF.description)) return false
       if (!inc(periodLabel(p), colF.period)) return false
-      if (!inc(p.months, colF.months)) return false
       if (colF.crit && p.criticidade !== colF.crit) return false
       if (colF.executor && (p.executor ?? 'interno') !== colF.executor) return false
       if (colF.estado === 'ativo' && !p.active) return false
@@ -242,7 +262,6 @@ export default function MaintenancePlanClient({
       title: (p) => p.title?.toLowerCase(),
       description: (p) => p.description?.toLowerCase() ?? null,
       period: (p) => periodLabel(p),
-      months: (p) => p.months ?? null,
       crit: (p) => p.criticidade,
       executor: (p) => (p.executor ? EXECUTOR_LABELS[p.executor] : ''),
       estado: (p) => (p.active ? 0 : 1),
@@ -298,25 +317,20 @@ export default function MaintenancePlanClient({
           <input ref={importInputRef} type="file" accept=".xlsx" onChange={handleImportFile} className="hidden" />
           <button onClick={openCreate} className="btn-primary flex items-center gap-1.5">
             <Plus className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">{dict.maintenancePlan.newPlan}</span>
+            <span>Criar Tarefa</span>
           </button>
         </div>
       </div>
 
       {importError && (
-        <div className="mb-3 flex items-start justify-between gap-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 px-4 py-3 text-sm text-red-700 dark:text-red-400">
-          <span>{importError}</span>
-          <button onClick={() => setImportError('')} className="text-red-500 hover:text-red-700 dark:hover:text-red-300 flex-shrink-0" aria-label="Dispensar">
-            <X className="h-4 w-4" />
-          </button>
+        <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-xs text-red-700 font-medium">
+          {importError}
         </div>
       )}
-
       {importResult && (
-        <div className="mb-3 flex items-start justify-between gap-3 rounded-lg bg-green-50 dark:bg-emerald-900/20 border border-green-200 dark:border-emerald-800/50 px-4 py-3 text-sm text-green-700 dark:text-emerald-400">
+        <div className="mb-4 rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between text-xs text-green-800 font-medium">
           <span>
-            {importResult.created} plano(s) importado(s)
-            {importResult.skipped > 0 ? `, ${importResult.skipped} linha(s) ignorada(s)` : ''}.
+            Importação concluída: {importResult.created} planos criados{importResult.skipped > 0 ? `, ${importResult.skipped} ignorados (duplicados)` : ''}.
           </span>
           <button onClick={() => setImportResult(null)} className="text-green-500 hover:text-green-700 dark:hover:text-emerald-300 flex-shrink-0" aria-label="Dispensar">
             <X className="h-4 w-4" />
@@ -377,7 +391,6 @@ export default function MaintenancePlanClient({
                 <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="DESCRIÇÃO" sortableKey="description" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
                 <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="MESES" sortableKey="months" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
                 <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden sm:table-cell" />
                 <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -386,10 +399,33 @@ export default function MaintenancePlanClient({
               {/* Linha de filtros por coluna (estilo Excel) */}
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="px-1.5 py-1">
-                  <input value={colF.area} onChange={(e) => setCol('area', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+                  <select
+                    value={colF.area}
+                    onChange={(e) => {
+                      setCol('area', e.target.value)
+                      setCol('tag', '')
+                    }}
+                    className={colFilterCls}
+                    title="Filtrar por Área"
+                  >
+                    <option value="">Todas ({uniqueAreas.length})</option>
+                    {uniqueAreas.map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
                 </th>
                 <th className="px-1.5 py-1">
-                  <input value={colF.tag} onChange={(e) => setCol('tag', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+                  <select
+                    value={colF.tag}
+                    onChange={(e) => setCol('tag', e.target.value)}
+                    className={colFilterCls}
+                    title="Filtrar por TAG"
+                  >
+                    <option value="">Todas ({availableTags.length})</option>
+                    {availableTags.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
                 </th>
                 <th className="px-1.5 py-1 hidden md:table-cell">
                   <input value={colF.system} onChange={(e) => setCol('system', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
@@ -408,9 +444,6 @@ export default function MaintenancePlanClient({
                     <option value="">Todas</option>
                     {PERIODICIDADE_OPTIONS.map((p) => <option key={p} value={p}>{PERIODICIDADE_LABELS[p]}</option>)}
                   </select>
-                </th>
-                <th className="px-1.5 py-1 hidden xl:table-cell">
-                  <input value={colF.months} onChange={(e) => setCol('months', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
                 <th className="px-1.5 py-1">
                   <select value={colF.crit} onChange={(e) => setCol('crit', e.target.value)} className={colFilterCls} title="Filtrar criticidade">
@@ -463,7 +496,6 @@ export default function MaintenancePlanClient({
                       {periodLabel(p)}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-slate-800 hidden xl:table-cell text-xs font-mono font-semibold whitespace-nowrap">{p.months ?? '—'}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     <span title={CRITICIDADE_LABELS[p.criticidade]} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
                       p.criticidade === 'vermelho' ? 'bg-red-100 text-red-800 border border-red-300' :

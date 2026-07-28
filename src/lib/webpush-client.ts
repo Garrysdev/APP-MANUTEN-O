@@ -1,5 +1,4 @@
-import { getFirestore, doc, updateDoc } from 'firebase/firestore'
-import { getFirebaseApp } from './firebase/client'
+import { updatePushSubscriptionAction } from '@/app/dashboard/profile/actions'
 
 // Converte a VAPID key para Uint8Array
 function urlBase64ToUint8Array(base64String: string) {
@@ -15,18 +14,18 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray
 }
 
-export async function subscribeToPushNotifications(userId: string) {
+export async function subscribeToPushNotifications(_userId: string) {
   try {
     if (typeof window === 'undefined') return false
 
     if (!('Notification' in window)) {
-      throw new Error('Notificações não são suportadas neste navegador telemóvel/dispositivo.')
+      throw new Error('Notificações não são suportadas neste navegador.')
     }
 
-    // Pedir permissão explicitamente no telemóvel
+    // Pedir permissão explicitamente no telemóvel/PC
     const permission = await Notification.requestPermission()
     if (permission !== 'granted') {
-      throw new Error('Permissão de notificações recusada no dispositivo. Ativa as notificações nas definições do telemóvel.')
+      throw new Error('Permissão de notificações recusada nas definições do navegador.')
     }
 
     if (!('serviceWorker' in navigator)) {
@@ -39,28 +38,29 @@ export async function subscribeToPushNotifications(userId: string) {
       registration = await navigator.serviceWorker.register('/sw.js')
     }
 
-    // Em telemóveis, a VAPID key padrão se não estiver presente no env
     const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa45x-b99D6489-09'
 
-    let subscription = null
+    let subscriptionPayload: any = null
     if ('PushManager' in window && registration && registration.pushManager) {
       try {
-        subscription = await registration.pushManager.subscribe({
+        const sub = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidKey),
         })
+        subscriptionPayload = JSON.parse(JSON.stringify(sub))
       } catch (pushErr) {
-        console.warn('PushManager.subscribe falhou, guardando permissão local:', pushErr)
+        console.warn('PushManager.subscribe falhou, guardando permissão concedida:', pushErr)
+        subscriptionPayload = { granted: true, updatedAt: new Date().toISOString() }
       }
+    } else {
+      subscriptionPayload = { granted: true, updatedAt: new Date().toISOString() }
     }
 
-    // Guardar token no Firestore do utilizador
-    const db = getFirestore(getFirebaseApp())
-    await updateDoc(doc(db, 'users', userId), {
-      pushSubscription: subscription
-        ? JSON.parse(JSON.stringify(subscription))
-        : { granted: true, updatedAt: new Date().toISOString() },
-    })
+    // Guardar subscrição via Server Action (evita erro "Missing or insufficient permissions" do client SDK)
+    const result = await updatePushSubscriptionAction(subscriptionPayload)
+    if (result.error) {
+      throw new Error(result.error)
+    }
 
     return true
   } catch (err) {

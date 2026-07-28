@@ -41,8 +41,6 @@ export async function updateProfileAction(
   }
 }
 
-import { adminAuth } from '@/lib/firebase/admin'
-
 export async function changeUserPasswordAction(newPassword: string): Promise<ProfileFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
@@ -53,5 +51,17 @@ export async function changeUserPasswordAction(newPassword: string): Promise<Pro
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao alterar password.' }
+  }
+}
+
+export async function updatePushSubscriptionAction(subscription: any): Promise<ProfileFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  try {
+    await updateUserProfile(profile.id, { pushSubscription: subscription })
+    revalidatePath('/dashboard/profile')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao guardar subscrição.' }
   }
 }

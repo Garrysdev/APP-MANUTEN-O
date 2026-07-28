@@ -23,6 +23,7 @@ import {
 } from '@/types/models'
 import { formatDate, formatDateTime, taskDelayLevel, DELAY_CLASSES, DELAY_LABELS } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
+import MaterialsSelector from '@/components/ui/MaterialsSelector'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
 import {
@@ -151,76 +152,26 @@ function DynamicList({
   )
 }
 
-/** Materiais a utilizar: selecionados da BD Stocks, não texto livre (tarefa 09). */
-function StockMaterialsList({
+function TaskMaterialsPicker({
   items,
   onChange,
   stockRefs,
   stockLoading,
+  onStockItemCreated,
 }: {
   items: string[]
   onChange: (items: string[]) => void
   stockRefs: StockMaterialRef[]
   stockLoading: boolean
+  onStockItemCreated?: (newItem: StockMaterialRef) => void
 }) {
-  function update(i: number, val: string) {
-    onChange(items.map((v, idx) => idx === i ? val : v))
-  }
-  function remove(i: number) {
-    const next = items.filter((_, idx) => idx !== i)
-    onChange(next.length ? next : [''])
-  }
-  function add() { onChange([...items, '']) }
-
   return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
-        <Package className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500" />
-        Materiais a utilizar
-      </label>
-      {!stockLoading && stockRefs.length === 0 ? (
-        <p className="text-xs text-gray-500">
-          Sem itens em Stock. Cria stock primeiro para poderes associar materiais a esta tarefa.
-        </p>
-      ) : (
-        <>
-          <div className="space-y-2">
-            {items.map((val, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <select
-                  value={stockRefs.some((s) => s.name === val) ? val : ''}
-                  onChange={(e) => update(i, e.target.value)}
-                  className="input flex-1 text-sm"
-                  disabled={stockLoading}
-                >
-                  <option value="">— Selecionar da Stock —</option>
-                  {stockRefs.map((s) => (
-                    <option key={s.id} value={s.name}>{s.name}{s.unit ? ` (${s.unit})` : ''}</option>
-                  ))}
-                </select>
-                {items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => remove(i)}
-                    className="text-gray-400 hover:text-red-500 p-1 flex-shrink-0"
-                    aria-label="Remover"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={add}
-            className="mt-2 text-xs font-bold text-safety-orange hover:text-safety-orange/80 transition-colors flex items-center gap-1"
-          >
-            <Plus className="h-3 w-3" /> Adicionar material
-          </button>
-        </>
-      )}
-    </div>
+    <MaterialsSelector
+      items={items}
+      onChange={onChange}
+      stockRefs={stockRefs}
+      onStockItemCreated={onStockItemCreated}
+    />
   )
 }
 

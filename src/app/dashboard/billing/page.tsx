@@ -188,7 +188,7 @@ export default async function BillingPage({
                 </div>
 
                 <UpgradeButton
-                  plan={plan.id}
+                  plan={plan.id as 'pro' | 'business'}
                   label={`Subscrever ${plan.name}`}
                   primary={plan.id === 'pro' || plan.id === 'business'}
                 />
