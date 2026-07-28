@@ -731,21 +731,12 @@ export default function TasksClient({
                 />
               </div>
 
-              {/* Materiais a utilizar com aviso para criar no stock primeiro se não existir */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Materiais a utilizar</span>
-                  <a href="/dashboard/stocks" target="_blank" className="text-[11px] font-bold text-safety-orange hover:underline">
-                    Se não existir no stock, crie primeiro no Stock ↗
-                  </a>
-                </div>
-                <StockMaterialsList
-                  items={materialsRequired}
-                  onChange={setMaterialsRequired}
-                  stockRefs={stockRefs}
-                  stockLoading={stockLoading}
-                />
-              </div>
+              <TaskMaterialsPicker
+                items={materialsRequired}
+                onChange={setMaterialsRequired}
+                stockRefs={stockRefs}
+                stockLoading={stockLoading}
+              />
 
               {error && <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">{error}</div>}
 

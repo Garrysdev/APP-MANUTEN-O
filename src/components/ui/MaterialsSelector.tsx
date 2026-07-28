@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Plus, X, Package, Check, Sparkles } from 'lucide-react'
 import { createStockItemAction } from '@/app/dashboard/stocks/actions'
 
@@ -82,12 +83,12 @@ export default function MaterialsSelector({
         <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center gap-1.5">
           <Package className="h-3.5 w-3.5 text-slate-500" /> Materiais a utilizar
         </label>
-        <a
+        <Link
           href="/dashboard/stocks"
           className="text-[11px] font-bold text-safety-orange hover:underline"
         >
           Gerir inventário em Stocks ↗
-        </a>
+        </Link>
       </div>
 
       {/* Lista de Seleção de Materiais */}

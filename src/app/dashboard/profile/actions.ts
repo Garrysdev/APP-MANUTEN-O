@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { updateUserProfile } from '@/lib/firebase/data'
+import { adminAuth } from '@/lib/firebase/admin'
 
 export type ProfileFormState = { error?: string; ok?: boolean }
 

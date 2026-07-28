@@ -648,7 +648,7 @@ export async function createUserDirect(
 
 export async function updateUserProfile(
   userId: string,
-  data: { name?: string; avatarUrl?: string | null; language?: string; specialty?: string | null; role?: UserRole; abbreviation?: string | null; active?: boolean }
+  data: { name?: string; avatarUrl?: string | null; language?: string; specialty?: string | null; role?: UserRole; abbreviation?: string | null; active?: boolean; pushSubscription?: any }
 ): Promise<void> {
   const update: Record<string, unknown> = {}
   if (data.name !== undefined) update.name = data.name.trim()
@@ -658,6 +658,7 @@ export async function updateUserProfile(
   if (data.specialty !== undefined) update.specialty = data.specialty
   if (data.role !== undefined) update.role = data.role
   if (data.active !== undefined) update.active = data.active
+  if (data.pushSubscription !== undefined) update.pushSubscription = data.pushSubscription
   await adminDb().collection('users').doc(userId).update(update)
 }
 
