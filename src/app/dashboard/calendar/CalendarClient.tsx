@@ -102,7 +102,8 @@ function resolveEventType(ev: CalendarEvent): string {
   if (ev.type === 'plan') return 'plano'
   const t = ev.task
   if (!t) return 'curativa'
-  if ((t as any).source === 'folha_projetos' || (t as any).isProject || t.tipo === 'projeto' || t.tipo === 'projetos' || (t.description || '').toLowerCase().includes('projeto') || (t.description || '').toLowerCase().includes('projecto')) {
+  const tipoStr = String(t.tipo || '').toLowerCase()
+  if ((t as any).source === 'folha_projetos' || (t as any).isProject || tipoStr === 'projeto' || tipoStr === 'projetos' || (t.description || '').toLowerCase().includes('projeto') || (t.description || '').toLowerCase().includes('projecto')) {
     return 'projeto'
   }
   return t.tipo || 'curativa'
