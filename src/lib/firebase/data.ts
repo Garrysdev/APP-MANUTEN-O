@@ -641,20 +641,16 @@ export async function createUserFromInvite(
 
 export async function deactivateUser(companyId: string, userId: string): Promise<void> {
   const ref = adminDb().collection('users').doc(userId)
-  const doc = await ref.get()
-  if (!doc.exists || doc.data()?.companyId !== companyId)
-    throw new Error('Utilizador não encontrado')
-  await ref.update({ active: false })
-  // Bloqueia a conta Firebase Auth e revoga todos os tokens
-  await adminAuth().updateUser(userId, { disabled: true })
-  await adminAuth().revokeRefreshTokens(userId)
+  await ref.set({ active: false, companyId }, { merge: true })
+  try {
+    await adminAuth().updateUser(userId, { disabled: true })
+    await adminAuth().revokeRefreshTokens(userId)
+  } catch { /* ignore auth error for fallback users */ }
 }
 
 export async function updateUserRate(companyId: string, userId: string, hourlyRate: number): Promise<void> {
   const ref = adminDb().collection('users').doc(userId)
-  const doc = await ref.get()
-  if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Utilizador não encontrado.')
-  await ref.update({ hourlyRate })
+  await ref.set({ hourlyRate, companyId }, { merge: true })
 }
 
 export const getCompanyName = cache(async function(companyId: string): Promise<string | null> {
@@ -727,10 +723,27 @@ export async function createUserDirect(
 
 export async function updateUserProfile(
   userId: string,
-  data: { name?: string; avatarUrl?: string | null; language?: string; specialty?: string | null; role?: UserRole; abbreviation?: string | null; active?: boolean; pushSubscription?: any; mustChangePassword?: boolean }
+  data: {
+    name?: string
+    email?: string
+    avatarUrl?: string | null
+    language?: string
+    specialty?: string | null
+    role?: UserRole
+    abbreviation?: string | null
+    active?: boolean
+    pushSubscription?: any
+    mustChangePassword?: boolean
+    isExternal?: boolean
+    externalCompanyId?: string | null
+    externalCompanyName?: string | null
+    phone?: string | null
+    hourlyRate?: number
+  }
 ): Promise<void> {
-  const update: Record<string, unknown> = {}
+  const update: Record<string, unknown> = { updatedAt: new Date().toISOString() }
   if (data.name !== undefined) update.name = data.name.trim()
+  if (data.email !== undefined) update.email = data.email
   if (data.abbreviation !== undefined) update.abbreviation = data.abbreviation ? data.abbreviation.trim().toUpperCase() : null
   if (data.mustChangePassword !== undefined) update.mustChangePassword = data.mustChangePassword
   if (data.avatarUrl !== undefined) update.avatarUrl = data.avatarUrl
@@ -739,7 +752,13 @@ export async function updateUserProfile(
   if (data.role !== undefined) update.role = data.role
   if (data.active !== undefined) update.active = data.active
   if (data.pushSubscription !== undefined) update.pushSubscription = data.pushSubscription
-  await adminDb().collection('users').doc(userId).update(update)
+  if (data.isExternal !== undefined) update.isExternal = data.isExternal
+  if (data.externalCompanyId !== undefined) update.externalCompanyId = data.externalCompanyId
+  if (data.externalCompanyName !== undefined) update.externalCompanyName = data.externalCompanyName
+  if (data.phone !== undefined) update.phone = data.phone
+  if (data.hourlyRate !== undefined) update.hourlyRate = data.hourlyRate
+
+  await adminDb().collection('users').doc(userId).set(update, { merge: true })
 }
 
 export const countActiveUsers = cache(async function(companyId: string): Promise<number> {
