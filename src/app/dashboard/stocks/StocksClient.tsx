@@ -374,20 +374,72 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
               </tbody>
             </table>
           </div>
-                <X className="h-5 w-5" />
-              </button>
+
+          {/* Paginação */}
+          <div className="p-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+              <span>Mostrar</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="input text-xs py-1 px-2"
+              >
+                <option value={25}>25 por página</option>
+                <option value={50}>50 por página</option>
+                <option value={100}>100 por página</option>
+                <option value={-1}>Todos ({sortedItems.length})</option>
+              </select>
+              <span>registos de um total de <strong>{sortedItems.length}</strong></span>
             </div>
 
-            {modal.type === 'create' ? (
-              <StockForm dict={dict} onSave={handleCreate} onCancel={() => setModal(null)} />
-            ) : (
-              <StockForm
-                dict={dict}
-                defaultValues={modal.item}
-                onSave={(fd) => handleEdit(modal.item.id, fd)}
-                onCancel={() => setModal(null)}
-              />
+            {pageSize !== -1 && totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="btn-secondary p-1 disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  Página {currentPage} de {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="btn-secondary p-1 disabled:opacity-40"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Criar / Editar */}
+      {modal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-slate-800 w-full max-w-md p-6 relative animate-in fade-in zoom-in duration-150">
+            <button
+              onClick={() => setModal(null)}
+              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4">
+              {modal.type === 'create' ? dict.stocks.newItem : dict.stocks.editItem}
+            </h2>
+            <StockForm
+              defaultValues={modal.type === 'edit' ? modal.item : undefined}
+              onSave={(formData) =>
+                modal.type === 'create'
+                  ? handleCreate(formData)
+                  : handleEdit(modal.item.id, formData)
+              }
+              onCancel={() => setModal(null)}
+              dict={dict}
+            />
           </div>
         </div>
       )}
