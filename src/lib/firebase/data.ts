@@ -722,14 +722,6 @@ export async function createUserDirect(
     mustChangePassword: true,
     createdAt: new Date().toISOString(),
   })
-    abbreviation: data.abbreviation ? data.abbreviation.trim().toUpperCase() : null,
-    role: data.role,
-    avatarUrl: data.avatarUrl ?? null,
-    specialty: data.specialty ?? null,
-    active: true,
-    mustChangePassword: true,
-    createdAt: new Date().toISOString(),
-  })
   return authUser.uid
 }
 
