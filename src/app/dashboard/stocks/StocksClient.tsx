@@ -169,6 +169,8 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
         (item.area || '').toLowerCase().includes(q) ||
         (item.category || '').toLowerCase().includes(q) ||
         (item.description || '').toLowerCase().includes(q)
+      )
+    })
   }, [items, search, categoryFilter, areaFilter, tagFilter])
 
   const { sorted: sortedItems, sortKey, sortDir, toggleSort: requestSort } = useTableSort(
