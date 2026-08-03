@@ -4,6 +4,10 @@ import { TIPO_LABELS } from '@/types/models'
 
 export function getTipoBadgeClass(tipo: TipoTarefa | string): string {
   const t = String(tipo || '').toLowerCase()
+  if (t === 'projeto' || t === 'projetos' || t === 'projecto' || t === 'projectos' || t === 'pr') {
+    // Laranja + texto branco - Projetos
+    return 'bg-safety-orange text-white border border-orange-600 font-extrabold'
+  }
   if (t === 'plano' || t === 'pm') {
     // Azul com texto branco - Plano de Manutenção
     return 'bg-[#1B4F72] text-white border border-[#1B4F72] font-bold'
@@ -12,7 +16,7 @@ export function getTipoBadgeClass(tipo: TipoTarefa | string): string {
     // Amarelo - Manutenção Corretiva
     return 'bg-yellow-400 text-slate-900 border border-yellow-500 font-extrabold'
   }
-  if (t === 'investimento' || t === 'mi' || t === 'projeto' || t === 'projetos') {
+  if (t === 'investimento' || t === 'mi') {
     // Verde - Manutenção Investimentos
     return 'bg-emerald-600 text-white border border-emerald-700 font-bold'
   }
@@ -30,11 +34,12 @@ export function TipoBadge({ tipo, codeOnly = false }: { tipo: TipoTarefa | strin
   const cls = getTipoBadgeClass(tipo)
   const t = String(tipo || '').toLowerCase()
   const code = (
+    t === 'projeto' || t === 'projetos' || t === 'projecto' || t === 'projectos' || t === 'pr' ? 'PR' :
     t === 'curativa' ? 'MC' :
     t === 'preventiva' ? 'MP' :
     t === 'plano' ? 'PM' :
     t === 'pi' ? 'PI' :
-    t === 'investimento' || t === 'projeto' ? 'MI' :
+    t === 'investimento' || t === 'mi' ? 'MI' :
     t.toUpperCase()
   )
   const label = (TIPO_LABELS as any)[t] || code

@@ -98,6 +98,16 @@ function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end
   return map
 }
 
+function resolveEventType(ev: CalendarEvent): string {
+  if (ev.type === 'plan') return 'plano'
+  const t = ev.task
+  if (!t) return 'curativa'
+  if ((t as any).source === 'folha_projetos' || (t as any).isProject || t.tipo === 'projeto' || t.tipo === 'projetos' || (t.description || '').toLowerCase().includes('projeto') || (t.description || '').toLowerCase().includes('projecto')) {
+    return 'projeto'
+  }
+  return t.tipo || 'curativa'
+}
+
 const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
@@ -472,7 +482,7 @@ export default function CalendarClient({
                           }}
                           title={`Clique para abrir: ${ev.label}`}
                           className={`text-[11px] font-medium rounded-md px-1.5 py-1 truncate transition-transform hover:scale-[1.02] active:scale-95 shadow-sm border ${
-                            getTipoBadgeClass(ev.type === 'plan' ? 'plano' : (ev.task?.tipo || 'curativa'))
+                            getTipoBadgeClass(resolveEventType(ev))
                           }`}
                         >
                           {ev.label}
@@ -529,7 +539,7 @@ export default function CalendarClient({
                   <div className="space-y-1">
                     {events.map((ev, j) => (
                       <div key={j} className={`text-[10px] rounded px-1 py-0.5 leading-tight ${
-                        getTipoBadgeClass(ev.type === 'plan' ? 'plano' : (ev.task?.tipo || 'curativa'))
+                        getTipoBadgeClass(resolveEventType(ev))
                       }`}>
                         {ev.label}
                       </div>
@@ -567,23 +577,19 @@ export default function CalendarClient({
                 <div
                   key={hour}
                   onClick={() => openNewTaskForDate(activeSelectedDate)}
-                  className="flex items-start gap-4 p-3 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors cursor-pointer group min-h-[56px]"
+                  className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors flex items-center gap-4 cursor-pointer group"
                 >
-                  <div className="w-14 font-mono text-xs font-bold text-slate-400 dark:text-slate-500 shrink-0">
-                    {hour}
-                  </div>
-                  <div className="flex-1 flex flex-wrap gap-2 items-center">
-                    {events.map((ev, idx) => (
+                  <span className="font-mono text-xs font-bold text-slate-400 w-12">{hour}</span>
+                  <div className="flex-1 flex flex-wrap gap-2">
+                    {events.map((ev, j) => (
                       <div
-                        key={idx}
+                        key={j}
                         onClick={(e) => {
                           e.stopPropagation()
                           if (ev.type === 'task' && ev.task) router.push(`/dashboard/tasks/${ev.task.id}`)
                         }}
                         className={`text-xs font-bold px-2.5 py-1 rounded-lg border shadow-sm ${
-                          ev.type === 'task'
-                            ? 'bg-blue-50 text-blue-900 border-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700'
-                            : 'bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
+                          getTipoBadgeClass(resolveEventType(ev))
                         }`}
                       >
                         {ev.label}
