@@ -44,7 +44,8 @@ export default async function DashboardPage() {
     listUsers(profile.companyId),
   ])
 
-  const technicians = usersList.filter(u => u.role === 'technician');
+  const technicians = usersList.filter(u => u.role === 'technician' && u.active !== false);
+  const totalActiveUsers = usersList.filter(u => u.active !== false);
   
   const isProject = (t: any) =>
     t.source === 'folha_projetos' ||
@@ -86,12 +87,12 @@ export default async function DashboardPage() {
       </div>
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard label="Ordens Ativas" value={normalActiveTasks.length.toString()} icon={ClipboardList} trend="+12%" href="/dashboard/tasks" />
+        <StatCard label="Ordens Ativas" value={normalActiveTasks.length.toString()} icon={ClipboardList} href="/dashboard/tasks" />
         <StatCard 
-          label="Técnicos Online" 
-          value={Math.round(technicians.length * 0.8).toString()} 
+          label="Técnicos Ativos" 
+          value={technicians.length.toString()} 
           icon={Users} 
-          sub={`/ ${technicians.length} Ativos`} 
+          sub={`de ${totalActiveUsers.length} Ativos`} 
           href="/dashboard/users"
         />
         <StatCard label="Tempo Médio Resolução" value="4.2" icon={Timer} sub="hrs" trend="-0.5h" href="/dashboard/history" />

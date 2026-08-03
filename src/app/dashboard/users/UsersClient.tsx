@@ -3,9 +3,9 @@
 import { useState, useTransition, useRef, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { UserPlus, UserX, ShieldCheck, Wrench, X, Eye, EyeOff, Link2, Copy, Check, Camera, Filter } from 'lucide-react'
+import { UserPlus, UserX, ShieldCheck, Wrench, X, Eye, EyeOff, Link2, Copy, Check, Camera, Filter, KeyRound } from 'lucide-react'
 import { DEFAULT_TECHNICIAN_TYPES, type User } from '@/types/models'
-import { createUserDirectAction, deactivateUserAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction, toggleUserActiveAction } from './actions'
+import { createUserDirectAction, deactivateUserAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction, toggleUserActiveAction, resetUserPasswordAction } from './actions'
 import Avatar from '@/components/ui/Avatar'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
@@ -63,7 +63,7 @@ export default function UsersClient({
   const [searchAbbr, setSearchAbbr] = useState('')
   const [filterRole, setFilterRole] = useState<'all' | 'manager' | 'technician'>('all')
   const [filterSpecialty, setFilterSpecialty] = useState<string>('all')
-  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all')
+  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('active')
   const [pageSize, setPageSize] = useState<number>(20)
   const [currentPage, setCurrentPage] = useState<number>(1)
 
@@ -676,12 +676,31 @@ export default function UsersClient({
                     )}
                     {isManager && (
                       <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => setEditingUser(u)}
-                          className="text-xs text-[#2E86C1] hover:underline font-bold"
-                        >
-                          Editar
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={async () => {
+                              const pwdPrompt = window.prompt(`Definir nova password para ${u.name} (mínimo 6 caracteres) ou clique em OK para gerar automática:`)
+                              if (pwdPrompt === null) return
+                              const res = await resetUserPasswordAction(u.id, pwdPrompt || undefined)
+                              if (res.error) {
+                                alert(`Erro: ${res.error}`)
+                              } else {
+                                alert(`Password de ${u.name} reposta com sucesso!\n\nNova Password Provisória: ${res.tempPassword}\n\n(O utilizador terá de alterar a password na primeira utilização)`)
+                                router.refresh()
+                              }
+                            }}
+                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 rounded text-xs font-bold transition-all flex items-center gap-1"
+                            title="Repor password do utilizador (exige alteração no primeiro login)"
+                          >
+                            <KeyRound className="h-3.5 w-3.5" /> Repor Pass
+                          </button>
+                          <button
+                            onClick={() => setEditingUser(u)}
+                            className="text-xs text-[#2E86C1] hover:underline font-bold"
+                          >
+                            Editar
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>

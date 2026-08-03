@@ -70,6 +70,7 @@ export interface User {
   hourlyRate?: number // Custo hora do técnico
   language?: 'pt' | 'en' | 'es' | 'fr'
   pushSubscription?: any // Token do Web Push
+  mustChangePassword?: boolean // Requer alteração de password no próximo login
 }
 
 /** Perfil enriquecido usado na UI (user + empresa resolvida). */

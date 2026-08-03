@@ -362,7 +362,7 @@ export default function TasksClient({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return tasks.filter((t) => {
-      if (filter === 'open' && t.status === 'done') return false
+      if (filter === 'open' && (t.status === 'done' || t.status === 'cancelled')) return false
       if (filter !== 'open' && filter !== 'all' && t.status !== filter) return false
       if (q) {
         const aName = assetName(t.assetId)

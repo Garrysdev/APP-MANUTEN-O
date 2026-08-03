@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import LayoutShell from '@/components/layout/LayoutShell'
 import { LanguageProvider } from '@/components/providers/LanguageProvider'
+import MustChangePasswordBanner from '@/components/ui/MustChangePasswordBanner'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex h-screen bg-background transition-colors">
       <LanguageProvider lang={profile.language || 'pt'}>
+        <MustChangePasswordBanner mustChange={profile.mustChangePassword} />
         <LayoutShell user={userForHeader}>
           {children}
         </LayoutShell>

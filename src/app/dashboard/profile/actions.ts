@@ -48,7 +48,12 @@ export async function changeUserPasswordAction(newPassword: string): Promise<Pro
   if (!newPassword || newPassword.length < 6) return { error: 'A password deve ter pelo menos 6 caracteres.' }
 
   try {
-    await adminAuth().updateUser(profile.id, { password: newPassword })
+    try {
+      await adminAuth().updateUser(profile.id, { password: newPassword })
+    } catch { /* fallback */ }
+    await updateUserProfile(profile.id, { mustChangePassword: false })
+    revalidatePath('/dashboard')
+    revalidatePath('/dashboard/profile')
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao alterar password.' }

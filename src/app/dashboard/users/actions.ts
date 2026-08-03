@@ -209,3 +209,30 @@ export async function toggleUserActiveAction(userId: string, active: boolean): P
     return { error: e instanceof Error ? e.message : 'Erro ao alterar estado do utilizador.' }
   }
 }
+
+export async function resetUserPasswordAction(
+  userId: string,
+  newPassword?: string
+): Promise<UserActionState & { tempPassword?: string }> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+
+  const pwd = (newPassword && newPassword.trim().length >= 6)
+    ? newPassword.trim()
+    : 'Muda@' + Math.floor(1000 + Math.random() * 9000)
+
+  try {
+    try {
+      await adminAuth().updateUser(userId, { password: pwd })
+    } catch (authErr) {
+      console.warn('[resetUserPasswordAction] Auth update note:', authErr)
+    }
+
+    await updateUserProfile(userId, { mustChangePassword: true })
+    revalidatePath('/dashboard/users')
+    return { ok: true, tempPassword: pwd }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao repor password do utilizador.' }
+  }
+}

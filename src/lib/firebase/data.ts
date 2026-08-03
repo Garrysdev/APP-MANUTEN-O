@@ -645,6 +645,7 @@ export async function createUserDirect(
     avatarUrl: data.avatarUrl ?? null,
     specialty: data.specialty ?? null,
     active: true,
+    mustChangePassword: true,
     createdAt: new Date().toISOString(),
   })
   return authUser.uid
