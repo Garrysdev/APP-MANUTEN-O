@@ -31,7 +31,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
   const [importResult, setImportResult] = useState<{ created: number; skipped: number } | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
-  const [estadoFilter, setEstadoFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [estadoFilter, setEstadoFilter] = useState<'all' | 'active' | 'inactive'>('active')
   const [selectedAssets, setSelectedAssets] = useState<Set<string>>(new Set())
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
