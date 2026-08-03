@@ -7,7 +7,7 @@ import type { DocumentSnapshot } from 'firebase-admin/firestore'
 import { adminDb, adminAuth } from './admin'
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { calculateTotalCost } from '../finance'
-import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule } from '@/types/models'
+import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
   return { id: doc.id, ...doc.data() } as T
@@ -686,7 +686,19 @@ export async function updateTechnicianTypes(companyId: string, technicianTypes: 
 
 export async function createUserDirect(
   companyId: string,
-  data: { email: string; name: string; role: UserRole; tempPassword: string; avatarUrl?: string | null; specialty?: string | null; abbreviation?: string | null }
+  data: {
+    email: string
+    name: string
+    role: UserRole
+    tempPassword: string
+    avatarUrl?: string | null
+    specialty?: string | null
+    abbreviation?: string | null
+    isExternal?: boolean
+    externalCompanyId?: string | null
+    externalCompanyName?: string | null
+    phone?: string | null
+  }
 ): Promise<string> {
   const finalEmail = data.email.includes('@') ? data.email.trim().toLowerCase() : `${data.email.trim().toLowerCase()}@rgmaintenance.pt`
   const authUser = await adminAuth().createUser({
@@ -698,6 +710,18 @@ export async function createUserDirect(
     companyId,
     email: finalEmail,
     name: data.name.trim(),
+    role: data.role,
+    avatarUrl: data.avatarUrl ?? null,
+    specialty: data.specialty ?? null,
+    abbreviation: data.abbreviation ?? null,
+    isExternal: data.isExternal ?? false,
+    externalCompanyId: data.externalCompanyId ?? null,
+    externalCompanyName: data.externalCompanyName ?? null,
+    phone: data.phone ?? null,
+    active: true,
+    mustChangePassword: true,
+    createdAt: new Date().toISOString(),
+  })
     abbreviation: data.abbreviation ? data.abbreviation.trim().toUpperCase() : null,
     role: data.role,
     avatarUrl: data.avatarUrl ?? null,
