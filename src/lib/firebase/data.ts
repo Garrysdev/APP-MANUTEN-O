@@ -653,11 +653,12 @@ export async function createUserDirect(
 
 export async function updateUserProfile(
   userId: string,
-  data: { name?: string; avatarUrl?: string | null; language?: string; specialty?: string | null; role?: UserRole; abbreviation?: string | null; active?: boolean; pushSubscription?: any }
+  data: { name?: string; avatarUrl?: string | null; language?: string; specialty?: string | null; role?: UserRole; abbreviation?: string | null; active?: boolean; pushSubscription?: any; mustChangePassword?: boolean }
 ): Promise<void> {
   const update: Record<string, unknown> = {}
   if (data.name !== undefined) update.name = data.name.trim()
   if (data.abbreviation !== undefined) update.abbreviation = data.abbreviation ? data.abbreviation.trim().toUpperCase() : null
+  if (data.mustChangePassword !== undefined) update.mustChangePassword = data.mustChangePassword
   if (data.avatarUrl !== undefined) update.avatarUrl = data.avatarUrl
   if (data.language !== undefined) update.language = data.language
   if (data.specialty !== undefined) update.specialty = data.specialty
