@@ -91,7 +91,7 @@ function getFallbackTasks(): Task[] {
       const raw = fs.readFileSync(filePathUr, 'utf-8')
       const json = JSON.parse(raw)
       const listUr = json.map((item: any, idx: number) => ({
-        id: item.sourceId || `task_ur_${idx + 1}`,
+        id: item.sourceId ? `task_ur_${item.sourceId}` : `task_ur_${idx + 1}`,
         companyId: 'rjHNaSUbLm4qTMyKP0oX',
         title: item.title || 'Ordem de Trabalho',
         description: item.title || null,
@@ -100,9 +100,11 @@ function getFallbackTasks(): Task[] {
         tipo: item.tipo || 'curativa',
         assignedTo: item.technicians || null,
         status: item.status === 'done' ? 'done' : (item.status === 'in_progress' ? 'in_progress' : 'pending'),
+        plannedStartDate: item.plannedStartDate || item.inicioDate || null,
+        completedAt: item.completedAt || item.fim || null,
         source: 'folha_ur_historico',
         createdBy: 'system',
-        createdAt: new Date(Date.now() - (idx * 3600000)).toISOString(),
+        createdAt: item.plannedStartDate ? `${item.plannedStartDate}T08:00:00.000Z` : new Date(Date.now() - (idx * 3600000)).toISOString(),
         updatedAt: new Date().toISOString()
       }))
       tasks = tasks.concat(listUr)
@@ -112,7 +114,7 @@ function getFallbackTasks(): Task[] {
       const raw = fs.readFileSync(filePathPr, 'utf-8')
       const json = JSON.parse(raw)
       const listPr = json.map((item: any, idx: number) => ({
-        id: `task_proj_${idx + 1}`,
+        id: item.sourceId ? `task_proj_${item.sourceId}` : `task_proj_${idx + 1}`,
         companyId: 'rjHNaSUbLm4qTMyKP0oX',
         title: item.title || item.name || 'Tarefa de Projeto',
         description: item.description || null,
@@ -120,9 +122,11 @@ function getFallbackTasks(): Task[] {
         tag: item.tag || null,
         tipo: item.tipo || 'curativa',
         status: item.status || 'pending',
+        plannedStartDate: item.plannedStartDate || item.inicioDate || null,
+        completedAt: item.completedAt || item.fim || null,
         source: 'folha_projetos',
         createdBy: 'system',
-        createdAt: new Date().toISOString(),
+        createdAt: item.plannedStartDate ? `${item.plannedStartDate}T08:00:00.000Z` : new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }))
       tasks = tasks.concat(listPr)

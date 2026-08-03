@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { getFirebaseAuth } from '@/lib/firebase/client'
+import { Eye, EyeOff } from 'lucide-react'
 
 const TEST_ACCOUNTS = [
   { label: 'Free',       email: 'free@teste.rg',       password: 'Teste123!', role: 'Gestor' },
@@ -20,6 +21,7 @@ export default function LoginPage() {
 
   const [usernameInput, setUsernameInput] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -98,16 +100,27 @@ export default function LoginPage() {
               <label htmlFor="password" className="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-1.5">
                 Password
               </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="input"
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="input pr-10"
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  title={showPassword ? "Ocultar password" : "Mostrar password"}
+                  aria-label={showPassword ? "Ocultar password" : "Mostrar password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {error && (

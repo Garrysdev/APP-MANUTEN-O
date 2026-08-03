@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { getFirebaseAuth } from '@/lib/firebase/client'
-import { Building2, UserCheck } from 'lucide-react'
+import { Building2, UserCheck, Eye, EyeOff } from 'lucide-react'
 
 interface Props {
   inviteToken: string | null
@@ -23,6 +23,7 @@ export default function RegisterForm({ inviteToken, inviteCompanyName, inviteRol
   const [userName, setUserName] = useState('')
   const [email, setEmail] = useState(inviteEmail ?? '')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -157,16 +158,27 @@ export default function RegisterForm({ inviteToken, inviteCompanyName, inviteRol
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
                 Password
               </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input"
-                placeholder="Mínimo 6 caracteres"
-                required
-                autoComplete="new-password"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input pr-10"
+                  placeholder="Mínimo 6 caracteres"
+                  required
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  title={showPassword ? "Ocultar password" : "Mostrar password"}
+                  aria-label={showPassword ? "Ocultar password" : "Mostrar password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {error && (

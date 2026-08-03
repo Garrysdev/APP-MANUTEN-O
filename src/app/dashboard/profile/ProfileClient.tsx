@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Mail, Building2, Shield, Save, KeyRound, Camera, Lock } from 'lucide-react'
+import { Mail, Building2, Shield, Save, KeyRound, Camera, Lock, Eye, EyeOff } from 'lucide-react'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
 import { useLanguage } from '@/components/providers/LanguageProvider'
@@ -294,6 +294,8 @@ function WebPushButton({ userId, isSubscribed }: { userId: string, isSubscribed:
 function ChangePasswordForm({ profileName, abbreviation }: { profileName: string; abbreviation?: string | null }) {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNewPass, setShowNewPass] = useState(false)
+  const [showConfirmPass, setShowConfirmPass] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
@@ -336,29 +338,49 @@ function ChangePasswordForm({ profileName, abbreviation }: { profileName: string
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1">
             Nova Password *
           </label>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className="input"
-            placeholder="Mínimo 6 caracteres"
-            required
-            minLength={6}
-          />
+          <div className="relative">
+            <input
+              type={showNewPass ? 'text' : 'password'}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="input pr-10"
+              placeholder="Mínimo 6 caracteres"
+              required
+              minLength={6}
+            />
+            <button
+              type="button"
+              onClick={() => setShowNewPass(!showNewPass)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+              title={showNewPass ? "Ocultar password" : "Mostrar password"}
+            >
+              {showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1">
             Confirmar Password *
           </label>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="input"
-            placeholder="Repete a nova password"
-            required
-            minLength={6}
-          />
+          <div className="relative">
+            <input
+              type={showConfirmPass ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="input pr-10"
+              placeholder="Repete a nova password"
+              required
+              minLength={6}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPass(!showConfirmPass)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+              title={showConfirmPass ? "Ocultar password" : "Mostrar password"}
+            >
+              {showConfirmPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         {error && <p className="text-xs font-bold text-red-600 dark:text-red-400">{error}</p>}
