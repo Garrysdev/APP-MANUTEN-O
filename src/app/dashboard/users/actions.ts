@@ -33,12 +33,29 @@ export async function createUserDirectAction(
   const avatarUrl = String(formData.get('avatarUrl') ?? '').trim() || null
   const specialty = String(formData.get('specialty') ?? '').trim() || null
   const abbreviation = String(formData.get('abbreviation') ?? '').trim().toUpperCase() || null
+  const isExternalRaw = formData.get('isExternal')
+  const isExternal = isExternalRaw !== null ? isExternalRaw === 'true' || isExternalRaw === 'on' : false
+  const externalCompanyId = String(formData.get('externalCompanyId') ?? '').trim() || null
+  const externalCompanyName = String(formData.get('externalCompanyName') ?? '').trim() || null
+  const phone = String(formData.get('phone') ?? '').trim() || null
 
   if (!name || !email || !tempPassword) return { error: 'Preenche todos os campos.' }
   if (tempPassword.length < 6) return { error: 'A password deve ter pelo menos 6 caracteres.' }
 
   try {
-    await createUserDirect(profile.companyId, { email, name, role, tempPassword, avatarUrl, specialty, abbreviation })
+    await createUserDirect(profile.companyId, {
+      email,
+      name,
+      role,
+      tempPassword,
+      avatarUrl,
+      specialty,
+      abbreviation,
+      isExternal,
+      externalCompanyId,
+      externalCompanyName,
+      phone
+    })
     revalidatePath('/dashboard/users')
     return { ok: true }
   } catch (e) {
@@ -158,6 +175,18 @@ export async function updateUserByManagerAction(
     ? String(formData.get('avatarUrl') ?? '').trim() || null
     : undefined
 
+  const isExternalRaw = formData.get('isExternal')
+  const isExternal = isExternalRaw !== null ? isExternalRaw === 'true' || isExternalRaw === 'on' : undefined
+
+  const externalCompanyIdRaw = formData.get('externalCompanyId')
+  const externalCompanyId = externalCompanyIdRaw !== null ? String(externalCompanyIdRaw).trim() || null : undefined
+
+  const externalCompanyNameRaw = formData.get('externalCompanyName')
+  const externalCompanyName = externalCompanyNameRaw !== null ? String(externalCompanyNameRaw).trim() || null : undefined
+
+  const phoneRaw = formData.get('phone')
+  const phone = phoneRaw !== null ? String(phoneRaw).trim() || null : undefined
+
   try {
     const updateData: any = { name }
     if (language) updateData.language = language
@@ -166,6 +195,10 @@ export async function updateUserByManagerAction(
     if (specialty !== undefined) updateData.specialty = specialty
     if (abbreviation !== undefined) updateData.abbreviation = abbreviation
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl
+    if (isExternal !== undefined) updateData.isExternal = isExternal
+    if (externalCompanyId !== undefined) updateData.externalCompanyId = externalCompanyId
+    if (externalCompanyName !== undefined) updateData.externalCompanyName = externalCompanyName
+    if (phone !== undefined) updateData.phone = phone
 
     // Se o email foi fornecido e é válido, atualiza no Firebase Auth (se mudou) e no Firestore
     if (emailRaw && emailRaw.includes('@')) {

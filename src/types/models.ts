@@ -56,6 +56,21 @@ export interface Company {
   createdAt: string // ISO
 }
 
+export interface ExternalCompany {
+  id: string
+  companyId: string
+  name: string
+  nif?: string | null
+  contactPerson?: string | null
+  phone?: string | null
+  email?: string | null
+  specialty?: string | null
+  address?: string | null
+  active: boolean
+  notes?: string | null
+  createdAt?: string
+}
+
 export interface User {
   id: string // = uid do Firebase Auth
   companyId: string
@@ -71,6 +86,10 @@ export interface User {
   language?: 'pt' | 'en' | 'es' | 'fr'
   pushSubscription?: any // Token do Web Push
   mustChangePassword?: boolean // Requer alteração de password no próximo login
+  isExternal?: boolean // Técnico externo / Prestador de serviço
+  externalCompanyId?: string | null // ID da Empresa Prestadora de Serviços
+  externalCompanyName?: string | null // Nome da Empresa Prestadora de Serviços
+  phone?: string | null
 }
 
 /** Perfil enriquecido usado na UI (user + empresa resolvida). */

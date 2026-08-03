@@ -118,19 +118,19 @@ let cachedFallbackUsers: User[] | null = null
 function getFallbackUsers(): User[] {
   if (cachedFallbackUsers) return cachedFallbackUsers
   const techs = [
-    { id: 'tech_LM', name: 'Leandro M. (LM)', abbreviation: 'LM', email: 'lm@rgmaintenance.pt', role: 'technician', active: true },
-    { id: 'tech_RG', name: 'Rui Garrido (RG)', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true },
-    { id: 'tech_LI', name: 'Luís I. (LI)', abbreviation: 'LI', email: 'li@rgmaintenance.pt', role: 'technician', active: true },
-    { id: 'tech_MC', name: 'Manuel C. (MC)', abbreviation: 'MC', email: 'mc@rgmaintenance.pt', role: 'technician', active: true },
-    { id: 'tech_JC', name: 'João C. (JC)', abbreviation: 'JC', email: 'jc@rgmaintenance.pt', role: 'technician', active: true },
-    { id: 'tech_MS', name: 'Mário S. (MS)', abbreviation: 'MS', email: 'ms@rgmaintenance.pt', role: 'technician', active: true },
-    { id: 'tech_CB', name: 'Carlos B. (CB)', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician', active: true },
-    { id: 'tech_UR', name: 'Técnico UR (UR)', abbreviation: 'UR', email: 'ur@rgmaintenance.pt', role: 'technician', active: true },
-    { id: 'tech_OX2', name: 'OX2 Especialista (Empresa Externa)', abbreviation: 'OX2', email: 'ox2@rgmaintenance.pt', role: 'subcontractor', active: false },
-    { id: 'tech_BlockControl', name: 'BlockControl (Nuno/João - Empresa Externa)', abbreviation: 'BLK', email: 'blockcontrol@rgmaintenance.pt', role: 'subcontractor', active: false },
-    { id: 'tech_Carrier', name: 'Carrier (Ricardo - Empresa Externa)', abbreviation: 'CAR', email: 'carrier@rgmaintenance.pt', role: 'subcontractor', active: false },
-    { id: 'tech_Schindler', name: 'Schindler (Empresa Externa)', abbreviation: 'SCH', email: 'schindler@rgmaintenance.pt', role: 'subcontractor', active: false },
-    { id: 'tech_Helenos', name: 'Helenos (Empresa Externa)', abbreviation: 'HEL', email: 'helenos@rgmaintenance.pt', role: 'subcontractor', active: false }
+    { id: 'tech_LM', name: 'Leandro M. (LM)', abbreviation: 'LM', email: 'lm@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
+    { id: 'tech_RG', name: 'Rui Garrido (RG)', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false },
+    { id: 'tech_LI', name: 'Luís I. (LI)', abbreviation: 'LI', email: 'li@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
+    { id: 'tech_MC', name: 'Manuel C. (MC)', abbreviation: 'MC', email: 'mc@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
+    { id: 'tech_JC', name: 'João C. (JC)', abbreviation: 'JC', email: 'jc@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
+    { id: 'tech_MS', name: 'Mário S. (MS)', abbreviation: 'MS', email: 'ms@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
+    { id: 'tech_CB', name: 'Carlos B. (CB)', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
+    { id: 'tech_UR', name: 'Técnico UR (UR)', abbreviation: 'UR', email: 'ur@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
+    { id: 'tech_OX2', name: 'Eng. Pedro (OX2)', abbreviation: 'OX2', email: 'ox2@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_ox2', externalCompanyName: 'OX2 Especialista', specialty: 'Caldeiras & Sobreasquecimento', phone: '912 345 678' },
+    { id: 'tech_BlockControl', name: 'Nuno / João (BlockControl)', abbreviation: 'BLK', email: 'blockcontrol@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_blk', externalCompanyName: 'BlockControl Automação', specialty: 'Automação & Eletrónica', phone: '934 567 890' },
+    { id: 'tech_Carrier', name: 'Ricardo (Carrier)', abbreviation: 'CAR', email: 'carrier@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_car', externalCompanyName: 'Carrier Portugal', specialty: 'HVAC / Climatização', phone: '965 432 109' },
+    { id: 'tech_Schindler', name: 'Equipa Téc. (Schindler)', abbreviation: 'SCH', email: 'schindler@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_sch', externalCompanyName: 'Schindler Elevadores', specialty: 'Elevadores & Cargas', phone: '210 987 654' },
+    { id: 'tech_Helenos', name: 'Heleno (Helenos)', abbreviation: 'HEL', email: 'helenos@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_hel', externalCompanyName: 'Helenos S.A.', specialty: 'Construção & Estruturas', phone: '921 112 233' }
   ]
   cachedFallbackUsers = techs.map(t => ({
     ...t,
@@ -138,6 +138,90 @@ function getFallbackUsers(): User[] {
     createdAt: new Date().toISOString()
   })) as User[]
   return cachedFallbackUsers
+}
+
+export const listExternalCompanies = cache(async function(companyId: string): Promise<ExternalCompany[]> {
+  try {
+    const snap = await adminDb()
+      .collection('externalCompanies')
+      .where('companyId', '==', companyId)
+      .get()
+    const docs = snap.docs.map((d) => serialize<ExternalCompany>(d))
+    if (docs.length > 0) return docs
+  } catch (err) {
+    console.error('[listExternalCompanies] Error / Quota Exceeded:', err)
+  }
+  return getFallbackExternalCompanies()
+})
+
+function getFallbackExternalCompanies(): ExternalCompany[] {
+  return [
+    {
+      id: 'comp_ox2',
+      companyId: 'rjHNaSUbLm4qTMyKP0oX',
+      name: 'OX2 Especialista',
+      nif: '509123456',
+      contactPerson: 'Eng. Pedro',
+      phone: '912 345 678',
+      email: 'ox2@rgmaintenance.pt',
+      specialty: 'Caldeiras & Geradores de Vapor',
+      address: 'Zona Industrial da Maia, Lote 14',
+      active: true,
+      notes: 'Prestador certificado para revisão de válvulas de segurança e caldeiras.'
+    },
+    {
+      id: 'comp_blk',
+      companyId: 'rjHNaSUbLm4qTMyKP0oX',
+      name: 'BlockControl Automação',
+      nif: '508765432',
+      contactPerson: 'Nuno / João',
+      phone: '934 567 890',
+      email: 'blockcontrol@rgmaintenance.pt',
+      specialty: 'Automação, PLCs & Variadores',
+      address: 'Parque Tecnológico de Aveiro',
+      active: true,
+      notes: 'Assistência técnica a variadores Danfoss e PLCs Siemens.'
+    },
+    {
+      id: 'comp_car',
+      companyId: 'rjHNaSUbLm4qTMyKP0oX',
+      name: 'Carrier Portugal',
+      nif: '501234987',
+      contactPerson: 'Ricardo',
+      phone: '965 432 109',
+      email: 'carrier@rgmaintenance.pt',
+      specialty: 'Chillers & Climatização Industrial',
+      address: 'Alameda dos Oceanos, Lisboa',
+      active: true,
+      notes: 'Manutenção preventiva e corretiva nos grupos de frio (Chillers).'
+    },
+    {
+      id: 'comp_sch',
+      companyId: 'rjHNaSUbLm4qTMyKP0oX',
+      name: 'Schindler Elevadores',
+      nif: '502345678',
+      contactPerson: 'Apoio Técnico 24h',
+      phone: '210 987 654',
+      email: 'schindler@rgmaintenance.pt',
+      specialty: 'Elevadores & Monta-cargas',
+      address: 'Av. Defensores de Chaves, Lisboa',
+      active: true,
+      notes: 'Contrato de manutenção obrigatória de monta-cargas industriais.'
+    },
+    {
+      id: 'comp_hel',
+      companyId: 'rjHNaSUbLm4qTMyKP0oX',
+      name: 'Helenos S.A.',
+      nif: '503456789',
+      contactPerson: 'Eng. Heleno',
+      phone: '921 112 233',
+      email: 'helenos@rgmaintenance.pt',
+      specialty: 'Construção Civil & Serralharia Heavy Duty',
+      address: 'Zona Industrial de Ovar',
+      active: true,
+      notes: 'Execução de coberturas, caleiras e estruturas metálicas.'
+    }
+  ]
 }
 
 // ── ASSETS ──────────────────────────────────────────────────────────────────

@@ -4,27 +4,34 @@ import { useState, useTransition, useRef, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { UserPlus, UserX, ShieldCheck, Wrench, X, Eye, EyeOff, Link2, Copy, Check, Camera, Filter, KeyRound } from 'lucide-react'
-import { DEFAULT_TECHNICIAN_TYPES, type User } from '@/types/models'
+import { DEFAULT_TECHNICIAN_TYPES, type User, type ExternalCompany } from '@/types/models'
 import { createUserDirectAction, deactivateUserAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction, toggleUserActiveAction, resetUserPasswordAction } from './actions'
 import Avatar from '@/components/ui/Avatar'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
+import { Building2, Phone, Mail, MapPin, FileText, UserPlus as UserPlusIcon, ExternalLink, Briefcase } from 'lucide-react'
 
 export default function UsersClient({
   users,
   currentUserId,
   isManager,
   technicianTypes = DEFAULT_TECHNICIAN_TYPES,
+  externalCompanies = [],
 }: {
   users: User[]
   currentUserId: string
   isManager: boolean
   technicianTypes?: string[]
+  externalCompanies?: ExternalCompany[]
 }) {
   const router = useRouter()
   const { dict } = useLanguage()
+  const [activeTab, setActiveTab] = useState<'internal' | 'external'>('internal')
+  const [selectedCompany, setSelectedCompany] = useState<ExternalCompany | null>(null)
+  const [isExternalNew, setIsExternalNew] = useState(false)
+  const [isExternalEdit, setIsExternalEdit] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -260,6 +267,138 @@ export default function UsersClient({
 
   return (
     <div className="space-y-4">
+      {/* Navegação entre Técnicos Internos vs Prestadores Externos */}
+      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-slate-800 pb-2">
+        <button
+          onClick={() => setActiveTab('internal')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-colors ${
+            activeTab === 'internal'
+              ? 'bg-[#2E86C1] text-white shadow-sm'
+              : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200'
+          }`}
+        >
+          <Wrench className="h-4 w-4" />
+          Utilizadores & Técnicos Internos ({users.filter((u) => !u.isExternal).length})
+        </button>
+        <button
+          onClick={() => setActiveTab('external')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-colors ${
+            activeTab === 'external'
+              ? 'bg-[#2E86C1] text-white shadow-sm'
+              : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200'
+          }`}
+        >
+          <Building2 className="h-4 w-4" />
+          Empresas & Técnicos Externos ({externalCompanies.length})
+        </button>
+      </div>
+
+      {activeTab === 'external' ? (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                <Building2 className="h-6 w-6 text-[#2E86C1]" /> Empresas Prestadoras de Serviços & Subempreiteiros
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                Consulta as empresas contratadas e a lista de técnicos associados a cada empresa externa.
+              </p>
+            </div>
+            {isManager && (
+              <button
+                onClick={() => {
+                  setShowForm(true)
+                  setIsExternalNew(true)
+                  setActiveTab('internal')
+                }}
+                className="btn-primary flex items-center gap-1.5 text-xs font-bold"
+              >
+                <UserPlusIcon className="h-4 w-4" /> Adicionar Técnico Externo
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {externalCompanies.map((comp) => {
+              const compTechs = users.filter((u) => u.isExternal && (u.externalCompanyId === comp.id || (u.externalCompanyName || '').toLowerCase().includes(comp.name.toLowerCase())))
+              return (
+                <div key={comp.id} className="card p-5 hover:shadow-md transition-shadow border-l-4 border-l-[#2E86C1]">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-blue-100 text-blue-900 mb-1">
+                        {comp.specialty || 'Prestador de Serviços'}
+                      </span>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100">{comp.name}</h3>
+                      {comp.nif && <p className="text-xs font-mono text-gray-500 dark:text-slate-400">NIF: {comp.nif}</p>}
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800">
+                      {compTechs.length} técnico(s)
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs text-gray-600 dark:text-slate-300 mb-4">
+                    {comp.contactPerson && (
+                      <p className="flex items-center gap-1.5">
+                        <Briefcase className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="font-semibold text-gray-800 dark:text-slate-200">Contacto:</span> {comp.contactPerson}
+                      </p>
+                    )}
+                    {comp.phone && (
+                      <p className="flex items-center gap-1.5">
+                        <Phone className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="font-semibold text-gray-800 dark:text-slate-200">Telefone:</span> {comp.phone}
+                      </p>
+                    )}
+                    {comp.email && (
+                      <p className="flex items-center gap-1.5">
+                        <Mail className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="font-semibold text-gray-800 dark:text-slate-200">E-mail:</span> {comp.email}
+                      </p>
+                    )}
+                    {comp.address && (
+                      <p className="flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="font-semibold text-gray-800 dark:text-slate-200">Morada:</span> {comp.address}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Lista sumária de técnicos da empresa */}
+                  <div className="bg-gray-50 dark:bg-slate-800/60 p-3 rounded-lg border border-gray-200 dark:border-slate-700 mb-4">
+                    <p className="text-[11px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+                      Técnicos Registados nesta Empresa:
+                    </p>
+                    {compTechs.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">Nenhum técnico associado especificamente.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {compTechs.map((t) => (
+                          <div key={t.id} className="flex items-center justify-between text-xs bg-white dark:bg-slate-900 p-1.5 rounded border border-gray-100 dark:border-slate-800">
+                            <span className="font-bold text-gray-800 dark:text-slate-200 flex items-center gap-1">
+                              <span className="font-mono text-[10px] bg-gray-100 dark:bg-slate-800 px-1 rounded">{t.abbreviation || 'EXT'}</span>
+                              {t.name}
+                            </span>
+                            <span className="text-gray-500 text-[10px]">{t.specialty || t.email}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedCompany(comp)}
+                    className="w-full btn-secondary text-xs py-2 font-bold flex items-center justify-center gap-1.5 text-blue-700 dark:text-blue-400 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    📂 Abrir Ficha Completa da Empresa & Técnicos
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : (
+        <>
       {isManager && (
         <div className="card p-4">
           <div className="flex items-center justify-between mb-3">
@@ -351,6 +490,37 @@ export default function UsersClient({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Opção Técnico Externo / Prestador de Serviço */}
+              <div className="p-3 bg-gray-50 dark:bg-slate-800/60 rounded-lg border border-gray-200 dark:border-slate-700 space-y-2">
+                <label className="flex items-center gap-2 text-xs font-bold text-gray-800 dark:text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="isExternal"
+                    checked={isExternalNew}
+                    onChange={(e) => setIsExternalNew(e.target.checked)}
+                    className="rounded border-gray-300 text-[#2E86C1]"
+                  />
+                  Técnico Externo / Prestador de Serviço Contratado
+                </label>
+                {isExternalNew && (
+                  <div className="pt-2 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-gray-600 dark:text-slate-400 mb-1 font-medium">Empresa Prestadora de Serviços</label>
+                      <select name="externalCompanyId" className="input text-xs">
+                        <option value="">— Selecionar Empresa —</option>
+                        {externalCompanies.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-gray-600 dark:text-slate-400 mb-1 font-medium">Telefone Directo / Contacto</label>
+                      <input name="phone" className="input text-xs" placeholder="Ex: 912 345 678" />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -807,6 +977,34 @@ export default function UsersClient({
                 </select>
               </div>
 
+              {/* Vínculo Técnico Externo no Edit */}
+              <div className="p-3 bg-gray-50 dark:bg-slate-800/60 rounded-lg border border-gray-200 dark:border-slate-700 space-y-2 text-xs">
+                <label className="flex items-center gap-2 font-bold text-gray-800 dark:text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="isExternal"
+                    defaultChecked={editingUser.isExternal || false}
+                    className="rounded border-gray-300 text-[#2E86C1]"
+                  />
+                  Técnico Externo / Prestador de Serviço Contratado
+                </label>
+                <div className="pt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-gray-600 dark:text-slate-400 mb-1 font-medium">Empresa Prestadora de Serviços</label>
+                    <select name="externalCompanyId" defaultValue={editingUser.externalCompanyId || ''} className="input text-xs">
+                      <option value="">— Selecionar Empresa —</option>
+                      {externalCompanies.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 dark:text-slate-400 mb-1 font-medium">Telefone Directo / Contacto</label>
+                    <input name="phone" defaultValue={editingUser.phone || ''} className="input text-xs" placeholder="Ex: 912 345 678" />
+                  </div>
+                </div>
+              </div>
+
               {editError && (
                 <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                   {editError}
@@ -880,6 +1078,114 @@ export default function UsersClient({
               </button>
               <button type="button" onClick={handleSaveTypes} disabled={savingTypes} className="btn-primary flex-1">
                 {savingTypes ? 'A guardar…' : 'Guardar Tipos'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ficha Completa da Empresa Prestadora de Serviços & Técnicos */}
+      {selectedCompany && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedCompany(null)} />
+          <div className="card relative w-full max-w-2xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between border-b border-gray-200 dark:border-slate-800 pb-3">
+              <div>
+                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-blue-100 text-blue-900 mb-1">
+                  Ficha da Empresa Prestadora de Serviços
+                </span>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                  <Building2 className="h-6 w-6 text-[#2E86C1]" />
+                  {selectedCompany.name}
+                </h2>
+              </div>
+              <button onClick={() => setSelectedCompany(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Informação Geral da Empresa */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 dark:bg-slate-800/60 p-4 rounded-xl border border-gray-200 dark:border-slate-700 text-xs">
+              <div>
+                <p className="text-gray-500 font-medium mb-1">Especialidade / Ramo:</p>
+                <p className="font-bold text-gray-900 dark:text-slate-100">{selectedCompany.specialty || 'Serviços Gerais'}</p>
+              </div>
+              <div>
+                <p className="text-gray-500 font-medium mb-1">NIF:</p>
+                <p className="font-mono font-bold text-gray-900 dark:text-slate-100">{selectedCompany.nif || '—'}</p>
+              </div>
+              <div>
+                <p className="text-gray-500 font-medium mb-1">Pessoa de Contacto:</p>
+                <p className="font-semibold text-gray-900 dark:text-slate-100">{selectedCompany.contactPerson || '—'}</p>
+              </div>
+              <div>
+                <p className="text-gray-500 font-medium mb-1">Telefone Directo:</p>
+                <p className="font-semibold text-gray-900 dark:text-slate-100">{selectedCompany.phone || '—'}</p>
+              </div>
+              <div>
+                <p className="text-gray-500 font-medium mb-1">E-mail Oficial:</p>
+                <p className="font-semibold text-gray-900 dark:text-slate-100">{selectedCompany.email || '—'}</p>
+              </div>
+              <div>
+                <p className="text-gray-500 font-medium mb-1">Sede / Morada:</p>
+                <p className="font-semibold text-gray-900 dark:text-slate-100">{selectedCompany.address || '—'}</p>
+              </div>
+              {selectedCompany.notes && (
+                <div className="col-span-full pt-2 border-t border-gray-200 dark:border-slate-700">
+                  <p className="text-gray-500 font-medium mb-1">Observações & Âmbito do Contrato:</p>
+                  <p className="text-gray-800 dark:text-slate-200 italic">{selectedCompany.notes}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Técnicos Pertencentes a esta Empresa */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-1.5">
+                  <Wrench className="h-4 w-4 text-[#2E86C1]" />
+                  Técnicos Associados a esta Empresa
+                </h3>
+                <span className="text-xs text-gray-500 font-semibold">
+                  Total: {users.filter((u) => u.isExternal && (u.externalCompanyId === selectedCompany.id || (u.externalCompanyName || '').toLowerCase().includes(selectedCompany.name.toLowerCase()))).length} técnico(s)
+                </span>
+              </div>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {users
+                  .filter((u) => u.isExternal && (u.externalCompanyId === selectedCompany.id || (u.externalCompanyName || '').toLowerCase().includes(selectedCompany.name.toLowerCase())))
+                  .map((tech) => (
+                    <div key={tech.id} className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 shadow-sm text-xs">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={tech.name} avatarUrl={tech.avatarUrl} size={36} />
+                        <div>
+                          <p className="font-bold text-gray-900 dark:text-slate-100 flex items-center gap-1.5">
+                            <span className="font-mono bg-blue-100 text-blue-900 text-[10px] px-1.5 py-0.5 rounded font-extrabold">{tech.abbreviation || 'EXT'}</span>
+                            {tech.name}
+                          </p>
+                          <p className="text-gray-500 text-[11px]">{tech.email} {tech.phone ? `· Tel: ${tech.phone}` : ''}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
+                          {tech.specialty || 'Técnico Externo'}
+                        </span>
+                        {tech.hourlyRate != null && tech.hourlyRate > 0 && (
+                          <p className="text-[11px] font-semibold text-gray-700 dark:text-slate-300 mt-0.5">{tech.hourlyRate.toFixed(2)}€ / hora</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                {users.filter((u) => u.isExternal && (u.externalCompanyId === selectedCompany.id || (u.externalCompanyName || '').toLowerCase().includes(selectedCompany.name.toLowerCase()))).length === 0 && (
+                  <p className="text-xs text-gray-400 text-center py-6 border border-dashed border-gray-200 rounded-lg">
+                    Nenhum técnico individual registado ainda para a empresa {selectedCompany.name}.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-gray-200 dark:border-slate-800">
+              <button onClick={() => setSelectedCompany(null)} className="btn-primary text-xs px-5">
+                Fechar Ficha
               </button>
             </div>
           </div>
