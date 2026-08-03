@@ -197,6 +197,13 @@ export interface StockItem {
   companyId: string
   name: string
   reference?: string | null
+  code?: string | null
+  area?: string | null
+  tag?: string | null
+  system?: string | null
+  cost?: number | null
+  description?: string | null
+  supplier?: string | null
   category?: string | null
   quantity: number
   unit?: string | null

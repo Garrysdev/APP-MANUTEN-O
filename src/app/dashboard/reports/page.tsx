@@ -44,6 +44,32 @@ export default async function ReportsPage() {
   const assetMap = Object.fromEntries(assets.map((a) => [a.id, a.name]))
   const userMap = Object.fromEntries(users.map((u) => [u.id, u.name]))
 
+  const criticalAssets = assets
+    .map((asset) => {
+      const assetTasks = tasks.filter((t) => t.assetId === asset.id || t.tag === asset.tag)
+      const openUrgent = assetTasks.filter((t) => t.criticidade === 'vermelho' && t.status !== 'done' && t.status !== 'cancelled').length
+      const totalInterventions = interventions.filter((iv) => {
+        const t = tasks.find((tk) => tk.id === iv.taskId)
+        return t && (t.assetId === asset.id || t.tag === asset.tag)
+      }).length + assetTasks.length
+
+      return {
+        asset,
+        totalTasks: assetTasks.length,
+        totalInterventions,
+        openUrgent,
+        criticidadeABC: asset.criticidadeABC || 'C',
+      }
+    })
+    .sort((a, b) => {
+      const rank: Record<string, number> = { A: 1, B: 2, C: 3 }
+      const rA = rank[a.criticidadeABC] || 4
+      const rB = rank[b.criticidadeABC] || 4
+      if (rA !== rB) return rA - rB
+      return b.totalTasks - a.totalTasks
+    })
+    .slice(0, 15)
+
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: `

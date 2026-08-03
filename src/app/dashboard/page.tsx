@@ -55,6 +55,7 @@ export default async function DashboardPage() {
 
   const normalActiveTasks = tasks.filter((t) => !isProject(t) && t.status !== 'done' && t.status !== 'cancelled')
   const projectActiveTasks = tasks.filter((t) => isProject(t) && t.status !== 'done' && t.status !== 'cancelled')
+  const completedTasks = tasks.filter((t) => t.status === 'done')
   let totalDurationHours = 0
   let completedCount = 0
   for (const t of completedTasks) {
