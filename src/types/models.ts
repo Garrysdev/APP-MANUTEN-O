@@ -114,6 +114,8 @@ export interface Task {
   status: TaskStatus
   dueDate?: string | null // ISO date
   plannedStartDate?: string | null // ISO date/datetime: Data planeada de início
+  completedAt?: string | null // ISO date/datetime: Data de conclusão
+  tag?: string | null // TAG do equipamento
   observacoes?: string | null // Observações adicionais da OT
   safetyRules?: string[] | null
   materialsRequired?: string[] | null

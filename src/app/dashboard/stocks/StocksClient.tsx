@@ -171,9 +171,7 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
         (item.description || '').toLowerCase().includes(q)
       )
     })
-  }, [items, search, categoryFilter, areaFilter, tagFilter])
-
-  const { sortedItems, sortKey, sortDir, requestSort } = useTableSort(
+  }, [items, search, categoryFilter, areaFilter, tagFilter])  const { sorted: sortedItems, sortKey, sortDir, toggleSort: requestSort } = useTableSort(
     filteredItems,
     {
       code: (i) => i.code || i.reference || '',
@@ -298,21 +296,11 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-900/60 font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  <SortableTh columnKey="code" currentSortKey={sortKey} currentSortDir={sortDir} onRequestSort={requestSort} className="text-left px-3 py-2.5 w-28">
-                    CÓD / TAG
-                  </SortableTh>
-                  <SortableTh columnKey="name" currentSortKey={sortKey} currentSortDir={sortDir} onRequestSort={requestSort} className="text-left px-3 py-2.5">
-                    DESIGNAÇÃO / SOBRESSELENETE
-                  </SortableTh>
-                  <SortableTh columnKey="area" currentSortKey={sortKey} currentSortDir={sortDir} onRequestSort={requestSort} className="text-left px-3 py-2.5 hidden md:table-cell">
-                    ÁREA
-                  </SortableTh>
-                  <SortableTh columnKey="category" currentSortKey={sortKey} currentSortDir={sortDir} onRequestSort={requestSort} className="text-left px-3 py-2.5 hidden lg:table-cell">
-                    SISTEMA / CATEGORIA
-                  </SortableTh>
-                  <SortableTh columnKey="quantity" currentSortKey={sortKey} currentSortDir={sortDir} onRequestSort={requestSort} className="text-right px-3 py-2.5">
-                    QUANT.
-                  </SortableTh>
+                  <SortableTh label="CÓD / TAG" sortableKey="code" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5 w-28" />
+                  <SortableTh label="DESIGNAÇÃO / SOBRESSELANETE" sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5" />
+                  <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5 hidden md:table-cell" />
+                  <SortableTh label="SISTEMA / CATEGORIA" sortableKey="category" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5 hidden lg:table-cell" />
+                  <SortableTh label="QUANT." sortableKey="quantity" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-right px-3 py-2.5" />
                   <th className="text-left px-3 py-2.5 hidden sm:table-cell">UNID.</th>
                   <th className="text-left px-3 py-2.5 hidden xl:table-cell">LOCAL</th>
                   <th className="px-3 py-2.5" />
@@ -428,7 +416,7 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
               <X className="h-5 w-5" />
             </button>
             <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-4">
-              {modal.type === 'create' ? dict.stocks.newItem : dict.stocks.editItem}
+              {modal.type === 'create' ? dict.stocks.modalNew : dict.stocks.modalEdit}
             </h2>
             <StockForm
               defaultValues={modal.type === 'edit' ? modal.item : undefined}
