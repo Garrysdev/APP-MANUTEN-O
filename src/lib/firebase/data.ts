@@ -83,59 +83,33 @@ let cachedFallbackTasks: Task[] | null = null
 function getFallbackTasks(): Task[] {
   if (cachedFallbackTasks) return cachedFallbackTasks
   try {
-    const filePathUr = path.join(process.cwd(), 'scripts', 'import', 'tasks_ur.json')
-    const filePathPr = path.join(process.cwd(), 'scripts', 'import', 'tasks_projects.json')
-    let tasks: Task[] = []
-    
-    if (fs.existsSync(filePathUr)) {
-      const raw = fs.readFileSync(filePathUr, 'utf-8')
+    const filePath = path.join(process.cwd(), 'scripts', 'import', 'tasks.json')
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8')
       const json = JSON.parse(raw)
-      const listUr = json.map((item: any, idx: number) => ({
-        id: item.sourceId ? `task_ur_${item.sourceId}` : `task_ur_${idx + 1}`,
+      cachedFallbackTasks = json.map((item: any, idx: number) => ({
+        id: item.id || `task_${idx + 1}`,
         companyId: 'rjHNaSUbLm4qTMyKP0oX',
         title: item.title || 'Ordem de Trabalho',
-        description: item.title || null,
+        description: item.description || item.title || null,
         area: item.area || null,
         tag: item.tag || null,
         tipo: item.tipo || 'curativa',
-        assignedTo: item.technicians || null,
-        status: item.status === 'done' ? 'done' : (item.status === 'in_progress' ? 'in_progress' : 'pending'),
-        plannedStartDate: item.plannedStartDate || item.inicioDate || null,
-        completedAt: item.completedAt || item.fim || null,
-        source: 'folha_ur_historico',
-        createdBy: 'system',
-        createdAt: item.plannedStartDate ? `${item.plannedStartDate}T08:00:00.000Z` : new Date(Date.now() - (idx * 3600000)).toISOString(),
-        updatedAt: new Date().toISOString()
-      }))
-      tasks = tasks.concat(listUr)
-    }
-
-    if (fs.existsSync(filePathPr)) {
-      const raw = fs.readFileSync(filePathPr, 'utf-8')
-      const json = JSON.parse(raw)
-      const listPr = json.map((item: any, idx: number) => ({
-        id: item.sourceId ? `task_proj_${item.sourceId}` : `task_proj_${idx + 1}`,
-        companyId: 'rjHNaSUbLm4qTMyKP0oX',
-        title: item.title || item.name || 'Tarefa de Projeto',
-        description: item.description || null,
-        area: item.area || null,
-        tag: item.tag || null,
-        tipo: item.tipo || 'curativa',
+        criticidade: item.criticidade || 'amarelo',
         status: item.status || 'pending',
-        plannedStartDate: item.plannedStartDate || item.inicioDate || null,
-        completedAt: item.completedAt || item.fim || null,
-        source: 'folha_projetos',
-        createdBy: 'system',
-        createdAt: item.plannedStartDate ? `${item.plannedStartDate}T08:00:00.000Z` : new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        plannedStartDate: item.plannedStartDate || null,
+        completedAt: item.completedAt || null,
+        dueDate: item.dueDate || item.plannedStartDate || null,
+        assignedTo: item.assignedTo || null,
+        source: item.source || 'excel_ur',
+        createdBy: item.createdBy || 'system',
+        createdAt: item.createdAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || new Date().toISOString(),
       }))
-      tasks = tasks.concat(listPr)
+      return cachedFallbackTasks!
     }
-
-    cachedFallbackTasks = tasks
-    return cachedFallbackTasks
   } catch (err) {
-    console.error('[Fallback] Error loading tasks JSON:', err)
+    console.error('[Fallback] Error loading tasks.json:', err)
   }
   return []
 }
@@ -144,23 +118,23 @@ let cachedFallbackUsers: User[] | null = null
 function getFallbackUsers(): User[] {
   if (cachedFallbackUsers) return cachedFallbackUsers
   const techs = [
-    { id: 'tech_LM', name: 'Leandro M. (LM)', abbreviation: 'LM', email: 'lm@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_RG', name: 'Rui Garrido (RG)', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager' },
-    { id: 'tech_LI', name: 'Luís I. (LI)', abbreviation: 'LI', email: 'li@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_MC', name: 'Manuel C. (MC)', abbreviation: 'MC', email: 'mc@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_JC', name: 'João C. (JC)', abbreviation: 'JC', email: 'jc@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_MS', name: 'Mário S. (MS)', abbreviation: 'MS', email: 'ms@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_CB', name: 'Carlos B. (CB)', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_OX2', name: 'OX2 Especialista', abbreviation: 'OX2', email: 'ox2@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_BlockControl', name: 'BlockControl (Nuno/João)', abbreviation: 'BLK', email: 'blockcontrol@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_Carrier', name: 'Carrier (Ricardo)', abbreviation: 'CAR', email: 'carrier@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_Schindler', name: 'Schindler', abbreviation: 'SCH', email: 'schindler@rgmaintenance.pt', role: 'technician' },
-    { id: 'tech_Helenos', name: 'Helenos', abbreviation: 'HEL', email: 'helenos@rgmaintenance.pt', role: 'technician' }
+    { id: 'tech_LM', name: 'Leandro M. (LM)', abbreviation: 'LM', email: 'lm@rgmaintenance.pt', role: 'technician', active: true },
+    { id: 'tech_RG', name: 'Rui Garrido (RG)', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true },
+    { id: 'tech_LI', name: 'Luís I. (LI)', abbreviation: 'LI', email: 'li@rgmaintenance.pt', role: 'technician', active: true },
+    { id: 'tech_MC', name: 'Manuel C. (MC)', abbreviation: 'MC', email: 'mc@rgmaintenance.pt', role: 'technician', active: true },
+    { id: 'tech_JC', name: 'João C. (JC)', abbreviation: 'JC', email: 'jc@rgmaintenance.pt', role: 'technician', active: true },
+    { id: 'tech_MS', name: 'Mário S. (MS)', abbreviation: 'MS', email: 'ms@rgmaintenance.pt', role: 'technician', active: true },
+    { id: 'tech_CB', name: 'Carlos B. (CB)', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician', active: true },
+    { id: 'tech_UR', name: 'Técnico UR (UR)', abbreviation: 'UR', email: 'ur@rgmaintenance.pt', role: 'technician', active: true },
+    { id: 'tech_OX2', name: 'OX2 Especialista (Empresa Externa)', abbreviation: 'OX2', email: 'ox2@rgmaintenance.pt', role: 'subcontractor', active: false },
+    { id: 'tech_BlockControl', name: 'BlockControl (Nuno/João - Empresa Externa)', abbreviation: 'BLK', email: 'blockcontrol@rgmaintenance.pt', role: 'subcontractor', active: false },
+    { id: 'tech_Carrier', name: 'Carrier (Ricardo - Empresa Externa)', abbreviation: 'CAR', email: 'carrier@rgmaintenance.pt', role: 'subcontractor', active: false },
+    { id: 'tech_Schindler', name: 'Schindler (Empresa Externa)', abbreviation: 'SCH', email: 'schindler@rgmaintenance.pt', role: 'subcontractor', active: false },
+    { id: 'tech_Helenos', name: 'Helenos (Empresa Externa)', abbreviation: 'HEL', email: 'helenos@rgmaintenance.pt', role: 'subcontractor', active: false }
   ]
   cachedFallbackUsers = techs.map(t => ({
     ...t,
     companyId: 'rjHNaSUbLm4qTMyKP0oX',
-    active: true,
     createdAt: new Date().toISOString()
   })) as User[]
   return cachedFallbackUsers

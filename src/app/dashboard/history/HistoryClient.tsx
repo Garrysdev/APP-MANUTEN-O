@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { History as HistoryIcon, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import Link from 'next/link'
+import { History as HistoryIcon, X, ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react'
 import type { Intervention, Material, Task } from '@/types/models'
 import { formatDateTime } from '@/lib/utils'
 import HistoryExportButtons from './HistoryExportButtons'
@@ -271,6 +272,7 @@ export default function HistoryClient({
                 <SortableTh label="INÍCIO" sortableKey="inicio" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
                 <SortableTh label="FIM" sortableKey="fim" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
                 <SortableTh label="CAUSA / OBS" sortableKey="causa" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
+                <th className="px-3 py-2 text-center text-xs font-bold">AÇÕES</th>
               </tr>
               {/* Linha de Filtros Estilo Excel */}
               <tr className="border-b border-slate-200 bg-slate-50">
@@ -304,13 +306,16 @@ export default function HistoryClient({
                 <th className="px-1.5 py-1 hidden lg:table-cell">
                   <input value={colF.causa} onChange={(e) => setCol('causa', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
+                <th className="px-1.5 py-1" />
               </tr>
             </thead>
             <tbody>
               {currentShown.map((r) => (
-                <tr key={r.rawId} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+                <tr key={r.rawId} className="border-b border-slate-100 hover:bg-blue-50/50 transition-colors">
                   <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
-                    <span className="bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200">{r.id}</span>
+                    <Link href={`/dashboard/tasks/${r.rawId}`} className="bg-slate-100/90 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-slate-300 text-blue-800 hover:underline">
+                      {r.id}
+                    </Link>
                   </td>
                   <td className="px-3 py-2.5 font-mono text-slate-800 font-semibold whitespace-nowrap">{r.data}</td>
                   <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">{r.area}</td>
@@ -321,13 +326,24 @@ export default function HistoryClient({
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-slate-900 font-semibold max-w-[280px]">
-                    <span className="line-clamp-2" title={r.avaria}>{r.avaria}</span>
+                    <Link href={`/dashboard/tasks/${r.rawId}`} className="hover:text-blue-600 hover:underline line-clamp-2" title={r.avaria}>
+                      {r.avaria}
+                    </Link>
                   </td>
                   <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">{r.tecnicos}</td>
                   <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">{r.inicio}</td>
                   <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">{r.fim}</td>
                   <td className="px-3 py-2.5 text-slate-700 hidden lg:table-cell max-w-[200px]">
                     <span className="line-clamp-2" title={r.causa}>{r.causa}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                    <Link
+                      href={`/dashboard/tasks/${r.rawId}`}
+                      className="inline-flex items-center gap-1 bg-white hover:bg-slate-100 text-blue-700 font-bold border border-slate-300 px-2 py-1 rounded text-[11px] shadow-sm transition-colors"
+                    >
+                      <FolderOpen className="h-3.5 w-3.5 text-blue-600" />
+                      Abrir
+                    </Link>
                   </td>
                 </tr>
               ))}

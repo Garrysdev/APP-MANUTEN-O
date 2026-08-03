@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
@@ -15,6 +15,7 @@ import {
   createMaterialAction,
   deleteMaterialAction,
   startTaskAction,
+  reopenTaskAction,
 } from './actions'
 
 const MAX_PHOTOS = 5
@@ -274,6 +275,17 @@ export default function TaskDetailClient({
     else router.refresh()
   }
 
+  const [reopenBusy, setReopenBusy] = useState(false)
+  async function handleReopen() {
+    if (!confirm('Deseja reabrir esta Ordem de Trabalho?')) return
+    setReopenBusy(true)
+    setStartError('')
+    const result = await reopenTaskAction(taskId)
+    setReopenBusy(false)
+    if (result.error) setStartError(result.error)
+    else router.refresh()
+  }
+
   const isDone = taskStatus === 'done'
   const isPending = taskStatus === 'pending'
 
@@ -291,7 +303,15 @@ export default function TaskDetailClient({
               <Wrench className="h-4 w-4" /> {startBusy ? 'A iniciar…' : 'Iniciar'}
             </button>
           )}
-          {!isDone && (
+          {isDone ? (
+            <button
+              onClick={handleReopen}
+              disabled={reopenBusy}
+              className="btn-secondary bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 font-bold flex items-center gap-2"
+            >
+              <Wrench className="h-4 w-4 text-amber-700" /> {reopenBusy ? 'A reabrir…' : 'Reabrir OT'}
+            </button>
+          ) : (
             <button
               onClick={() => { resetForm(); setOpen(true) }}
               className="btn-primary flex items-center gap-2"
