@@ -22,7 +22,7 @@ export const dictionaries = {
       company: 'Perfil Empresa',
       logout: 'Terminar sessão',
       knowledgeBase: 'Base de Conhecimento',
-      safetyRules: 'Itens de Segurança',
+      safetyRules: 'Itens & Regras de Segurança',
     },
     common: {
       save: 'Guardar',

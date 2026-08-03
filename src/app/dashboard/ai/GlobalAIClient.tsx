@@ -3,11 +3,12 @@
 import { useState } from 'react'
 import { Brain, Sparkles, Loader2, Send } from 'lucide-react'
 import Link from 'next/link'
+import { askAiConsultantAction } from './actions'
 
 export default function GlobalAIClient({ hasAiModule, aiCredits }: { hasAiModule: boolean, aiCredits: number }) {
   const [prompt, setPrompt] = useState('')
   const [messages, setMessages] = useState<{ role: 'user' | 'ai', content: string }[]>([
-    { role: 'ai', content: 'Olá! Sou o teu Consultor IA. Podes perguntar-me sobre os teus equipamentos, tarefas pendentes, ou dicas sobre normas (ex: ISO 9001, NP EN 13306). Em que posso ajudar?' }
+    { role: 'ai', content: 'Olá! Sou o teu Consultor IA. Podes perguntar-me sobre os teus equipamentos, tarefas pendentes, artigos de stock, ou diretrizes de normas (ex: ISO 9001, NP EN 13306). Em que posso ajudar?' }
   ])
   const [busy, setBusy] = useState(false)
   const [currentCredits, setCurrentCredits] = useState(aiCredits)
@@ -41,15 +42,19 @@ export default function GlobalAIClient({ hasAiModule, aiCredits }: { hasAiModule
     setMessages(prev => [...prev, { role: 'user', content: userMsg }])
     setBusy(true)
 
-    // Simulate AI thinking and calling server action
-    setTimeout(() => {
-      setMessages(prev => [...prev, { 
-        role: 'ai', 
-        content: `Simulação de resposta IA para: "${userMsg}". Com base no teu histórico e nas diretrizes da ISO 9001, recomendo focar na manutenção preventiva dos equipamentos críticos indicados no dashboard.` 
-      }])
-      setCurrentCredits(prev => prev - 1)
+    try {
+      const res = await askAiConsultantAction(userMsg)
+      if (res.error) {
+        setMessages(prev => [...prev, { role: 'ai', content: `⚠️ ${res.error}` }])
+      } else {
+        setMessages(prev => [...prev, { role: 'ai', content: res.response }])
+        setCurrentCredits(prev => Math.max(0, prev - 1))
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'ai', content: '⚠️ Erro de ligação ao servidor do Consultor IA.' }])
+    } finally {
       setBusy(false)
-    }, 1500)
+    }
   }
 
   return (

@@ -56,6 +56,7 @@ const managerNavGroups: NavGroup[] = [
     groupName: 'Módulos Starter',
     items: [
       { href: '/dashboard/assets',             key: 'assets',          icon: Package,        feature: 'assets' },
+      { href: '/dashboard/safety-rules',       key: 'safetyRules',     icon: ShieldCheck,    feature: 'compliance' },
       { href: '/dashboard/stocks',             key: 'stocks',          icon: Boxes,          feature: 'stocks' },
       { href: '/dashboard/calendar',           key: 'calendar',        icon: Calendar,       feature: 'calendar' },
       { href: '/dashboard/maintenance-plan',   key: 'maintenancePlan', icon: Wrench,         feature: 'maintenance-plan' },
@@ -80,7 +81,6 @@ const managerNavGroups: NavGroup[] = [
     groupName: 'Módulos Enterprise',
     items: [
       { href: '/dashboard/compliance', key: 'compliance', icon: ShieldCheck, feature: 'compliance' },
-      { href: '/dashboard/safety-rules', key: 'safetyRules', icon: ShieldCheck, feature: 'compliance' },
     ]
   },
   {
