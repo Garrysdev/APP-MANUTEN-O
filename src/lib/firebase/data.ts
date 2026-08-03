@@ -750,6 +750,41 @@ export const getUsersByCompany = cache(async function(companyId: string): Promis
   return listUsers(companyId)
 })
 
+let cachedFallbackStockItems: StockItem[] | null = null
+function getFallbackStockItems(): StockItem[] {
+  if (cachedFallbackStockItems) return cachedFallbackStockItems
+  try {
+    const filePath = path.join(process.cwd(), 'scripts', 'import', 'stocks.json')
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8')
+      const json = JSON.parse(raw)
+      cachedFallbackStockItems = json.map((item: any, idx: number) => ({
+        id: `stock_item_${idx + 1}`,
+        companyId: 'rjHNaSUbLm4qTMyKP0oX',
+        code: item.code || `STOCK-${idx + 1}`,
+        name: item.name || 'Artigo / Sobresselente',
+        category: item.category || 'Equipamentos / Sobresselentes',
+        unit: item.unit || 'un',
+        quantity: 0,
+        minQuantity: item.minQuantity ?? 1,
+        location: item.location || 'Armazém UR',
+        cost: item.cost ?? 0,
+        area: item.area || null,
+        tag: item.tag || null,
+        system: item.system || null,
+        description: item.description || null,
+        supplier: item.supplier || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }))
+      return cachedFallbackStockItems!
+    }
+  } catch (err) {
+    console.error('[Fallback] Error loading stocks.json:', err)
+  }
+  return []
+}
+
 // ── STOCK ITEMS ───────────────────────────────────────────────────────────────
 
 export const listStockItems = cache(async function(companyId: string): Promise<StockItem[]> {
@@ -758,13 +793,12 @@ export const listStockItems = cache(async function(companyId: string): Promise<S
       .collection('stock_items')
       .where('companyId', '==', companyId)
       .get()
-    return snap.docs
-      .map((d) => serialize<StockItem>(d))
-      .sort((a, b) => a.name.localeCompare(b.name))
+    const docs = snap.docs.map((d) => serialize<StockItem>(d))
+    if (docs.length > 0) return docs.sort((a, b) => a.name.localeCompare(b.name))
   } catch (err) {
     console.error('[listStockItems] Error:', err)
-    return []
   }
+  return getFallbackStockItems()
 })
 
 export const getStockItem = cache(async function(companyId: string, id: string): Promise<StockItem | null> {

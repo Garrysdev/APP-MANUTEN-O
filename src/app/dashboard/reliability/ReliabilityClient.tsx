@@ -17,39 +17,44 @@ export default function ReliabilityClient({ assets, tasks }: Props) {
   
   const stats = useMemo(() => {
     let totalCorrectives = 0
-    let totalRepairTimeHrs = 0 // Mock repair time
+    let totalRepairTimeHrs = 0
     
     const assetStats = assets.map(a => {
-      const assetTasks = tasks.filter(t => t.assetId === a.id)
-      const correctives = assetTasks.filter(t => t.tipo === 'curativa')
-      
+      const assetTasks = tasks.filter(t => t.assetId === a.id || t.tag === a.tag)
+      const correctives = assetTasks.filter(t => t.tipo === 'curativa' || t.tipo === 'pi')
       const breakdowns = correctives.length
       totalCorrectives += breakdowns
       
-      // Mock MTTR: Assign random 2-5 hours per breakdown if no real data
-      const repairTime = breakdowns * 3.5 
-      totalRepairTimeHrs += repairTime
+      let repairTimeHrs = 0
+      for (const t of correctives) {
+        if (t.createdAt && t.completedAt) {
+          const start = new Date(t.createdAt).getTime()
+          const end = new Date(t.completedAt).getTime()
+          if (end > start) {
+            repairTimeHrs += (end - start) / (1000 * 60 * 60)
+          }
+        }
+      }
+      totalRepairTimeHrs += repairTimeHrs
 
-      // Mock MTBF: 720 hours in a month. Uptime = 720 - repairTime
-      const uptime = 720 - repairTime
-      const mtbf = breakdowns > 0 ? uptime / breakdowns : 720
-      const mttr = breakdowns > 0 ? repairTime / breakdowns : 0
-      const availability = ((uptime / 720) * 100).toFixed(1)
+      const mttr = breakdowns > 0 && repairTimeHrs > 0 ? repairTimeHrs / breakdowns : 0
+      const mtbf = breakdowns > 0 && repairTimeHrs > 0 ? (720 - repairTimeHrs) / breakdowns : (breakdowns === 0 ? 0 : 720)
+      const availability = breakdowns > 0 && repairTimeHrs > 0 ? Math.max(0, ((720 - repairTimeHrs) / 720) * 100).toFixed(1) : (breakdowns === 0 ? '100.0' : '0.0')
 
       return {
         name: a.name,
         breakdowns,
         mtbf: Math.round(mtbf),
-        mttr: Math.round(mttr),
+        mttr: parseFloat(mttr.toFixed(1)),
         availability: parseFloat(availability)
       }
     })
 
     return {
-      assetStats: assetStats.sort((a, b) => a.mtbf - b.mtbf), // Lowest MTBF first (worst performing)
+      assetStats: assetStats.sort((a, b) => a.mtbf - b.mtbf),
       globalBreakdowns: totalCorrectives,
-      globalMtbf: totalCorrectives > 0 ? Math.round((assets.length * 720 - totalRepairTimeHrs) / totalCorrectives) : 720,
-      globalMttr: totalCorrectives > 0 ? Math.round(totalRepairTimeHrs / totalCorrectives) : 0,
+      globalMtbf: totalCorrectives > 0 && totalRepairTimeHrs > 0 ? Math.round((assets.length * 720 - totalRepairTimeHrs) / totalCorrectives) : 0,
+      globalMttr: totalCorrectives > 0 && totalRepairTimeHrs > 0 ? parseFloat((totalRepairTimeHrs / totalCorrectives).toFixed(1)) : 0,
     }
   }, [assets, tasks])
 

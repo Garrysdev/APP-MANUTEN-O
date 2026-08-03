@@ -55,7 +55,19 @@ export default async function DashboardPage() {
 
   const normalActiveTasks = tasks.filter((t) => !isProject(t) && t.status !== 'done' && t.status !== 'cancelled')
   const projectActiveTasks = tasks.filter((t) => isProject(t) && t.status !== 'done' && t.status !== 'cancelled')
-  const completedTasks = tasks.filter((t) => t.status === 'done')
+  let totalDurationHours = 0
+  let completedCount = 0
+  for (const t of completedTasks) {
+    if (t.createdAt && t.completedAt) {
+      const start = new Date(t.createdAt).getTime()
+      const end = new Date(t.completedAt).getTime()
+      if (end > start) {
+        totalDurationHours += (end - start) / (1000 * 60 * 60)
+        completedCount++
+      }
+    }
+  }
+  const avgResolutionHours = completedCount > 0 ? (totalDurationHours / completedCount).toFixed(1) : '0.0'
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in-up">
@@ -95,7 +107,7 @@ export default async function DashboardPage() {
           sub={`de ${totalActiveUsers.length} Ativos`} 
           href="/dashboard/users"
         />
-        <StatCard label="Tempo Médio Resolução" value="4.2" icon={Timer} sub="hrs" trend="-0.5h" href="/dashboard/history" />
+        <StatCard label="Tempo Médio Resolução" value={avgResolutionHours} icon={Timer} sub="hrs" href="/dashboard/history" />
       </section>
 
       {/* Quadros Lado a Lado: OTs Ativas e Atribuídas (Esquerdo) + Projetos (Direito) com Filtros por Colunas */}

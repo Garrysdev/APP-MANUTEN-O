@@ -109,61 +109,78 @@ export default async function ReportsPage() {
           interventions={interventions}
         />
 
-        {/* Histórico de intervenções */}
-        <div className="page-break mt-8">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-3 flex items-center gap-2">
-            <span className="inline-block w-1 h-5 bg-[#1B4F72] rounded" />
-            Histórico de Intervenções
-            <span className="text-sm font-normal text-gray-400 dark:text-slate-500">({interventions.length})</span>
-          </h2>
-
-          {interventions.length === 0 ? (
+        {/* Análise dos Equipamentos Mais Críticos */}
+        <div className="mt-8">
+          <h2 className="text-base font-bold text-gray-800 dark:text-slate-200 mb-3">Análise dos Equipamentos Mais Críticos</h2>
+          {criticalAssets.length === 0 ? (
             <div className="card px-5 py-10 text-center text-gray-400 dark:text-slate-500 text-sm">
-              Sem intervenções registadas.
+              Sem equipamentos cadastrados.
             </div>
           ) : (
             <div className="card overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[500px] md:min-w-0">
+                <table className="w-full text-xs min-w-[650px] md:min-w-0">
                   <thead>
-                    <tr className="bg-gray-50 dark:bg-slate-900/60 border-b border-gray-100 dark:border-slate-800">
-                      <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Data</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Técnico</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 hidden md:table-cell">Equipamento</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Duração</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 hidden lg:table-cell">Observações</th>
+                    <tr className="bg-slate-100/90 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider">
+                      <th className="text-left px-3 py-2.5">ÁREA</th>
+                      <th className="text-left px-3 py-2.5">TAG</th>
+                      <th className="text-left px-3 py-2.5">EQUIPAMENTO</th>
+                      <th className="text-center px-3 py-2.5">CRITICIDADE ABC</th>
+                      <th className="text-center px-3 py-2.5">TOTAL OTs</th>
+                      <th className="text-center px-3 py-2.5">URGENTES EM ABERTO</th>
+                      <th className="text-center px-3 py-2.5">ESTADO</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
-                    {interventions.map((iv) => {
-                      const task = tasks.find((t) => t.id === iv.taskId)
-                      const asset = task?.assetId ? assets.find((a) => a.id === task.assetId) : null
-                      return (
-                        <tr key={iv.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30">
-                          <td className="px-4 py-2.5 text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                            {formatDateTime(iv.startedAt ?? iv.createdAt)}
-                          </td>
-                          <td className="px-4 py-2.5 font-medium text-gray-800 dark:text-slate-200">
-                            {userMap[iv.technicianId] ?? '—'}
-                          </td>
-                          <td className="px-4 py-2.5 text-gray-600 dark:text-slate-400 hidden md:table-cell">
-                            {asset?.name ?? task?.title ?? '—'}
-                          </td>
-                          <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 whitespace-nowrap">
-                            {formatDuration(iv.startedAt ?? null, iv.endedAt ?? null)}
-                          </td>
-                          <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 text-xs hidden lg:table-cell max-w-xs truncate">
-                            {iv.observations ?? '—'}
-                          </td>
-                        </tr>
-                      )
-                    })}
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                    {criticalAssets.map(({ asset, totalTasks, openUrgent, criticidadeABC }) => (
+                      <tr key={asset.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="px-3 py-2.5 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                          {asset.area || '—'}
+                        </td>
+                        <td className="px-3 py-2.5 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                          <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                            {asset.tag || '—'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100">
+                          {asset.name}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[11px] font-extrabold ${
+                            criticidadeABC === 'A' ? 'bg-red-100 text-red-800 border border-red-300' :
+                            criticidadeABC === 'B' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                            'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          }`}>
+                            Classe {criticidadeABC}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-center font-bold font-mono text-slate-800 dark:text-slate-200">
+                          {totalTasks}
+                        </td>
+                        <td className="px-3 py-2.5 text-center font-mono">
+                          {openUrgent > 0 ? (
+                            <span className="bg-red-50 text-red-700 font-extrabold px-2 py-0.5 rounded border border-red-200">
+                              ⚠️ {openUrgent}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">0</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${asset.active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-300'}`}>
+                            {asset.active ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
         </div>
+
+
 
         <p className="mt-8 text-xs text-gray-400 dark:text-slate-500 text-center no-print">
           RG Maintenance · {companyName} · {generatedAt}
