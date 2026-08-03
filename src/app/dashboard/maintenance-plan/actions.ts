@@ -209,7 +209,6 @@ export async function importMaintenancePlansAction(formData: FormData): Promise<
         periodicidadeLabel: cellText('periodicidade') || null,
         executor,
         legal,
-        months: cellText('months') || null,
         tag,
         area: cellText('area') || null,
         system: cellText('system') || null,
