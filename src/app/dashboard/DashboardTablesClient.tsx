@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { FolderKanban, ClipboardList, AlertTriangle, Filter, ArrowRight } from 'lucide-react'
+import { TipoBadge } from '@/components/ui/TipoBadge'
 import type { Task, User } from '@/types/models'
 import { formatDate } from '@/lib/utils'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
@@ -148,9 +149,12 @@ function TableSection({
                   className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group cursor-pointer"
                 >
                   <td className="py-3 px-3 font-bold text-slate-900 dark:text-slate-100">
-                    <Link href={viewAllHref} className="block group-hover:text-safety-orange transition-colors truncate max-w-[220px]">
-                      {item.title}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <TipoBadge tipo={(item as any).tipo || 'curativa'} codeOnly={true} />
+                      <Link href={viewAllHref} className="block group-hover:text-safety-orange transition-colors truncate max-w-[180px]">
+                        {item.title}
+                      </Link>
+                    </div>
                   </td>
                   <td className="py-3 px-3 font-semibold text-slate-700 dark:text-slate-300">
                     <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">

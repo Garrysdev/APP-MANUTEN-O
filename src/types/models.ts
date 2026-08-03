@@ -185,10 +185,10 @@ export interface MaintenancePlan {
   periodicidadeLabel?: string | null // rótulo original do Excel, ex.: "BIANUAL-STP"
   executor?: Executor | null // interno / externo (-STP)
   legal?: boolean | null // inspeção obrigatória/regulamentar (-legal)
-  months?: string | null // MÊS, ex.: "JAN, ABR, JUL, OUT"
   tag?: string | null // TAG do equipamento (liga ao Asset)
   area?: string | null
   system?: string | null
+  showInCalendar?: boolean | null // Marcador para incluir no Calendário (default: true)
 }
 
 export interface StockItem {

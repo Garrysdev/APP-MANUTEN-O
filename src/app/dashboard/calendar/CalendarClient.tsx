@@ -9,6 +9,7 @@ import { createTaskFromPlanAction } from './actions'
 import { createTaskAction } from '@/app/dashboard/tasks/actions'
 import Avatar from '@/components/ui/Avatar'
 import MaterialsSelector from '@/components/ui/MaterialsSelector'
+import { getTipoBadgeClass } from '@/components/ui/TipoBadge'
 
 type Ref = { id: string; name: string; tag?: string | null }
 type UserRef = Ref & { avatarUrl?: string | null; active?: boolean }
@@ -89,7 +90,7 @@ function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end
       add(d, { date: d, type: 'task', task, label: task.title, criticidade: task.criticidade })
     }
   })
-  plans.filter((p) => p.active).forEach((plan) => {
+  plans.filter((p) => p.active && p.showInCalendar !== false).forEach((plan) => {
     computePlanOccurrencesInRange(plan, start, end).forEach((d) =>
       add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
     )
@@ -471,9 +472,7 @@ export default function CalendarClient({
                           }}
                           title={`Clique para abrir: ${ev.label}`}
                           className={`text-[11px] font-medium rounded-md px-1.5 py-1 truncate transition-transform hover:scale-[1.02] active:scale-95 shadow-sm border ${
-                            ev.type === 'task'
-                              ? 'bg-blue-100/90 text-blue-900 border-blue-300 dark:bg-blue-900/50 dark:text-blue-200 dark:border-blue-700'
-                              : 'bg-amber-100/90 text-amber-900 border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700'
+                            getTipoBadgeClass(ev.type === 'plan' ? 'plano' : (ev.task?.tipo || 'curativa'))
                           }`}
                         >
                           {ev.label}
@@ -530,7 +529,7 @@ export default function CalendarClient({
                   <div className="space-y-1">
                     {events.map((ev, j) => (
                       <div key={j} className={`text-[10px] rounded px-1 py-0.5 leading-tight ${
-                        ev.type === 'task' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                        getTipoBadgeClass(ev.type === 'plan' ? 'plano' : (ev.task?.tipo || 'curativa'))
                       }`}>
                         {ev.label}
                       </div>

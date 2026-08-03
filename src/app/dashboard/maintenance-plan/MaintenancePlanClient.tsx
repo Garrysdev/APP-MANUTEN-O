@@ -20,10 +20,12 @@ import {
   deleteMaintenancePlanAction,
   toggleMaintenancePlanActiveAction,
   importMaintenancePlansAction,
+  togglePlanCalendarAction,
 } from './actions'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
+import { TipoBadge } from '@/components/ui/TipoBadge'
 import { PREDEFINED_SAFETY_RULES } from '../tasks/TasksClient'
 
 function sanitizeCell(v: string): string {
@@ -387,9 +389,14 @@ export default function MaintenancePlanClient({
                 <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden md:table-cell" />
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
+                <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden md:table-cell" />
                 <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden sm:table-cell" />
                 <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="DESCRIÇÃO" sortableKey="description" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
+                <SortableTh label="TIPO / MARCADOR" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden sm:table-cell" />
@@ -436,8 +443,8 @@ export default function MaintenancePlanClient({
                 <th className="px-1.5 py-1">
                   <input value={colF.title} onChange={(e) => setCol('title', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-1.5 py-1 hidden lg:table-cell">
-                  <input value={colF.description} onChange={(e) => setCol('description', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+                <th className="px-1.5 py-1">
+                  <span className="text-[10px] text-slate-500 font-bold">Filtro por Tipo</span>
                 </th>
                 <th className="px-1.5 py-1">
                   <select value={colF.period} onChange={(e) => setCol('period', e.target.value)} className={colFilterCls} title="Filtrar periodicidade">
@@ -487,8 +494,25 @@ export default function MaintenancePlanClient({
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 text-slate-700 text-xs hidden lg:table-cell">
-                    {p.description ? <span className="line-clamp-2 max-w-[240px]" title={p.description}>{p.description}</span> : '—'}
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <div className="flex flex-col gap-1">
+                      <TipoBadge tipo={p.tipo || 'plano'} codeOnly={false} />
+                      <label className="inline-flex items-center gap-1 cursor-pointer select-none text-[10px] font-bold">
+                        <input
+                          type="checkbox"
+                          checked={p.showInCalendar !== false}
+                          onChange={async (e) => {
+                            const val = e.target.checked
+                            await togglePlanCalendarAction(p.id, val)
+                            router.refresh()
+                          }}
+                          className="rounded border-slate-300 text-safety-orange focus:ring-safety-orange h-3.5 w-3.5"
+                        />
+                        <span className={p.showInCalendar !== false ? "text-blue-800 dark:text-blue-300 font-bold" : "text-slate-400"}>
+                          {p.showInCalendar !== false ? "No Calendário" : "Fora do Calendário"}
+                        </span>
+                      </label>
+                    </div>
                   </td>
                   <td className="px-3 py-2.5 text-slate-800 whitespace-nowrap">
                     <span className="inline-flex items-center gap-1 text-xs font-semibold">

@@ -52,10 +52,24 @@ function parsePlan(formData: FormData) {
     periodicidade: periodOk,
     executor: EXECUTORES.includes(executor) ? executor : 'interno',
     legal,
+    showInCalendar: formData.has('showInCalendar') ? (formData.get('showInCalendar') === 'on' || formData.get('showInCalendar') === 'true') : true,
     recurrence,
     recurrenceValue,
     safetyRules,
     active: true,
+  }
+}
+
+export async function togglePlanCalendarAction(id: string, showInCalendar: boolean): Promise<PlanFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  try {
+    await updateMaintenancePlan(profile.companyId, id, { showInCalendar })
+    revalidatePath('/dashboard/maintenance-plan')
+    revalidatePath('/dashboard/calendar')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao atualizar marcador do calendário.' }
   }
 }
 

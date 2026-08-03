@@ -23,6 +23,7 @@ import {
 } from '@/types/models'
 import { formatDate, formatDateTime, taskDelayLevel, DELAY_CLASSES, DELAY_LABELS } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
+import { TipoBadge } from '@/components/ui/TipoBadge'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
 import {
@@ -592,9 +593,7 @@ export default function ProjectsClient({
                         {(asset as any)?.tag || asset?.name || (t as any).tag || '—'}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
-                          {t.tipo === 'preventiva' ? 'MP' : t.tipo === 'curativa' ? 'MC' : t.tipo === 'plano' ? 'PM' : (TIPO_LABELS[t.tipo] || t.tipo?.toUpperCase() || 'MC')}
-                        </span>
+                        <TipoBadge tipo={t.tipo} codeOnly={true} />
                       </td>
                       <td className="px-3 py-2.5 text-slate-900 font-semibold max-w-[280px]">
                         <Link href={`/dashboard/tasks/${t.id}`} className="hover:text-safety-orange transition-colors underline-offset-2 hover:underline">
