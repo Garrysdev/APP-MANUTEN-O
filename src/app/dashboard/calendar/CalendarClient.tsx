@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition, useId } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Wrench, ClipboardList, ShieldAlert, X, Plus, Minus, Package } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wrench, ClipboardList, ShieldAlert, X, Plus, Minus, Package, RefreshCw, Copy, Check, ExternalLink, Share2, Calendar as CalendarIcon } from 'lucide-react'
 import type { Task, MaintenancePlan, TaskCriticidade, TipoTarefa, RecurrenceType, UserRole } from '@/types/models'
 import { CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS } from '@/types/models'
 import { createTaskFromPlanAction } from './actions'
@@ -90,10 +90,19 @@ function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end
       add(d, { date: d, type: 'task', task, label: task.title, criticidade: task.criticidade })
     }
   })
-  plans.filter((p) => p.active && p.showInCalendar !== false).forEach((plan) => {
-    computePlanOccurrencesInRange(plan, start, end).forEach((d) =>
-      add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
-    )
+  plans.filter((p) => p.active && p.showInCalendar === true).forEach((plan) => {
+    if (plan.calendarDates && plan.calendarDates.length > 0) {
+      plan.calendarDates.forEach((d) => {
+        const dd = new Date(d + 'T12:00:00')
+        if (dd >= start && dd <= end) {
+          add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
+        }
+      })
+    } else {
+      computePlanOccurrencesInRange(plan, start, end).forEach((d) =>
+        add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
+      )
+    }
   })
   return map
 }
@@ -211,6 +220,8 @@ export default function CalendarClient({
   // Shared
   const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [showSyncModal, setShowSyncModal] = useState(false)
+  const [copiedFeed, setCopiedFeed] = useState(false)
 
   // Create from plan
   const [selectedPlan, setSelectedPlan] = useState<MaintenancePlan | null>(null)
@@ -415,14 +426,23 @@ export default function CalendarClient({
           </div>
         </div>
 
-        {/* Botão + Nova OT colocado no topo */}
-        <button
-          onClick={() => openNewTaskForDate(selectedDate || todayStr)}
-          className="h-9 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
-        >
-          <Plus size={16} />
-          <span>+ Nova OT</span>
-        </button>
+        {/* Botões do Topo: Sincronização e Nova OT */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setShowSyncModal(true)}
+            className="h-9 px-3 bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-blue-900 dark:text-blue-300 font-bold text-xs rounded-xl shadow-sm border border-blue-300 dark:border-blue-700 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+          >
+            <RefreshCw size={14} className="text-blue-600 dark:text-blue-400" />
+            <span>Sincronizar (Gmail / Outlook)</span>
+          </button>
+          <button
+            onClick={() => openNewTaskForDate(selectedDate || todayStr)}
+            className="h-9 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+          >
+            <Plus size={16} />
+            <span>+ Nova OT</span>
+          </button>
+        </div>
       </div>
 
       {/* Legend */}
@@ -889,6 +909,116 @@ export default function CalendarClient({
               <button onClick={() => setSelectedPlan(null)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={handleCreateFromPlan} disabled={planBusy} className="btn-primary flex-1">
                 {planBusy ? 'A criar…' : 'Criar OT'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Sincronização Calendário Gmail / Outlook */}
+      {showSyncModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowSyncModal(false)} />
+          <div className="card relative w-full max-w-xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between border-b border-gray-200 dark:border-slate-800 pb-3">
+              <div>
+                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-blue-100 text-blue-900 mb-1">
+                  Sincronização Externa
+                </span>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                  <RefreshCw className="h-5 w-5 text-blue-600" />
+                  Sincronizar com Google Calendar / Outlook
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                  Subscreva o feed de calendário para ver todas as OTs e Manutenções no seu telemóvel (Android/iPhone) ou computador em tempo real.
+                </p>
+              </div>
+              <button onClick={() => setShowSyncModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* URL do Feed iCal */}
+            <div className="space-y-3 text-xs">
+              <div className="bg-blue-50/70 dark:bg-blue-950/40 p-3.5 rounded-xl border border-blue-200 dark:border-blue-800/60 space-y-2">
+                <label className="block text-xs font-bold text-blue-950 dark:text-blue-200">
+                  URL do Feed iCal (.ics) - OTs & Manutenções RG
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={typeof window !== 'undefined' ? `${window.location.origin}/api/calendar/feed` : '/api/calendar/feed'}
+                    className="input font-mono text-xs flex-1 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                  />
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}/api/calendar/feed`
+                      navigator.clipboard.writeText(url)
+                      setCopiedFeed(true)
+                      setTimeout(() => setCopiedFeed(false), 2500)
+                    }}
+                    className="btn-primary flex items-center gap-1 text-xs py-2 px-3 whitespace-nowrap"
+                  >
+                    {copiedFeed ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    <span>{copiedFeed ? 'Copiado!' : 'Copiar URL'}</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-blue-800 dark:text-blue-300">
+                  Este link sincroniza automaticamente as tarefas em aberto e prevenções agendadas com a sua conta Google/Outlook.
+                </p>
+              </div>
+
+              {/* Opções de Configuração Rápida */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* Google Calendar */}
+                <div className="card p-3.5 border border-slate-200 dark:border-slate-800 space-y-2 hover:border-blue-400 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-lg bg-red-100 text-red-700 flex items-center justify-center font-bold text-xs">
+                      G
+                    </div>
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-xs">Google Calendar (Gmail)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-snug">
+                    1. Copie o URL do Feed acima.<br />
+                    2. Abra o Google Calendar -&gt; <strong>Outros calendários (+)</strong> -&gt; <strong>A partir do URL</strong>.<br />
+                    3. Cole o URL e guarde.
+                  </p>
+                  <button
+                    onClick={() => window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl', '_blank')}
+                    className="w-full btn-secondary text-xs flex items-center justify-center gap-1.5 py-1.5"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span>Abrir Google Calendar</span>
+                  </button>
+                </div>
+
+                {/* Microsoft Outlook */}
+                <div className="card p-3.5 border border-slate-200 dark:border-slate-800 space-y-2 hover:border-blue-400 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">
+                      O
+                    </div>
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-xs">Outlook / Office 365</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-snug">
+                    1. Copie o URL do Feed acima.<br />
+                    2. Abra o Outlook -&gt; <strong>Adicionar Calendário</strong> -&gt; <strong>Subscrever da Web</strong>.<br />
+                    3. Cole o URL e guarde.
+                  </p>
+                  <button
+                    onClick={() => window.open('https://outlook.live.com/calendar/0/addcalendar', '_blank')}
+                    className="w-full btn-secondary text-xs flex items-center justify-center gap-1.5 py-1.5"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span>Abrir Outlook Web</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-gray-200 dark:border-slate-800">
+              <button type="button" onClick={() => setShowSyncModal(false)} className="btn-primary px-6">
+                Concluído
               </button>
             </div>
           </div>
