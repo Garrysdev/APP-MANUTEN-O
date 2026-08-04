@@ -269,9 +269,9 @@ export default function HistoryClient({
                 <SortableTh label="TI" sortableKey="ti" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="AVARIA / DESCRIÇÃO" sortableKey="avaria" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="TÉCNICOS" sortableKey="tecnicos" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="INÍCIO" sortableKey="inicio" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
-                <SortableTh label="FIM" sortableKey="fim" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
-                <SortableTh label="CAUSA / OBS" sortableKey="causa" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
+                <SortableTh label="INÍCIO" sortableKey="inicio" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="FIM" sortableKey="fim" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="CAUSA / OBS" sortableKey="causa" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <th className="px-3 py-2 text-center text-xs font-bold">AÇÕES</th>
               </tr>
               {/* Linha de Filtros Estilo Excel */}
@@ -297,13 +297,13 @@ export default function HistoryClient({
                 <th className="px-1.5 py-1">
                   <input value={colF.tecnicos} onChange={(e) => setCol('tecnicos', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-1.5 py-1 hidden xl:table-cell">
+                <th className="px-1.5 py-1">
                   <input value={colF.inicio} onChange={(e) => setCol('inicio', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-1.5 py-1 hidden xl:table-cell">
+                <th className="px-1.5 py-1">
                   <input value={colF.fim} onChange={(e) => setCol('fim', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-1.5 py-1 hidden lg:table-cell">
+                <th className="px-1.5 py-1">
                   <input value={colF.causa} onChange={(e) => setCol('causa', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
                 <th className="px-1.5 py-1" />
@@ -331,9 +331,9 @@ export default function HistoryClient({
                     </Link>
                   </td>
                   <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">{r.tecnicos}</td>
-                  <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">{r.inicio}</td>
-                  <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">{r.fim}</td>
-                  <td className="px-3 py-2.5 text-slate-700 hidden lg:table-cell max-w-[200px]">
+                  <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">{r.inicio}</td>
+                  <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">{r.fim}</td>
+                  <td className="px-3 py-2.5 text-slate-700 max-w-[200px]">
                     <span className="line-clamp-2" title={r.causa}>{r.causa}</span>
                   </td>
                   <td className="px-3 py-2.5 text-center whitespace-nowrap">

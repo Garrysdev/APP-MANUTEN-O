@@ -491,9 +491,9 @@ export default function TasksClient({
                   <SortableTh label="TI" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <SortableTh label="AVARIA / DESCRIÇÃO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <SortableTh label="TÉCNICOS" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="INÍCIO" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
-                  <SortableTh label="FIM" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
-                  <SortableTh label="CAUSA / OBS" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
+                  <SortableTh label="INÍCIO" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="FIM" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="CAUSA / OBS" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <th className="px-3 py-2 text-right font-mono text-xs font-bold text-slate-700 uppercase tracking-wider">AÇÕES</th>
                 </tr>
@@ -506,9 +506,9 @@ export default function TasksClient({
                   <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="TI..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
                   <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Avaria..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
                   <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Técnico..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
-                  <td className="p-1 hidden xl:table-cell" />
-                  <td className="p-1 hidden xl:table-cell" />
-                  <td className="p-1 hidden lg:table-cell" />
+                  <td className="p-1" />
+                  <td className="p-1" />
+                  <td className="p-1" />
                   <td className="p-1" />
                   <td className="p-1" />
                 </tr>
@@ -542,13 +542,13 @@ export default function TasksClient({
                       <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">
                         {userName(t.assignedTo) !== '—' ? userName(t.assignedTo) : ((t as any).assignedToText || '—')}
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">
+                      <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">
                         {t.plannedStartDate ? formatDate(t.plannedStartDate) : '—'}
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">
+                      <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">
                         {t.completedAt ? formatDate(t.completedAt) : '—'}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-700 hidden lg:table-cell max-w-[200px]">
+                      <td className="px-3 py-2.5 text-slate-700 max-w-[200px]">
                         <span className="line-clamp-2" title={t.description ?? ''}>{t.description || '—'}</span>
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">

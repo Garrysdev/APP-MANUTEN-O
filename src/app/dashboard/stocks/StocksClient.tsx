@@ -301,10 +301,10 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
                   <SortableTh label="CÓD / TAG" sortableKey="code" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5 w-28" />
                   <SortableTh label="DESIGNAÇÃO / SOBRESSELANETE" sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5" />
                   <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5 hidden md:table-cell" />
-                  <SortableTh label="SISTEMA / CATEGORIA" sortableKey="category" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5 hidden lg:table-cell" />
+                  <SortableTh label="SISTEMA / CATEGORIA" sortableKey="category" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5 hidden md:table-cell" />
                   <SortableTh label="QUANT." sortableKey="quantity" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-right px-3 py-2.5" />
-                  <th className="text-left px-3 py-2.5 hidden sm:table-cell">UNID.</th>
-                  <th className="text-left px-3 py-2.5 hidden xl:table-cell">LOCAL</th>
+                  <th className="text-left px-3 py-2.5 hidden md:table-cell">UNID.</th>
+                  <th className="text-left px-3 py-2.5 hidden md:table-cell">LOCAL</th>
                   <th className="px-3 py-2.5" />
                 </tr>
               </thead>
@@ -332,14 +332,14 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
                       <td className="px-3 py-2.5 text-slate-700 dark:text-slate-300 font-mono font-semibold hidden md:table-cell">
                         {item.area || '—'}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 hidden lg:table-cell">
+                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 hidden md:table-cell">
                         {item.category || item.system || '—'}
                       </td>
                       <td className={`px-3 py-2.5 text-right font-mono font-extrabold ${isLow ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-slate-100'}`}>
                         {item.quantity}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hidden sm:table-cell">{item.unit ?? 'un'}</td>
-                      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hidden xl:table-cell">{item.location ?? '—'}</td>
+                      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hidden md:table-cell">{item.unit ?? 'un'}</td>
+                      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hidden md:table-cell">{item.location ?? '—'}</td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-1 justify-end">
                           <button

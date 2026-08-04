@@ -388,13 +388,13 @@ export default function MaintenancePlanClient({
               <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
                 <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden md:table-cell" />
-                <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden sm:table-cell" />
+                <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="TIPO / MARCADOR" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden sm:table-cell" />
+                <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <th className="px-3 py-2 text-right text-xs font-bold text-slate-700 uppercase tracking-wide">AÇÕES</th>
               </tr>
@@ -429,10 +429,10 @@ export default function MaintenancePlanClient({
                     ))}
                   </select>
                 </th>
-                <th className="px-1.5 py-1 hidden md:table-cell">
+                <th className="px-1.5 py-1">
                   <input value={colF.system} onChange={(e) => setCol('system', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-1.5 py-1 hidden sm:table-cell">
+                <th className="px-1.5 py-1">
                   <input value={colF.asset} onChange={(e) => setCol('asset', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
                 <th className="px-1.5 py-1">
@@ -477,8 +477,8 @@ export default function MaintenancePlanClient({
                   <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
                     <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{getPlanTag(p) || '—'}</span>
                   </td>
-                  <td className="px-3 py-2.5 text-slate-800 font-semibold hidden md:table-cell whitespace-nowrap">{p.system || '—'}</td>
-                  <td className="px-3 py-2.5 text-slate-900 hidden sm:table-cell font-bold whitespace-nowrap">{assetName(p.assetId)}</td>
+                  <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">{p.system || '—'}</td>
+                  <td className="px-3 py-2.5 text-slate-900 font-bold whitespace-nowrap">{assetName(p.assetId)}</td>
                   <td className="px-3 py-2.5 font-bold text-slate-900">
                     <div className="flex items-center gap-1.5">
                       <span>{p.title}</span>
@@ -524,7 +524,7 @@ export default function MaintenancePlanClient({
                       {CRITICIDADE_LABELS[p.criticidade]}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 hidden sm:table-cell text-xs whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-xs whitespace-nowrap">
                     {p.executor === 'externo' ? (
                       <span className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200"><Building2 className="h-3.5 w-3.5" /> Externo</span>
                     ) : (
