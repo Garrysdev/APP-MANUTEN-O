@@ -37,16 +37,17 @@ export function TipoBadge({ tipo, codeOnly = false }: { tipo: TipoTarefa | strin
     t === 'projeto' || t === 'projetos' || t === 'projecto' || t === 'projectos' || t === 'pr' ? 'PR' :
     t === 'curativa' ? 'MC' :
     t === 'preventiva' ? 'MP' :
-    t === 'plano' ? 'PM' :
+    t === 'plano' || t === 'pm' ? 'PM' :
     t === 'pi' ? 'PI' :
     t === 'investimento' || t === 'mi' ? 'MI' :
     t.toUpperCase()
   )
   const label = (TIPO_LABELS as any)[t] || code
+  const textToShow = codeOnly || code === label || String(label).toUpperCase() === code ? code : `${code} · ${label}`
 
   return (
     <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[11px] uppercase tracking-wider shadow-sm ${cls}`}>
-      {codeOnly ? code : `${code} · ${label}`}
+      {textToShow}
     </span>
   )
 }

@@ -567,8 +567,8 @@ export default function MaintenancePlanClient({
                     </div>
                   </td>
                   <td className="px-2 py-2 whitespace-nowrap">
-                    <div className="flex flex-col gap-1">
-                      <TipoBadge tipo={p.tipo || 'plano'} codeOnly={false} />
+                    <div className="flex flex-col gap-1 items-start">
+                      <TipoBadge tipo={p.tipo || 'plano'} codeOnly={true} />
                       <label className="inline-flex items-center gap-1 cursor-pointer select-none text-[10px] font-bold">
                         <input
                           type="checkbox"
@@ -583,8 +583,8 @@ export default function MaintenancePlanClient({
                           }}
                           className="rounded border-slate-300 text-safety-orange focus:ring-safety-orange h-3.5 w-3.5"
                         />
-                        <span className={p.showInCalendar === true ? "text-blue-800 dark:text-blue-300 font-bold" : "text-slate-400"}>
-                          {p.showInCalendar === true ? "No Calendário" : "Fora do Calendário"}
+                        <span className={p.showInCalendar === true ? "text-blue-800 dark:text-blue-300 font-bold" : "text-slate-500"}>
+                          Calendário
                         </span>
                       </label>
                     </div>
