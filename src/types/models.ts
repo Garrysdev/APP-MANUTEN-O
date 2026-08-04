@@ -211,7 +211,9 @@ export interface MaintenancePlan {
   tag?: string | null // TAG do equipamento (liga ao Asset)
   area?: string | null
   system?: string | null
-  showInCalendar?: boolean | null // Marcador para incluir no Calendário (default: true)
+  showInCalendar?: boolean | null // Marcador para incluir no Calendário (default: false)
+  calendarStartDate?: string | null // Data da primeira execução no calendário
+  calendarDates?: string[] | null // Lista de datas agendadas no calendário
 }
 
 export interface StockItem {

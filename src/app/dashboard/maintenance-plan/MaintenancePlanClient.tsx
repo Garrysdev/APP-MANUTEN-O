@@ -39,6 +39,16 @@ function toCSV(rows: string[][]): string {
     .join('\r\n')
 }
 
+function formatDate(isoStr?: string | null): string {
+  if (!isoStr) return '—'
+  const d = new Date(isoStr)
+  if (isNaN(d.getTime())) return isoStr
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
 function downloadCSV(content: string, filename: string) {
   const bom = '﻿'
   const blob = new Blob([bom + content], { type: 'text/csv;charset=utf-8;' })
@@ -158,6 +168,62 @@ export default function MaintenancePlanClient({
   function addRule() { setSafetyRules((r) => [...r, '']) }
   function removeRule(i: number) { setSafetyRules((r) => r.filter((_, idx) => idx !== i)) }
   function updateRule(i: number, v: string) { setSafetyRules((r) => r.map((x, idx) => idx === i ? v : x)) }
+
+  // Modal de Agendamento no Calendário
+  const [calendarModalPlan, setCalendarModalPlan] = useState<MaintenancePlan | null>(null)
+  const [calendarStartDate, setCalendarStartDate] = useState<string>(new Date().toISOString().slice(0, 10))
+  const [savingCalendar, setSavingCalendar] = useState(false)
+
+  // Previsão de ocorrências por periodicidade
+  const calculatedDates = useMemo(() => {
+    if (!calendarModalPlan || !calendarStartDate) return []
+    const start = new Date(calendarStartDate)
+    if (isNaN(start.getTime())) return []
+    
+    const dates: string[] = []
+    const period = calendarModalPlan.periodicidade || 'mensal'
+
+    let count = 12
+    if (period === 'semanal') count = 12
+    else if (period === 'mensal') count = 12
+    else if (period === 'trimestral') count = 4
+    else if (period === 'bianual') count = 2
+    else if (period === 'anual') count = 3
+    else if (period === 'bienal') count = 2
+    else if (period === 'trianual') count = 2
+    else if (period === 'pontual') count = 1
+    else count = 6
+
+    for (let i = 0; i < count; i++) {
+      const d = new Date(start)
+      if (period === 'semanal') d.setDate(d.getDate() + i * 7)
+      else if (period === 'mensal') d.setMonth(d.getMonth() + i)
+      else if (period === 'trimestral') d.setMonth(d.getMonth() + i * 3)
+      else if (period === 'bianual') d.setMonth(d.getMonth() + i * 6)
+      else if (period === 'anual') d.setFullYear(d.getFullYear() + i)
+      else if (period === 'bienal') d.setFullYear(d.getFullYear() + i * 2)
+      else if (period === 'trianual') d.setFullYear(d.getFullYear() + i * 3)
+      else if (period === 'horas') d.setMonth(d.getMonth() + i)
+      else if (period === 'pontual') { if (i > 0) break }
+      
+      dates.push(d.toISOString().slice(0, 10))
+    }
+    return dates
+  }, [calendarModalPlan, calendarStartDate])
+
+  async function handleConfirmCalendarSchedule() {
+    if (!calendarModalPlan) return
+    setSavingCalendar(true)
+    await togglePlanCalendarAction(
+      calendarModalPlan.id,
+      true,
+      calendarStartDate,
+      calculatedDates
+    )
+    setSavingCalendar(false)
+    setCalendarModalPlan(null)
+    router.refresh()
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -495,16 +561,19 @@ export default function MaintenancePlanClient({
                       <label className="inline-flex items-center gap-1 cursor-pointer select-none text-[10px] font-bold">
                         <input
                           type="checkbox"
-                          checked={p.showInCalendar !== false}
+                          checked={p.showInCalendar === true}
                           onChange={async (e) => {
-                            const val = e.target.checked
-                            await togglePlanCalendarAction(p.id, val)
-                            router.refresh()
+                            if (!e.target.checked) {
+                              await togglePlanCalendarAction(p.id, false)
+                              router.refresh()
+                            } else {
+                              setCalendarModalPlan(p)
+                            }
                           }}
                           className="rounded border-slate-300 text-safety-orange focus:ring-safety-orange h-3.5 w-3.5"
                         />
-                        <span className={p.showInCalendar !== false ? "text-blue-800 dark:text-blue-300 font-bold" : "text-slate-400"}>
-                          {p.showInCalendar !== false ? "No Calendário" : "Fora do Calendário"}
+                        <span className={p.showInCalendar === true ? "text-blue-800 dark:text-blue-300 font-bold" : "text-slate-400"}>
+                          {p.showInCalendar === true ? "No Calendário" : "Fora do Calendário"}
                         </span>
                       </label>
                     </div>
@@ -708,6 +777,71 @@ export default function MaintenancePlanClient({
                 <button type="submit" disabled={busy} className="btn-primary flex-1">{busy ? dict.common.loading : dict.common.save}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Perguntar Datas do Calendário */}
+      {calendarModalPlan && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setCalendarModalPlan(null)} />
+          <div className="card relative w-full max-w-lg p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between border-b border-gray-200 dark:border-slate-800 pb-3">
+              <div>
+                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-blue-100 text-blue-900 mb-1">
+                  Agendar Tarefa no Calendário
+                </span>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                  <CalendarClock className="h-5 w-5 text-safety-orange" />
+                  {calendarModalPlan.title}
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                  TAG: <span className="font-bold text-gray-800 dark:text-slate-200">{getPlanTag(calendarModalPlan) || '—'}</span> | Periodicidade: <span className="font-bold text-blue-700 dark:text-blue-400 uppercase">{periodLabel(calendarModalPlan)}</span>
+                </p>
+              </div>
+              <button onClick={() => setCalendarModalPlan(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-sm font-bold text-gray-800 dark:text-slate-200 mb-1">
+                  Data de Início / 1ª Execução no Calendário *
+                </label>
+                <input
+                  type="date"
+                  value={calendarStartDate}
+                  onChange={(e) => setCalendarStartDate(e.target.value)}
+                  className="input font-mono font-bold"
+                  required
+                />
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                <p className="font-bold text-slate-900 dark:text-slate-100 flex items-center justify-between">
+                  <span>Previsão de Datas de Ocorrência ({calculatedDates.length})</span>
+                  <span className="text-[10px] text-slate-500 font-mono">Calculado p/ {periodLabel(calendarModalPlan)}</span>
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-36 overflow-y-auto pt-1">
+                  {calculatedDates.map((dStr, idx) => (
+                    <div key={dStr + idx} className="bg-white dark:bg-slate-900 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-800 text-[11px] font-mono font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                      <span className="text-slate-400 text-[9px]">#{idx + 1}</span>
+                      <span>{formatDate(dStr)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-3 border-t border-gray-200 dark:border-slate-800">
+              <button type="button" onClick={() => setCalendarModalPlan(null)} className="btn-secondary flex-1">
+                Cancelar
+              </button>
+              <button type="button" onClick={handleConfirmCalendarSchedule} disabled={savingCalendar} className="btn-primary flex-1">
+                {savingCalendar ? 'A guardar…' : 'Confirmar & Agendar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

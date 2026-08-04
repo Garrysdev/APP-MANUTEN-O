@@ -60,11 +60,20 @@ function parsePlan(formData: FormData) {
   }
 }
 
-export async function togglePlanCalendarAction(id: string, showInCalendar: boolean): Promise<PlanFormState> {
+export async function togglePlanCalendarAction(
+  id: string,
+  showInCalendar: boolean,
+  calendarStartDate?: string | null,
+  calendarDates?: string[] | null
+): Promise<PlanFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   try {
-    await updateMaintenancePlan(profile.companyId, id, { showInCalendar })
+    await updateMaintenancePlan(profile.companyId, id, {
+      showInCalendar,
+      calendarStartDate: calendarStartDate ?? null,
+      calendarDates: calendarDates ?? null,
+    })
     revalidatePath('/dashboard/maintenance-plan')
     revalidatePath('/dashboard/calendar')
     return { ok: true }
