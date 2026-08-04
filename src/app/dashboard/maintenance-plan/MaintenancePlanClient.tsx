@@ -107,7 +107,7 @@ export default function MaintenancePlanClient({
 
   // Filtros por coluna (estilo Excel)
   // Filtros por coluna (estilo Excel - alinhados com a folha PM)
-  const emptyCol = { area: '', tag: '', system: '', asset: '', title: '', description: '', period: '', crit: '', executor: '', estado: '' }
+  const emptyCol = { area: '', tag: '', system: '', asset: '', title: '', description: '', tipo: '', period: '', crit: '', executor: '', estado: '' }
   const [colF, setColF] = useState(emptyCol)
   const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
   const [fLegal, setFLegal] = useState(false)
@@ -449,24 +449,24 @@ export default function MaintenancePlanClient({
             <p className="text-sm">{dict.maintenancePlan.empty}</p>
           </div>
         ) : (
-          <table className="w-full text-xs min-w-[1000px]">
+          <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
-                <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="TIPO / MARCADOR" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <th className="px-3 py-2 text-right text-xs font-bold text-slate-700 uppercase tracking-wide">AÇÕES</th>
+                <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2" />
+                <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2" />
+                <SortableTh label="TIPO / MARCADOR" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
+                <th className="px-2 py-2 text-center text-xs font-bold text-slate-700 uppercase tracking-wide">AÇÕES</th>
               </tr>
               {/* Linha de filtros por coluna (estilo Excel) */}
               <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-1.5 py-1">
+                <th className="px-1 py-1">
                   <select
                     value={colF.area}
                     onChange={(e) => {
@@ -482,7 +482,7 @@ export default function MaintenancePlanClient({
                     ))}
                   </select>
                 </th>
-                <th className="px-1.5 py-1">
+                <th className="px-1 py-1">
                   <select
                     value={colF.tag}
                     onChange={(e) => setCol('tag', e.target.value)}
@@ -495,67 +495,78 @@ export default function MaintenancePlanClient({
                     ))}
                   </select>
                 </th>
-                <th className="px-1.5 py-1">
+                <th className="px-1 py-1">
                   <input value={colF.system} onChange={(e) => setCol('system', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-1.5 py-1">
+                <th className="px-1 py-1">
                   <input value={colF.asset} onChange={(e) => setCol('asset', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-1.5 py-1">
+                <th className="px-1 py-1">
                   <input value={colF.title} onChange={(e) => setCol('title', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-1.5 py-1">
-                  <span className="text-[10px] text-slate-500 font-bold">Filtro por Tipo</span>
+                <th className="px-1 py-1">
+                  <select value={colF.tipo} onChange={(e) => setCol('tipo', e.target.value)} className={colFilterCls} title="Filtrar tipo">
+                    <option value="">Todos</option>
+                    {Object.entries(TIPO_LABELS).map(([k, label]) => (
+                      <option key={k} value={k}>{label}</option>
+                    ))}
+                  </select>
                 </th>
-                <th className="px-1.5 py-1">
+                <th className="px-1 py-1">
                   <select value={colF.period} onChange={(e) => setCol('period', e.target.value)} className={colFilterCls} title="Filtrar periodicidade">
                     <option value="">Todas</option>
-                    {PERIODICIDADE_OPTIONS.map((p) => <option key={p} value={p}>{PERIODICIDADE_LABELS[p]}</option>)}
+                    {Object.entries(PERIODICIDADE_LABELS).map(([k, label]) => (
+                      <option key={k} value={k}>{label}</option>
+                    ))}
                   </select>
                 </th>
-                <th className="px-1.5 py-1">
+                <th className="px-1 py-1">
                   <select value={colF.crit} onChange={(e) => setCol('crit', e.target.value)} className={colFilterCls} title="Filtrar criticidade">
-                    <option value="">—</option>
-                    {CRITICIDADE_OPTIONS.map((c) => <option key={c} value={c}>{CRITICIDADE_LABELS[c]}</option>)}
+                    <option value="">Todas</option>
+                    {Object.entries(CRITICIDADE_LABELS).map(([k, label]) => (
+                      <option key={k} value={k}>{label}</option>
+                    ))}
                   </select>
                 </th>
-                <th className="px-1.5 py-1 hidden sm:table-cell">
+                <th className="px-1 py-1">
                   <select value={colF.executor} onChange={(e) => setCol('executor', e.target.value)} className={colFilterCls} title="Filtrar executor">
                     <option value="">Todos</option>
                     <option value="interno">Interno</option>
                     <option value="externo">Externo</option>
                   </select>
                 </th>
-                <th className="px-1.5 py-1">
+                <th className="px-1 py-1">
                   <select value={colF.estado} onChange={(e) => setCol('estado', e.target.value)} className={colFilterCls} title="Filtrar estado">
                     <option value="">Todos</option>
                     <option value="ativo">Ativo</option>
                     <option value="inativo">Inativo</option>
                   </select>
                 </th>
-                <th className="px-1.5 py-1" />
+                <th className="px-1 py-1" />
               </tr>
             </thead>
             <tbody>
               {currentShown.map((p) => (
                 <tr key={p.id} className={`border-b border-slate-100 hover:bg-slate-50/80 transition-colors ${!p.active ? 'opacity-50' : ''}`}>
-                  <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">{p.area || '—'}</td>
-                  <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
+                  <td className="px-2 py-2 font-mono font-bold text-slate-900 whitespace-nowrap">{p.area || '—'}</td>
+                  <td className="px-2 py-2 font-mono font-bold text-slate-900 whitespace-nowrap">
                     <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{getPlanTag(p) || '—'}</span>
                   </td>
-                  <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">{p.system || '—'}</td>
-                  <td className="px-3 py-2.5 text-slate-900 font-bold whitespace-nowrap">{assetName(p.assetId)}</td>
-                  <td className="px-3 py-2.5 font-bold text-slate-900">
+                  <td className="px-2 py-2 text-slate-800 font-semibold whitespace-nowrap">{p.system || '—'}</td>
+                  <td className="px-2 py-2 text-slate-900 font-bold max-w-[180px]">
+                    <span className="line-clamp-2" title={assetName(p.assetId)}>{assetName(p.assetId)}</span>
+                  </td>
+                  <td className="px-2 py-2 font-bold text-slate-900 max-w-[240px]">
                     <div className="flex items-center gap-1.5">
-                      <span>{p.title}</span>
+                      <span className="line-clamp-2" title={p.title}>{p.title}</span>
                       {p.legal && (
-                        <span title="Inspeção legal/obrigatória" className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[10px] text-red-800 font-bold border border-red-300">
+                        <span title="Inspeção legal/obrigatória" className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[10px] text-red-800 font-bold border border-red-300 shrink-0">
                           <Scale className="h-3 w-3" /> Legal
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
+                  <td className="px-2 py-2 whitespace-nowrap">
                     <div className="flex flex-col gap-1">
                       <TipoBadge tipo={p.tipo || 'plano'} codeOnly={false} />
                       <label className="inline-flex items-center gap-1 cursor-pointer select-none text-[10px] font-bold">
@@ -578,7 +589,7 @@ export default function MaintenancePlanClient({
                       </label>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 text-slate-800 whitespace-nowrap">
+                  <td className="px-2 py-2 text-slate-800 whitespace-nowrap">
                     <span className="inline-flex items-center gap-1 text-xs font-semibold">
                       <CalendarClock className="h-3.5 w-3.5 text-slate-500" />
                       {periodLabel(p)}

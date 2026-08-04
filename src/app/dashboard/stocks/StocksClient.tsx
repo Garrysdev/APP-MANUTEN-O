@@ -298,14 +298,14 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-900/60 font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  <SortableTh label="CÓD / TAG" sortableKey="code" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5 w-28" />
-                  <SortableTh label="DESIGNAÇÃO / SOBRESSELANETE" sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5" />
-                  <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5 hidden md:table-cell" />
-                  <SortableTh label="SISTEMA / CATEGORIA" sortableKey="category" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-3 py-2.5 hidden md:table-cell" />
-                  <SortableTh label="QUANT." sortableKey="quantity" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-right px-3 py-2.5" />
-                  <th className="text-left px-3 py-2.5 hidden md:table-cell">UNID.</th>
-                  <th className="text-left px-3 py-2.5 hidden md:table-cell">LOCAL</th>
-                  <th className="px-3 py-2.5" />
+                  <SortableTh label="CÓD / TAG" sortableKey="code" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2.5 py-2.5 whitespace-nowrap" />
+                  <SortableTh label="DESIGNAÇÃO / SOBRESSELANTE" sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2.5 py-2.5" />
+                  <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2 py-2.5 whitespace-nowrap" />
+                  <SortableTh label="SISTEMA / CATEGORIA" sortableKey="category" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2 py-2.5" />
+                  <SortableTh label="QUANT." sortableKey="quantity" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-right px-2 py-2.5 whitespace-nowrap" />
+                  <th className="text-left px-2 py-2.5 whitespace-nowrap">UNID.</th>
+                  <th className="text-left px-2 py-2.5 whitespace-nowrap">LOCAL</th>
+                  <th className="px-2 py-2.5 text-center">AÇÕES</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-800/50">
@@ -313,15 +313,15 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
                   const isLow = item.minQuantity != null && item.quantity <= item.minQuantity && item.quantity > 0
                   return (
                     <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="px-3 py-2.5 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                      <td className="px-2.5 py-2 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
                         {item.tag || item.code || item.reference || '—'}
                       </td>
-                      <td className="px-3 py-2.5">
-                        <Link href={`/dashboard/stocks/${item.id}`} className="font-bold text-[#2E86C1] hover:underline transition-colors block">
+                      <td className="px-2.5 py-2 max-w-[280px]">
+                        <Link href={`/dashboard/stocks/${item.id}`} className="font-bold text-[#2E86C1] hover:underline transition-colors block line-clamp-2" title={item.name}>
                           {item.name}
                         </Link>
                         {item.description && (
-                          <p className="text-[11px] text-slate-400 truncate max-w-md">{item.description}</p>
+                          <p className="text-[11px] text-slate-400 line-clamp-1" title={item.description}>{item.description}</p>
                         )}
                         {isLow && (
                           <span className="mt-0.5 inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800/50 rounded px-1.5 py-0.2">
@@ -329,32 +329,34 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-700 dark:text-slate-300 font-mono font-semibold hidden md:table-cell">
+                      <td className="px-2 py-2 text-slate-700 dark:text-slate-300 font-mono font-semibold whitespace-nowrap">
                         {item.area || '—'}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 hidden md:table-cell">
-                        {item.category || item.system || '—'}
+                      <td className="px-2 py-2 text-slate-600 dark:text-slate-400 max-w-[160px]">
+                        <span className="line-clamp-2" title={item.category || item.system || '—'}>{item.category || item.system || '—'}</span>
                       </td>
-                      <td className={`px-3 py-2.5 text-right font-mono font-extrabold ${isLow ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                      <td className={`px-2 py-2 text-right font-mono font-extrabold whitespace-nowrap ${isLow ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-slate-100'}`}>
                         {item.quantity}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hidden md:table-cell">{item.unit ?? 'un'}</td>
-                      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hidden md:table-cell">{item.location ?? '—'}</td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-1 justify-end">
+                      <td className="px-2 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">{item.unit ?? 'un'}</td>
+                      <td className="px-2 py-2 text-slate-500 dark:text-slate-400 max-w-[120px]">
+                        <span className="line-clamp-1" title={item.location ?? '—'}>{item.location ?? '—'}</span>
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <div className="flex items-center gap-1 justify-center">
                           <button
                             onClick={() => setModal({ type: 'edit', item })}
-                            className="p-1.5 text-gray-400 hover:text-[#2E86C1] transition-colors"
+                            className="p-1 text-gray-400 hover:text-[#2E86C1] transition-colors"
                             aria-label="Editar"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => handleDelete(item.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
+                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                             aria-label="Eliminar"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </td>
