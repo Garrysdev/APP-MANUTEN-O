@@ -38,6 +38,7 @@ export const DEFAULT_TECHNICIAN_TYPES = [
   'Automação & Eletrónica',
   'Serralharia / Tubagem',
   'Multidisciplinar',
+  'Externos',
 ]
 
 /** Quem executa a tarefa de plano: interno (RG) ou prestador externo (sufixo -STP). */

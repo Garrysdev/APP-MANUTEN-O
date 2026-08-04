@@ -852,22 +852,23 @@ function getFallbackStockItems(): StockItem[] {
       const raw = fs.readFileSync(filePath, 'utf-8')
       const json = JSON.parse(raw)
       cachedFallbackStockItems = json.map((item: any, idx: number) => ({
-        id: `stock_item_${idx + 1}`,
+        id: item.id || `stock_item_${idx + 1}`,
         companyId: 'rjHNaSUbLm4qTMyKP0oX',
-        code: item.code || `STOCK-${idx + 1}`,
-        name: item.name || 'Artigo / Sobresselente',
-        category: item.category || 'Equipamentos / Sobresselentes',
+        code: item.code || item.reference || `STOCK-${idx + 1}`,
+        name: item.name || 'Artigo de Consumo',
+        category: item.category || 'Consumíveis',
         unit: item.unit || 'un',
         quantity: 0,
         minQuantity: item.minQuantity ?? 1,
         location: item.location || 'Armazém UR',
-        cost: item.cost ?? 0,
+        cost: item.unitCost || item.cost || 0,
+        unitCost: item.unitCost || item.cost || 0,
         area: item.area || null,
         tag: item.tag || null,
         system: item.system || null,
         description: item.description || null,
         supplier: item.supplier || null,
-        createdAt: new Date().toISOString(),
+        createdAt: item.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }))
       return cachedFallbackStockItems!
