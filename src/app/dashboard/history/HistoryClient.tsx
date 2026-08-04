@@ -141,14 +141,14 @@ export default function HistoryClient({
           list.push({
             id: formattedId,
             rawId: t.id,
-            data: (t.createdAt || '').slice(0, 10),
+            data: t.plannedStartDate ? formatDate(t.plannedStartDate) : (t.createdAt ? formatDate(t.createdAt) : '—'),
             area: (t as any).area || (asset as any)?.area || '—',
             equiTag: (asset as any)?.tag || (t as any).tag || asset?.name || '—',
             ti: formatTiCode((t as any).tipo || (t as any).ti || 'MC'),
             avaria: t.title || t.description || '—',
-            tecnicos: resolveTechName(t.assignedTo),
-            inicio: formatDateTime(t.createdAt),
-            fim: formatDateTime(t.updatedAt || t.createdAt),
+            tecnicos: resolveTechName(t.assignedTo) !== '—' ? resolveTechName(t.assignedTo) : ((t as any).assignedToText || '—'),
+            inicio: t.plannedStartDate ? formatDate(t.plannedStartDate) : '—',
+            fim: t.completedAt ? formatDate(t.completedAt) : '—',
             causa: t.description || '—',
             rawTask: t
           })

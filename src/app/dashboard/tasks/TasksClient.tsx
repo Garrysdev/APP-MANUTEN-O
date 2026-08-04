@@ -523,7 +523,7 @@ export default function TasksClient({
                         <span className="bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200">{formattedId}</span>
                       </td>
                       <td className="px-3 py-2.5 font-mono font-semibold text-slate-800 whitespace-nowrap">
-                        {formatDate(t.createdAt)}
+                        {t.plannedStartDate ? formatDate(t.plannedStartDate) : formatDate(t.createdAt)}
                       </td>
                       <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
                         {(t as any).area || (asset as any)?.area || '—'}
@@ -540,13 +540,13 @@ export default function TasksClient({
                         </Link>
                       </td>
                       <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">
-                        {userName(t.assignedTo)}
+                        {userName(t.assignedTo) !== '—' ? userName(t.assignedTo) : ((t as any).assignedToText || '—')}
                       </td>
                       <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">
-                        {formatDateTime(t.createdAt)}
+                        {t.plannedStartDate ? formatDate(t.plannedStartDate) : '—'}
                       </td>
                       <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">
-                        {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
+                        {t.completedAt ? formatDate(t.completedAt) : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-slate-700 hidden lg:table-cell max-w-[200px]">
                         <span className="line-clamp-2" title={t.description ?? ''}>{t.description || '—'}</span>
