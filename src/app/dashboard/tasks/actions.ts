@@ -72,6 +72,9 @@ function parseTask(formData: FormData) {
 
   const tag = String(formData.get('tag') ?? '').trim() || null
   const area = String(formData.get('area') ?? '').trim() || null
+  const photoUrl = String(formData.get('photoUrl') ?? '').trim() || null
+  const periodicidade = String(formData.get('periodicidade') ?? 'mensal').trim() || null
+  const addToMaintenancePlan = formData.get('addToMaintenancePlan') === 'true' || formData.get('addToMaintenancePlan') === 'on'
 
   return {
     title,
@@ -79,6 +82,9 @@ function parseTask(formData: FormData) {
     assetId,
     tag,
     area,
+    photoUrl,
+    periodicidade,
+    addToMaintenancePlan,
     assignedTo: String(formData.get('assignedTo') ?? '').trim() || null,
     assignedToIds,
     criticidade: CRITICIDADES.includes(criticidade) ? criticidade : 'verde',
@@ -131,6 +137,25 @@ export async function createTaskAction(
         if (!parsed.area && found.area) parsed.area = found.area
       }
     }
+
+    if (parsed.addToMaintenancePlan && parsed.periodicidade) {
+      const { createMaintenancePlan } = await import('@/lib/firebase/data')
+      await createMaintenancePlan(profile.companyId, profile.id, {
+        title: parsed.title,
+        description: parsed.description,
+        assetId: parsed.assetId,
+        tag: parsed.tag,
+        area: parsed.area,
+        criticidade: parsed.criticidade,
+        periodicidade: parsed.periodicidade as any,
+        periodicidadeLabel: parsed.periodicidade,
+        executor: 'interno',
+        legal: false,
+        active: true,
+        safetyRules: parsed.safetyRules,
+      }).catch(console.error)
+    }
+
     await createTask(profile.companyId, profile.id, {
       ...parsed,
       createdByName: profile.name,

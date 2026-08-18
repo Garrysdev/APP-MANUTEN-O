@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, Activity, Thermometer, Clock, Package, 
-  Settings, PenTool, Edit2, Save, X, Camera, ImageOff, Plus
+  Settings, PenTool, Edit2, Save, X, Camera, ImageOff, Plus,
+  ShieldAlert, Trash2, Wrench
 } from 'lucide-react'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
@@ -18,8 +19,6 @@ import {
 import type { Asset, Task, User } from '@/types/models'
 import { STATUS_LABELS, TIPO_LABELS } from '@/types/models'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
-
-
 
 import { createTaskAction } from '@/app/dashboard/tasks/actions'
 import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
@@ -54,12 +53,19 @@ export default function AssetDetailClient({
   const [photoPreview, setPhotoPreview] = useState<string | null>(asset.photoUrl ?? null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Modal de Nova OT no Equipamento
+  // Modal de Nova OT no Equipamento - Estados adicionais
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [busyModal, setBusyModal] = useState(false)
   const [errorModal, setErrorModal] = useState('')
   const [selectedAssetId, setSelectedAssetId] = useState(asset.id)
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([])
+  const [safetyRulesModal, setSafetyRulesModal] = useState<string[]>([])
+  const [materialsModal, setMaterialsRequiredModal] = useState<string[]>([])
+  const [photoFileModal, setPhotoFileModal] = useState<File | null>(null)
+  const [photoPreviewModal, setPhotoPreviewModal] = useState<string | null>(null)
+  const [addToPmModal, setAddToPmModal] = useState(false)
+  const [periodicidadeModal, setPeriodicidadeModal] = useState<string>('mensal')
+  const taskPhotoInputRef = useRef<HTMLInputElement>(null)
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const original = e.target.files?.[0]
@@ -67,6 +73,14 @@ export default function AssetDetailClient({
     const file = await compressImage(original)
     setPhotoFile(file)
     setPhotoPreview(URL.createObjectURL(file))
+  }
+
+  async function handleTaskPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const original = e.target.files?.[0]
+    if (!original) return
+    const file = await compressImage(original)
+    setPhotoFileModal(file)
+    setPhotoPreviewModal(URL.createObjectURL(file))
   }
 
   async function handleCreateTask(e: React.FormEvent<HTMLFormElement>) {
@@ -78,12 +92,31 @@ export default function AssetDetailClient({
     if (!formData.get('area')) formData.set('area', asset.area || '')
     if (!formData.get('tag')) formData.set('tag', asset.tag || '')
 
+    if (photoFileModal) {
+      try {
+        const url = await uploadImage(photoFileModal, 'tasks')
+        formData.set('photoUrl', url)
+      } catch (err) {
+        console.error('Erro no upload de foto da OT:', err)
+      }
+    }
+
+    formData.set('safetyRules', JSON.stringify(safetyRulesModal))
+    formData.set('materialsRequired', JSON.stringify(materialsModal.filter(Boolean)))
+    formData.set('addToMaintenancePlan', addToPmModal ? 'true' : 'false')
+    formData.set('periodicidade', periodicidadeModal)
+
     const result = await createTaskAction({}, formData)
     setBusyModal(false)
     if (result.error) {
       setErrorModal(result.error)
     } else {
       setShowCreateModal(false)
+      setPhotoFileModal(null)
+      setPhotoPreviewModal(null)
+      setSafetyRulesModal([])
+      setMaterialsRequiredModal([])
+      setAddToPmModal(false)
       router.refresh()
     }
   }
@@ -430,6 +463,40 @@ export default function AssetDetailClient({
                 </div>
               </div>
 
+              {/* Incluir no Plano de Manutenção (PM) e Periodicidade */}
+              <div className="bg-amber-50/60 dark:bg-amber-900/20 p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/50 space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-amber-900 dark:text-amber-300">
+                  <input
+                    type="checkbox"
+                    checked={addToPmModal}
+                    onChange={(e) => setAddToPmModal(e.target.checked)}
+                    className="rounded accent-amber-600 h-4 w-4"
+                  />
+                  <span>⚙️ Incluir no Plano de Manutenção Preventiva (PM)</span>
+                </label>
+                {addToPmModal && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Periodicidade do PM *
+                    </label>
+                    <select
+                      value={periodicidadeModal}
+                      onChange={(e) => setPeriodicidadeModal(e.target.value)}
+                      className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-700"
+                    >
+                      <option value="semanal">Semanal</option>
+                      <option value="quinzenal">Quinzenal</option>
+                      <option value="mensal">Mensal</option>
+                      <option value="bimensal">Bimensal</option>
+                      <option value="trimestral">Trimestral</option>
+                      <option value="quadrimestral">Quadrimestral</option>
+                      <option value="semestral">Semestral</option>
+                      <option value="anual">Anual</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Descrição da Intervenção</label>
                 <textarea name="description" className="input" rows={2} placeholder="Descreva os trabalhos a realizar..." />
@@ -438,6 +505,108 @@ export default function AssetDetailClient({
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Observações Adicionais</label>
                 <textarea name="observacoes" className="input" rows={2} placeholder="Instruções específicas..." />
+              </div>
+
+              {/* Regras de Segurança */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <ShieldAlert className="h-4 w-4 text-safety-orange" />
+                  Regras de Segurança (EPIs & Procedimentos)
+                </label>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+                  {[
+                    'Usar EPI completo (Capacete, Luvas, Calçado de Segurança)',
+                    'Desligar e sinalizar fonte de energia (Lockout / Tagout)',
+                    'Garantir ventilação e iluminação adequada no local',
+                    'Verificar ausência de tensão e pressão residual antes de intervir',
+                    'Manter extintor e kit de emergência próximo'
+                  ].map((rule) => {
+                    const checked = safetyRulesModal.includes(rule)
+                    return (
+                      <label key={rule} className="flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 p-1 rounded transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) setSafetyRulesModal((prev) => [...prev, rule])
+                            else setSafetyRulesModal((prev) => prev.filter((r) => r !== rule))
+                          }}
+                          className="rounded accent-orange-600 h-3.5 w-3.5"
+                        />
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">{rule}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Materiais a utilizar */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Wrench className="h-4 w-4 text-industrial-blue" />
+                  Materiais / Peças a Utilizar
+                </label>
+                <div className="space-y-2">
+                  {materialsModal.map((mat, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        value={mat}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setMaterialsRequiredModal((prev) => prev.map((m, i) => i === idx ? val : m))
+                        }}
+                        className="input text-xs flex-1"
+                        placeholder="Ex: 1x Filtro de Ar, 2L Óleo Mobil 630..."
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setMaterialsRequiredModal((prev) => prev.filter((_, i) => i !== idx))}
+                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setMaterialsRequiredModal((prev) => [...prev, ''])}
+                    className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 font-bold text-industrial-blue"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Adicionar Material
+                  </button>
+                </div>
+              </div>
+
+              {/* Fotos da Avaria / Intervenção */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Camera className="h-4 w-4 text-purple-600" />
+                  Foto da Avaria / Equipamento (Opcional)
+                </label>
+                <div className="flex items-center gap-3">
+                  {photoPreviewModal ? (
+                    <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 shrink-0">
+                      <Image src={photoPreviewModal} alt="Preview" fill className="object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => { setPhotoFileModal(null); setPhotoPreviewModal(null) }}
+                        className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full hover:bg-red-600 transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => taskPhotoInputRef.current?.click()}
+                      className="px-3 py-2 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-purple-500 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-2 transition-all hover:bg-purple-50/50"
+                    >
+                      <Camera className="h-4 w-4 text-purple-600" /> Tirar / Carregar Foto
+                    </button>
+                  )}
+                  <input ref={taskPhotoInputRef} type="file" accept="image/*" onChange={handleTaskPhotoChange} className="hidden" />
+                </div>
               </div>
 
               {errorModal && (
