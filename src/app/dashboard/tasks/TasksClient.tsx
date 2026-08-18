@@ -34,6 +34,7 @@ import {
   loadPlanTaskRefsAction, loadStockRefsAction, type StockMaterialRef,
 } from './actions'
 import { createMaintenancePlanAction } from '../maintenance-plan/actions'
+import CreateTaskModal from '@/components/modals/CreateTaskModal'
 
 const PERIODICIDADE_OPTIONS: Periodicidade[] = ['semanal', 'mensal', 'trimestral', 'bianual', 'anual', 'bienal', 'trianual', 'horas', 'pontual']
 
@@ -971,18 +972,32 @@ export default function TasksClient({
           </div>
         )}
 
-      {/* Modal criar / editar */}
-      {showForm && (
+      {/* Unified Nova OT Modal Component */}
+      <CreateTaskModal
+        isOpen={showForm && !editing}
+        onClose={closeModal}
+        initialAssetId={assetId}
+        assets={assets}
+        users={users}
+        stockRefs={stockRefs}
+        isManager={isManager}
+        onSuccess={() => {
+          router.refresh()
+        }}
+      />
+
+      {/* Modal editar OT existente */}
+      {showForm && editing && (
         <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-4 sm:pt-8 overflow-y-auto">
           <div className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={closeModal} />
           <div className="card relative w-full max-w-lg p-6 shadow-2xl my-auto sm:my-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100">{editing ? dict.tasks.modalEdit : dict.tasks.modalNew}</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100">{dict.tasks.modalEdit}</h2>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"><X className="h-5 w-5" /></button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {editing && <input type="hidden" name="id" value={editing.id} />}
+              <input type="hidden" name="id" value={editing.id} />
               <input type="hidden" name="maintenancePlanId" value={maintenancePlanId} />
 
               <div>
@@ -1027,11 +1042,6 @@ export default function TasksClient({
                     </>
                   )
                 })()}
-                {assets.length === 0 && (
-                  <p className="text-[10px] text-red-500 font-medium mt-1">
-                    Não tens equipamentos criados. Deves criar pelo menos um equipamento no módulo de Equipamentos antes de registar uma OT.
-                  </p>
-                )}
               </div>
 
               <div className="space-y-3">
@@ -1111,17 +1121,17 @@ export default function TasksClient({
                 </div>
               </div>
 
-                <input type="hidden" name="assignedToIds" value={JSON.stringify(selectedTechIds)} />
-                <input
-                  type="hidden"
-                  name="assignedTo"
-                  value={selectedTechIds
-                    .map((id) => {
-                      const u = users.find((usr) => usr.id === id || usr.abbreviation === id)
-                      return u ? (u.abbreviation || u.name) : id
-                    })
-                    .join(', ')}
-                />
+              <input type="hidden" name="assignedToIds" value={JSON.stringify(selectedTechIds)} />
+              <input
+                type="hidden"
+                name="assignedTo"
+                value={selectedTechIds
+                  .map((id) => {
+                    const u = users.find((usr) => usr.id === id || usr.abbreviation === id)
+                    return u ? (u.abbreviation || u.name) : id
+                  })
+                  .join(', ')}
+              />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1153,7 +1163,6 @@ export default function TasksClient({
                 </div>
               </div>
 
-              {/* Regras de segurança com link para gestão dedicada */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Regras de Segurança</span>
