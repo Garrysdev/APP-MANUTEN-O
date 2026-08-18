@@ -137,6 +137,7 @@ export default function AssetDetailClient({
         tipo: tipoVal,
         status: 'pending',
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         createdBy: 'eu',
         createdByName: 'Eu',
         assignedTo: null,
