@@ -10,9 +10,13 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
 
-  let asset = await getAsset(profile.companyId, id)
+  // Busca paralela do equipamento e utilizadores para velocidade máxima
+  const [assetRes, users] = await Promise.all([
+    getAsset(profile.companyId, id).catch(() => null),
+    listUsers(profile.companyId).catch(() => []),
+  ])
 
-  // Se o ativo não for encontrado no Firestore ou Fallback, cria um registo virtual dinâmico para NUNCA bloquear a navegação
+  let asset = assetRes
   if (!asset) {
     const tagOrName = decodeURIComponent(id)
     const areaMatch = tagOrName.match(/^(\d+[A-Za-z0-9]*)/)
@@ -27,10 +31,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     }
   }
 
-  const [tasks, users] = await Promise.all([
-    listTasksByAsset(profile.companyId, id).catch(() => []),
-    listUsers(profile.companyId).catch(() => []),
-  ])
+  const tasks = await listTasksByAsset(profile.companyId, id, asset.tag).catch(() => [])
 
   return <AssetDetailClient asset={asset} tasks={tasks} users={users} />
 }

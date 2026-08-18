@@ -430,31 +430,45 @@ export const listTasks = cache(async function(companyId: string, limitCount = 20
   return getFallbackTasks()
 })
 
-export const listTasksByAsset = cache(async function(companyId: string, assetId: string): Promise<Task[]> {
+export const listTasksByAsset = cache(async function(companyId: string, assetId: string, providedAssetTag?: string | null): Promise<Task[]> {
   try {
-    const asset = await getAsset(companyId, assetId)
-    const assetTag = asset?.tag?.trim()
-    
-    // 1. Busca direta por assetId
-    const snap = await adminDb()
-      .collection('tasks')
-      .where('companyId', '==', companyId)
-      .where('assetId', '==', assetId)
-      .get()
-    const dbDocs = snap.docs.map((d) => serialize<Task>(d))
-
-    // 2. Se tiver TAG, busca também por TAG para apanhar OTs migradas
-    let tagDocs: Task[] = []
-    if (assetTag) {
-      const tagSnap = await adminDb()
-        .collection('tasks')
-        .where('companyId', '==', companyId)
-        .where('tag', '==', assetTag)
-        .get()
-      tagDocs = tagSnap.docs.map((d) => serialize<Task>(d))
+    let assetTag = providedAssetTag?.trim()
+    if (!assetTag && !assetId.startsWith('asset_')) {
+      assetTag = assetId
     }
 
-    const merged = Array.from(new Map([...dbDocs, ...tagDocs].map((t) => [t.id, t])).values())
+    const queries: Promise<any>[] = [
+      adminDb()
+        .collection('tasks')
+        .where('companyId', '==', companyId)
+        .where('assetId', '==', assetId)
+        .limit(100)
+        .get()
+        .catch(() => ({ docs: [] }))
+    ]
+
+    if (assetTag && assetTag !== assetId) {
+      queries.push(
+        adminDb()
+          .collection('tasks')
+          .where('companyId', '==', companyId)
+          .where('tag', '==', assetTag)
+          .limit(100)
+          .get()
+          .catch(() => ({ docs: [] }))
+      )
+    }
+
+    const results = await Promise.all(queries)
+    const dbDocs: Task[] = []
+    results.forEach((snap) => {
+      if (snap.docs) {
+        snap.docs.forEach((d: any) => dbDocs.push(serialize<Task>(d)))
+      }
+    })
+
+    const fallbacks = getFallbackTasks().filter((t) => t.assetId === assetId || (assetTag && t.tag === assetTag))
+    const merged = Array.from(new Map([...dbDocs, ...fallbacks].map((t) => [t.id, t])).values())
     if (merged.length > 0) {
       return merged.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     }
