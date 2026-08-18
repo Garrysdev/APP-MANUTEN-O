@@ -133,8 +133,8 @@ export interface CreateTaskModalProps {
   isOpen: boolean
   onClose: () => void
   initialAssetId?: string | null
-  assets: Asset[]
-  users: User[]
+  assets: any[]
+  users: any[]
   stockRefs?: StockMaterialRef[]
   isManager?: boolean
   onSuccess?: (newTask?: Task) => void
