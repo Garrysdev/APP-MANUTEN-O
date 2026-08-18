@@ -140,6 +140,9 @@ export async function createTaskAction(
 
     if (parsed.addToMaintenancePlan && parsed.periodicidade) {
       const { createMaintenancePlan } = await import('@/lib/firebase/data')
+      const { periodicidadeToRecurrence } = await import('@/types/models')
+      const periodOk = (parsed.periodicidade as any) || 'mensal'
+      const { recurrence, recurrenceValue } = periodicidadeToRecurrence(periodOk)
       await createMaintenancePlan(profile.companyId, profile.id, {
         title: parsed.title,
         description: parsed.description,
@@ -147,8 +150,11 @@ export async function createTaskAction(
         tag: parsed.tag,
         area: parsed.area,
         criticidade: parsed.criticidade,
-        periodicidade: parsed.periodicidade as any,
+        tipo: parsed.tipo || 'preventiva',
+        periodicidade: periodOk,
         periodicidadeLabel: parsed.periodicidade,
+        recurrence,
+        recurrenceValue,
         executor: 'interno',
         legal: false,
         active: true,
