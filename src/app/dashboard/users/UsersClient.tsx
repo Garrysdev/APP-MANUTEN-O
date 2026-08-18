@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { UserPlus, UserX, ShieldCheck, Wrench, X, Eye, EyeOff, Link2, Copy, Check, Camera, Filter, KeyRound } from 'lucide-react'
 import { DEFAULT_TECHNICIAN_TYPES, type User, type ExternalCompany } from '@/types/models'
-import { createUserDirectAction, deactivateUserAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction, toggleUserActiveAction, resetUserPasswordAction } from './actions'
+import { createUserDirectAction, deactivateUserAction, deleteUserAction, deleteExternalCompanyAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction, toggleUserActiveAction, resetUserPasswordAction } from './actions'
 import Avatar from '@/components/ui/Avatar'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
-import { Building2, Phone, Mail, MapPin, FileText, UserPlus as UserPlusIcon, ExternalLink, Briefcase } from 'lucide-react'
+import { Building2, Phone, Mail, MapPin, FileText, UserPlus as UserPlusIcon, ExternalLink, Briefcase, Pencil, Trash2 } from 'lucide-react'
 
 export default function UsersClient({
   users,
@@ -78,6 +78,8 @@ export default function UsersClient({
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
+      if (activeTab === 'internal' && u.isExternal) return false
+      if (activeTab === 'external' && !u.isExternal) return false
       if (filterActive === 'active' && !u.active) return false
       if (filterActive === 'inactive' && u.active) return false
       if (filterRole !== 'all' && u.role !== filterRole) return false
@@ -90,7 +92,7 @@ export default function UsersClient({
       }
       return true
     })
-  }, [users, filterActive, filterRole, filterSpecialty, searchAbbr, searchName])
+  }, [users, activeTab, filterActive, filterRole, filterSpecialty, searchAbbr, searchName])
 
   const { sorted: sortedUsers, sortKey, sortDir, toggleSort } = useTableSort<User>(
     filteredUsers,
@@ -387,10 +389,10 @@ export default function UsersClient({
 
                   <button
                     onClick={() => setSelectedCompany(comp)}
-                    className="w-full btn-secondary text-xs py-2 font-bold flex items-center justify-center gap-1.5 text-blue-700 dark:text-blue-400 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                    className="w-full bg-[#1B4F72] hover:bg-[#154360] text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                   >
-                    <ExternalLink className="h-4 w-4" />
-                    📂 Abrir Ficha Completa da Empresa & Técnicos
+                    <ExternalLink className="h-4 w-4 shrink-0 text-white" />
+                    <span>📂 Abrir Ficha Completa da Empresa & Técnicos</span>
                   </button>
                 </div>
               )
@@ -568,73 +570,7 @@ export default function UsersClient({
         </div>
       )}
 
-      {/* Invite by link */}
-      {isManager && (
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-800 dark:text-slate-100 flex items-center gap-2">
-              <Link2 className="h-4 w-4 text-[#2E86C1]" />
-              Convidar por link
-            </h2>
-            <button
-              onClick={() => { setShowInvite((v) => !v); setInviteUrl(''); setInviteError('') }}
-              className="text-sm text-[#2E86C1] hover:underline"
-            >
-              {showInvite ? 'Fechar' : 'Gerar link de convite'}
-            </button>
-          </div>
 
-          {showInvite && (
-            <div className="space-y-3">
-              {!inviteUrl ? (
-                <form onSubmit={handleGenerateInvite} className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">E-mail (opcional)</label>
-                      <input name="email" type="email" className="input" placeholder="tecnico@empresa.pt" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Papel do convidado</label>
-                      <select name="role" className="input">
-                        <option value="technician">Técnico</option>
-                        <option value="manager">Gestor</option>
-                      </select>
-                    </div>
-                  </div>
-                  <button type="submit" disabled={inviteBusy} className="btn-primary w-full">
-                    {inviteBusy ? 'A gerar…' : 'Gerar link de convite'}
-                  </button>
-                </form>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-gray-500 dark:text-slate-400">Partilha este link com o técnico. Expira quando utilizado.</p>
-                  <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-900/60 rounded-lg px-3 py-2 border border-gray-200 dark:border-slate-800">
-                    <input
-                      readOnly
-                      value={inviteUrl}
-                      className="flex-1 bg-transparent text-xs text-gray-700 dark:text-slate-300 outline-none truncate"
-                    />
-                    <button
-                      onClick={handleCopy}
-                      className="text-gray-400 hover:text-[#2E86C1] dark:hover:text-[#2E86C1] flex-shrink-0"
-                      title="Copiar link"
-                    >
-                      {copied ? <Check className="h-4 w-4 text-green-600 dark:text-green-500" /> : <Copy className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => setInviteUrl('')}
-                    className="text-xs text-gray-400 hover:underline"
-                  >
-                    Gerar outro
-                  </button>
-                </div>
-              )}
-              {inviteError && <p className="text-xs text-red-600">{inviteError}</p>}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Barra Superior de Contagem e Filtros Rápidos */}
       <div className="flex items-center justify-between gap-3 mb-3 px-1 flex-wrap">
@@ -658,31 +594,22 @@ export default function UsersClient({
       </div>
 
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[700px] md:min-w-0">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-xs min-w-[1000px] table-fixed">
             <thead>
               {/* Linha 1: Cabeçalhos com Ordenação */}
               <tr className="bg-slate-100/90 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                <SortableTh label={dict.users.colName} sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="Cód." sortableKey="abbreviation" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-center" />
-                <SortableTh label="E-mail" sortableKey="email" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden md:table-cell" />
-                <SortableTh label={dict.users.colRole} sortableKey="role" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="Estado" sortableKey="active" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                {isManager && <SortableTh label={dict.users.colCost} sortableKey="hourlyRate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />}
-                {isManager && <th className="px-4 py-3 text-right">AÇÕES</th>}
+                <SortableTh label="Cód." sortableKey="abbreviation" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-center w-[70px]" />
+                <SortableTh label={dict.users.colName} sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[200px]" />
+                <SortableTh label="E-mail" sortableKey="email" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[180px]" />
+                <SortableTh label={dict.users.colRole} sortableKey="role" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[140px]" />
+                <SortableTh label="Estado" sortableKey="active" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[90px]" />
+                {isManager && <SortableTh label={dict.users.colCost} sortableKey="hourlyRate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[80px]" />}
+                {isManager && <th className="px-4 py-3 text-right w-[240px]">AÇÕES</th>}
               </tr>
 
               {/* Linha 2: Filtros por Colunas */}
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                <td className="px-2 py-1.5">
-                  <input
-                    type="text"
-                    value={searchName}
-                    onChange={(e) => setSearchName(e.target.value)}
-                    placeholder="Filtrar nome..."
-                    className="input !text-xs !py-1 !px-2 w-full"
-                  />
-                </td>
                 <td className="px-2 py-1.5 text-center">
                   <input
                     type="text"
@@ -690,6 +617,15 @@ export default function UsersClient({
                     onChange={(e) => setSearchAbbr(e.target.value)}
                     placeholder="Cód..."
                     className="input !text-xs !py-1 !px-2 w-16 text-center font-mono uppercase"
+                  />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input
+                    type="text"
+                    value={searchName}
+                    onChange={(e) => setSearchName(e.target.value)}
+                    placeholder="Filtrar nome..."
+                    className="input !text-xs !py-1 !px-2 w-full"
                   />
                 </td>
                 <td className="px-2 py-1.5 hidden md:table-cell">
@@ -754,6 +690,11 @@ export default function UsersClient({
                     onClick={() => { if (isManager) setEditingUser(u) }}
                     className={`hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors ${isManager ? 'cursor-pointer' : ''} ${!u.active ? 'opacity-50' : ''}`}
                   >
+                    <td className="px-4 py-3 text-center">
+                      <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700">
+                        {u.abbreviation || '—'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 font-medium text-gray-800 dark:text-slate-200">
                       <div className="flex items-center gap-2">
                         <Avatar name={u.name} avatarUrl={u.avatarUrl} size={24} />
@@ -764,11 +705,6 @@ export default function UsersClient({
                           )}
                         </span>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700">
-                        {u.abbreviation || '—'}
-                      </span>
                     </td>
                     <td className="px-4 py-3 text-gray-500 dark:text-slate-400 hidden md:table-cell">{u.email}</td>
                     <td className="px-4 py-3">
@@ -794,10 +730,14 @@ export default function UsersClient({
                       {isManager && u.id !== currentUserId ? (
                         <button
                           type="button"
-                          onClick={async () => {
-                            await toggleUserActiveAction(u.id, !u.active)
-                            router.refresh()
+                          onClick={() => {
+                            startTransition(async () => {
+                              const res = await toggleUserActiveAction(u.id, !u.active)
+                              if (res?.error) alert(res.error)
+                              else router.refresh()
+                            })
                           }}
+                          disabled={isPending}
                           className={`text-xs font-bold px-2.5 py-1 rounded-full border transition-all shadow-sm ${
                             u.active
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400'
@@ -866,10 +806,36 @@ export default function UsersClient({
                           </button>
                           <button
                             onClick={() => setEditingUser(u)}
-                            className="text-xs text-[#2E86C1] hover:underline font-bold"
+                            className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-xs font-bold transition-all flex items-center gap-1"
                           >
-                            Editar
+                            <Pencil className="h-3.5 w-3.5" /> Editar
                           </button>
+                          {u.id !== currentUserId && (
+                            <button
+                              onClick={() => {
+                                if (confirm(`Tem a certeza que deseja eliminar o utilizador ${u.name}?`)) {
+                                  startTransition(async () => {
+                                    const res = await deleteUserAction(u.id, false)
+                                    if (res?.hasHistory || res?.error === 'HAS_HISTORY') {
+                                      if (confirm(`O técnico "${u.name}" já possui histórico de intervenções/tarefas registadas.\n\nDeseja eliminar definitivamente a conta deste utilizador do sistema?`)) {
+                                        const forceRes = await deleteUserAction(u.id, true)
+                                        if (forceRes?.error) alert(forceRes.error)
+                                        else router.refresh()
+                                      }
+                                    } else if (res?.error) {
+                                      alert(res.error)
+                                    } else {
+                                      router.refresh()
+                                    }
+                                  })
+                                }
+                              }}
+                              className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded text-xs font-bold transition-all flex items-center gap-1"
+                              title="Eliminar permanentemente este utilizador"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                            </button>
+                          )}
                         </div>
                       </td>
                     )}
@@ -1014,13 +980,36 @@ export default function UsersClient({
                 </div>
               )}
 
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={closeEditModal} className="btn-secondary flex-1">
-                  {dict.common.cancel}
-                </button>
-                <button type="submit" disabled={editBusy || uploadingAvatar} className="btn-primary flex-1">
-                  {uploadingAvatar ? dict.common.loading : editBusy ? dict.common.loading : dict.common.save}
-                </button>
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                {editingUser.id !== currentUserId && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!confirm(`Tem a certeza que deseja eliminar definitivamente o utilizador ${editingUser.name}?`)) return
+                      setEditBusy(true)
+                      const res = await deleteUserAction(editingUser.id)
+                      setEditBusy(false)
+                      if (res.error) {
+                        setEditError(res.error)
+                      } else {
+                        closeEditModal()
+                        router.refresh()
+                      }
+                    }}
+                    disabled={editBusy}
+                    className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-xl flex items-center gap-1 transition-all"
+                  >
+                    <Trash2 className="h-4 w-4" /> Eliminar
+                  </button>
+                )}
+                <div className="flex gap-2 ml-auto">
+                  <button type="button" onClick={closeEditModal} className="btn-secondary text-xs px-4 py-1.5 font-bold">
+                    {dict.common.cancel}
+                  </button>
+                  <button type="submit" disabled={editBusy || uploadingAvatar} className="btn-primary text-xs px-5 py-1.5 font-bold">
+                    {uploadingAvatar ? dict.common.loading : editBusy ? dict.common.loading : dict.common.save}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1168,12 +1157,46 @@ export default function UsersClient({
                           <p className="text-gray-500 text-[11px]">{tech.email} {tech.phone ? `· Tel: ${tech.phone}` : ''}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
-                          {tech.specialty || 'Técnico Externo'}
-                        </span>
-                        {tech.hourlyRate != null && tech.hourlyRate > 0 && (
-                          <p className="text-[11px] font-semibold text-gray-700 dark:text-slate-300 mt-0.5">{tech.hourlyRate.toFixed(2)}€ / hora</p>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
+                            {tech.specialty || 'Técnico Externo'}
+                          </span>
+                          {tech.hourlyRate != null && tech.hourlyRate > 0 && (
+                            <p className="text-[11px] font-semibold text-gray-700 dark:text-slate-300 mt-0.5">{tech.hourlyRate.toFixed(2)}€ / hora</p>
+                          )}
+                        </div>
+                        {isManager && (
+                          <div className="flex items-center gap-1.5 border-l border-gray-200 dark:border-slate-800 pl-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedCompany(null)
+                                setEditingUser(tech)
+                              }}
+                              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                              title="Editar Perfil do Técnico"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (confirm(`Tem a certeza que deseja eliminar definitivamente o técnico ${tech.name}?`)) {
+                                  startTransition(async () => {
+                                    const res = await deleteUserAction(tech.id)
+                                    if (res?.error) alert(res.error)
+                                    setSelectedCompany(null)
+                                    router.refresh()
+                                  })
+                                }
+                              }}
+                              className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                              title="Eliminar Técnico"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1186,8 +1209,46 @@ export default function UsersClient({
               </div>
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-gray-200 dark:border-slate-800">
-              <button onClick={() => setSelectedCompany(null)} className="btn-primary text-xs px-5">
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-200 dark:border-slate-800">
+              {isManager && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const compTechs = users.filter((u) => u.isExternal && (u.externalCompanyId === selectedCompany.id || (u.externalCompanyName || '').toLowerCase().includes(selectedCompany.name.toLowerCase())))
+                      if (compTechs.length > 0) {
+                        setEditingUser(compTechs[0])
+                        setSelectedCompany(null)
+                      } else {
+                        setShowForm(true)
+                        setIsExternalNew(true)
+                        setActiveTab('internal')
+                        setSelectedCompany(null)
+                      }
+                    }}
+                    className="btn-outline text-xs px-3 py-1.5 flex items-center gap-1.5 font-bold"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-blue-600" /> Editar Dados da Empresa / Técnico
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (confirm(`Tem a certeza que deseja eliminar a empresa prestadora de serviços ${selectedCompany.name}?`)) {
+                        startTransition(async () => {
+                          const res = await deleteExternalCompanyAction(selectedCompany.id)
+                          if (res?.error) alert(res.error)
+                          setSelectedCompany(null)
+                          router.refresh()
+                        })
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs rounded-lg flex items-center gap-1 transition-all"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Eliminar Empresa
+                  </button>
+                </div>
+              )}
+              <button onClick={() => setSelectedCompany(null)} className="btn-primary text-xs px-5 ml-auto">
                 Fechar Ficha
               </button>
             </div>

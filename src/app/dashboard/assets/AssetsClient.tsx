@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, Package, X, Tag, Camera, ImageOff, Upload, Filter, Search, ChevronLeft, ChevronRight, QrCode, Printer } from 'lucide-react'
+import { Plus, Pencil, Trash2, Package, X, Tag, Camera, ImageOff, Upload, Filter, Search, ChevronLeft, ChevronRight, QrCode, Printer, History } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
@@ -14,6 +14,8 @@ import { useTableSort, SortableTh } from '@/lib/useTableSort'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
+
+import jsQR from 'jsqr'
 
 export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: PlanName }) {
   const router = useRouter()
@@ -26,17 +28,209 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState('')
   const [importResult, setImportResult] = useState<{ created: number; skipped: number } | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
+  const [colAreaFilter, setColAreaFilter] = useState('')
+  const [colTagFilter, setColTagFilter] = useState('')
+  const [colNameFilter, setColNameFilter] = useState('')
   const [estadoFilter, setEstadoFilter] = useState<'all' | 'active' | 'inactive'>('active')
   const [selectedAssets, setSelectedAssets] = useState<Set<string>>(new Set())
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
   const [printQRAsset, setPrintQRAsset] = useState<Asset | null>(null)
   const [lockedFeature, setLockedFeature] = useState<FeatureKey | null>(null)
+
+  const [showBatchQRModal, setShowBatchQRModal] = useState(false)
+  const [batchArea, setBatchArea] = useState<string>('')
+  const [batchSelectedIds, setBatchSelectedIds] = useState<Set<string>>(new Set())
+
+  const [showQRScanner, setShowQRScanner] = useState(false)
+  const [qrInput, setQrInput] = useState('')
+  const [qrError, setQrError] = useState('')
+  const [cameraActive, setCameraActive] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  function normAlphaNum(str?: string | null): string {
+    if (!str) return ''
+    return str.toLowerCase().replace(/[^a-z0-9]/g, '')
+  }
+
+  function resolveAndNavigateQR(scannedInput: string) {
+    let raw = scannedInput.trim()
+    if (!raw) return
+
+    try { raw = decodeURIComponent(raw).trim() } catch {}
+
+    // Remover prefixos comuns de leitores (ex: "TAG: 90 H1 B1", "EQUIPAMENTO: ...", "ID: ...")
+    let cleanedQuery = raw.replace(/^(tag|id|qr|equipamento|asset)[:=\s]+/i, '').trim()
+    if (!cleanedQuery) cleanedQuery = raw
+
+    let query = cleanedQuery
+    let explicitTag = ''
+    let explicitId = ''
+    try {
+      const u = new URL(raw.startsWith('http') ? raw : `http://dummy.local/${raw}`)
+      explicitTag = u.searchParams.get('tag') || u.searchParams.get('qrTag') || ''
+      explicitId = u.searchParams.get('id') || u.searchParams.get('qrId') || ''
+    } catch {}
+
+    const matchUrl = query.match(/\/dashboard\/assets\/([^\/\?#]+)/)
+    if (matchUrl) {
+      try { query = decodeURIComponent(matchUrl[1]) } catch { query = matchUrl[1] }
+    }
+
+    const normQuery = query.toLowerCase().trim()
+    const queryAlpha = normAlphaNum(query)
+
+    // 1. Se veio tag explícita na URL
+    if (explicitTag) {
+      const expTagAlpha = normAlphaNum(explicitTag)
+      const foundByExpTag = assets.find((a) => a.tag && normAlphaNum(a.tag) === expTagAlpha)
+      if (foundByExpTag) {
+        setShowQRScanner(false)
+        setQrError('')
+        router.push(`/dashboard/assets/${foundByExpTag.id}`)
+        return
+      }
+    }
+
+    // 2. Se veio id explícito na URL
+    if (explicitId) {
+      const foundByExpId = assets.find((a) => a.id === explicitId || a.id.toLowerCase() === explicitId.toLowerCase())
+      if (foundByExpId) {
+        setShowQRScanner(false)
+        setQrError('')
+        router.push(`/dashboard/assets/${foundByExpId.id}`)
+        return
+      }
+    }
+
+    // 3. Procura por TAG (exata ou alpha-numérica)
+    const matchedByTag = assets.find((a) => {
+      if (!a.tag) return false
+      const aTagLower = a.tag.toLowerCase().trim()
+      const aTagAlpha = normAlphaNum(a.tag)
+      return aTagLower === normQuery || (queryAlpha && aTagAlpha === queryAlpha)
+    })
+    if (matchedByTag) {
+      setShowQRScanner(false)
+      setQrError('')
+      router.push(`/dashboard/assets/${matchedByTag.id}`)
+      return
+    }
+
+    // 4. Procura por ID
+    const matchedById = assets.find((a) => {
+      const aIdLower = a.id.toLowerCase().trim()
+      const aIdAlpha = normAlphaNum(a.id)
+      return aIdLower === normQuery || (queryAlpha && aIdAlpha === queryAlpha)
+    })
+    if (matchedById) {
+      setShowQRScanner(false)
+      setQrError('')
+      router.push(`/dashboard/assets/${matchedById.id}`)
+      return
+    }
+
+    // 5. Procura por qrCode guardado
+    const matchedByQrCode = assets.find((a) => {
+      const qrVal = (a as any).qrCode
+      if (!qrVal) return false
+      return qrVal.toLowerCase().trim() === normQuery || (queryAlpha && normAlphaNum(qrVal) === queryAlpha)
+    })
+    if (matchedByQrCode) {
+      setShowQRScanner(false)
+      setQrError('')
+      router.push(`/dashboard/assets/${matchedByQrCode.id}`)
+      return
+    }
+
+    // 6. Procura por Nome
+    const matchedByName = assets.find((a) => {
+      if (!a.name) return false
+      const aNameLower = a.name.toLowerCase().trim()
+      const aNameAlpha = normAlphaNum(a.name)
+      return aNameLower === normQuery || (queryAlpha && aNameAlpha === queryAlpha)
+    })
+    if (matchedByName) {
+      setShowQRScanner(false)
+      setQrError('')
+      router.push(`/dashboard/assets/${matchedByName.id}`)
+      return
+    }
+
+    setQrError(`Equipamento não encontrado para "${raw}". Tenta por TAG (ex: 90 H1 B1 ou 101 Y3 B3) ou ID.`)
+  }
+
+  useEffect(() => {
+    let stream: MediaStream | null = null
+    let interval: NodeJS.Timeout | null = null
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+
+    if (showQRScanner) {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices
+          .getUserMedia({ video: { facingMode: 'environment' } })
+          .then((s) => {
+            stream = s
+            setCameraActive(true)
+            if (videoRef.current) {
+              videoRef.current.srcObject = s
+              videoRef.current.setAttribute('playsinline', 'true')
+              videoRef.current.play().catch(() => {})
+            }
+
+            interval = setInterval(async () => {
+              const video = videoRef.current
+              if (!video || video.readyState < 2) return
+
+              // 1. Tentar jsQR no canvas
+              try {
+                canvas.width = video.videoWidth || 300
+                canvas.height = video.videoHeight || 300
+                if (ctx && canvas.width > 0 && canvas.height > 0) {
+                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+                  const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: 'dontInvert',
+                  })
+                  if (code && code.data) {
+                    resolveAndNavigateQR(code.data)
+                    return
+                  }
+                }
+              } catch {}
+
+              // 2. Fallback BarcodeDetector se suportado
+              if ('BarcodeDetector' in window) {
+                try {
+                  const detector = new (window as any).BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13'] })
+                  const barcodes = await detector.detect(video)
+                  if (barcodes.length > 0 && barcodes[0].rawValue) {
+                    resolveAndNavigateQR(barcodes[0].rawValue)
+                  }
+                } catch {}
+              }
+            }, 400)
+          })
+          .catch(() => {
+            setCameraActive(false)
+          })
+      }
+    } else {
+      setCameraActive(false)
+    }
+
+    return () => {
+      if (interval) clearInterval(interval)
+      if (stream) stream.getTracks().forEach((t) => t.stop())
+    }
+  }, [showQRScanner])
 
   function openCreate() {
     if (!planHas(plan, 'assets') && assets.length >= TEASER_LIMITS['assets']) {
@@ -190,16 +384,23 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
+    const areaQ = colAreaFilter.trim().toLowerCase()
+    const tagQ = colTagFilter.trim().toLowerCase()
+    const nameQ = colNameFilter.trim().toLowerCase()
+
     return assets.filter((a) => {
-      if (estadoFilter === 'active' && !a.active) return false
-      if (estadoFilter === 'inactive' && a.active) return false
+      if (estadoFilter === 'active' && a.active === false) return false
+      if (estadoFilter === 'inactive' && a.active !== false) return false
+      if (areaQ && !(a.area || '').toLowerCase().includes(areaQ)) return false
+      if (tagQ && !(a.tag || '').toLowerCase().includes(tagQ)) return false
+      if (nameQ && !(a.name || '').toLowerCase().includes(nameQ)) return false
       if (q) {
         const haystack = `${a.name || ''} ${a.location || ''} ${a.type || ''} ${a.area || ''} ${a.tag || ''} ${a.manufacturer || ''} ${(a.tags || []).join(' ')}`.toLowerCase()
         if (!haystack.includes(q)) return false
       }
       return true
     })
-  }, [assets, search, estadoFilter])
+  }, [assets, search, estadoFilter, colAreaFilter, colTagFilter, colNameFilter])
 
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Asset>(
     filtered,
@@ -214,12 +415,36 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
     null,
   )
 
-  const temFiltro = search.trim() || estadoFilter !== 'all'
-  function limparFiltros() { setSearch(''); setEstadoFilter('all') }
+  const uniqueAreas = useMemo(() => {
+    return Array.from(new Set(assets.map((a) => a.area).filter(Boolean))).sort((a, b) =>
+      String(a).localeCompare(String(b), 'pt', { numeric: true })
+    )
+  }, [assets])
+
+  const uniqueTags = useMemo(() => {
+    return Array.from(new Set(assets.map((a) => a.tag).filter(Boolean))).sort((a, b) =>
+      String(a).localeCompare(String(b), 'pt', { numeric: true })
+    )
+  }, [assets])
+
+  const uniqueNames = useMemo(() => {
+    return Array.from(new Set(assets.map((a) => a.name).filter(Boolean))).sort((a, b) =>
+      String(a).localeCompare(String(b), 'pt')
+    )
+  }, [assets])
+
+  const temFiltro = search.trim() || estadoFilter !== 'all' || colAreaFilter || colTagFilter || colNameFilter
+  function limparFiltros() {
+    setSearch('')
+    setEstadoFilter('all')
+    setColAreaFilter('')
+    setColTagFilter('')
+    setColNameFilter('')
+  }
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [search, estadoFilter, pageSize])
+  }, [search, estadoFilter, colAreaFilter, colTagFilter, colNameFilter, pageSize])
 
   const effectivePageSize = pageSize === -1 ? (shown.length || 1) : pageSize
   const totalPages = Math.ceil(shown.length / effectivePageSize) || 1
@@ -241,6 +466,25 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setShowQRScanner(true)}
+            className="bg-[#2E86C1] hover:bg-[#21618C] text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm shrink-0 active:scale-95 transition-all"
+            title="Digitalizar QR Code de equipamento"
+          >
+            <QrCode className="h-4 w-4 shrink-0 text-white stroke-[2.5]" />
+            <span className="text-xs font-bold text-white">Ler QR</span>
+          </button>
+          <button
+            onClick={() => {
+              setBatchSelectedIds(new Set(assets.map(a => a.id)))
+              setShowBatchQRModal(true)
+            }}
+            className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm shrink-0 active:scale-95 transition-all"
+            title="Gerar e imprimir QR Codes em lote"
+          >
+            <Printer className="h-4 w-4 shrink-0 text-white stroke-[2.5]" />
+            <span className="text-xs font-bold text-white">Imprimir QR</span>
+          </button>
           <button
             onClick={() => importInputRef.current?.click()}
             disabled={importing}
@@ -293,34 +537,29 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
         </div>
       )}
 
-      {assets.length > 0 && (
-        <div className="card p-3 mb-4">
+      {/* Barra de Filtros e Pesquisa */}
+      <div className="card p-4 mb-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={dict.assets.searchPlaceholder}
+              className="input pl-9 text-xs sm:text-sm"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-slate-400">
-              <Filter className="h-3.5 w-3.5" /> {dict.common.filters}
-            </span>
-            <div className="relative">
-              <Search className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={dict.assets.searchPlaceholder}
-                className="input text-sm py-1.5 pl-7 pr-7 w-56 sm:w-64"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-            <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value as typeof estadoFilter)} className="input text-sm py-1.5 w-auto">
-              <option value="all">{dict.assets.allStatus}</option>
-              <option value="active">{dict.assets.activeOnly}</option>
-              <option value="inactive">{dict.assets.inactiveOnly}</option>
-            </select>
             <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 ml-auto">
               <span>Por página:</span>
               <select
@@ -342,7 +581,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
             )}
           </div>
         </div>
-      )}
+      </div>
 
       {selectedAssets.size > 0 && (
         <div className="card p-3 mb-4 bg-[#2E86C1]/10 dark:bg-[#2E86C1]/20 border border-[#2E86C1]/20 flex items-center justify-between animate-fade-in-up">
@@ -358,69 +597,118 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
       )}
 
       <div className="card overflow-hidden">
-        {shown.length === 0 ? (
-          <div className="px-5 py-12 text-center text-gray-400">
-            <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p className="text-sm">{temFiltro ? dict.assets.emptyFilter : dict.assets.empty}</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs min-w-[600px] md:min-w-0">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
-                  <th className="px-3 py-3 w-10">
-                    <input type="checkbox" checked={shown.length > 0 && selectedAssets.size === shown.length} onChange={toggleSelectAll} className="rounded border-slate-300 bg-white" />
-                  </th>
-                  <SortableTh label={dict.assets.colArea} sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
-                  <SortableTh label={dict.assets.colTag} sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
-                  <SortableTh label={dict.assets.colName} sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
-                  <SortableTh label={dict.common.status} sortableKey="active" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
-                  <th className="px-3 py-3 text-right text-xs font-bold text-slate-700 uppercase tracking-wide">{dict.common.actions}</th>
-                </tr>
-                {/* Linha de Filtro por Colunas em Equipamentos */}
-                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
-                  <td className="p-1" />
-                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filtrar Área..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-mono" /></td>
-                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filtrar TAG..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-mono" /></td>
-                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filtrar Nome..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
-                  <td className="p-1">
-                    <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value as any)} className="input !text-[11px] !py-0.5 !px-1 w-full">
-                      <option value="all">Todos</option>
-                      <option value="active">Ativo</option>
-                      <option value="inactive">Inativo</option>
-                    </select>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[600px] md:min-w-0">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
+                <th className="px-3 py-3 w-10">
+                  <input type="checkbox" checked={shown.length > 0 && selectedAssets.size === shown.length} onChange={toggleSelectAll} className="rounded border-slate-300 bg-white" />
+                </th>
+                <SortableTh label={dict.assets.colArea} sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
+                <SortableTh label={dict.assets.colTag} sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
+                <SortableTh label={dict.assets.colName} sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
+                <SortableTh label={dict.common.status} sortableKey="active" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
+                <th className="px-3 py-3 text-right text-xs font-bold text-slate-700 uppercase tracking-wide">{dict.common.actions}</th>
+              </tr>
+              {/* Linha de Filtro por Colunas em Equipamentos */}
+              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
+                <td className="p-1" />
+                <td className="p-1">
+                  <select
+                    value={colAreaFilter}
+                    onChange={(e) => setColAreaFilter(e.target.value)}
+                    className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded"
+                  >
+                    <option value="">Área (Todas)</option>
+                    {uniqueAreas.map((a) => (
+                      <option key={String(a)} value={String(a)}>{String(a)}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="p-1">
+                  <select
+                    value={colTagFilter}
+                    onChange={(e) => setColTagFilter(e.target.value)}
+                    className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded"
+                  >
+                    <option value="">TAG (Todas)</option>
+                    {uniqueTags.map((t) => (
+                      <option key={String(t)} value={String(t)}>{String(t)}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="p-1">
+                  <select
+                    value={colNameFilter}
+                    onChange={(e) => setColNameFilter(e.target.value)}
+                    className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded"
+                  >
+                    <option value="">Nome (Todos)</option>
+                    {uniqueNames.map((n) => (
+                      <option key={String(n)} value={String(n)}>{String(n)}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="p-1">
+                  <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value as any)} className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded">
+                    <option value="all">Estado (Todos)</option>
+                    <option value="active">Ativo</option>
+                    <option value="inactive">Inativo</option>
+                  </select>
+                </td>
+                <td className="p-1" />
+              </tr>
+            </thead>
+            <tbody>
+              {currentShown.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-12 text-center text-slate-400">
+                    <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm font-medium">{temFiltro ? dict.assets.emptyFilter : dict.assets.empty}</p>
+                    {temFiltro && (
+                      <button
+                        type="button"
+                        onClick={limparFiltros}
+                        className="mt-3 text-xs font-bold text-[#2E86C1] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <X size={14} /> Limpar Todos os Filtros
+                      </button>
+                    )}
                   </td>
-                  <td className="p-1" />
                 </tr>
-              </thead>
-              <tbody>
-                {currentShown.map((a) => (
-                  <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
-                    <td className="px-3 py-2.5">
+              ) : (
+                currentShown.map((a) => (
+                  <tr
+                    key={a.id}
+                    onClick={() => router.push(`/dashboard/assets/${a.id}`)}
+                    className="border-b border-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition-colors cursor-pointer"
+                    title={`Clique para abrir Histórico de OTs e detalhes de ${a.name}`}
+                  >
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedAssets.has(a.id)} onChange={() => toggleSelection(a.id)} className="rounded border-slate-300 bg-white" />
                     </td>
-                    <td className="px-3 py-3.5 text-slate-900 font-mono font-bold">{a.area ?? '—'}</td>
-                    <td className="px-3 py-3.5 text-slate-900 font-bold">
+                    <td className="px-3 py-3.5 text-slate-900 dark:text-slate-100 font-mono font-bold">{a.area ?? '—'}</td>
+                    <td className="px-3 py-3.5 text-slate-900 dark:text-slate-100 font-bold">
                       {a.tag ? (
-                        <span className="inline-flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded bg-slate-100/90 border border-slate-200 text-slate-900">
+                        <span className="inline-flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100">
                           <Tag className="h-3 w-3" />{a.tag}
                         </span>
                       ) : '—'}
                     </td>
-                    <td className="px-3 py-3.5 font-bold text-slate-900">
+                    <td className="px-3 py-3.5 font-bold text-slate-900 dark:text-slate-100">
                       <div className="flex items-center gap-2">
                         {a.photoUrl ? (
                           <div className="relative w-7 h-7 rounded overflow-hidden border border-slate-300 flex-shrink-0">
                             <Image src={a.photoUrl} alt={a.name} fill className="object-cover" sizes="28px" />
                           </div>
                         ) : (
-                          <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center flex-shrink-0">
+                          <div className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
                             <Package className="h-3.5 w-3.5 text-slate-500" />
                           </div>
                         )}
-                        <Link href={`/dashboard/assets/${a.id}`} className="hover:text-safety-orange hover:underline transition-colors">
+                        <span className="hover:text-safety-orange hover:underline transition-colors">
                           {a.name}
-                        </Link>
+                        </span>
                       </div>
                     </td>
                     <td className="px-3 py-3.5">
@@ -428,23 +716,42 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                         {a.active ? dict.assets.lblActive : dict.assets.lblInactive}
                       </span>
                     </td>
-                    <td className="px-3 py-3.5 text-right">
-                      <button onClick={() => setPrintQRAsset(a)} className="text-slate-600 hover:text-purple-700 p-1.5" aria-label="Imprimir QR Code">
-                        <QrCode className="h-4 w-4" />
+                    <td className="px-3 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => router.push(`/dashboard/assets/${a.id}`)}
+                        className="text-slate-600 dark:text-slate-400 hover:text-industrial-blue dark:hover:text-blue-400 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
+                        title="Ver Histórico de OTs e Ficha Técnica"
+                      >
+                        <History className="h-4 w-4" />
                       </button>
-                      <button onClick={() => openEdit(a)} className="text-slate-600 hover:text-blue-700 p-1.5" aria-label="Editar">
+                      <button
+                        onClick={() => openEdit(a)}
+                        className="text-slate-600 dark:text-slate-400 hover:text-blue-700 dark:hover:text-blue-300 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
+                        title="Editar Equipamento"
+                      >
                         <Pencil className="h-4 w-4" />
                       </button>
-                      <button onClick={() => handleDelete(a)} className="text-slate-600 hover:text-red-700 p-1.5" aria-label="Eliminar">
+                      <button
+                        onClick={() => setPrintQRAsset(a)}
+                        className="text-slate-600 dark:text-slate-400 hover:text-purple-700 dark:hover:text-purple-300 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
+                        title="Imprimir QR Code / Etiqueta"
+                      >
+                        <QrCode className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(a)}
+                        className="text-slate-600 dark:text-slate-400 hover:text-red-700 dark:hover:text-red-400 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
+                        title="Eliminar"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
         {shown.length > 0 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50 rounded-b-xl">
@@ -459,6 +766,8 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 <option value={20}>20</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
+                <option value={500}>500</option>
+                <option value={-1}>Todos ({shown.length})</option>
               </select>
             </div>
             
@@ -511,23 +820,36 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formPhoto}</label>
                 <div className="flex items-center gap-3">
                   <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 dark:border-slate-700 flex items-center justify-center cursor-pointer hover:border-[#2E86C1] transition-colors overflow-hidden bg-gray-50 dark:bg-slate-800 flex-shrink-0"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-700 flex items-center justify-center cursor-pointer hover:border-[#2E86C1] transition-colors overflow-hidden bg-gray-50 dark:bg-slate-800 flex-shrink-0 relative group"
+                    title="Tirar foto com a câmara"
                   >
                     {photoPreview ? (
                       <Image src={photoPreview} alt="preview" width={80} height={80} className="w-full h-full object-cover rounded-xl" />
                     ) : (
-                      <Camera className="h-6 w-6 text-gray-300 dark:text-slate-500" />
+                      <div className="text-center p-1">
+                        <Camera className="h-6 w-6 mx-auto text-gray-400 dark:text-slate-500 group-hover:text-[#2E86C1]" />
+                        <span className="text-[9px] text-gray-400 font-medium block mt-0.5">Tirar Foto</span>
+                      </div>
                     )}
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-slate-400 space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-[#2E86C1] hover:underline font-medium block"
-                    >
-                      {photoPreview ? dict.assets.formChangePhoto : dict.assets.formUploadPhoto}
-                    </button>
+                  <div className="text-xs text-gray-500 dark:text-slate-400 space-y-1.5">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="btn-primary text-xs py-1 px-2.5 flex items-center gap-1.5"
+                      >
+                        <Camera className="h-3.5 w-3.5" /> Tirar Foto (Câmara)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="btn-secondary text-xs py-1 px-2.5 flex items-center gap-1.5"
+                      >
+                        📁 Escolher da Galeria
+                      </button>
+                    </div>
                     {photoPreview && (
                       <button
                         type="button"
@@ -537,9 +859,20 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                         <ImageOff className="h-3 w-3" /> {dict.assets.formRemovePhoto}
                       </button>
                     )}
-                    <p className="text-xs text-gray-400">JPG, PNG — máx. 5 MB</p>
+                    <p className="text-[11px] text-gray-400">JPG, PNG, WEBP — máx. 5 MB (Comprime automaticamente)</p>
                   </div>
                 </div>
+
+                {/* Input com capture=environment para câmara fotográfica direta */}
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+                {/* Input para escolher da galeria de fotos/ficheiros */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -627,9 +960,9 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
       )}
 
       {printQRAsset && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 print:p-0 print:bg-white bg-black/40 dark:bg-black/60 backdrop-blur-sm print:backdrop-blur-none">
-          <div className="absolute inset-0" onClick={() => setPrintQRAsset(null)} />
-          <div className="card relative w-full max-w-sm p-8 shadow-2xl bg-white dark:bg-slate-900 print:shadow-none print:border-none print:p-0 text-center">
+        <div className="print-qr-container fixed inset-0 z-[200] flex items-center justify-center p-4 print:p-0 print:bg-white bg-black/40 dark:bg-black/60 backdrop-blur-sm print:backdrop-blur-none">
+          <div className="absolute inset-0 print:hidden" onClick={() => setPrintQRAsset(null)} />
+          <div className="card relative w-full max-w-sm p-8 shadow-2xl bg-white dark:bg-slate-900 print:shadow-none print:border-none print:p-0 text-center text-gray-900 dark:text-slate-100">
             <button onClick={() => setPrintQRAsset(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 print:hidden">
               <X className="h-5 w-5" />
             </button>
@@ -662,10 +995,283 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
       
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
-          body > *:not(.fixed) { display: none !important; }
-          .fixed { position: static !important; }
+          body * {
+            visibility: hidden !important;
+          }
+          .print-qr-container, .print-qr-container *, .print-batch-container, .print-batch-container * {
+            visibility: visible !important;
+          }
+          .print-qr-container {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          .print-batch-container {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 194mm !important;
+            display: grid !important;
+            grid-template-columns: repeat(2, 94mm) !important;
+            grid-auto-rows: 65mm !important;
+            gap: 5mm !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+          }
+          .print-label-card {
+            width: 94mm !important;
+            height: 65mm !important;
+            border: 2px solid #000 !important;
+            border-radius: 10px !important;
+            padding: 6px 8px !important;
+            box-sizing: border-box !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            background: white !important;
+          }
+          .print\\:hidden {
+            display: none !important;
+          }
         }
       `}} />
+      
+      {/* MODAL DE IMPRESSÃO EM LOTE DE QR CODES */}
+      {showBatchQRModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 backdrop-blur-sm overflow-y-auto print:hidden">
+          <div className="absolute inset-0" onClick={() => setShowBatchQRModal(false)} />
+          <div className="card relative w-full max-w-4xl p-6 shadow-2xl bg-white dark:bg-slate-900 overflow-hidden my-8 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-purple-50 dark:bg-purple-900/30 rounded-xl text-purple-600 dark:text-purple-400">
+                  <Printer className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">Gerar & Imprimir QR Codes em Lote</h2>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Seleciona por Área ou TAGs específicas para imprimir etiquetas autocolantes (8 por folha A4)</p>
+                </div>
+              </div>
+              <button onClick={() => setShowBatchQRModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* FILTROS & OPÇÕES */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 shrink-0 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Filtrar por Área:</label>
+                <select
+                  value={batchArea}
+                  onChange={(e) => {
+                    const areaVal = e.target.value
+                    setBatchArea(areaVal)
+                    const matching = areaVal
+                      ? assets.filter(a => (a.area || '').trim().toLowerCase() === areaVal.toLowerCase()).map(a => a.id)
+                      : assets.map(a => a.id)
+                    setBatchSelectedIds(new Set(matching))
+                  }}
+                  className="input text-xs w-full font-semibold"
+                >
+                  <option value="">Todas as Áreas ({uniqueAreas.length})</option>
+                  {uniqueAreas.map(a => (
+                    <option key={String(a)} value={String(a)}>Área {String(a)}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2 flex items-end justify-between gap-2">
+                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  Etiquetas selecionadas: <strong className="text-purple-600 dark:text-purple-400 font-bold">{batchSelectedIds.size}</strong> de {assets.length}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pool = batchArea
+                        ? assets.filter(a => (a.area || '').trim().toLowerCase() === batchArea.toLowerCase())
+                        : assets
+                      setBatchSelectedIds(new Set(pool.map(a => a.id)))
+                    }}
+                    className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline"
+                  >
+                    Selecionar Todos
+                  </button>
+                  <span>•</span>
+                  <button
+                    type="button"
+                    onClick={() => setBatchSelectedIds(new Set())}
+                    className="text-[11px] font-bold text-slate-500 hover:underline"
+                  >
+                    Limpar Seleção
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* SELEÇÃO INDIVIDUAL DE EQUIPAMENTOS */}
+            <div className="overflow-y-auto flex-1 min-h-[160px] border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-900 mb-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {(batchArea ? assets.filter(a => (a.area || '').trim().toLowerCase() === batchArea.toLowerCase()) : assets).map((a) => {
+                const isChecked = batchSelectedIds.has(a.id)
+                return (
+                  <label key={a.id} className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition-all ${isChecked ? 'bg-purple-50/70 dark:bg-purple-950/40 border-purple-300 dark:border-purple-800' : 'bg-slate-50/50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60'}`}>
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={(e) => {
+                        const next = new Set(batchSelectedIds)
+                        if (e.target.checked) next.add(a.id)
+                        else next.delete(a.id)
+                        setBatchSelectedIds(next)
+                      }}
+                      className="rounded accent-purple-600 h-3.5 w-3.5"
+                    />
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-800 dark:text-slate-200 truncate">{a.name}</p>
+                      <p className="text-[10px] text-slate-500 truncate">TAG: <strong>{a.tag || '—'}</strong> • Área: <strong>{a.area || '—'}</strong></p>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+
+            {/* BOTÕES DE AÇÃO */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowBatchQRModal(false)}
+                className="btn-secondary text-xs"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                disabled={batchSelectedIds.size === 0}
+                className="btn-primary text-xs flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
+              >
+                <Printer className="h-4 w-4" /> Imprimir {batchSelectedIds.size} Etiquetas (8 por folha A4)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ÁREA DE IMPRESSÃO EM LOTE (GRID DE ETIQUETAS A4: 8 POR PÁGINA) */}
+      {showBatchQRModal && (
+        <div className="hidden print:grid print-batch-container">
+          {assets
+            .filter(a => batchSelectedIds.has(a.id))
+            .map((a) => {
+              const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://rg-maintenance.vercel.app'
+              const qrDataUrl = `${currentOrigin}/dashboard/assets?tag=${encodeURIComponent(a.tag || a.id)}&id=${a.id}`
+              const qrApiImg = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrDataUrl)}`
+
+              return (
+                <div key={a.id} className="print-label-card">
+                  <div className="w-full text-center">
+                    <div className="text-[8px] font-black uppercase tracking-widest text-slate-500">RG MAINTENANCE</div>
+                    <h3 className="text-[11px] font-extrabold text-slate-900 leading-tight truncate max-w-full px-1">{a.name}</h3>
+                    <div className="text-[10px] font-extrabold text-slate-800 mt-0.5">
+                      TAG: <span className="text-purple-800">{a.tag || a.id}</span> • Área: <span>{a.area || 'Geral'}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="w-24 h-24 my-0.5 border border-slate-300 p-1 rounded-lg bg-white flex items-center justify-center shrink-0">
+                    <img src={qrApiImg} alt={`QR Code ${a.tag || a.id}`} className="w-full h-full object-contain" />
+                  </div>
+
+                  <div className="text-[7.5px] font-mono text-slate-500 uppercase tracking-tight">SCAN PARA FICHA DO EQUIPAMENTO</div>
+                </div>
+              )
+            })}
+        </div>
+      )}
+
+      {showQRScanner && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 backdrop-blur-sm">
+          <div className="absolute inset-0" onClick={() => setShowQRScanner(false)} />
+          <div className="card relative w-full max-w-md p-6 shadow-2xl bg-white dark:bg-slate-900 overflow-hidden">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-xl text-[#2E86C1]">
+                  <QrCode className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">Leitor de QR Code</h2>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Digitalizar etiqueta de equipamento</p>
+                </div>
+              </div>
+              <button onClick={() => setShowQRScanner(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="relative bg-slate-950 rounded-2xl overflow-hidden mb-4 min-h-[220px] flex items-center justify-center border border-slate-800">
+              <video ref={videoRef} className={`w-full h-[220px] object-cover ${cameraActive ? 'block' : 'hidden'}`} playsInline muted />
+              {!cameraActive && (
+                <div className="text-center p-6 text-slate-400">
+                  <Camera className="h-10 w-10 mx-auto mb-2 opacity-50 text-slate-500" />
+                  <p className="text-xs">A câmara não está ativa ou a permissão foi recusada.</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Usa a pesquisa por TAG ou ID abaixo.</p>
+                </div>
+              )}
+              {cameraActive && (
+                <div className="absolute inset-0 border-2 border-dashed border-[#2E86C1]/70 rounded-2xl pointer-events-none animate-pulse flex items-center justify-center">
+                  <div className="w-48 h-48 border border-white/40 rounded-xl" />
+                </div>
+              )}
+            </div>
+
+            {qrError && (
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-600 dark:text-red-400 font-medium">
+                {qrError}
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                resolveAndNavigateQR(qrInput)
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
+                  Introduzir TAG, ID ou colar URL do QR:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={qrInput}
+                    onChange={(e) => {
+                      setQrInput(e.target.value)
+                      setQrError('')
+                    }}
+                    placeholder="Ex: 10 ED, asset_ur_1..."
+                    className="input text-xs flex-1"
+                    autoFocus
+                  />
+                  <button type="submit" className="btn-primary text-xs px-3.5 flex items-center gap-1.5 shrink-0">
+                    <Search className="h-3.5 w-3.5" /> Abrir Histórico
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

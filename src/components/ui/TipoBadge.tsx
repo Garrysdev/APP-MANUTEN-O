@@ -24,6 +24,10 @@ export function getTipoBadgeClass(tipo: TipoTarefa | string): string {
     // Vermelho, com texto amarelo - Pedido de Intervenção
     return 'bg-red-600 text-yellow-300 border border-red-700 font-extrabold'
   }
+  if (t === 'stp' || t === 'serviço técnico prestador' || t === 'paragem') {
+    // Roxo escuro com texto branco - Serviço Técnico Prestador / Paragem
+    return 'bg-purple-700 text-white border border-purple-800 font-extrabold'
+  }
   if (t === 'preventiva' || t === 'mp') {
     return 'bg-blue-600 text-white border border-blue-700 font-bold'
   }
@@ -39,6 +43,7 @@ export function TipoBadge({ tipo, codeOnly = false }: { tipo: TipoTarefa | strin
     t === 'preventiva' ? 'MP' :
     t === 'plano' || t === 'pm' ? 'PM' :
     t === 'pi' ? 'PI' :
+    t === 'stp' ? 'STP' :
     t === 'investimento' || t === 'mi' ? 'MI' :
     t.toUpperCase()
   )

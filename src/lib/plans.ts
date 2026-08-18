@@ -1,6 +1,6 @@
 import type { PlanName } from '@/types/models'
 
-export type FeatureKey = 'assets' | 'history' | 'users' | 'reports' | 'maintenance-plan' | 'calendar' | 'stocks' | 'finance' | 'aiConsultant' | 'reliability' | 'compliance'
+export type FeatureKey = 'assets' | 'history' | 'users' | 'reports' | 'maintenance-plan' | 'calendar' | 'stocks' | 'finance' | 'aiConsultant' | 'reliability' | 'compliance' | 'projects'
 
 export interface PlanLimits {
   maxUsers: number
@@ -9,11 +9,11 @@ export interface PlanLimits {
 }
 
 const GATES: Record<PlanName, Record<FeatureKey, boolean>> = {
-  free:       { assets: false, history: false, users: false, reports: false, 'maintenance-plan': false, calendar: false, stocks: false, finance: false, aiConsultant: false, reliability: false, compliance: false },
-  starter:    { assets: true,  history: false, users: false, reports: true,  'maintenance-plan': false, calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: false, compliance: false },
-  pro:        { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: true,  compliance: false },
-  business:   { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: false },
-  enterprise: { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: true  },
+  free:       { assets: false, history: false, users: false, reports: false, 'maintenance-plan': false, calendar: false, stocks: false, finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false },
+  starter:    { assets: true,  history: false, users: false, reports: true,  'maintenance-plan': false, calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false },
+  pro:        { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: true,  compliance: false, projects: true },
+  business:   { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: false, projects: true },
+  enterprise: { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: true,  projects: true },
 }
 
 export const LIMITS: Record<PlanName, PlanLimits> = {
@@ -36,6 +36,7 @@ export const TEASER_LIMITS: Record<FeatureKey, number> = {
   aiConsultant: 0,
   reliability: 0,
   compliance: 0,
+  projects: 2,
 }
 
 export const PLAN_LABELS: Record<PlanName, string> = {

@@ -11,6 +11,7 @@ export type TipoTarefa =
   | 'curativa'
   | 'plano'
   | 'pi'
+  | 'stp'
   | 'inspecao'
   | 'lubrificacao'
   | 'calibracao'
@@ -120,6 +121,8 @@ export interface Asset {
   manufacturer?: string | null // FORNECEDOR / FABRICANTE
   characteristics?: string | null // CARACTERISTICAS
   criticidadeABC?: CriticidadeABC | null // categoria A/B/C
+  qrCode?: string | null // Código QR guardado do equipamento
+  qrCodeUrl?: string | null // URL do Código QR
 }
 
 export interface Task {
@@ -129,6 +132,7 @@ export interface Task {
   description?: string | null
   assetId?: string | null
   assignedTo?: string | null
+  assignedToIds?: string[] | null
   criticidade: TaskCriticidade
   tipo: TipoTarefa
   status: TaskStatus
@@ -136,12 +140,21 @@ export interface Task {
   plannedStartDate?: string | null // ISO date/datetime: Data planeada de início
   completedAt?: string | null // ISO date/datetime: Data de conclusão
   tag?: string | null // TAG do equipamento
+  area?: string | null // Área da OT
+  tipoText?: string | null // TI text (ex: MC, MI, PI, PM, STP, PR)
+  ti?: string | null // Código TI
+  observations?: string | null // Observações da OT
   observacoes?: string | null // Observações adicionais da OT
   safetyRules?: string[] | null
   materialsRequired?: string[] | null
   maintenancePlanId?: string | null
   totalCost?: number | null
+  requiredFRs?: string[] | null // Folhas de Registo obrigatorias
+  requiredITs?: string[] | null // Instrucoes de Trabalho obrigatorias
+  completedFRs?: Record<string, any> | null // Dados preenchidos nas Folhas de Registo
+  acknowledgedITs?: string[] | null // IDs/nomes das ITs lidas e confirmadas
   createdBy: string
+  createdByName?: string | null // Nome do utilizador que criou/abriu a OT
   createdAt: string
   updatedAt: string
 }
@@ -214,6 +227,8 @@ export interface MaintenancePlan {
   showInCalendar?: boolean | null // Marcador para incluir no Calendário (default: false)
   calendarStartDate?: string | null // Data da primeira execução no calendário
   calendarDates?: string[] | null // Lista de datas agendadas no calendário
+  nextDueDate?: string | null // Próxima data de execução agendada
+  includeInGantt?: boolean | null // Marcador para incluir no Gráfico de Gantt de Projetos (Paragens AGO/DEZ e Intervenções)
 }
 
 export interface StockItem {
@@ -224,6 +239,8 @@ export interface StockItem {
   code?: string | null
   area?: string | null
   tag?: string | null
+  assetId?: string | null
+  assetIds?: string[] | null
   system?: string | null
   cost?: number | null
   description?: string | null
@@ -287,6 +304,7 @@ export const TIPO_LABELS: Record<TipoTarefa, string> = {
   curativa: 'MC',
   plano: 'PM',
   pi: 'PI',
+  stp: 'STP',
   inspecao: 'INS',
   lubrificacao: 'LUB',
   calibracao: 'CAL',

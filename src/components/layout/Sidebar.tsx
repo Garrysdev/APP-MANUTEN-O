@@ -47,7 +47,6 @@ const managerNavGroups: NavGroup[] = [
     items: [
       { href: '/dashboard',                    key: 'dashboard',       icon: LayoutDashboard },
       { href: '/dashboard/tasks',              key: 'tasks',           icon: ClipboardList },
-      { href: '/dashboard/projects',           key: 'projects',        icon: FolderKanban },
       { href: '/dashboard/users',              key: 'users',           icon: Users,          feature: 'users' },
       { href: '/dashboard/history',            key: 'history',         icon: History,        feature: 'history' },
     ]
@@ -65,6 +64,7 @@ const managerNavGroups: NavGroup[] = [
   {
     groupName: 'Módulos Pro',
     items: [
+      { href: '/dashboard/projects',           key: 'projects',        icon: FolderKanban,   feature: 'projects' },
       { href: '/dashboard/reports',            key: 'reports',         icon: FileBarChart,   feature: 'reports' },
       { href: '/dashboard/reliability',        key: 'reliability',     icon: Activity,       feature: 'reliability' },
     ]
@@ -84,8 +84,9 @@ const managerNavGroups: NavGroup[] = [
     ]
   },
   {
-    groupName: 'Configurações',
+    groupName: 'Configurações & Ajuda',
     items: [
+      { href: '/dashboard/manual',             key: 'userManual',      icon: BookOpen },
       { href: '/dashboard/profile',            key: 'profile',         icon: UserCircle },
       { href: '/dashboard/billing',            key: 'upgrade',         icon: CreditCard },
     ]
@@ -93,11 +94,17 @@ const managerNavGroups: NavGroup[] = [
 ]
 
 const techNavKeys: NavItem[] = [
-  { href: '/dashboard/tasks',   key: 'tasks',    icon: ClipboardList },
-  { href: '/dashboard/projects', key: 'projects', icon: FolderKanban },
-  { href: '/dashboard/history', key: 'history',  icon: History },
-  { href: '/dashboard/profile', key: 'profile',  icon: UserCircle },
+  { href: '/dashboard/tasks',   key: 'tasks',   icon: ClipboardList },
+  { href: '/dashboard/assets',  key: 'assets',  icon: Package, feature: 'assets' },
+  { href: '/dashboard/history', key: 'history', icon: History },
+  { href: '/dashboard/profile', key: 'profile', icon: UserCircle },
 ]
+
+function isTechRole(role?: string | null): boolean {
+  if (!role) return false
+  const r = role.toLowerCase().trim()
+  return r === 'technician' || r === 'tecnico' || r === 'técnico' || r === 'tech'
+}
 
 export default function Sidebar({ user, open: externalOpen, onOpenChange }: SidebarProps) {
   const pathname = usePathname()
@@ -110,6 +117,9 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
     setInternalOpen(v)
     onOpenChange?.(v)
   }
+
+  const isTechnician = isTechRole(user.role)
+  const isManager = !isTechnician
 
   const plan = (user.company?.plan ?? 'free') as PlanName
   const lang = (user.language || 'pt') as Language
@@ -124,7 +134,7 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
 
   const NavLinks = () => (
     <nav className="flex-1 px-3 flex flex-col gap-1 overflow-y-auto custom-scrollbar pt-2">
-      {user.role === 'manager' ? (
+      {isManager ? (
         managerNavGroups.map((group, idx) => (
           <div key={idx} className="mb-4 last:mb-0">
             <h3 className="px-4 text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest mb-1.5">
@@ -225,7 +235,7 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
           </div>
         </div>
         
-        {user.role === 'manager' && (
+        {isManager && (
           <div className="px-6">
             <button onClick={() => router.push('/dashboard/tasks')} className="w-full btn-primary h-10 uppercase text-[11px] tracking-widest font-bold">
               <Plus size={16} />
@@ -261,7 +271,7 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
               </button>
             </div>
             
-            {user.role === 'manager' && (
+            {isManager && (
               <div className="px-6">
                 <button onClick={() => { setOpen(false); router.push('/dashboard/tasks'); }} className="w-full btn-primary h-10 uppercase text-[11px] tracking-widest font-bold">
                   <Plus size={16} />

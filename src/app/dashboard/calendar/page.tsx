@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export default async function CalendarPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
-  if (profile.role === 'technician') redirect('/dashboard/tasks')
+  if (profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const plan = (profile.company?.plan ?? 'free') as PlanName
   if (!planHas(plan, 'calendar')) redirect('/dashboard/billing')
@@ -33,7 +33,7 @@ export default async function CalendarPage() {
       <CalendarClient
         tasks={tasks}
         plans={plans}
-        assets={assets.map((a) => ({ id: a.id, name: a.name, tag: a.tag }))}
+        assets={assets.map((a) => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))}
         users={users.map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl, active: u.active }))}
         role={profile.role}
         userId={profile.id}

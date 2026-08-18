@@ -83,7 +83,7 @@ export default function SafetyRulesClient({ initialRules }: { initialRules: Safe
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-7 w-7 text-safety-orange" />
             <h1 className="text-2xl font-extrabold text-industrial-blue dark:text-slate-100">
-              Itens & Regras de Segurança
+              Regras de Segurança
             </h1>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">

@@ -19,6 +19,8 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
+import { OfflineProvider } from '@/components/providers/OfflineProvider'
+
 export default function RootLayout({
   children,
 }: {
@@ -28,7 +30,9 @@ export default function RootLayout({
     <html lang="pt" suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
-          {children}
+          <OfflineProvider>
+            {children}
+          </OfflineProvider>
         </ThemeProvider>
       </body>
     </html>

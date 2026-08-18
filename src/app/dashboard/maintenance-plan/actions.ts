@@ -7,6 +7,9 @@ import {
   createMaintenancePlan,
   updateMaintenancePlan,
   deleteMaintenancePlan,
+  getMaintenancePlan,
+  createTask,
+  deleteTasksByMaintenancePlan,
   listAssets,
 } from '@/lib/firebase/data'
 import type { TaskCriticidade, TipoTarefa, Periodicidade, Executor } from '@/types/models'
@@ -69,16 +72,60 @@ export async function togglePlanCalendarAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   try {
+    const plan = await getMaintenancePlan(profile.companyId, id)
     await updateMaintenancePlan(profile.companyId, id, {
       showInCalendar,
       calendarStartDate: calendarStartDate ?? null,
       calendarDates: calendarDates ?? null,
     })
+
+    // Eliminar tarefas agendadas anteriores deste plano
+    await deleteTasksByMaintenancePlan(profile.companyId, id)
+
+    if (showInCalendar && calendarDates && calendarDates.length > 0 && plan) {
+      for (const d of calendarDates) {
+        await createTask(profile.companyId, profile.id, {
+          title: `[PM] ${plan.title}`,
+          description: plan.description,
+          assetId: plan.assetId,
+          assignedTo: plan.assignedTo,
+          criticidade: plan.criticidade,
+          tipo: plan.tipo || 'preventiva',
+          status: 'pending',
+          dueDate: d,
+          plannedStartDate: d,
+          safetyRules: plan.safetyRules,
+          maintenancePlanId: id,
+        })
+      }
+    }
+
     revalidatePath('/dashboard/maintenance-plan')
     revalidatePath('/dashboard/calendar')
+    revalidatePath('/dashboard/tasks')
+    revalidatePath('/dashboard/projects')
+    revalidatePath('/dashboard')
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao atualizar marcador do calendário.' }
+  }
+}
+
+export async function togglePlanGanttAction(
+  id: string,
+  includeInGantt: boolean
+): Promise<PlanFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  try {
+    await updateMaintenancePlan(profile.companyId, id, {
+      includeInGantt,
+    })
+    revalidatePath('/dashboard/maintenance-plan')
+    revalidatePath('/dashboard/projects')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao atualizar marcador de Gantt.' }
   }
 }
 

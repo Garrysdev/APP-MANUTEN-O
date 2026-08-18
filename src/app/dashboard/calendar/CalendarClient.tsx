@@ -2,16 +2,17 @@
 
 import React, { useState, useTransition, useId } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Wrench, ClipboardList, ShieldAlert, X, Plus, Minus, Package, RefreshCw, Copy, Check, ExternalLink, Share2, Calendar as CalendarIcon } from 'lucide-react'
-import type { Task, MaintenancePlan, TaskCriticidade, TipoTarefa, RecurrenceType, UserRole } from '@/types/models'
-import { CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS } from '@/types/models'
-import { createTaskFromPlanAction } from './actions'
-import { createTaskAction } from '@/app/dashboard/tasks/actions'
+import { ChevronLeft, ChevronRight, Wrench, ClipboardList, ShieldAlert, X, Plus, Minus, Package, RefreshCw, Copy, Check, ExternalLink, Share2, Calendar as CalendarIcon, GripVertical, Printer, CheckSquare, Square, Pencil, Trash2 } from 'lucide-react'
+import type { Task, MaintenancePlan, TaskCriticidade, TipoTarefa, TaskStatus, RecurrenceType, UserRole } from '@/types/models'
+import { CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS, STATUS_LABELS } from '@/types/models'
+import { createTaskFromPlanAction, rescheduleCalendarItemAction } from './actions'
+import { createTaskAction, updateTaskAction, deleteTaskAction, updateTaskStatusAction } from '@/app/dashboard/tasks/actions'
 import Avatar from '@/components/ui/Avatar'
 import MaterialsSelector from '@/components/ui/MaterialsSelector'
+import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
 import { getTipoBadgeClass } from '@/components/ui/TipoBadge'
 
-type Ref = { id: string; name: string; tag?: string | null }
+type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
 type UserRef = Ref & { avatarUrl?: string | null; active?: boolean }
 type ViewMode = 'month' | 'week' | 'day'
 
@@ -76,34 +77,90 @@ function getWeekStart(date: Date): Date {
   return d
 }
 
+function getPlanTargetDates(plan: MaintenancePlan): string[] {
+  if (plan.calendarDates && plan.calendarDates.length > 0) {
+    return plan.calendarDates
+  }
+  if (plan.calendarStartDate) {
+    return [plan.calendarStartDate]
+  }
+  if (plan.nextDueDate) {
+    return [plan.nextDueDate]
+  }
+
+  const pLow = String(plan.periodicidade || '').toLowerCase()
+  const pLabelLow = String(plan.periodicidadeLabel || '').toLowerCase()
+  const titleLow = String(plan.title || '').toLowerCase()
+  const descLow = String(plan.description || '').toLowerCase()
+  const combo = `${pLow} ${pLabelLow} ${titleLow} ${descLow}`
+
+  if (combo.includes('bianual') || combo.includes('2x/ano') || combo.includes('2x ano')) {
+    return ['2026-08-08', '2026-12-21']
+  }
+
+  if (combo.includes('anual') || combo.includes('1x/ano')) {
+    return ['2026-08-08']
+  }
+
+  return []
+}
+
 function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end: Date): Map<string, CalendarEvent[]> {
   const map = new Map<string, CalendarEvent[]>()
   function add(date: string, ev: CalendarEvent) {
     if (!map.has(date)) map.set(date, [])
     map.get(date)!.push(ev)
   }
+
   tasks.forEach((task) => {
-    if (!task.dueDate) return
-    const d = task.dueDate.slice(0, 10)
-    const dd = new Date(d + 'T12:00:00')
-    if (dd >= start && dd <= end) {
-      add(d, { date: d, type: 'task', task, label: task.title, criticidade: task.criticidade })
+    let dates: string[] = []
+    const d = task.dueDate ? task.dueDate.slice(0, 10) : task.plannedStartDate ? task.plannedStartDate.slice(0, 10) : null
+    if (d) {
+      dates = [d]
+    } else {
+      const linkedPlan = task.maintenancePlanId ? plans.find((p) => p.id === task.maintenancePlanId) : null
+      if (linkedPlan) {
+        dates = getPlanTargetDates(linkedPlan)
+      }
     }
+
+    dates.forEach((d) => {
+      const dd = new Date(d + 'T12:00:00')
+      if (dd >= start && dd <= end) {
+        add(d, { date: d, type: 'task', task, label: task.title, criticidade: task.criticidade })
+      }
+    })
   })
-  plans.filter((p) => p.active && p.showInCalendar === true).forEach((plan) => {
-    if (plan.calendarDates && plan.calendarDates.length > 0) {
-      plan.calendarDates.forEach((d) => {
+
+  plans.filter((p) => p.active !== false).forEach((plan) => {
+    // Se este plano já tiver uma OT em taskList (convertida ou reagendada),
+    const hasConvertedTask = tasks.some(
+      (t) =>
+        t.maintenancePlanId === plan.id ||
+        t.id === plan.id ||
+        t.id === `plan_${plan.id}` ||
+        plan.id === `plan_${t.id}` ||
+        (t.maintenancePlanId && plan.id.endsWith(t.maintenancePlanId))
+    )
+    if (hasConvertedTask) {
+      return
+    }
+
+    const targetDates = getPlanTargetDates(plan)
+    if (targetDates.length > 0) {
+      targetDates.forEach((d) => {
         const dd = new Date(d + 'T12:00:00')
         if (dd >= start && dd <= end) {
           add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
         }
       })
-    } else {
+    } else if (plan.showInCalendar || (plan.calendarDates && plan.calendarDates.length > 0)) {
       computePlanOccurrencesInRange(plan, start, end).forEach((d) =>
         add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
       )
     }
   })
+
   return map
 }
 
@@ -212,6 +269,12 @@ export default function CalendarClient({
   const router = useRouter()
   const today = new Date()
 
+  const [taskList, setTaskList] = useState<Task[]>(tasks)
+  const [planList, setPlanList] = useState<MaintenancePlan[]>(plans)
+
+  React.useEffect(() => { setTaskList(tasks) }, [tasks])
+  React.useEffect(() => { setPlanList(plans) }, [plans])
+
   // Month view state
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
@@ -245,6 +308,182 @@ export default function CalendarClient({
   const [ntMaterials, setNtMaterials] = useState<string[]>([''])
   const [ntBusy, startNtTransition] = useTransition()
   const [ntError, setNtError] = useState('')
+
+  // Edit existing task modal from calendar
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [etTitle, setEtTitle] = useState('')
+  const [etTipo, setEtTipo] = useState<TipoTarefa>('preventiva')
+  const [etCriticidade, setEtCriticidade] = useState<TaskCriticidade>('verde')
+  const [etStatus, setEtStatus] = useState<TaskStatus>('pending')
+  const [etAssetId, setEtAssetId] = useState('')
+  const [etAssignedTo, setEtAssignedTo] = useState('')
+  const [etDueDate, setEtDueDate] = useState('')
+  const [etPlannedStartDate, setEtPlannedStartDate] = useState('')
+  const [etDescription, setEtDescription] = useState('')
+  const [etObservacoes, setEtObservacoes] = useState('')
+  const [etSafetyRules, setEtSafetyRules] = useState<string[]>([''])
+  const [etBusy, startEtTransition] = useTransition()
+  const [etError, setEtError] = useState('')
+
+  function openEditTask(task: Task) {
+    setEditingTask(task)
+    setEtTitle(task.title || '')
+    setEtTipo(task.tipo || 'preventiva')
+    setEtCriticidade(task.criticidade || 'verde')
+    setEtStatus(task.status || 'pending')
+    setEtAssetId(task.assetId || '')
+    setEtAssignedTo(task.assignedTo || '')
+    setEtDueDate(task.dueDate || '')
+    setEtPlannedStartDate(task.plannedStartDate || '')
+    setEtDescription(task.description || '')
+    setEtObservacoes(task.observacoes || '')
+    setEtSafetyRules(task.safetyRules && task.safetyRules.length > 0 ? task.safetyRules : [''])
+    setEtError('')
+  }
+
+  function openPlanAsOT(plan: MaintenancePlan, targetDate?: string) {
+    const dateStr = targetDate || plan.calendarStartDate || toYMD(new Date())
+    const existingTask = taskList.find(
+      (t) => t.maintenancePlanId === plan.id || (t.title && t.title.toLowerCase().includes(plan.title.toLowerCase()))
+    )
+    if (existingTask) {
+      openEditTask(existingTask)
+    } else {
+      const planTask: Task = {
+        id: `plan_${plan.id}`,
+        companyId: plan.companyId,
+        title: `[PM] ${plan.title}`,
+        description: plan.description || `Plano de Manutenção: ${plan.periodicidadeLabel || plan.periodicidade || 'PM'} | TAG: ${plan.tag || '—'}`,
+        assetId: plan.assetId || '',
+        assignedTo: plan.assignedTo || '',
+        criticidade: plan.criticidade || 'verde',
+        tipo: 'plano' as TipoTarefa,
+        status: 'pending' as TaskStatus,
+        dueDate: dateStr,
+        plannedStartDate: dateStr,
+        createdAt: dateStr,
+        updatedAt: dateStr,
+        createdBy: plan.createdBy || '',
+        safetyRules: plan.safetyRules || [],
+        maintenancePlanId: plan.id,
+      }
+      openEditTask(planTask)
+    }
+  }
+
+  // Drag and Drop state & handlers (Estilo Gmail / Google Calendar / Outlook)
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null)
+  const [isRescheduling, startRescheduleTransition] = useTransition()
+
+  function handleDragStart(e: React.DragEvent, ev: CalendarEvent) {
+    const id = ev.type === 'task' ? ev.task?.id : (ev.plan?.id ? `plan_${ev.plan.id}` : null)
+    if (!id) return
+    const payload = JSON.stringify({ type: ev.type, id, originalDate: ev.date })
+    e.dataTransfer.setData('text/plain', payload)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleDragOver(e: React.DragEvent, dateStr: string) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverDate !== dateStr) {
+      setDragOverDate(dateStr)
+    }
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOverDate(null)
+  }
+
+  async function handleDropOnDate(e: React.DragEvent, targetDate: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverDate(null)
+
+    const rawData = e.dataTransfer.getData('text/plain')
+    if (!rawData) return
+    try {
+      const { type, id, originalDate } = JSON.parse(rawData) as { type: 'task' | 'plan'; id: string; originalDate?: string }
+      if (!id || originalDate === targetDate) return
+
+      const targetTaskId = id.startsWith('plan_') ? id : (type === 'plan' ? `plan_${id}` : id)
+      const targetPlanId = targetTaskId.startsWith('plan_') ? targetTaskId.replace('plan_', '') : null
+
+      setTaskList((prev) => {
+        const exists = prev.some((t) => t.id === targetTaskId)
+        if (exists) {
+          return prev.map((t) => (t.id === targetTaskId ? { ...t, dueDate: targetDate, plannedStartDate: `${targetDate}T09:00` } : t))
+        }
+        const p = targetPlanId ? planList.find((pl) => pl.id === targetPlanId) : null
+        const newTask: Task = {
+          id: targetTaskId,
+          companyId: p?.companyId || '',
+          title: p ? `[PM] ${p.title}` : 'Nova OT',
+          assetId: p?.assetId || null,
+          assignedTo: p?.assignedTo || null,
+          criticidade: p?.criticidade || 'verde',
+          tipo: 'plano',
+          status: 'pending',
+          dueDate: targetDate,
+          plannedStartDate: `${targetDate}T09:00`,
+          createdAt: targetDate,
+          updatedAt: targetDate,
+          createdBy: userId,
+          maintenancePlanId: targetPlanId,
+        }
+        return [newTask, ...prev]
+      })
+
+      if (targetPlanId) {
+        setPlanList((prev) =>
+          prev.map((p) =>
+            p.id === targetPlanId
+              ? {
+                  ...p,
+                  calendarStartDate: targetDate,
+                  calendarDates: [targetDate],
+                  nextDueDate: targetDate,
+                }
+              : p
+          )
+        )
+      }
+
+      startRescheduleTransition(async () => {
+        const res = await rescheduleCalendarItemAction(type, id, targetDate, originalDate)
+        if (res.error) {
+          console.warn(`Erro ao reagendar: ${res.error}`)
+        } else {
+          router.refresh()
+        }
+      })
+    } catch (err) {
+      console.error('Erro no drag & drop:', err)
+    }
+  }
+
+  // Toggle OT status directly in calendar (gestores apenas)
+  const [isTogglingStatus, startStatusTransition] = useTransition()
+  const [showPrintModal, setShowPrintModal] = useState(false)
+
+  async function handleToggleTaskStatus(taskId: string, currentStatus: string) {
+    if (role !== 'manager') {
+      alert('Apenas gestores podem encerrar OTs no calendário.')
+      return
+    }
+    const isDone = currentStatus === 'done' || currentStatus === 'completed'
+    const newStatus = isDone ? 'pending' : 'done'
+
+    startStatusTransition(async () => {
+      const res = await updateTaskStatusAction(taskId, newStatus)
+      if (res.error) {
+        alert(`Erro ao atualizar estado: ${res.error}`)
+      } else {
+        router.refresh()
+      }
+    })
+  }
 
   // Navigation
   function prevPeriod() {
@@ -285,8 +524,8 @@ export default function CalendarClient({
   const monthEnd = new Date(year, month + 1, 0, 23, 59, 59)
   const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6); weekEnd.setHours(23, 59, 59)
   const eventMap = viewMode === 'month'
-    ? buildEventMap(tasks, plans, monthStart, monthEnd)
-    : buildEventMap(tasks, plans, weekStart, weekEnd)
+    ? buildEventMap(taskList, planList, monthStart, monthEnd)
+    : buildEventMap(taskList, planList, weekStart, weekEnd)
 
   const todayStr = toYMD(today)
   const activeSelectedDate = selectedDate || todayStr
@@ -385,32 +624,38 @@ export default function CalendarClient({
 
   return (
     <div>
-      {/* Header com botão + Nova OT no topo */}
-      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <button onClick={prevPeriod} className="p-2 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800">
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <button onClick={goToToday} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700">
-            Hoje
-          </button>
-          <button onClick={nextPeriod} className="p-2 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800">
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
+      {/* Header com botões e navegadores */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 gap-3 bg-slate-50/80 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Navegação Prev / Hoje / Next */}
+          <div className="flex items-center gap-1">
+            <button onClick={prevPeriod} className="p-1.5 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer" title="Anterior">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button onClick={goToToday} className="px-2.5 py-1 bg-slate-200/80 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors border border-slate-300/60 dark:border-slate-700 cursor-pointer">
+              Hoje
+            </button>
+            <button onClick={nextPeriod} className="p-1.5 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer" title="Seguinte">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
 
-        <div className="flex items-center gap-3 justify-center flex-wrap">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-slate-100 capitalize">{headerLabel}</h2>
-          <div className="flex rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden text-xs">
+          {/* Mês/Ano */}
+          <h2 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-slate-100 capitalize min-w-[130px]">
+            {headerLabel}
+          </h2>
+
+          {/* Vista Mês/Semana/Dia */}
+          <div className="flex rounded-lg border border-gray-300 dark:border-slate-700 overflow-hidden text-xs font-bold">
             <button
               onClick={() => setViewMode('month')}
-              className={`px-3.5 py-1.5 font-bold transition-colors ${viewMode === 'month' ? 'bg-[#1B4F72] text-white' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
+              className={`px-3 py-1 font-bold transition-colors cursor-pointer ${viewMode === 'month' ? 'bg-[#1B4F72] text-white' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800'}`}
             >
               Mês
             </button>
             <button
               onClick={() => setViewMode('week')}
-              className={`px-3.5 py-1.5 font-bold transition-colors ${viewMode === 'week' ? 'bg-[#1B4F72] text-white' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
+              className={`px-3 py-1 font-bold transition-colors cursor-pointer ${viewMode === 'week' ? 'bg-[#1B4F72] text-white' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800'}`}
             >
               Semana
             </button>
@@ -419,38 +664,55 @@ export default function CalendarClient({
                 setViewMode('day')
                 if (!selectedDate) setSelectedDate(todayStr)
               }}
-              className={`px-3.5 py-1.5 font-bold transition-colors ${viewMode === 'day' ? 'bg-[#1B4F72] text-white' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
+              className={`px-3 py-1 font-bold transition-colors cursor-pointer ${viewMode === 'day' ? 'bg-[#1B4F72] text-white' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800'}`}
             >
               Dia
             </button>
           </div>
         </div>
 
-        {/* Botões do Topo: Sincronização e Nova OT */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Botões do Topo: Imprimir Agendamentos, Sincronização e Nova OT */}
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <button
+            onClick={() => setShowPrintModal(true)}
+            className="h-8.5 px-3 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl shadow-sm border border-slate-300 dark:border-slate-700 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+            title="Imprimir relatório de agendamentos da semana ou mês"
+          >
+            <Printer size={14} className="text-slate-600 dark:text-slate-300 shrink-0" />
+            <span className="whitespace-nowrap">Imprimir Agendamentos</span>
+          </button>
           <button
             onClick={() => setShowSyncModal(true)}
-            className="h-9 px-3 bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-blue-900 dark:text-blue-300 font-bold text-xs rounded-xl shadow-sm border border-blue-300 dark:border-blue-700 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+            className="h-8.5 px-3 bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-blue-900 dark:text-blue-300 font-bold text-xs rounded-xl shadow-sm border border-blue-300 dark:border-blue-700 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
           >
-            <RefreshCw size={14} className="text-blue-600 dark:text-blue-400" />
-            <span>Sincronizar (Gmail / Outlook)</span>
+            <RefreshCw size={13} className="text-blue-600 dark:text-blue-400 shrink-0" />
+            <span className="whitespace-nowrap">Sincronizar (Gmail / Outlook)</span>
           </button>
           <button
             onClick={() => openNewTaskForDate(selectedDate || todayStr)}
-            className="h-9 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+            className="h-8.5 px-3.5 bg-safety-orange hover:bg-safety-orange/90 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
           >
-            <Plus size={16} />
-            <span>+ Nova OT</span>
+            <Plus size={15} className="shrink-0" />
+            <span className="whitespace-nowrap">Nova OT</span>
           </button>
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 mb-3 text-xs font-semibold text-gray-500">
+      {/* Legend & Drag Info */}
+      <div className="flex items-center gap-4 mb-3 text-xs font-semibold text-gray-500 flex-wrap">
         <span className="flex items-center gap-1.5"><ClipboardList className="h-4 w-4 text-[#2E86C1]" /> OT atribuída</span>
         <span className="flex items-center gap-1.5"><Wrench className="h-4 w-4 text-amber-500" /> Plano de manutenção</span>
-        <span className="text-[11px] text-slate-400 italic">(Clique em qualquer dia/hora para abrir logo a criação de OT)</span>
+        <span className="flex items-center gap-1 text-safety-orange font-bold bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800">
+          <GripVertical className="h-3.5 w-3.5" /> Arraste qualquer item para alterar a data (estilo Gmail / Outlook)
+        </span>
       </div>
+
+      {isRescheduling && (
+        <div className="mb-3 p-2.5 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl text-xs font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2 animate-pulse">
+          <RefreshCw className="h-4 w-4 animate-spin text-blue-600" />
+          <span>A atualizar agendamento no calendário...</span>
+        </div>
+      )}
 
       {/* Month grid */}
       {viewMode === 'month' && (
@@ -468,12 +730,19 @@ export default function CalendarClient({
               const isToday = dateStr === todayStr
               const isSelected = dateStr === selectedDate
               const isPast = dateStr < todayStr
+              const isOver = dragOverDate === dateStr
               return (
                 <div
                   key={i}
-                  onClick={() => openNewTaskForDate(dateStr)}
+                  onClick={() => setSelectedDate(dateStr)}
+                  onDragOver={(e) => handleDragOver(e, dateStr)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDropOnDate(e, dateStr)}
                   className={`border-b border-r border-slate-100 dark:border-slate-800 min-h-[110px] lg:min-h-[135px] p-2 cursor-pointer transition-all flex flex-col justify-between ${
-                    isSelected ? 'bg-blue-50/80 dark:bg-blue-900/30 ring-2 ring-blue-400 z-10' : isPast ? 'bg-gray-50/60 dark:bg-slate-900/40 hover:bg-gray-100/60 dark:hover:bg-slate-800/40' : 'hover:bg-gray-50 dark:hover:bg-slate-800/40'
+                    isOver ? 'bg-amber-100/90 dark:bg-amber-900/60 ring-4 ring-safety-orange scale-[1.02] z-20 shadow-2xl' :
+                    isSelected ? 'bg-blue-50/80 dark:bg-blue-900/30 ring-2 ring-blue-400 z-10' :
+                    isPast ? 'bg-gray-50/60 dark:bg-slate-900/40 hover:bg-gray-100/60 dark:hover:bg-slate-800/40' :
+                    'hover:bg-gray-50 dark:hover:bg-slate-800/40'
                   }`}
                 >
                   <div>
@@ -490,25 +759,47 @@ export default function CalendarClient({
                       )}
                     </div>
                     <div className="space-y-1">
-                      {events.slice(0, 4).map((ev, j) => (
-                        <div
-                          key={j}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (ev.type === 'task' && ev.task) {
-                              router.push(`/dashboard/tasks/${ev.task.id}`)
-                            } else {
-                              openNewTaskForDate(dateStr)
-                            }
-                          }}
-                          title={`Clique para abrir: ${ev.label}`}
-                          className={`text-[11px] font-medium rounded-md px-1.5 py-1 truncate transition-transform hover:scale-[1.02] active:scale-95 shadow-sm border ${
-                            getTipoBadgeClass(resolveEventType(ev))
-                          }`}
-                        >
-                          {ev.label}
-                        </div>
-                      ))}
+                      {events.slice(0, 4).map((ev, j) => {
+                        const isTaskDone = ev.type === 'task' && ev.task && (ev.task.status === 'done' || (ev.task.status as string) === 'completed')
+                        return (
+                          <div
+                            key={j}
+                            draggable={true}
+                            onDragStart={(e) => handleDragStart(e, ev)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (ev.type === 'task' && ev.task) {
+                                openEditTask(ev.task)
+                              } else if (ev.type === 'plan' && ev.plan) {
+                                openPlanAsOT(ev.plan, dateStr)
+                              }
+                            }}
+                            title={`Arraste para alterar a data ou clique para ver: ${ev.label}`}
+                            className={`text-[11px] font-medium rounded-md px-1.5 py-1 truncate transition-all hover:scale-[1.02] active:scale-95 shadow-sm border cursor-grab active:cursor-grabbing flex items-center justify-between gap-1 ${
+                              isTaskDone ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border-emerald-300 line-through opacity-85' : getTipoBadgeClass(resolveEventType(ev))
+                            }`}
+                          >
+                            <div className="flex items-center gap-1 min-w-0 flex-1">
+                              {ev.type === 'task' && ev.task && (
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(isTaskDone)}
+                                  disabled={role !== 'manager' || isTogglingStatus}
+                                  onChange={(e) => {
+                                    e.stopPropagation()
+                                    handleToggleTaskStatus(ev.task!.id, ev.task!.status)
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5 shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                                  title={role === 'manager' ? (isTaskDone ? 'Marcar como pendente' : 'Encerrar OT no calendário') : 'Apenas gestores podem encerrar OTs'}
+                                />
+                              )}
+                              <span className="truncate">{ev.label}</span>
+                            </div>
+                            <GripVertical className="h-3 w-3 text-slate-400 opacity-60 shrink-0 inline" />
+                          </div>
+                        )
+                      })}
                       {events.length > 4 && (
                         <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 text-center">
                           +{events.length - 4} mais
@@ -549,22 +840,59 @@ export default function CalendarClient({
               const events = eventMap.get(dateStr) ?? []
               const isSelected = dateStr === selectedDate
               const isPast = dateStr < todayStr
+              const isOver = dragOverDate === dateStr
               return (
                 <div
                   key={i}
-                  onClick={() => openNewTaskForDate(dateStr)}
+                  onClick={() => setSelectedDate(dateStr)}
+                  onDragOver={(e) => handleDragOver(e, dateStr)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDropOnDate(e, dateStr)}
                   className={`min-h-[140px] p-1.5 cursor-pointer transition-colors ${
-                    isSelected ? 'bg-[#EAF4FB] dark:bg-blue-900/20' : isPast ? 'bg-gray-50/60 dark:bg-slate-900/40 hover:bg-gray-100/60 dark:hover:bg-slate-800/40' : 'hover:bg-gray-50 dark:hover:bg-slate-800/30'
+                    isOver ? 'bg-amber-100/90 dark:bg-amber-900/60 ring-2 ring-safety-orange' :
+                    isSelected ? 'bg-[#EAF4FB] dark:bg-blue-900/20' :
+                    isPast ? 'bg-gray-50/60 dark:bg-slate-900/40 hover:bg-gray-100/60 dark:hover:bg-slate-800/40' :
+                    'hover:bg-gray-50 dark:hover:bg-slate-800/30'
                   }`}
                 >
                   <div className="space-y-1">
-                    {events.map((ev, j) => (
-                      <div key={j} className={`text-[10px] rounded px-1 py-0.5 leading-tight ${
-                        getTipoBadgeClass(resolveEventType(ev))
-                      }`}>
-                        {ev.label}
-                      </div>
-                    ))}
+                    {events.map((ev, j) => {
+                      const isTaskDone = ev.type === 'task' && ev.task && (ev.task.status === 'done' || (ev.task.status as string) === 'completed')
+                      return (
+                        <div
+                          key={j}
+                          draggable={true}
+                          onDragStart={(e) => handleDragStart(e, ev)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (ev.type === 'task' && ev.task) openEditTask(ev.task)
+                          }}
+                          title={`Arraste para alterar a data: ${ev.label}`}
+                          className={`text-[10px] rounded px-1 py-0.5 leading-tight cursor-grab active:cursor-grabbing flex items-center justify-between gap-1 ${
+                            isTaskDone ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 line-through opacity-85' : getTipoBadgeClass(resolveEventType(ev))
+                          }`}
+                        >
+                          <div className="flex items-center gap-1 min-w-0 flex-1">
+                            {ev.type === 'task' && ev.task && (
+                              <input
+                                type="checkbox"
+                                checked={Boolean(isTaskDone)}
+                                disabled={role !== 'manager' || isTogglingStatus}
+                                onChange={(e) => {
+                                  e.stopPropagation()
+                                  handleToggleTaskStatus(ev.task!.id, ev.task!.status)
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3 w-3 shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                                title={role === 'manager' ? (isTaskDone ? 'Marcar como pendente' : 'Encerrar OT no calendário') : 'Apenas gestores podem encerrar OTs'}
+                              />
+                            )}
+                            <span className="truncate">{ev.label}</span>
+                          </div>
+                          <GripVertical className="h-2.5 w-2.5 text-slate-400 opacity-60 shrink-0 inline" />
+                        </div>
+                      )
+                    })}
                     {events.length === 0 && (
                       <p className="text-[10px] text-gray-300 dark:text-slate-600 text-center mt-4">+</p>
                     )}
@@ -594,28 +922,56 @@ export default function CalendarClient({
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {HOURS.map((hour) => {
               const events = selectedEvents
+              const isOver = dragOverDate === activeSelectedDate
               return (
                 <div
                   key={hour}
-                  onClick={() => openNewTaskForDate(activeSelectedDate)}
-                  className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors flex items-center gap-4 cursor-pointer group"
+                  onClick={() => setSelectedDate(activeSelectedDate)}
+                  onDragOver={(e) => handleDragOver(e, activeSelectedDate)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDropOnDate(e, activeSelectedDate)}
+                  className={`p-3 transition-colors flex items-center gap-4 cursor-pointer group ${
+                    isOver ? 'bg-amber-100/80 dark:bg-amber-900/50' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                  }`}
                 >
                   <span className="font-mono text-xs font-bold text-slate-400 w-12">{hour}</span>
                   <div className="flex-1 flex flex-wrap gap-2">
-                    {events.map((ev, j) => (
-                      <div
-                        key={j}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (ev.type === 'task' && ev.task) router.push(`/dashboard/tasks/${ev.task.id}`)
-                        }}
-                        className={`text-xs font-bold px-2.5 py-1 rounded-lg border shadow-sm ${
-                          getTipoBadgeClass(resolveEventType(ev))
-                        }`}
-                      >
-                        {ev.label}
-                      </div>
-                    ))}
+                    {events.map((ev, j) => {
+                      const isTaskDone = ev.type === 'task' && ev.task && (ev.task.status === 'done' || (ev.task.status as string) === 'completed')
+                      return (
+                        <div
+                          key={j}
+                          draggable={true}
+                          onDragStart={(e) => handleDragStart(e, ev)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (ev.type === 'task' && ev.task) openEditTask(ev.task)
+                            else if (ev.type === 'plan' && ev.plan) openPlanAsOT(ev.plan, activeSelectedDate)
+                          }}
+                          title={`Arraste para alterar a data: ${ev.label}`}
+                          className={`text-xs font-bold px-2.5 py-1 rounded-lg border shadow-sm cursor-grab active:cursor-grabbing flex items-center gap-1.5 ${
+                            isTaskDone ? 'bg-emerald-100 text-emerald-900 border-emerald-300 line-through opacity-85' : getTipoBadgeClass(resolveEventType(ev))
+                          }`}
+                        >
+                          <GripVertical className="h-3 w-3 text-slate-400 opacity-60 shrink-0" />
+                          {ev.type === 'task' && ev.task && (
+                            <input
+                              type="checkbox"
+                              checked={Boolean(isTaskDone)}
+                              disabled={role !== 'manager' || isTogglingStatus}
+                              onChange={(e) => {
+                                e.stopPropagation()
+                                handleToggleTaskStatus(ev.task!.id, ev.task!.status)
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5 shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                              title={role === 'manager' ? (isTaskDone ? 'Marcar como pendente' : 'Encerrar OT no calendário') : 'Apenas gestores podem encerrar OTs'}
+                            />
+                          )}
+                          <span>{ev.label}</span>
+                        </div>
+                      )
+                    })}
                     {events.length === 0 && (
                       <span className="text-xs text-slate-300 dark:text-slate-600 group-hover:text-safety-orange font-medium transition-colors">
                         + Clique para agendar OT às {hour}
@@ -659,61 +1015,299 @@ export default function CalendarClient({
             </p>
           ) : (
             <div className="space-y-3">
-              {selectedEvents.map((ev, i) => (
-                <div key={i} className="rounded-lg border border-gray-100 dark:border-slate-800 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      {ev.type === 'task'
-                        ? <ClipboardList className="h-4 w-4 text-[#2E86C1] dark:text-blue-400 flex-shrink-0" />
-                        : <Wrench className="h-4 w-4 text-amber-500 flex-shrink-0" />}
-                      <div>
-                        <p className="text-sm font-medium text-gray-800 dark:text-slate-200">{ev.label}</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400 flex items-center flex-wrap gap-1">
-                          {ev.type === 'task' && ev.task && <>
-                            <span>{CRITICIDADE_LABELS[ev.task.criticidade]} · {TIPO_LABELS[ev.task.tipo]}</span>
-                            {ev.task.assignedTo && (
-                              <span className="inline-flex items-center gap-1">
-                                <span>·</span>
-                                <Avatar name={userName(ev.task.assignedTo)} avatarUrl={userRef(ev.task.assignedTo)?.avatarUrl} size={14} />
-                                <span>{userName(ev.task.assignedTo)}</span>
-                              </span>
+              {selectedEvents.map((ev, i) => {
+                const isTaskDone = ev.type === 'task' && ev.task && (ev.task.status === 'done' || (ev.task.status as string) === 'completed')
+                return (
+                  <div key={i} className={`rounded-lg border p-3 transition-all ${isTaskDone ? 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800' : 'border-gray-100 dark:border-slate-800'}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        {ev.type === 'task' && ev.task ? (
+                          <input
+                            type="checkbox"
+                            checked={Boolean(isTaskDone)}
+                            disabled={role !== 'manager' || isTogglingStatus}
+                            onChange={() => handleToggleTaskStatus(ev.task!.id, ev.task!.status)}
+                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                            title={role === 'manager' ? (isTaskDone ? 'Marcar como pendente' : 'Encerrar OT') : 'Apenas gestores podem encerrar OTs'}
+                          />
+                        ) : (
+                          <Wrench className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                        )}
+                        <div>
+                          <p className={`text-sm font-bold text-gray-800 dark:text-slate-200 ${isTaskDone ? 'line-through opacity-70 text-emerald-900 dark:text-emerald-300' : ''}`}>
+                            {ev.label}
+                            {isTaskDone && (
+                              <span className="ml-2 text-[10px] font-extrabold text-emerald-800 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded border border-emerald-300">Concluída</span>
                             )}
-                          </>}
-                          {ev.type === 'plan' && ev.plan && <>
-                            {RECURRENCE_LABELS[ev.plan.recurrence]} · {assetName(ev.plan.assetId)}
-                          </>}
-                        </p>
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400 flex items-center flex-wrap gap-1">
+                            {ev.type === 'task' && ev.task && <>
+                              <span>{CRITICIDADE_LABELS[ev.task.criticidade]} · {TIPO_LABELS[ev.task.tipo]}</span>
+                              {ev.task.assignedTo && (
+                                <span className="inline-flex items-center gap-1">
+                                  <span>·</span>
+                                  <Avatar name={userName(ev.task.assignedTo)} avatarUrl={userRef(ev.task.assignedTo)?.avatarUrl} size={14} />
+                                  <span>{userName(ev.task.assignedTo)}</span>
+                                </span>
+                              )}
+                            </>}
+                            {ev.type === 'plan' && ev.plan && <>
+                              {RECURRENCE_LABELS[ev.plan.recurrence]} · {assetName(ev.plan.assetId)}
+                            </>}
+                          </p>
+                        </div>
                       </div>
+                      {ev.type === 'plan' && ev.plan && (
+                        <button
+                          type="button"
+                          onClick={() => openPlanAsOT(ev.plan!, selectedDate)}
+                          className="btn-primary flex items-center gap-1 text-xs py-1 px-2.5"
+                        >
+                          <Pencil size={12} /> <span>Editar / Reagendar OT</span>
+                        </button>
+                      )}
+                      {ev.type === 'task' && ev.task && (
+                        <button
+                          type="button"
+                          onClick={() => openEditTask(ev.task!)}
+                          className="btn-primary flex items-center gap-1 text-xs py-1 px-2.5"
+                        >
+                          <Pencil size={12} /> <span>Editar OT</span>
+                        </button>
+                      )}
                     </div>
-                    {ev.type === 'plan' && ev.plan && (
-                      <button
-                        onClick={() => {
-                          setSelectedPlan(ev.plan!)
-                          setDueDate(selectedDate)
-                          setAssignTo(ev.plan!.assignedTo ?? '')
-                          setCreateError('')
-                        }}
-                        className="btn-primary text-xs py-1 px-2.5"
-                      >
-                        Criar tarefa
-                      </button>
-                    )}
-                    {ev.type === 'task' && ev.task && (
-                      <a href={`/dashboard/tasks/${ev.task.id}`} className="btn-secondary text-xs py-1 px-2.5">
-                        Ver
-                      </a>
+                    {ev.type === 'plan' && ev.plan?.safetyRules && ev.plan.safetyRules.length > 0 && (
+                      <div className="mt-2 flex items-center gap-1 text-xs text-amber-600">
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                        {ev.plan.safetyRules.length} regra(s) de segurança
+                      </div>
                     )}
                   </div>
-                  {ev.type === 'plan' && ev.plan?.safetyRules && ev.plan.safetyRules.length > 0 && (
-                    <div className="mt-2 flex items-center gap-1 text-xs text-amber-600">
-                      <ShieldAlert className="h-3.5 w-3.5" />
-                      {ev.plan.safetyRules.length} regra(s) de segurança
-                    </div>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal de Edição de OT diretamente no Calendário */}
+      {editingTask && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="absolute inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm" onClick={() => setEditingTask(null)} />
+          <div className="card relative w-full max-w-lg p-6 shadow-2xl max-h-[92vh] overflow-y-auto z-10 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-safety-orange" />
+                <h2 className="text-lg font-extrabold text-slate-900 dark:text-slate-100">
+                  {editingTask.id.startsWith('plan_') || editingTask.tipo === 'plano' || editingTask.title.startsWith('[PM]')
+                    ? 'Editar OT - Plano de Manutenção'
+                    : `Editar Ordem de Trabalho #${editingTask.id}`}
+                </h2>
+              </div>
+              <button onClick={() => setEditingTask(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {etError && (
+              <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 font-medium">
+                {etError}
+              </div>
+            )}
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                setEtError('')
+                const fd = new FormData(e.currentTarget)
+                fd.set('id', editingTask.id)
+                const cleanRules = etSafetyRules.filter((r) => r.trim())
+                fd.set('safetyRules', JSON.stringify(cleanRules.length ? cleanRules : []))
+
+                setTaskList((prev) => {
+                  const exists = prev.some((t) => t.id === editingTask.id)
+                  const updatedObj: Task = {
+                    ...editingTask,
+                    title: etTitle,
+                    tipo: etTipo,
+                    criticidade: etCriticidade,
+                    status: etStatus,
+                    assetId: etAssetId,
+                    assignedTo: etAssignedTo,
+                    dueDate: etDueDate,
+                    plannedStartDate: etPlannedStartDate,
+                    description: etDescription,
+                    observacoes: etObservacoes,
+                    safetyRules: cleanRules,
+                  }
+                  if (exists) {
+                    return prev.map((t) => (t.id === editingTask.id ? updatedObj : t))
+                  }
+                  return [updatedObj, ...prev]
+                })
+
+                startEtTransition(async () => {
+                  const res = await updateTaskAction({}, fd)
+                  if (res.error) {
+                    setEtError(res.error)
+                  } else {
+                    setEditingTask(null)
+                    router.refresh()
+                  }
+                })
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Título / Descrição Breve *</label>
+                <input
+                  name="title"
+                  value={etTitle}
+                  onChange={(e) => setEtTitle(e.target.value)}
+                  className="input font-semibold text-sm"
+                  required
+                />
+              </div>
+
+              {/* Equipamento (Área -> TAG em cascata) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Equipamento (Área / TAG / Designação)</label>
+                <SearchableAssetSelect
+                  value={etAssetId}
+                  onChange={(val) => setEtAssetId(val)}
+                  assets={assets}
+                  name="assetId"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tipo</label>
+                  <select
+                    name="tipo"
+                    value={etTipo}
+                    onChange={(e) => setEtTipo(e.target.value as TipoTarefa)}
+                    className="input text-xs"
+                  >
+                    {Object.entries(TIPO_LABELS).map(([k, label]) => (
+                      <option key={k} value={k}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Criticidade</label>
+                  <select
+                    name="criticidade"
+                    value={etCriticidade}
+                    onChange={(e) => setEtCriticidade(e.target.value as TaskCriticidade)}
+                    className="input text-xs"
+                  >
+                    {Object.entries(CRITICIDADE_LABELS).map(([k, label]) => (
+                      <option key={k} value={k}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Estado</label>
+                  <select
+                    name="status"
+                    value={etStatus}
+                    onChange={(e) => setEtStatus(e.target.value as TaskStatus)}
+                    className="input text-xs font-bold"
+                  >
+                    {Object.entries(STATUS_LABELS).map(([k, label]) => (
+                      <option key={k} value={k}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Técnico Atribuído</label>
+                  <select
+                    name="assignedTo"
+                    value={etAssignedTo}
+                    onChange={(e) => setEtAssignedTo(e.target.value)}
+                    className="input text-xs"
+                  >
+                    <option value="">-- Não Atribuído --</option>
+                    {users
+                      .filter((u) => u.active !== false)
+                      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {(u as any).abbreviation ? `[${(u as any).abbreviation}] ${u.name}` : u.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Prazo / Data Limite</label>
+                  <input
+                    type="date"
+                    name="dueDate"
+                    value={etDueDate}
+                    onChange={(e) => setEtDueDate(e.target.value)}
+                    className="input text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Descrição Detalhada do Trabalho</label>
+                <textarea
+                  name="description"
+                  value={etDescription}
+                  onChange={(e) => setEtDescription(e.target.value)}
+                  rows={2}
+                  className="input text-xs"
+                  placeholder="Instruções ou tarefas a realizar..."
+                />
+              </div>
+
+              {/* Botões do Modal */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
+                {role === 'manager' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!confirm(`Tem a certeza que deseja eliminar esta OT?`)) return
+                      startEtTransition(async () => {
+                        const res = await deleteTaskAction(editingTask.id)
+                        if (res.error) alert(res.error)
+                        else {
+                          setEditingTask(null)
+                          router.refresh()
+                        }
+                      })
+                    }}
+                    disabled={etBusy}
+                    className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-xl flex items-center gap-1 transition-all"
+                  >
+                    <Trash2 size={14} /> <span>Eliminar</span>
+                  </button>
+                )}
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setEditingTask(null)}
+                    className="btn-secondary text-xs px-4 py-1.5"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={etBusy}
+                    className="btn-primary text-xs px-5 py-1.5 font-bold"
+                  >
+                    {etBusy ? 'A guardar...' : 'Guardar Alterações'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -1020,6 +1614,136 @@ export default function CalendarClient({
               <button type="button" onClick={() => setShowSyncModal(false)} className="btn-primary px-6">
                 Concluído
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Impressão de Agendamentos */}
+      {showPrintModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Header do Modal */}
+            <div className="p-4 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between no-print">
+              <div className="flex items-center gap-2">
+                <Printer className="h-5 w-5 text-industrial-blue" />
+                <h3 className="font-extrabold text-base text-slate-800 dark:text-slate-100">
+                  Relatório de Agendamentos — {headerLabel}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-industrial-blue hover:bg-industrial-blue/90 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Printer size={16} /> <span>Imprimir / Gerar PDF</span>
+                </button>
+                <button
+                  onClick={() => setShowPrintModal(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Conteúdo Imprimível */}
+            <div id="printable-calendar-report" className="p-6 overflow-y-auto space-y-4 bg-white text-slate-900">
+              <style>{`
+                @media print {
+                  body * { visibility: hidden !important; }
+                  #printable-calendar-report, #printable-calendar-report * { visibility: visible !important; }
+                  #printable-calendar-report { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
+                  .no-print { display: none !important; }
+                }
+              `}</style>
+
+              <div className="border-b border-slate-300 pb-4 flex items-center justify-between">
+                <div>
+                  <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">Relatório de Agendamentos de Manutenção</h1>
+                  <p className="text-sm font-semibold text-slate-600 mt-0.5">Período: <span className="text-industrial-blue font-extrabold">{headerLabel}</span></p>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-bold text-slate-400 block">Emitido em: {new Date().toLocaleDateString('pt-PT')} {new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="text-xs font-extrabold text-industrial-blue">RG Maintenance OS</span>
+                </div>
+              </div>
+
+              {/* Totalizadores de Impressão */}
+              {(() => {
+                const allEvents: { date: string; ev: CalendarEvent }[] = []
+                eventMap.forEach((evList, dStr) => {
+                  evList.forEach((ev) => allEvents.push({ date: dStr, ev }))
+                })
+                allEvents.sort((a, b) => a.date.localeCompare(b.date))
+                const completedCount = allEvents.filter((item) => item.ev.type === 'task' && item.ev.task && (item.ev.task.status === 'done' || (item.ev.task.status as string) === 'completed')).length
+                const pendingCount = allEvents.length - completedCount
+
+                return (
+                  <div>
+                    <div className="grid grid-cols-3 gap-3 mb-4 text-xs font-bold">
+                      <div className="bg-slate-100 p-2.5 rounded-lg border border-slate-300">
+                        <span className="text-slate-500 uppercase text-[10px]">Total Agendados</span>
+                        <p className="text-lg font-black text-slate-800">{allEvents.length}</p>
+                      </div>
+                      <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                        <span className="text-amber-700 uppercase text-[10px]">Pendentes</span>
+                        <p className="text-lg font-black text-amber-800">{pendingCount}</p>
+                      </div>
+                      <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+                        <span className="text-emerald-700 uppercase text-[10px]">Concluídos</span>
+                        <p className="text-lg font-black text-emerald-800">{completedCount}</p>
+                      </div>
+                    </div>
+
+                    <table className="w-full text-left text-xs border-collapse border border-slate-300">
+                      <thead>
+                        <tr className="bg-slate-200 text-slate-800 font-extrabold uppercase text-[10px]">
+                          <th className="border border-slate-300 p-2">Data</th>
+                          <th className="border border-slate-300 p-2">Tipo</th>
+                          <th className="border border-slate-300 p-2">Equipamento / TAG</th>
+                          <th className="border border-slate-300 p-2">Ação / Tarefa</th>
+                          <th className="border border-slate-300 p-2">Técnico</th>
+                          <th className="border border-slate-300 p-2 text-center">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 font-medium">
+                        {allEvents.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="p-4 text-center text-slate-400 italic">Nenhum agendamento registado para este período.</td>
+                          </tr>
+                        ) : (
+                          allEvents.map(({ date, ev }, idx) => {
+                            const isDone = ev.type === 'task' && ev.task && (ev.task.status === 'done' || (ev.task.status as string) === 'completed')
+                            const assetObj = ev.task?.assetId ? assets.find(a => a.id === ev.task?.assetId) : ev.plan?.assetId ? assets.find(a => a.id === ev.plan?.assetId) : null
+                            return (
+                              <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
+                                <td className="border border-slate-300 p-2 font-bold whitespace-nowrap">{date}</td>
+                                <td className="border border-slate-300 p-2 whitespace-nowrap uppercase font-bold text-[10px]">
+                                  {ev.type === 'task' ? (TIPO_LABELS[ev.task?.tipo || 'preventiva'] || 'OT') : 'Plano'}
+                                </td>
+                                <td className="border border-slate-300 p-2">
+                                  <div className="font-bold">{assetObj ? assetObj.name : assetName(ev.task?.assetId || ev.plan?.assetId)}</div>
+                                  {assetObj?.tag && <div className="text-[10px] text-slate-500 font-mono">TAG: {assetObj.tag}</div>}
+                                </td>
+                                <td className="border border-slate-300 p-2 font-bold text-slate-900">{ev.label}</td>
+                                <td className="border border-slate-300 p-2 whitespace-nowrap">{ev.task?.assignedTo ? userName(ev.task.assignedTo) : '—'}</td>
+                                <td className="border border-slate-300 p-2 text-center whitespace-nowrap">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    isDone ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  }`}>
+                                    {isDone ? 'Concluída' : 'Pendente'}
+                                  </span>
+                                </td>
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              })()}
             </div>
           </div>
         </div>

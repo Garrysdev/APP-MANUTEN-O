@@ -8,6 +8,7 @@ import {
   listStockItems,
   calculateTaskCost,
 } from '@/lib/firebase/data'
+import { adminDb } from '@/lib/firebase/admin'
 import type { TaskCriticidade, TipoTarefa, TaskStatus } from '@/types/models'
 
 export type TaskFormState = { error?: string; ok?: boolean }
@@ -155,5 +156,49 @@ export async function updateProjectTaskStatusAction(
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao atualizar estado.' }
+  }
+}
+
+export async function updateProjectTaskDatesAction(
+  taskId: string,
+  createdAt: string,
+  dueDate: string
+): Promise<TaskFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  try {
+    const db = adminDb()
+    if (taskId.startsWith('plan_')) {
+      const parts = taskId.split('_')
+      const planId = parts[1]
+      if (planId) {
+        await db.collection('maintenance_plans').doc(planId).update({
+          calendarStartDate: createdAt,
+          nextDueDate: dueDate,
+          scheduledDate: createdAt,
+          updatedAt: new Date().toISOString(),
+        }).catch(() => null)
+      }
+      await updateTask(profile.companyId, taskId, {
+        dueDate,
+      })
+    } else {
+      await updateTask(profile.companyId, taskId, { dueDate })
+      await db.collection('tasks').doc(taskId).update({
+        createdAt,
+        dueDate,
+      }).catch(() => null)
+    }
+    revalidatePath('/dashboard/projects')
+    revalidatePath('/dashboard/calendar')
+    revalidatePath('/dashboard/tasks')
+    revalidatePath('/dashboard')
+    return { ok: true }
+  } catch (e: any) {
+    const msg = e?.message || ''
+    if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota exceeded')) {
+      return { error: '⚠️ A cota diária do Firebase (Plano Gratuito Spark) foi atingida. Para tráfego ilimitado, ative o plano Blaze (Pay-as-you-go) na consola do Firebase.' }
+    }
+    return { error: e instanceof Error ? e.message : 'Erro ao reagendar data no Gantt.' }
   }
 }

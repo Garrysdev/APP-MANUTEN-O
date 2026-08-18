@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic'
 export default async function MaintenancePlanPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
+  if (profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const plan = (profile.company?.plan ?? 'free') as PlanName
 

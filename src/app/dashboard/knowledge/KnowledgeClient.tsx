@@ -14,6 +14,7 @@ export interface KBFile {
   status: 'active' | 'inactive'
   content: string
   type: string
+  category: 'knowledge' | 'registry_sheets' | 'work_instructions'
 }
 
 const initialFiles: KBFile[] = [
@@ -24,12 +25,12 @@ const initialFiles: KBFile[] = [
     date: new Date().toLocaleDateString('pt-PT'),
     status: 'active',
     type: 'text/markdown',
+    category: 'knowledge',
     content: `# NP EN 13306 - Terminologia da Manutenção
 ## Definições Principais
-- **Manutenção Preventiva (MP)**: Manutenção efetuada a intervalos predeterminados ou de acordo com critérios prescritos para reduzir a probabilidade de falha ou a degradação do funcionamento de um bem.
-- **Manutenção Curativa (MC)**: Manutenção efetuada após deteção da avaria e destinada a recolocar um bem num estado em que possa realizar uma função requerida.
-- **Plano de Manutenção (PM)**: Conjunto estruturado de tarefas que compreende as atividades, os procedimentos, os meios e a periodicidade necessários para realizar a manutenção.
-- **Disponibilidade**: Aptidão de um bem para estar em estado de realizar uma função requerida em condições dadas num determinado instante ou durante um determinado intervalo de tempo.`
+- **Manutenção Preventiva (MP)**: Manutenção efetuada a intervalos predeterminados.
+- **Manutenção Curativa (MC)**: Manutenção efetuada após deteção da avaria.
+- **Plano de Manutenção (PM)**: Conjunto estruturado de tarefas e periodicidade.`
   },
   {
     id: '2',
@@ -38,17 +39,38 @@ const initialFiles: KBFile[] = [
     date: new Date().toLocaleDateString('pt-PT'),
     status: 'active',
     type: 'text/markdown',
+    category: 'knowledge',
     content: `# ISO 9001 - Requisitos de Manutenção
 ## §7.1.3 Infraestrutura
-A organização deve determinar, prover e manter a infraestrutura necessária para a operação de seus processos e para alcançar a conformidade de produtos e serviços.
-### A infraestrutura inclui:
-1. Edifícios e utilidades associadas (Eletricidade, Água, Ar Comprimido, AVAC);
-2. Equipamento, incluindo hardware e software;
-3. Recursos de transporte;
-4. Tecnologias de informação e comunicação.
-
+Manter a infraestrutura necessária para a operação dos processos.
 ## §7.5 Informação Documentada
-Os registos de intervenções de manutenção, calibração de instrumentos de medição e histórico de avarias devem ser conservados e rastreáveis por TAG do equipamento.`
+Os registos de intervenções de manutenção e calibração devem ser conservados e rastreáveis por TAG.`
+  },
+  {
+    id: '3',
+    name: 'FR01_Folha_Registo_Leituras_Diarias.md',
+    size: '8.4 KB',
+    date: new Date().toLocaleDateString('pt-PT'),
+    status: 'active',
+    type: 'text/markdown',
+    category: 'registry_sheets',
+    content: `# FR-01: Folha de Registo de Leituras Diárias
+- Pressão de Ar Comprimido (bar)
+- Temperatura dos Compressores (ºC)
+- Horas de Funcionamento e Consumos Elétricos`
+  },
+  {
+    id: '4',
+    name: 'IT01_Instrucoes_Trabalho_Bloqueio_LOTO.md',
+    size: '12.1 KB',
+    date: new Date().toLocaleDateString('pt-PT'),
+    status: 'active',
+    type: 'text/markdown',
+    category: 'work_instructions',
+    content: `# IT-01: Instruções de Trabalho - Consignação LOTO
+1. Desligar interruptor geral da máquina.
+2. Aplicar alfinete de bloqueio e alavanca LOTO.
+3. Testar ausência de tensão antes de iniciar trabalho.`
   }
 ]
 
@@ -83,6 +105,7 @@ export default function KnowledgeClient({ isAdmin }: { isAdmin: boolean }) {
           date: new Date().toLocaleDateString('pt-PT'),
           status: 'active',
           type: file.type || 'document',
+          category: activeTab !== 'all' ? activeTab : 'knowledge',
           content: textContent,
         }
         setFiles((prev) => [newKBFile, ...prev])
@@ -139,8 +162,53 @@ export default function KnowledgeClient({ isAdmin }: { isAdmin: boolean }) {
     }, 1000)
   }
 
+  const [activeTab, setActiveTab] = useState<'all' | 'knowledge' | 'registry_sheets' | 'work_instructions'>('all')
+
+  const filteredFiles = files.filter((f) => {
+    if (activeTab === 'all') return true
+    return f.category === activeTab || (!f.category && activeTab === 'knowledge')
+  })
+
   return (
     <div className="space-y-6">
+      {/* Header da Página de Documentação */}
+      <div className="pb-2 border-b border-slate-200 dark:border-slate-800">
+        <h1 className="text-xl sm:text-2xl font-extrabold text-industrial-blue dark:text-slate-100 flex items-center gap-2">
+          <FileText className="text-safety-orange" size={26} />
+          Documentação
+        </h1>
+        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+          Gestão centralizada de documentos técnicos, folhas de registo e instruções de trabalho indexadas na IA.
+        </p>
+
+        {/* Separadores de Secção */}
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
+          {[
+            { id: 'all', label: 'Toda a Documentação', count: files.length },
+            { id: 'knowledge', label: 'Base de Conhecimento', count: files.filter(f => f.category === 'knowledge' || !f.category).length },
+            { id: 'registry_sheets', label: 'Folhas de Registo', count: files.filter(f => f.category === 'registry_sheets').length },
+            { id: 'work_instructions', label: 'Instruções de Trabalho', count: files.filter(f => f.category === 'work_instructions').length },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                activeTab === tab.id
+                  ? 'bg-industrial-blue text-white border-industrial-blue shadow-md'
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50'
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Input File Oculto */}
       <input
         type="file"
@@ -178,20 +246,20 @@ export default function KnowledgeClient({ isAdmin }: { isAdmin: boolean }) {
           <div className="card overflow-hidden">
             <div className="p-4 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-900/60 flex items-center justify-between">
               <h3 className="font-bold text-gray-800 dark:text-slate-200 text-sm">
-                Ficheiros Indexados ({files.length})
+                Ficheiros Indexados ({filteredFiles.length})
               </h3>
               <span className="text-xs text-slate-500">
-                {files.filter((f) => f.status === 'active').length} Ativos na IA
+                {filteredFiles.filter((f) => f.status === 'active').length} Ativos na IA
               </span>
             </div>
 
             <ul className="divide-y divide-gray-100 dark:divide-slate-800">
-              {files.length === 0 ? (
+              {filteredFiles.length === 0 ? (
                 <li className="p-8 text-center text-gray-500 dark:text-slate-400 text-sm">
-                  Nenhum documento na Base de Conhecimento. Clica em &ldquo;Selecionar Ficheiro&rdquo; para importar.
+                  Nenhum documento nesta secção da Documentação. Clica em &ldquo;Selecionar Ficheiro&rdquo; para importar.
                 </li>
               ) : (
-                files.map((f) => (
+                filteredFiles.map((f) => (
                   <li
                     key={f.id}
                     className={`p-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 flex items-center justify-between gap-3 transition-colors ${

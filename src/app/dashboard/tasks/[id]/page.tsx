@@ -1,4 +1,4 @@
-﻿import { notFound, redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, FileText } from 'lucide-react'
 import { getCurrentProfile } from '@/lib/firebase/session'
@@ -72,7 +72,7 @@ export default async function TaskDetailPage({
                 <FileText className="h-4 w-4" /> Relatório PDF
               </a>
             )}
-            {profile.role === 'manager' && (
+            {(profile.role === 'manager' || profile.email === 'garrido.rui@gmail.com' || (profile.name || '').toLowerCase().includes('rg')) && (
               <TaskSummaryActions
                 task={task}
                 assets={assets.map((a) => ({ id: a.id, name: a.name }))}
@@ -81,14 +81,56 @@ export default async function TaskDetailPage({
             )}
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 text-sm">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-5 text-sm pt-4 border-t border-slate-100 dark:border-slate-800">
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide">Equipamento</p>
-            <p className="text-gray-800 font-medium">{taskAsset?.name ?? '—'}</p>
+            <p className="text-[11px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Equipamento</p>
+            {taskAsset ? (
+              <Link href={`/dashboard/assets/${taskAsset.id}`} className="text-industrial-blue font-bold hover:underline flex items-center gap-1">
+                {taskAsset.name}
+              </Link>
+            ) : (
+              <p className="text-gray-800 dark:text-slate-200 font-medium">—</p>
+            )}
+            <p className="text-[11px] text-gray-400">
+              {task.tag ? `TAG: ${task.tag}` : ''} {task.area ? `(Área ${task.area})` : ''}
+            </p>
           </div>
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide">Criticidade</p>
-            <p className="text-gray-800 font-medium flex items-center gap-1.5">
+            <p className="text-[11px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Criada Por (ERP)</p>
+            <p className="text-gray-900 dark:text-slate-100 font-bold">
+              {(() => {
+                const u = users.find((usr) => usr.id === task.createdBy || usr.email === task.createdBy)
+                return task.createdByName || u?.name || 'Gestor / ERP'
+              })()}
+            </p>
+            <p className="text-[11px] text-gray-400">
+              {task.createdAt ? formatDate(task.createdAt) : ''}
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Técnico(s)</p>
+            <p className="text-gray-800 dark:text-slate-200 font-medium">
+              {(() => {
+                const ids = (task.assignedToIds && task.assignedToIds.length > 0)
+                  ? task.assignedToIds
+                  : (task.assignedTo ? [task.assignedTo] : [])
+                if (ids.length === 0) return '—'
+                return ids.map((idOrAbbr) => {
+                  const u = users.find(usr => usr.id === idOrAbbr || usr.abbreviation === idOrAbbr)
+                  return u ? (u.abbreviation || u.name) : idOrAbbr
+                }).join(', ')
+              })()}
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Tipo / TI</p>
+            <p className="text-gray-800 dark:text-slate-200 font-bold">
+              {task.ti ? `${task.ti} (${task.tipoText || TIPO_LABELS[task.tipo] || task.tipo})` : (TIPO_LABELS[task.tipo] ?? task.tipo)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Criticidade</p>
+            <p className="text-gray-800 dark:text-slate-200 font-medium flex items-center gap-1.5 mt-0.5">
               <span className={`inline-block w-2.5 h-2.5 rounded-full ${
                 task.criticidade === 'vermelho' ? 'bg-red-500' :
                 task.criticidade === 'amarelo' ? 'bg-yellow-400' : 'bg-green-500'
@@ -97,12 +139,10 @@ export default async function TaskDetailPage({
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide">Prazo</p>
-            <p className="text-gray-800 font-medium">{formatDate(task.dueDate ?? null)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide">Tipo</p>
-            <p className="text-gray-800 font-medium">{TIPO_LABELS[task.tipo] ?? task.tipo}</p>
+            <p className="text-[11px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-wider">Prazo / Início</p>
+            <p className="text-gray-800 dark:text-slate-200 font-medium">
+              {formatDate(task.plannedStartDate || task.dueDate || null)}
+            </p>
           </div>
         </div>
 
@@ -129,6 +169,11 @@ export default async function TaskDetailPage({
       <TaskDetailClient
         taskId={task.id}
         taskStatus={task.status}
+        taskAssetId={task.assetId ?? null}
+        requiredFRs={task.requiredFRs ?? []}
+        requiredITs={task.requiredITs ?? []}
+        completedFRs={task.completedFRs ?? {}}
+        acknowledgedITs={task.acknowledgedITs ?? []}
         users={users.map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl }))}
         interventions={interventions}
         materialsByIntervention={materialsByIntervention}
@@ -140,6 +185,8 @@ export default async function TaskDetailPage({
           unit: s.unit ?? null,
           unitCost: s.unitCost ?? null,
           quantity: s.quantity,
+          assetId: s.assetId ?? null,
+          assetIds: s.assetIds ?? null,
         }))}
       />
     </div>

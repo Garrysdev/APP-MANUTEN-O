@@ -21,10 +21,35 @@ export async function getSessionUser() {
   }
 }
 
+function isTechnicianEmail(email?: string | null): boolean {
+  if (!email) return false
+  const e = email.toLowerCase().trim()
+  return (
+    e.includes('tecnico') ||
+    e.includes('tech') ||
+    e === 'lm@rgmaintenance.pt' ||
+    e === 'li@rgmaintenance.pt' ||
+    e === 'mc@rgmaintenance.pt' ||
+    e === 'jc@rgmaintenance.pt' ||
+    e === 'ms@rgmaintenance.pt' ||
+    e === 'cb@rgmaintenance.pt' ||
+    e === 'ur@rgmaintenance.pt' ||
+    e === 'ox2@rgmaintenance.pt' ||
+    e === 'blockcontrol@rgmaintenance.pt' ||
+    e === 'carrier@rgmaintenance.pt' ||
+    e === 'schindler@rgmaintenance.pt' ||
+    e === 'helenos@rgmaintenance.pt'
+  )
+}
+
 /** Devolve o perfil completo (user + company) do utilizador autenticado, ou null. */
 export const getCurrentProfile = cache(async function (): Promise<UserProfile | null> {
   const session = await getSessionUser().catch(() => null)
   if (!session) return null
+
+  const isRGAdmin = session.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
+  const isTech = !isRGAdmin && isTechnicianEmail(session.email)
+  const defaultRole = isRGAdmin ? 'manager' : (isTech ? 'technician' : 'manager')
 
   try {
     const db = adminDb()
@@ -33,21 +58,25 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
       // Perfil fallback se o doc do utilizador não existir no Firestore
       return {
         id: session.uid,
-        email: session.email || 'user@rgmaintenance.pt',
-        name: session.name || session.email?.split('@')[0] || 'Utilizador',
+        email: session.email || 'garrido.rui@gmail.com',
+        name: session.name || 'Rui Garrido (RG)',
         role: 'manager',
         companyId: 'rjHNaSUbLm4qTMyKP0oX',
         company: {
           id: 'rjHNaSUbLm4qTMyKP0oX',
           name: 'Empresa UR',
           plan: 'enterprise',
-          activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
-          aiCredits: 100
+          activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'compliance-iso', 'ai-consultant'],
+          aiCredits: 9999
         }
       } as UserProfile
     }
 
-    const user = { id: userSnap.id, ...userSnap.data() } as UserProfile
+    const docData = userSnap.data() || {}
+    const rawRole = (docData.role as string)?.toLowerCase()?.trim()
+    const userRole = isRGAdmin ? 'manager' : ((rawRole === 'technician' || rawRole === 'tecnico' || rawRole === 'tech' || isTech) ? 'technician' : 'manager')
+
+    const user = { id: userSnap.id, ...docData, role: userRole } as UserProfile
     if (user.active === false) return null
 
     if (user.companyId) {
@@ -66,7 +95,7 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
           id: user.companyId,
           name: 'Empresa UR',
           plan: 'enterprise',
-          activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
+          activeModules: userRole === 'technician' ? ['tasks', 'assets', 'history'] : ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
           aiCredits: 100
         }
       }
@@ -78,15 +107,15 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
     return {
       id: session.uid,
       email: session.email || 'garrido.rui@gmail.com',
-      name: session.name || 'Rui Garrido (UR)',
-      role: 'manager',
+      name: session.name || 'Rui Garrido (RG)',
+      role: isRGAdmin ? 'manager' : defaultRole,
       companyId: 'rjHNaSUbLm4qTMyKP0oX',
       company: {
         id: 'rjHNaSUbLm4qTMyKP0oX',
         name: 'Empresa UR',
         plan: 'enterprise',
-        activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
-        aiCredits: 100
+        activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'compliance-iso', 'ai-consultant'],
+        aiCredits: 9999
       }
     } as UserProfile
   }

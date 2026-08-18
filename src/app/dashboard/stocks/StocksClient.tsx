@@ -3,9 +3,9 @@
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, X, AlertTriangle, Boxes, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
-import type { StockItem, PlanName } from '@/types/models'
-import { createStockItemAction, updateStockItemAction, deleteStockItemAction } from './actions'
+import { Plus, Pencil, Trash2, X, AlertTriangle, Boxes, Search, Filter, ChevronLeft, ChevronRight, Tag, Layers, CheckSquare } from 'lucide-react'
+import type { StockItem, PlanName, Asset } from '@/types/models'
+import { createStockItemAction, updateStockItemAction, deleteStockItemAction, bulkAssignStockAssetsAction } from './actions'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
@@ -16,11 +16,13 @@ type ModalMode = { type: 'create' } | { type: 'edit'; item: StockItem }
 
 function StockForm({
   defaultValues,
+  assets = [],
   onSave,
   onCancel,
   dict,
 }: {
   defaultValues?: Partial<StockItem>
+  assets?: Asset[]
   onSave: (formData: FormData) => Promise<void>
   onCancel: () => void
   dict: Dictionary
@@ -76,6 +78,28 @@ function StockForm({
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.stocks.formLocation}</label>
           <input name="location" defaultValue={defaultValues?.location ?? ''} className="input" />
         </div>
+
+        {/* Atribuição a Múltiplos Equipamentos */}
+        <div className="col-span-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+            Equipamentos Atribuídos (Deixar em branco para Consumível Geral)
+          </label>
+          <select
+            name="assetIds"
+            multiple
+            defaultValue={defaultValues?.assetIds ?? (defaultValues?.assetId ? [defaultValues.assetId] : [])}
+            className="input min-h-[90px] text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-1.5"
+          >
+            {assets.map((a) => (
+              <option key={a.id} value={a.id}>
+                [{a.area || 'Geral'}] {a.tag ? `[TAG: ${a.tag}] ` : ''}{a.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-[10px] text-slate-500 mt-1">
+            Pressiona Ctrl / Cmd para selecionar mais do que um equipamento. Se nenhum for selecionado, este artigo fica disponível como consumo livre em todas as OTs.
+          </p>
+        </div>
       </div>
 
       {error && (
@@ -92,7 +116,7 @@ function StockForm({
   )
 }
 
-export default function StocksClient({ items, plan }: { items: StockItem[], plan: PlanName }) {
+export default function StocksClient({ items, assets = [], plan }: { items: StockItem[], assets?: Asset[], plan: PlanName }) {
   const router = useRouter()
   const { dict } = useLanguage()
   const [modal, setModal] = useState<ModalMode | null>(null)
@@ -133,64 +157,142 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
     router.refresh()
   }
 
-  const availableCategories = useMemo(() => {
-    const set = new Set<string>()
-    items.forEach((i) => { if (i.category) set.add(i.category.trim()) })
-    return Array.from(set).sort()
-  }, [items])
+  const [colF, setColF] = useState({
+    code: '',
+    area: 'all',
+    tag: 'all',
+    system: 'all',
+    name: '',
+    unit: 'all',
+  })
+
+  // Modal para atribuição em lote a equipamentos por Área/TAG
+  const [showBulkAssignModal, setShowBulkAssignModal] = useState(false)
+  const [selectedStockIds, setSelectedStockIds] = useState<Set<string>>(new Set())
+  const [bulkArea, setBulkArea] = useState<string>('')
+  const [bulkTag, setBulkTag] = useState<string>('')
+  const [bulkAssignBusy, setBulkAssignBusy] = useState(false)
 
   const availableAreas = useMemo(() => {
     const set = new Set<string>()
     items.forEach((i) => { if (i.area) set.add(i.area.trim()) })
+    assets.forEach((a) => { if (a.area) set.add(a.area.trim()) })
     return Array.from(set).sort()
-  }, [items])
+  }, [items, assets])
 
   const availableTags = useMemo(() => {
     const set = new Set<string>()
+    const poolAssets = colF.area !== 'all'
+      ? assets.filter(a => (a.area || '').trim().toLowerCase() === colF.area.toLowerCase())
+      : assets
+    poolAssets.forEach((a) => { if (a.tag) set.add(a.tag.trim()) })
+    items.forEach((i) => { if (i.tag) set.add(i.tag.trim()) })
+    return Array.from(set).sort()
+  }, [items, assets, colF.area])
+
+  const availableSystems = useMemo(() => {
+    const set = new Set<string>()
     items.forEach((i) => {
-      if (areaFilter !== 'all' && i.area && i.area.trim().toLowerCase() !== areaFilter.trim().toLowerCase()) return
-      if (i.tag) set.add(i.tag.trim())
+      const s = (i.system || i.category || '').trim()
+      if (s) set.add(s)
     })
     return Array.from(set).sort()
-  }, [items, areaFilter])
+  }, [items])
+
+  const availableUnits = useMemo(() => {
+    const set = new Set<string>()
+    items.forEach((i) => {
+      const u = (i.unit || 'un').trim()
+      if (u) set.add(u)
+    })
+    return Array.from(set).sort()
+  }, [items])
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      if (categoryFilter !== 'all' && item.category !== categoryFilter) return false
-      if (areaFilter !== 'all' && item.area !== areaFilter) return false
-      if (tagFilter !== 'all' && item.tag !== tagFilter) return false
-      if (!search.trim()) return true
-      const q = search.toLowerCase()
-      return (
-        item.name.toLowerCase().includes(q) ||
-        (item.code || '').toLowerCase().includes(q) ||
-        (item.reference || '').toLowerCase().includes(q) ||
-        (item.tag || '').toLowerCase().includes(q) ||
-        (item.area || '').toLowerCase().includes(q) ||
-        (item.category || '').toLowerCase().includes(q) ||
-        (item.description || '').toLowerCase().includes(q)
-      )
-    })
-  }, [items, search, categoryFilter, areaFilter, tagFilter])
+      if (search.trim()) {
+        const q = search.toLowerCase().trim()
+        const matchSearch =
+          item.name.toLowerCase().includes(q) ||
+          (item.code || '').toLowerCase().includes(q) ||
+          (item.reference || '').toLowerCase().includes(q) ||
+          (item.tag || '').toLowerCase().includes(q) ||
+          (item.area || '').toLowerCase().includes(q) ||
+          (item.category || item.system || '').toLowerCase().includes(q) ||
+          (item.description || '').toLowerCase().includes(q)
+        if (!matchSearch) return false
+      }
 
-  const { sorted: sortedItems, sortKey, sortDir, toggleSort: requestSort } = useTableSort(
+      if (colF.code.trim()) {
+        const cq = colF.code.toLowerCase().trim()
+        const codeVal = (item.code || item.reference || item.tag || '').toLowerCase()
+        if (!codeVal.includes(cq)) return false
+      }
+
+      if (colF.area !== 'all' && (item.area || '—') !== colF.area) return false
+
+      if (colF.tag !== 'all') {
+        const itemTag = (item.tag || (item.assetId ? assets.find(a => a.id === item.assetId)?.tag : '') || '').trim().toLowerCase()
+        if (itemTag !== colF.tag.trim().toLowerCase()) return false
+      }
+
+      if (colF.system !== 'all') {
+        const sysVal = item.system || item.category || '—'
+        if (sysVal !== colF.system) return false
+      }
+
+      if (colF.name.trim()) {
+        const nq = colF.name.toLowerCase().trim()
+        if (!item.name.toLowerCase().includes(nq)) return false
+      }
+
+      if (colF.unit !== 'all' && (item.unit || 'un') !== colF.unit) return false
+
+      return true
+    })
+  }, [items, assets, search, colF])
+
+  const { sorted: baseSorted, sortKey, sortDir, toggleSort: requestSort } = useTableSort(
     filteredItems,
     {
-      code: (i) => i.code || i.reference || '',
-      name: (i) => i.name,
-      category: (i) => i.category || '',
+      code: (i) => i.code || i.reference || i.tag || '',
       area: (i) => i.area || '',
-      tag: (i) => i.tag || '',
+      tag: (i) => i.tag || (i.assetId ? assets.find(a => a.id === i.assetId)?.tag : '') || '',
+      system: (i) => i.system || i.category || '',
+      name: (i) => i.name,
       quantity: (i) => i.quantity,
-      location: (i) => i.location || '',
+      unit: (i) => i.unit || 'un',
     },
     'name',
     'asc'
   )
 
+  // ORDENAÇÃO ESPECIAL: Materiais já atribuídos a TAG/Equipamento aparecem SEMPRE NO TOPO
+  const sortedItems = useMemo(() => {
+    return [...baseSorted].sort((a, b) => {
+      const aTagVal = a.tag || (a.assetId ? assets.find(x => x.id === a.assetId)?.tag : '') || ((a.assetIds || []).length > 0 ? 'yes' : '')
+      const bTagVal = b.tag || (b.assetId ? assets.find(x => x.id === b.assetId)?.tag : '') || ((b.assetIds || []).length > 0 ? 'yes' : '')
+
+      const aHasTag = Boolean(aTagVal && aTagVal !== '—')
+      const bHasTag = Boolean(bTagVal && bTagVal !== '—')
+
+      if (aHasTag && !bHasTag) return -1
+      if (!aHasTag && bHasTag) return 1
+
+      if (colF.tag !== 'all') {
+        const aMatch = (aTagVal || '').toLowerCase() === colF.tag.toLowerCase()
+        const bMatch = (bTagVal || '').toLowerCase() === colF.tag.toLowerCase()
+        if (aMatch && !bMatch) return -1
+        if (!aMatch && bMatch) return 1
+      }
+
+      return 0
+    })
+  }, [baseSorted, assets, colF.tag])
+
   useEffect(() => {
     setCurrentPage(1)
-  }, [search, categoryFilter, areaFilter, tagFilter, pageSize])
+  }, [search, colF, pageSize])
 
   const effectivePageSize = pageSize === -1 ? (sortedItems.length || 1) : pageSize
   const totalPages = Math.ceil(sortedItems.length / effectivePageSize) || 1
@@ -226,64 +328,36 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">Cadastro de Inventário & Sobresselentes UR</p>
         </div>
-        <button
-          onClick={openCreate}
-          className="btn-primary flex items-center gap-1.5 shrink-0"
-        >
-          <Plus className="h-4 w-4 shrink-0" />
-          <span className="hidden sm:inline">{dict.stocks.newItem}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowBulkAssignModal(true)}
+            className="btn-secondary flex items-center gap-1.5 shrink-0 text-xs font-bold text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-900 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+            title="Atribuir artigos de stock a múltiplos equipamentos filtrando por Área e/ou TAG"
+          >
+            <Layers className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" />
+            <span>Atribuir por Área/TAG</span>
+          </button>
+          <button
+            onClick={openCreate}
+            className="btn-primary flex items-center gap-1.5 shrink-0"
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{dict.stocks.newItem}</span>
+          </button>
+        </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+      {/* Lupa Search Header */}
+      <div className="mb-4 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Pesquisar por nome, código, ref..."
+            placeholder="Pesquisar por nome, código, ref, área ou sistema..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="input text-xs pl-8 py-1.5 w-full"
+            className="input text-xs pl-9 py-2 w-full"
           />
-        </div>
-
-        <div>
-          <select
-            value={areaFilter}
-            onChange={(e) => setAreaFilter(e.target.value)}
-            className="input text-xs py-1.5 w-full"
-          >
-            <option value="all">Todas as Áreas ({availableAreas.length})</option>
-            {availableAreas.map((a) => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <select
-            value={tagFilter}
-            onChange={(e) => setTagFilter(e.target.value)}
-            className="input text-xs py-1.5 w-full"
-          >
-            <option value="all">Todas as TAGs ({availableTags.length})</option>
-            {availableTags.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="input text-xs py-1.5 w-full"
-          >
-            <option value="all">Todas as Categorias ({availableCategories.length})</option>
-            {availableCategories.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
         </div>
       </div>
 
@@ -298,25 +372,110 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-900/60 font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  <SortableTh label="CÓD / TAG" sortableKey="code" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2.5 py-2.5 whitespace-nowrap" />
-                  <SortableTh label="DESIGNAÇÃO / SOBRESSELANTE" sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2.5 py-2.5" />
+                  <SortableTh label="COD" sortableKey="code" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2.5 py-2.5 whitespace-nowrap" />
                   <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2 py-2.5 whitespace-nowrap" />
-                  <SortableTh label="SISTEMA / CATEGORIA" sortableKey="category" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2 py-2.5" />
-                  <SortableTh label="QUANT." sortableKey="quantity" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-right px-2 py-2.5 whitespace-nowrap" />
-                  <th className="text-left px-2 py-2.5 whitespace-nowrap">UNID.</th>
-                  <th className="text-left px-2 py-2.5 whitespace-nowrap">LOCAL</th>
-                  <th className="px-2 py-2.5 text-center">AÇÕES</th>
+                  <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2 py-2.5 whitespace-nowrap" />
+                  <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2 py-2.5" />
+                  <SortableTh label="DESIGNAÇÃO" sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2.5 py-2.5" />
+                  <SortableTh label="QUANT" sortableKey="quantity" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-right px-2 py-2.5 whitespace-nowrap" />
+                  <SortableTh label="UNID" sortableKey="unit" sortKey={sortKey} sortDir={sortDir} onSort={requestSort} className="text-left px-2 py-2.5 whitespace-nowrap" />
+                  <th className="px-2 py-2.5 text-center whitespace-nowrap">AÇÕES</th>
+                </tr>
+                {/* Linha de Filtros por Coluna (Pulldowns) */}
+                <tr className="bg-slate-50 dark:bg-slate-900/80 border-b border-gray-200 dark:border-slate-800 text-[11px]">
+                  <td className="p-1">
+                    <input
+                      type="text"
+                      placeholder="Filtrar..."
+                      value={colF.code}
+                      onChange={(e) => setColF((prev) => ({ ...prev, code: e.target.value }))}
+                      className="input text-[11px] py-1 px-1.5 w-full bg-white dark:bg-slate-900"
+                    />
+                  </td>
+                  <td className="p-1">
+                    <select
+                      value={colF.area}
+                      onChange={(e) => setColF((prev) => ({ ...prev, area: e.target.value }))}
+                      className="input text-[11px] py-1 px-1 w-full bg-white dark:bg-slate-900"
+                    >
+                      <option value="all">Todas ({availableAreas.length})</option>
+                      {availableAreas.map((a) => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </td>
+                  <td className="p-1">
+                    <select
+                      value={colF.tag}
+                      onChange={(e) => setColF((prev) => ({ ...prev, tag: e.target.value }))}
+                      className="input text-[11px] py-1 px-1 w-full bg-white dark:bg-slate-900"
+                    >
+                      <option value="all">Todas ({availableTags.length})</option>
+                      {availableTags.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </td>
+                  <td className="p-1">
+                    <select
+                      value={colF.system}
+                      onChange={(e) => setColF((prev) => ({ ...prev, system: e.target.value }))}
+                      className="input text-[11px] py-1 px-1 w-full bg-white dark:bg-slate-900"
+                    >
+                      <option value="all">Todos ({availableSystems.length})</option>
+                      {availableSystems.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </td>
+                  <td className="p-1">
+                    <input
+                      type="text"
+                      placeholder="Filtrar designação..."
+                      value={colF.name}
+                      onChange={(e) => setColF((prev) => ({ ...prev, name: e.target.value }))}
+                      className="input text-[11px] py-1 px-1.5 w-full bg-white dark:bg-slate-900"
+                    />
+                  </td>
+                  <td className="p-1"></td>
+                  <td className="p-1">
+                    <select
+                      value={colF.unit}
+                      onChange={(e) => setColF((prev) => ({ ...prev, unit: e.target.value }))}
+                      className="input text-[11px] py-1 px-1 w-full bg-white dark:bg-slate-900"
+                    >
+                      <option value="all">Todas</option>
+                      {availableUnits.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </td>
+                  <td className="p-1 text-center">
+                    {(colF.code || colF.area !== 'all' || colF.tag !== 'all' || colF.system !== 'all' || colF.name || colF.unit !== 'all') && (
+                      <button
+                        onClick={() => setColF({ code: '', area: 'all', tag: 'all', system: 'all', name: '', unit: 'all' })}
+                        className="text-[10px] text-red-600 dark:text-red-400 hover:underline font-semibold"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </td>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-800/50">
                 {paginatedItems.map((item) => {
                   const isLow = item.minQuantity != null && item.quantity <= item.minQuantity && item.quantity > 0
+                  const itemTagVal = item.tag || (item.assetId ? assets.find(a => a.id === item.assetId)?.tag : '') || '—'
+
                   return (
                     <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="px-2.5 py-2 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                        {item.tag || item.code || item.reference || '—'}
+                        {item.code || item.reference || item.tag || '—'}
                       </td>
-                      <td className="px-2.5 py-2 max-w-[280px]">
+                      <td className="px-2 py-2 text-slate-700 dark:text-slate-300 font-mono font-semibold whitespace-nowrap">
+                        {item.area || '—'}
+                      </td>
+                      <td className="px-2 py-2 text-purple-700 dark:text-purple-400 font-mono font-bold whitespace-nowrap">
+                        {itemTagVal}
+                      </td>
+                      <td className="px-2 py-2 text-slate-600 dark:text-slate-400 max-w-[150px]">
+                        <span className="line-clamp-1" title={item.system || item.category || '—'}>
+                          {item.system || item.category || '—'}
+                        </span>
+                      </td>
+                      <td className="px-2.5 py-2 max-w-[300px]">
                         <Link href={`/dashboard/stocks/${item.id}`} className="font-bold text-[#2E86C1] hover:underline transition-colors block line-clamp-2" title={item.name}>
                           {item.name}
                         </Link>
@@ -329,25 +488,17 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
                           </span>
                         )}
                       </td>
-                      <td className="px-2 py-2 text-slate-700 dark:text-slate-300 font-mono font-semibold whitespace-nowrap">
-                        {item.area || '—'}
-                      </td>
-                      <td className="px-2 py-2 text-slate-600 dark:text-slate-400 max-w-[160px]">
-                        <span className="line-clamp-2" title={item.category || item.system || '—'}>{item.category || item.system || '—'}</span>
-                      </td>
                       <td className={`px-2 py-2 text-right font-mono font-extrabold whitespace-nowrap ${isLow ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-slate-100'}`}>
                         {item.quantity}
                       </td>
                       <td className="px-2 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">{item.unit ?? 'un'}</td>
-                      <td className="px-2 py-2 text-slate-500 dark:text-slate-400 max-w-[120px]">
-                        <span className="line-clamp-1" title={item.location ?? '—'}>{item.location ?? '—'}</span>
-                      </td>
-                      <td className="px-2 py-2 text-center">
+                      <td className="px-2 py-2 text-center whitespace-nowrap">
                         <div className="flex items-center gap-1 justify-center">
                           <button
                             onClick={() => setModal({ type: 'edit', item })}
                             className="p-1 text-gray-400 hover:text-[#2E86C1] transition-colors"
                             aria-label="Editar"
+                            title="Editar"
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
@@ -355,6 +506,7 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
                             onClick={() => handleDelete(item.id)}
                             className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                             aria-label="Eliminar"
+                            title="Eliminar"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -424,6 +576,7 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
             </h2>
             <StockForm
               defaultValues={modal.type === 'edit' ? modal.item : undefined}
+              assets={assets}
               onSave={(formData) =>
                 modal.type === 'create'
                   ? handleCreate(formData)
@@ -432,6 +585,160 @@ export default function StocksClient({ items, plan }: { items: StockItem[], plan
               onCancel={() => setModal(null)}
               dict={dict}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Modal Atribuição em Lote por Área/TAG */}
+      {showBulkAssignModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-slate-800 w-full max-w-2xl p-6 relative max-h-[90vh] flex flex-col">
+            <button
+              onClick={() => setShowBulkAssignModal(false)}
+              className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 rounded-xl">
+                <Layers className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-gray-900 dark:text-slate-100">Atribuir Artigo(s) por Área / TAG</h2>
+                <p className="text-xs text-slate-500">Associa materiais do inventário a todos os equipamentos de uma determinada Área ou TAG</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+              {/* Passo 1: Escolher Artigo(s) do Stock */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  1. Selecionar Artigos de Stock a Atribuir:
+                </label>
+                <div className="max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-2 bg-slate-50/50 dark:bg-slate-900/50 space-y-1">
+                  {items.map((it) => {
+                    const isChecked = selectedStockIds.has(it.id)
+                    return (
+                      <label key={it.id} className="flex items-center gap-2 text-xs p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const next = new Set(selectedStockIds)
+                            if (e.target.checked) next.add(it.id)
+                            else next.delete(it.id)
+                            setSelectedStockIds(next)
+                          }}
+                          className="rounded accent-purple-600 h-3.5 w-3.5"
+                        />
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{it.name}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">({it.code || it.reference || 'sem ref'})</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Passo 2: Filtrar Área e/ou TAG */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-purple-50/40 dark:bg-purple-950/20 p-3 rounded-xl border border-purple-100 dark:border-purple-900/40">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">2. Filtrar por Área:</label>
+                  <select
+                    value={bulkArea}
+                    onChange={(e) => setBulkArea(e.target.value)}
+                    className="input text-xs w-full bg-white dark:bg-slate-900"
+                  >
+                    <option value="">Todas as Áreas ({availableAreas.length})</option>
+                    {availableAreas.map((a) => (
+                      <option key={a} value={a}>Área {a}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Filtrar por TAG Específica:</label>
+                  <select
+                    value={bulkTag}
+                    onChange={(e) => setBulkTag(e.target.value)}
+                    className="input text-xs w-full bg-white dark:bg-slate-900"
+                  >
+                    <option value="">Todas as TAGs</option>
+                    {availableTags.map((t) => (
+                      <option key={t} value={t}>TAG {t}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Pré-visualização dos Equipamentos Alvo */}
+              {(() => {
+                const targetAssets = assets.filter((a) => {
+                  if (bulkArea && (a.area || '').trim().toLowerCase() !== bulkArea.trim().toLowerCase()) return false
+                  if (bulkTag && (a.tag || '').trim().toLowerCase() !== bulkTag.trim().toLowerCase()) return false
+                  return true
+                })
+                return (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Equipamentos Alvo Encontrados ({targetAssets.length}):
+                    </label>
+                    <div className="max-h-32 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-2 text-xs bg-white dark:bg-slate-900">
+                      {targetAssets.length === 0 ? (
+                        <p className="text-slate-400 text-center py-2">Nenhum equipamento encontrado com estes filtros.</p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                          {targetAssets.map((a) => (
+                            <div key={a.id} className="p-1 rounded bg-slate-50 dark:bg-slate-800/40 text-[11px] truncate">
+                              <span className="font-bold text-purple-700 dark:text-purple-400">[{a.area || 'Geral'}] {a.tag ? `[TAG: ${a.tag}] ` : ''}</span>
+                              <span className="text-slate-800 dark:text-slate-200">{a.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+
+            <div className="flex items-center justify-between pt-4 mt-2 border-t border-slate-200 dark:border-slate-800 shrink-0">
+              <button type="button" onClick={() => setShowBulkAssignModal(false)} className="btn-secondary text-xs">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={selectedStockIds.size === 0 || bulkAssignBusy}
+                onClick={async () => {
+                  const targetAssetIds = assets
+                    .filter((a) => {
+                      if (bulkArea && (a.area || '').trim().toLowerCase() !== bulkArea.trim().toLowerCase()) return false
+                      if (bulkTag && (a.tag || '').trim().toLowerCase() !== bulkTag.trim().toLowerCase()) return false
+                      return true
+                    })
+                    .map((a) => a.id)
+
+                  if (targetAssetIds.length === 0) {
+                    alert('Nenhum equipamento selecionado para atribuição.')
+                    return
+                  }
+
+                  setBulkAssignBusy(true)
+                  const res = await bulkAssignStockAssetsAction(Array.from(selectedStockIds), targetAssetIds)
+                  setBulkAssignBusy(false)
+                  if (res?.error) {
+                    alert(res.error)
+                  } else {
+                    setShowBulkAssignModal(false)
+                    setSelectedStockIds(new Set())
+                    router.refresh()
+                  }
+                }}
+                className="btn-primary text-xs bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <CheckSquare className="h-4 w-4" />
+                {bulkAssignBusy ? 'A guardar…' : `Atribuir ${selectedStockIds.size} Artigo(s)`}
+              </button>
+            </div>
           </div>
         </div>
       )}

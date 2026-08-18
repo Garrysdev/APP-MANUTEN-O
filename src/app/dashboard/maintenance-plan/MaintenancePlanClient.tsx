@@ -3,8 +3,8 @@
 import { useState, useMemo, useEffect, useRef, useTransition, useId } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Plus, Pencil, Trash2, X, ShieldAlert, Power, PowerOff,
-  CalendarClock, Building2, Scale, ClipboardList, Upload, Download, ChevronLeft, ChevronRight,
+  Plus, Pencil, Trash2, X, ShieldAlert, Power, PowerOff, Check, CheckCircle2,
+  CalendarClock, Building2, Scale, ClipboardList, Upload, Download, ChevronLeft, ChevronRight, FileSpreadsheet
 } from 'lucide-react'
 import type {
   MaintenancePlan, TaskCriticidade, TipoTarefa, Periodicidade, PlanName
@@ -21,12 +21,31 @@ import {
   toggleMaintenancePlanActiveAction,
   importMaintenancePlansAction,
   togglePlanCalendarAction,
+  togglePlanGanttAction,
 } from './actions'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { TipoBadge } from '@/components/ui/TipoBadge'
 import { PREDEFINED_SAFETY_RULES } from '../tasks/TasksClient'
+
+export function isPlanGanttActive(p: MaintenancePlan): boolean {
+  if (p.includeInGantt !== undefined && p.includeInGantt !== null) {
+    return p.includeInGantt
+  }
+  const label = (p.periodicidadeLabel || p.title || '').toUpperCase()
+  if (
+    p.periodicidade === 'bianual' ||
+    label.includes('AGO') ||
+    label.includes('DEZ') ||
+    label.includes('PARAGEM') ||
+    label.includes('PARAGENS') ||
+    label.includes('STP')
+  ) {
+    return true
+  }
+  return false
+}
 
 function sanitizeCell(v: string): string {
   // neutraliza formula injection (=, +, -, @, tab, CR) ao abrir o CSV em Excel/Sheets
@@ -111,8 +130,10 @@ export default function MaintenancePlanClient({
   const [colF, setColF] = useState(emptyCol)
   const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
   const [fLegal, setFLegal] = useState(false)
-  const anyFilter = fLegal || Object.values(colF).some(Boolean)
-  function clearFilters() { setColF(emptyCol); setFLegal(false) }
+  const [fCalendar, setFCalendar] = useState<'' | 'yes' | 'no'>('')
+  const [fGantt, setFGantt] = useState<'' | 'yes' | 'no'>('')
+  const anyFilter = fLegal || Boolean(fCalendar) || Boolean(fGantt) || Object.values(colF).some(Boolean)
+  function clearFilters() { setColF(emptyCol); setFLegal(false); setFCalendar(''); setFGantt(''); }
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
   const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
@@ -172,28 +193,56 @@ export default function MaintenancePlanClient({
   // Modal de Agendamento no Calendário
   const [calendarModalPlan, setCalendarModalPlan] = useState<MaintenancePlan | null>(null)
   const [calendarStartDate, setCalendarStartDate] = useState<string>(new Date().toISOString().slice(0, 10))
+  const [customCalendarDates, setCustomCalendarDates] = useState<string[]>([])
   const [savingCalendar, setSavingCalendar] = useState(false)
 
-  // Previsão de ocorrências por periodicidade
-  const calculatedDates = useMemo(() => {
-    if (!calendarModalPlan || !calendarStartDate) return []
-    const start = new Date(calendarStartDate)
-    if (isNaN(start.getTime())) return []
-    
-    const dates: string[] = []
+  function openCalendarModal(p: MaintenancePlan) {
+    setCalendarModalPlan(p)
+    const initialStart = p.calendarStartDate || new Date().toISOString().slice(0, 10)
+    setCalendarStartDate(initialStart)
+
+    if (p.calendarDates && p.calendarDates.length > 0) {
+      setCustomCalendarDates(p.calendarDates)
+    } else {
+      const period = p.periodicidade || 'mensal'
+      let count = 12
+      if (period === 'semanal') count = 12
+      else if (period === 'mensal') count = 12
+      else if (period === 'trimestral') count = 4
+      else if (period === 'bianual') count = 2
+      else if (period === 'anual') count = 1
+      else if (period === 'bienal') count = 1
+      else if (period === 'trianual') count = 1
+      else if (period === 'pontual') count = 1
+      else count = 2
+
+      const initialDates: string[] = []
+      const start = new Date(initialStart)
+      for (let i = 0; i < count; i++) {
+        const d = new Date(start)
+        if (period === 'semanal') d.setDate(d.getDate() + i * 7)
+        else if (period === 'mensal') d.setMonth(d.getMonth() + i)
+        else if (period === 'trimestral') d.setMonth(d.getMonth() + i * 3)
+        else if (period === 'bianual') d.setMonth(d.getMonth() + i * 6)
+        else if (period === 'anual') d.setFullYear(d.getFullYear() + i)
+        else if (period === 'bienal') d.setFullYear(d.getFullYear() + i * 2)
+        else if (period === 'trianual') d.setFullYear(d.getFullYear() + i * 3)
+        else if (period === 'horas') d.setMonth(d.getMonth() + i)
+        else if (period === 'pontual') { if (i > 0) break }
+        
+        initialDates.push(d.toISOString().slice(0, 10))
+      }
+      setCustomCalendarDates(initialDates)
+    }
+  }
+
+  function handleStartDateChange(newStart: string) {
+    setCalendarStartDate(newStart)
+    if (!calendarModalPlan) return
     const period = calendarModalPlan.periodicidade || 'mensal'
-
-    let count = 12
-    if (period === 'semanal') count = 12
-    else if (period === 'mensal') count = 12
-    else if (period === 'trimestral') count = 4
-    else if (period === 'bianual') count = 2
-    else if (period === 'anual') count = 3
-    else if (period === 'bienal') count = 2
-    else if (period === 'trianual') count = 2
-    else if (period === 'pontual') count = 1
-    else count = 6
-
+    let count = customCalendarDates.length || (period === 'bianual' ? 2 : period === 'trimestral' ? 4 : period === 'anual' ? 1 : 12)
+    const newDates: string[] = []
+    const start = new Date(newStart)
     for (let i = 0; i < count; i++) {
       const d = new Date(start)
       if (period === 'semanal') d.setDate(d.getDate() + i * 7)
@@ -205,11 +254,10 @@ export default function MaintenancePlanClient({
       else if (period === 'trianual') d.setFullYear(d.getFullYear() + i * 3)
       else if (period === 'horas') d.setMonth(d.getMonth() + i)
       else if (period === 'pontual') { if (i > 0) break }
-      
-      dates.push(d.toISOString().slice(0, 10))
+      newDates.push(d.toISOString().slice(0, 10))
     }
-    return dates
-  }, [calendarModalPlan, calendarStartDate])
+    setCustomCalendarDates(newDates)
+  }
 
   async function handleConfirmCalendarSchedule() {
     if (!calendarModalPlan) return
@@ -217,8 +265,8 @@ export default function MaintenancePlanClient({
     await togglePlanCalendarAction(
       calendarModalPlan.id,
       true,
-      calendarStartDate,
-      calculatedDates
+      customCalendarDates[0] || calendarStartDate,
+      customCalendarDates
     )
     setSavingCalendar(false)
     setCalendarModalPlan(null)
@@ -312,9 +360,18 @@ export default function MaintenancePlanClient({
       if (colF.estado === 'ativo' && !p.active) return false
       if (colF.estado === 'inativo' && p.active) return false
       if (fLegal && !p.legal) return false
+
+      const isCal = Boolean(p.showInCalendar || (p.calendarDates && p.calendarDates.length > 0) || p.active !== false)
+      if (fCalendar === 'yes' && !isCal) return false
+      if (fCalendar === 'no' && isCal) return false
+
+      const isGantt = isPlanGanttActive(p)
+      if (fGantt === 'yes' && !isGantt) return false
+      if (fGantt === 'no' && isGantt) return false
+
       return true
     })
-  }, [plans, colF, fLegal, assetMap, assetTagMap])
+  }, [plans, colF, fLegal, fCalendar, fGantt, assetMap, assetTagMap])
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
@@ -370,9 +427,22 @@ export default function MaintenancePlanClient({
               <option value={-1}>Todos ({plans.length})</option>
             </select>
           </div>
+          <button
+            onClick={() => {
+              window.open('/api/backup/excel?type=plan', '_blank')
+              setTimeout(() => {
+                window.open('/api/backup/excel?type=tasks', '_blank')
+              }, 500)
+            }}
+            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Descarregar ficheiros de backup Excel de Plano de Manutenção (PL-MAN-01) e Histórico de OTs (FR-MAN-09)"
+          >
+            <FileSpreadsheet className="h-4 w-4 shrink-0" />
+            <span>Backup Excel (Planos + OTs)</span>
+          </button>
           <button onClick={handleExportCSV} className="btn-secondary flex items-center gap-1.5">
             <Download className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Exportar</span>
+            <span className="hidden sm:inline">Exportar CSV</span>
           </button>
           <button
             onClick={() => importInputRef.current?.click()}
@@ -406,25 +476,89 @@ export default function MaintenancePlanClient({
         </div>
       )}
 
-      {/* Filtros por estado */}
-      <div className="flex gap-1.5 mb-3 flex-wrap">
-        {[
-          { key: 'todos', label: 'Todos' },
-          { key: 'ativo', label: 'Ativo' },
-          { key: 'inativo', label: 'Inativo' },
-        ].map(({ key, label }) => (
+      {/* Filtros por estado, Calendário e Gantt */}
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <div className="flex gap-1.5 flex-wrap">
+          {[
+            { key: 'todos', label: 'Todos' },
+            { key: 'ativo', label: 'Ativo' },
+            { key: 'inativo', label: 'Inativo' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setCol('estado', key === 'todos' ? '' : key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${
+                (colF.estado === key || (key === 'todos' && !colF.estado))
+                  ? 'bg-[#1B4F72] text-white'
+                  : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Filtro Calendário */}
+        <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs">
+          <span className="px-2 font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+            <CalendarClock size={14} className="text-safety-orange" /> Calendário:
+          </span>
           <button
-            key={key}
-            onClick={() => setCol('estado', key === 'todos' ? '' : key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${
-              (colF.estado === key || (key === 'todos' && !colF.estado))
-                ? 'bg-[#1B4F72] text-white'
-                : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+            onClick={() => setFCalendar('')}
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+              !fCalendar ? 'bg-[#1B4F72] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
             }`}
           >
-            {label}
+            Todos
           </button>
-        ))}
+          <button
+            onClick={() => setFCalendar('yes')}
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+              fCalendar === 'yes' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+            }`}
+          >
+            ✓ No Calendário
+          </button>
+          <button
+            onClick={() => setFCalendar('no')}
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+              fCalendar === 'no' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+            }`}
+          >
+            Fora do Calendário
+          </button>
+        </div>
+
+        {/* Filtro Gantt */}
+        <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs">
+          <span className="px-2 font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+            <Building2 size={14} className="text-teal-600" /> Gantt:
+          </span>
+          <button
+            onClick={() => setFGantt('')}
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+              !fGantt ? 'bg-[#1B4F72] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+            }`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setFGantt('yes')}
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+              fGantt === 'yes' ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+            }`}
+          >
+            ✓ No Gantt
+          </button>
+          <button
+            onClick={() => setFGantt('no')}
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+              fGantt === 'no' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+            }`}
+          >
+            Fora do Gantt
+          </button>
+        </div>
       </div>
 
       {/* Barra de filtros: checkbox legais + limpar */}
@@ -449,20 +583,20 @@ export default function MaintenancePlanClient({
             <p className="text-sm">{dict.maintenancePlan.empty}</p>
           </div>
         ) : (
-          <table className="w-full text-xs">
+          <table className="w-full text-xs min-w-[1250px] table-fixed">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
-                <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2" />
-                <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2" />
-                <SortableTh label="TIPO / MARCADOR" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-2 py-2 whitespace-nowrap" />
-                <th className="px-2 py-2 text-center text-xs font-bold text-slate-700 uppercase tracking-wide">AÇÕES</th>
+                <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[105px] px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[115px] px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[160px] px-2 py-2" />
+                <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[220px] px-2 py-2" />
+                <SortableTh label="TIPO / MARCADOR" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[185px] px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[115px] px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[70px] px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[100px] px-2 py-2 whitespace-nowrap" />
+                <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[90px] px-2 py-2 whitespace-nowrap" />
+                <th className="w-[105px] px-2 py-2 text-center text-xs font-bold text-slate-700 uppercase tracking-wide">AÇÕES</th>
               </tr>
               {/* Linha de filtros por coluna (estilo Excel) */}
               <tr className="border-b border-slate-200 bg-slate-50">
@@ -569,24 +703,53 @@ export default function MaintenancePlanClient({
                   <td className="px-2 py-2 whitespace-nowrap">
                     <div className="flex flex-col gap-1 items-start">
                       <TipoBadge tipo={p.tipo || 'plano'} codeOnly={true} />
-                      <label className="inline-flex items-center gap-1 cursor-pointer select-none text-[10px] font-bold">
-                        <input
-                          type="checkbox"
-                          checked={p.showInCalendar === true}
-                          onChange={async (e) => {
-                            if (!e.target.checked) {
-                              await togglePlanCalendarAction(p.id, false)
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const isCalActive = Boolean(p.showInCalendar || (p.calendarDates && p.calendarDates.length > 0) || p.active !== false)
+                          return (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <label className="inline-flex items-center gap-1 cursor-pointer select-none text-[10px] font-bold">
+                                <input
+                                  type="checkbox"
+                                  checked={isCalActive}
+                                  onChange={async (e) => {
+                                    if (!e.target.checked) {
+                                      await togglePlanCalendarAction(p.id, false)
+                                      router.refresh()
+                                    } else {
+                                      openCalendarModal(p)
+                                    }
+                                  }}
+                                  className="rounded border-slate-300 text-safety-orange focus:ring-safety-orange h-3.5 w-3.5"
+                                />
+                                <span className={isCalActive ? "text-blue-800 dark:text-blue-300 font-bold" : "text-slate-500"}>
+                                  Calendário
+                                </span>
+                              </label>
+                              {isCalActive && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 text-[10px] font-extrabold shadow-xs" title="OT agendada e ativa no Calendário">
+                                  <CheckCircle2 size={11} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                  <span>✓ No Calendário</span>
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })()}
+                        <label className="inline-flex items-center gap-1 cursor-pointer select-none text-[10px] font-bold" title="Incluir tarefa no Gráfico de Gantt da página de Projetos">
+                          <input
+                            type="checkbox"
+                            checked={isPlanGanttActive(p)}
+                            onChange={async (e) => {
+                              await togglePlanGanttAction(p.id, e.target.checked)
                               router.refresh()
-                            } else {
-                              setCalendarModalPlan(p)
-                            }
-                          }}
-                          className="rounded border-slate-300 text-safety-orange focus:ring-safety-orange h-3.5 w-3.5"
-                        />
-                        <span className={p.showInCalendar === true ? "text-blue-800 dark:text-blue-300 font-bold" : "text-slate-500"}>
-                          Calendário
-                        </span>
-                      </label>
+                            }}
+                            className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-3.5 w-3.5"
+                          />
+                          <span className={isPlanGanttActive(p) ? "text-teal-700 dark:text-teal-300 font-bold" : "text-slate-400"}>
+                            Gantt
+                          </span>
+                        </label>
+                      </div>
                     </div>
                   </td>
                   <td className="px-2 py-2 text-slate-800 whitespace-nowrap">
@@ -815,30 +978,50 @@ export default function MaintenancePlanClient({
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block text-sm font-bold text-gray-800 dark:text-slate-200 mb-1">
-                  Data de Início / 1ª Execução no Calendário *
-                </label>
-                <input
-                  type="date"
-                  value={calendarStartDate}
-                  onChange={(e) => setCalendarStartDate(e.target.value)}
-                  className="input font-mono font-bold"
-                  required
-                />
-              </div>
+            <div className="space-y-4 text-xs">
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                    Datas de Execução ({customCalendarDates.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const last = customCalendarDates[customCalendarDates.length - 1] || calendarStartDate
+                      const d = new Date(last)
+                      d.setMonth(d.getMonth() + 1)
+                      setCustomCalendarDates([...customCalendarDates, d.toISOString().slice(0, 10)])
+                    }}
+                    className="text-xs text-[#2E86C1] hover:underline font-bold flex items-center gap-1"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Adicionar data
+                  </button>
+                </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-                <p className="font-bold text-slate-900 dark:text-slate-100 flex items-center justify-between">
-                  <span>Previsão de Datas de Ocorrência ({calculatedDates.length})</span>
-                  <span className="text-[10px] text-slate-500 font-mono">Calculado p/ {periodLabel(calendarModalPlan)}</span>
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-36 overflow-y-auto pt-1">
-                  {calculatedDates.map((dStr, idx) => (
-                    <div key={dStr + idx} className="bg-white dark:bg-slate-900 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-800 text-[11px] font-mono font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between">
-                      <span className="text-slate-400 text-[9px]">#{idx + 1}</span>
-                      <span>{formatDate(dStr)}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                  {customCalendarDates.map((dStr, idx) => (
+                    <div key={idx} className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                        <span>Data Execução #{idx + 1}</span>
+                        {customCalendarDates.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setCustomCalendarDates((list) => list.filter((_, i) => i !== idx))}
+                            className="text-red-500 hover:text-red-700 text-[10px]"
+                          >
+                            Remover
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="date"
+                        value={dStr}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setCustomCalendarDates((list) => list.map((item, i) => i === idx ? val : item))
+                        }}
+                        className="input font-mono font-bold text-xs py-1 px-2"
+                      />
                     </div>
                   ))}
                 </div>

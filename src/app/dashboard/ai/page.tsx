@@ -9,6 +9,7 @@ export const metadata = {
 export default async function AIPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
+  if (profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const hasAiModule = true
   const aiCredits = profile.company?.aiCredits ?? 1000

@@ -16,6 +16,7 @@ const FEATURE_LABELS: Record<FeatureKey, string> = {
   aiConsultant:        'Consultor IA',
   reliability:         'Fiabilidade & KPIs',
   compliance:          'Compliance ISO & Auditorias',
+  projects:            'Controlo de Projetos (Gantt)',
 }
 
 interface UpgradeModalProps {

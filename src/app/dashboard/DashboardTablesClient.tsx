@@ -1,214 +1,156 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import Link from 'next/link'
-import { FolderKanban, ClipboardList, AlertTriangle, Filter, ArrowRight } from 'lucide-react'
-import { TipoBadge } from '@/components/ui/TipoBadge'
+import { useMemo } from 'react'
+import { BarChart3, TrendingUp } from 'lucide-react'
 import type { Task, User } from '@/types/models'
-import { formatDate } from '@/lib/utils'
-import { useTableSort, SortableTh } from '@/lib/useTableSort'
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+} from 'recharts'
 
-const getStatusStyles = (status: string, criticidade?: string) => {
-  if (status === 'in_progress' && criticidade === 'vermelho') return 'bg-red-50 text-red-700 border-red-200'
-  switch (status) {
-    case 'in_progress': return 'bg-blue-50 text-blue-700 border-blue-200'
-    case 'pending': return 'bg-amber-50 text-amber-700 border-amber-200'
-    case 'done': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
-    default: return 'bg-slate-50 text-slate-700 border-slate-200'
+// 1. Pedidos de PI por Mês (reais da BD)
+function computePIMonthlyData(allTasks: Task[]) {
+  const piTasks = allTasks.filter(
+    (t) =>
+      t.tipo === 'pi' ||
+      t.ti === 'PI' ||
+      t.tipoText === 'PI' ||
+      (t.title || '').toUpperCase().startsWith('PI')
+  )
+  const monthsMap: Record<string, { month: string; pedidas: number; concluidas: number }> = {}
+
+  const now = new Date()
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const label = d.toLocaleDateString('pt', { month: 'short' })
+    monthsMap[key] = { month: label.charAt(0).toUpperCase() + label.slice(1), pedidas: 0, concluidas: 0 }
   }
+
+  piTasks.forEach((t) => {
+    if (t.createdAt) {
+      const key = t.createdAt.slice(0, 7)
+      if (monthsMap[key]) monthsMap[key].pedidas++
+    }
+    if (t.status === 'done' && (t.completedAt || t.createdAt)) {
+      const key = (t.completedAt || t.createdAt).slice(0, 7)
+      if (monthsMap[key]) monthsMap[key].concluidas++
+    }
+  })
+
+  return Object.values(monthsMap)
 }
 
-const getStatusLabel = (status: string, criticidade?: string) => {
-  if (status === 'in_progress' && criticidade === 'vermelho') return 'Emergência'
-  if (status === 'in_progress') return 'Em Curso'
-  if (status === 'pending') return 'Atribuída'
-  if (status === 'done') return 'Concluída'
-  return status
-}
-
-function TableSection({
-  title,
-  icon: Icon,
-  tasks,
-  usersList,
-  viewAllHref,
-  emptyMessage,
-}: {
-  title: string
-  icon: any
-  tasks: Task[]
-  usersList: User[]
-  viewAllHref: string
-  emptyMessage: string
-}) {
-  const [searchTitle, setSearchTitle] = useState('')
-  const [searchTech, setSearchTech] = useState('')
-  const [filterStatus, setFilterStatus] = useState<string>('all')
-
-  const userMap = useMemo(() => new Map(usersList.map((u) => [u.id, u.abbreviation || u.name])), [usersList])
-  const resolveTechName = (id?: string | null) => (id ? userMap.get(id) ?? id : 'Sem Atribuição')
-
-  const filtered = useMemo(() => {
-    return tasks.filter((t) => {
-      if (filterStatus !== 'all' && t.status !== filterStatus) return false
-      if (searchTitle.trim() && !t.title.toLowerCase().includes(searchTitle.toLowerCase().trim())) return false
-      if (searchTech.trim() && !resolveTechName(t.assignedTo).toLowerCase().includes(searchTech.toLowerCase().trim())) return false
-      return true
-    })
-  }, [tasks, filterStatus, searchTitle, searchTech, userMap])
-
-  const { sorted, sortKey, sortDir, toggleSort } = useTableSort<Task>(
-    filtered,
-    {
-      title: (t) => t.title?.toLowerCase(),
-      assignee: (t) => resolveTechName(t.assignedTo).toLowerCase(),
-      status: (t) => t.status,
-      dueDate: (t) => t.createdAt ?? '',
-    },
-    null
+// 2. % Cumprimento do Plano de Manutenção por Ano (reais da BD)
+function computePlanYearlyData(allTasks: Task[]) {
+  const planTasks = allTasks.filter(
+    (t) =>
+      t.tipo === 'plano' ||
+      t.tipo === 'preventiva' ||
+      t.ti === 'PM' ||
+      t.ti === 'MP' ||
+      t.tipoText === 'PM' ||
+      !!t.maintenancePlanId
   )
 
-  return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col shadow-sm">
-      {/* Header do Quadro */}
-      <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/40">
-        <div className="flex items-center gap-2.5">
-          <Icon className="text-safety-orange" size={22} />
-          <div>
-            <h3 className="text-base font-extrabold text-industrial-blue dark:text-slate-100">{title}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {sorted.length} de {tasks.length} em curso / pendentes
-            </p>
-          </div>
-        </div>
-        <Link
-          href={viewAllHref}
-          className="text-xs font-bold text-safety-orange hover:underline flex items-center gap-1 shrink-0"
-        >
-          Ver Todas <ArrowRight size={14} />
-        </Link>
-      </div>
+  const currentYear = new Date().getFullYear()
+  const years = [currentYear - 2, currentYear - 1, currentYear]
+  const yearsMap: Record<string, { year: string; agendadas: number; concluidas: number; percent: number }> = {}
 
-      {/* Tabela com Filtros por Coluna */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs min-w-[500px]">
-          <thead>
-            <tr className="bg-slate-100/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-              <SortableTh label="TÍTULO / EQUIPAMENTO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableTh label="TÉCNICO" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableTh label="DATA" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-            </tr>
+  years.forEach((y) => {
+    yearsMap[String(y)] = { year: String(y), agendadas: 0, concluidas: 0, percent: 0 }
+  })
 
-            {/* Linha de Filtros de Coluna */}
-            <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 p-1">
-              <td className="p-1.5">
-                <input
-                  type="text"
-                  value={searchTitle}
-                  onChange={(e) => setSearchTitle(e.target.value)}
-                  placeholder="Filtrar título..."
-                  className="input !text-[11px] !py-0.5 !px-2 w-full"
-                />
-              </td>
-              <td className="p-1.5">
-                <input
-                  type="text"
-                  value={searchTech}
-                  onChange={(e) => setSearchTech(e.target.value)}
-                  placeholder="Filtrar técnico..."
-                  className="input !text-[11px] !py-0.5 !px-2 w-full"
-                />
-              </td>
-              <td className="p-1.5">
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="input !text-[11px] !py-0.5 !px-1 w-full"
-                >
-                  <option value="all">Todos</option>
-                  <option value="pending">Pendente</option>
-                  <option value="in_progress">Em Curso</option>
-                </select>
-              </td>
-              <td className="p-1.5" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-            {sorted.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="py-8 text-center text-slate-400">
-                  <Filter className="h-6 w-6 mx-auto mb-2 opacity-30" />
-                  <p className="text-xs">{emptyMessage}</p>
-                </td>
-              </tr>
-            ) : (
-              sorted.slice(0, 6).map((item) => (
-                <tr
-                  key={item.id}
-                  className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group cursor-pointer"
-                >
-                  <td className="py-3 px-3 font-bold text-slate-900 dark:text-slate-100">
-                    <div className="flex items-center gap-1.5">
-                      <TipoBadge tipo={(item as any).tipo || 'curativa'} codeOnly={true} />
-                      <Link href={viewAllHref} className="block group-hover:text-safety-orange transition-colors truncate max-w-[180px]">
-                        {item.title}
-                      </Link>
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 font-semibold text-slate-700 dark:text-slate-300">
-                    <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-                      {resolveTechName(item.assignedTo)}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${getStatusStyles(item.status, item.criticidade)}`}>
-                      {getStatusLabel(item.status, item.criticidade)}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                    {formatDate(item.createdAt)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
+  planTasks.forEach((t) => {
+    const yr = (t.plannedStartDate || t.createdAt || '').slice(0, 4)
+    if (yearsMap[yr]) {
+      yearsMap[yr].agendadas++
+      if (t.status === 'done') {
+        yearsMap[yr].concluidas++
+      }
+    }
+  })
+
+  Object.values(yearsMap).forEach((item) => {
+    item.percent = item.agendadas > 0 ? Math.round((item.concluidas / item.agendadas) * 100) : 100
+  })
+
+  return Object.values(yearsMap)
 }
 
 export default function DashboardTablesClient({
-  normalTasks,
-  projectTasks,
-  usersList,
+  normalTasks = [],
+  allTasks = [],
 }: {
-  normalTasks: Task[]
-  projectTasks: Task[]
-  usersList: User[]
+  normalTasks?: Task[]
+  projectTasks?: Task[]
+  allTasks?: Task[]
+  usersList?: User[]
 }) {
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Quadro Esquerdo: OTs Ativas e Atribuídas */}
-      <TableSection
-        title="OTs Ativas e Atribuídas"
-        icon={ClipboardList}
-        tasks={normalTasks}
-        usersList={usersList}
-        viewAllHref="/dashboard/tasks"
-        emptyMessage="Nenhuma OT ativa registada."
-      />
+  const taskSource = allTasks.length ? allTasks : normalTasks
 
-      {/* Quadro Direito: Resumo de Projetos */}
-      <TableSection
-        title="Projetos"
-        icon={FolderKanban}
-        tasks={projectTasks}
-        usersList={usersList}
-        viewAllHref="/dashboard/projects"
-        emptyMessage="Nenhum projeto ativo registado."
-      />
+  const piMonthlyData = useMemo(() => computePIMonthlyData(taskSource), [taskSource])
+  const planYearlyData = useMemo(() => computePlanYearlyData(taskSource), [taskSource])
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+      {/* Gráfico 1: Pedidos de PI (Pedida vs Concluída por Mês) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="text-safety-orange h-5 w-5" />
+            <div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-slate-100">Pedidos de PI (Por Mês)</h3>
+              <p className="text-xs text-gray-500 dark:text-slate-400">PIs Pedidas (criadas) vs Concluídas no mês</p>
+            </div>
+          </div>
+        </div>
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={piMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Legend wrapperStyle={{ fontSize: '11px' }} />
+              <Bar dataKey="pedidas" name="PIs Pedidas" fill="#2E86C1" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="concluidas" name="PIs Concluídas" fill="#10B981" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Gráfico 2: % Cumprimento do Plano de Manutenção (Por Ano) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="text-emerald-600 h-5 w-5" />
+            <div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-slate-100">Cumprimento do Plano de Manutenção (% por Ano)</h3>
+              <p className="text-xs text-gray-500 dark:text-slate-400">Agendado vs Concluído e Taxa de Cumprimento anuais</p>
+            </div>
+          </div>
+        </div>
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={planYearlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(val: any, name: any) => [name === '% Cumprimento' ? `${val}%` : val, name]} />
+              <Legend wrapperStyle={{ fontSize: '11px' }} />
+              <Bar dataKey="agendadas" name="Agendadas" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="concluidas" name="Concluídas" fill="#10B981" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
     </div>
   )
 }

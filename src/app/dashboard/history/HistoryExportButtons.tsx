@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Download, Printer } from 'lucide-react'
+import { Download, Printer, FileSpreadsheet } from 'lucide-react'
 import type { Intervention, Material, Task } from '@/types/models'
 import { STATUS_LABELS, CRITICIDADE_LABELS, TIPO_LABELS } from '@/types/models'
 
@@ -135,6 +135,19 @@ export default function HistoryExportButtons({
           <>
             <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
             <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-lg py-1 min-w-[220px]">
+              <button
+                onClick={() => {
+                  window.open('/api/backup/excel?type=plan', '_blank')
+                  setTimeout(() => {
+                    window.open('/api/backup/excel?type=tasks', '_blank')
+                  }, 500)
+                  setOpen(false)
+                }}
+                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-b border-gray-100 dark:border-slate-800"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                Backup Completo Excel (PL-MAN & FR-MAN)
+              </button>
               <button
                 onClick={exportInterventionsCSV}
                 className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800/50"

@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic'
 export default async function ReliabilityPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
+  if (profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const [assets, tasks] = await Promise.all([
     listAssets(profile.companyId),

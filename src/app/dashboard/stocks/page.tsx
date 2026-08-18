@@ -1,6 +1,6 @@
-﻿import { redirect } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { listStockItems } from '@/lib/firebase/data'
+import { listStockItems, listAssets } from '@/lib/firebase/data'
 import { planHas } from '@/lib/plans'
 import type { PlanName } from '@/types/models'
 import StocksClient from './StocksClient'
@@ -14,11 +14,14 @@ export default async function StocksPage() {
 
   const plan = (profile.company?.plan ?? 'free') as PlanName
 
-  const items = await listStockItems(profile.companyId)
+  const [items, assets] = await Promise.all([
+    listStockItems(profile.companyId),
+    listAssets(profile.companyId),
+  ])
 
   return (
     <div className="max-w-5xl mx-auto">
-      <StocksClient items={items} plan={plan} />
+      <StocksClient items={items} assets={assets} plan={plan} />
     </div>
   )
 }

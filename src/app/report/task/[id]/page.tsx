@@ -178,6 +178,53 @@ export default async function TaskReportPage({
           </div>
         )}
 
+        {/* Folhas de Registo (FR) & Instruções de Trabalho (IT) */}
+        {((task.requiredFRs && task.requiredFRs.length > 0) || (task.requiredITs && task.requiredITs.length > 0)) && (
+          <div style={{ marginBottom: 14 }}>
+            <div className="sec-title">Folhas de Registo & Instruções de Trabalho</div>
+            
+            {task.requiredFRs && task.requiredFRs.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: '8.5pt', fontWeight: 700, color: '#1B4F72', marginBottom: 4 }}>📋 Folhas de Registo (FR) Preenchidas</div>
+                {task.requiredFRs.map(frId => {
+                  const frData = task.completedFRs?.[frId] || {}
+                  const savedAt = frData._savedAt ? formatDate(frData._savedAt) : 'Concluído'
+                  return (
+                    <div key={frId} style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 6, padding: '8px 10px', marginBottom: 6 }}>
+                      <div style={{ fontSize: '9pt', fontWeight: 700, color: '#111827' }}>{frId} · Data de Registo: {savedAt}</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, marginTop: 4 }}>
+                        {Object.entries(frData)
+                          .filter(([k]) => k !== '_savedAt')
+                          .map(([key, val]) => (
+                            <div key={key} style={{ fontSize: '8pt' }}>
+                              <span style={{ color: '#6b7280', textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}: </span>
+                              <span style={{ fontWeight: 600, color: '#111827' }}>{String(val)}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {task.requiredITs && task.requiredITs.length > 0 && (
+              <div>
+                <div style={{ fontSize: '8.5pt', fontWeight: 700, color: '#1B4F72', marginBottom: 4 }}>📖 Instruções de Trabalho (IT) Confirmadas</div>
+                {task.requiredITs.map(itId => {
+                  const isAck = (task.acknowledgedITs || []).includes(itId)
+                  return (
+                    <div key={itId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '8.5pt', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, padding: '6px 10px', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, color: '#166534' }}>{itId}</span>
+                      <span style={{ fontWeight: 600, color: '#15803d' }}>{isAck ? '✔ Lida & Confirmada pelo Técnico' : 'Pendente'}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Intervenções */}
         {interventions.length > 0 && (
           <>

@@ -37,7 +37,6 @@ export async function createAssetAction(
 ): Promise<AssetFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
-  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
   try {
     await createAsset(profile.companyId, parseAsset(formData))
     revalidatePath('/dashboard/assets')
@@ -53,7 +52,6 @@ export async function updateAssetAction(
 ): Promise<AssetFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
-  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
   const id = String(formData.get('id') ?? '')
   if (!id) return { error: 'ID em falta.' }
   try {
@@ -89,7 +87,6 @@ const COLUMN_MAP: Record<string, keyof Pick<Asset, 'area' | 'tag' | 'name' | 'ch
 export async function importAssetsAction(formData: FormData): Promise<ImportAssetsState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
-  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
 
   const file = formData.get('file')
   if (!(file instanceof File)) return { error: 'Ficheiro em falta.' }
@@ -157,7 +154,6 @@ export async function importAssetsAction(formData: FormData): Promise<ImportAsse
 export async function deleteAssetAction(id: string): Promise<AssetFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
-  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
   try {
     await deleteAsset(profile.companyId, id)
     revalidatePath('/dashboard/assets')
@@ -170,7 +166,6 @@ export async function deleteAssetAction(id: string): Promise<AssetFormState> {
 export async function bulkDeleteAssetsAction(ids: string[]): Promise<AssetFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
-  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
   try {
     await Promise.all(ids.map(id => deleteAsset(profile.companyId, id)))
     revalidatePath('/dashboard/assets')
@@ -183,7 +178,6 @@ export async function bulkDeleteAssetsAction(ids: string[]): Promise<AssetFormSt
 export async function bulkUpdateAssetsAction(ids: string[], updates: Partial<Pick<Asset, 'area' | 'tag'>>): Promise<AssetFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
-  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
   try {
     await Promise.all(ids.map(id => updateAsset(profile.companyId, id, updates)))
     revalidatePath('/dashboard/assets')

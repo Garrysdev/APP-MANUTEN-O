@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { Plus, X, Package, Check, Sparkles } from 'lucide-react'
 import { createStockItemAction } from '@/app/dashboard/stocks/actions'
@@ -28,6 +28,10 @@ export default function MaterialsSelector({
   const [initialQty, setInitialQty] = useState('10')
   const [unit, setUnit] = useState('unidade')
   const [creating, setCreating] = useState(false)
+
+  const sortedStockRefs = useMemo(() => {
+    return [...stockRefs].sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+  }, [stockRefs])
 
   function handleSelectExisting(index: number, value: string) {
     const updated = [...items]
@@ -101,12 +105,12 @@ export default function MaterialsSelector({
               className="input flex-1 text-xs"
             >
               <option value="">— Selecionar do Inventário —</option>
-              {stockRefs.map((s) => (
+              {sortedStockRefs.map((s) => (
                 <option key={s.id} value={s.name}>
                   {s.name} {s.unit ? `(${s.unit})` : ''}
                 </option>
               ))}
-              {val && !stockRefs.some((s) => s.name === val) && (
+              {val && !sortedStockRefs.some((s) => s.name === val) && (
                 <option value={val}>{val} (Novo/Avulso)</option>
               )}
             </select>

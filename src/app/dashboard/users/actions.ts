@@ -2,11 +2,30 @@
 
 import { revalidatePath } from 'next/cache'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { createUserDirect, deactivateUser, countActiveUsers, countPendingInvites, createInviteToken, updateUserRate } from '@/lib/firebase/data'
+import { createUserDirect, deactivateUser, deleteUserPermanent, checkUserHasHistory, countActiveUsers, countPendingInvites, createInviteToken, updateUserRate } from '@/lib/firebase/data'
+import { adminDb } from '@/lib/firebase/admin'
 import { LIMITS } from '@/lib/plans'
 import type { UserRole, PlanName } from '@/types/models'
 
 export type UserActionState = { error?: string; ok?: boolean }
+
+function formatActionError(e: unknown, fallback: string): string {
+  const msg = e instanceof Error ? e.message : String(e ?? '')
+  if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota exceeded') || msg.startsWith('8 ')) {
+    return 'A quota gratuita de leitura/escrita do Firebase Firestore foi excedida hoje. A plataforma está a operar no modo de contingência local.'
+  }
+  return msg || fallback
+}
+
+function revalidateUserRelatedPaths() {
+  revalidatePath('/dashboard/users')
+  revalidatePath('/dashboard/tasks')
+  revalidatePath('/dashboard/history')
+  revalidatePath('/dashboard/maintenance-plan')
+  revalidatePath('/dashboard/calendar')
+  revalidatePath('/dashboard/projects')
+  revalidatePath('/dashboard')
+}
 
 export async function createUserDirectAction(
   _prev: UserActionState,
@@ -56,14 +75,14 @@ export async function createUserDirectAction(
       externalCompanyName,
       phone
     })
-    revalidatePath('/dashboard/users')
+    revalidateUserRelatedPaths()
     return { ok: true }
   } catch (e) {
     const msg = e instanceof Error ? e.message : ''
     if (msg.includes('email-already-exists') || msg.includes('already exists')) {
       return { error: 'Este e-mail já está registado.' }
     }
-    return { error: msg || 'Erro ao criar utilizador.' }
+    return { error: formatActionError(e, 'Erro ao criar utilizador.') }
   }
 }
 
@@ -94,7 +113,32 @@ export async function generateInviteAction(
     const inviteUrl = `${baseUrl}/register?invite=${token}${emailParam}`
     return { ok: true, inviteUrl }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao gerar convite.' }
+    return { error: formatActionError(e, 'Erro ao gerar convite.') }
+  }
+}
+
+export async function deleteUserAction(userId: string, force = false): Promise<UserActionState & { hasHistory?: boolean }> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  if (userId === profile.id) return { error: 'Não podes eliminar a tua própria conta.' }
+
+  try {
+    if (!force) {
+      const hasHistory = await checkUserHasHistory(profile.companyId, userId)
+      if (hasHistory) {
+        return {
+          error: 'HAS_HISTORY',
+          hasHistory: true,
+        }
+      }
+    }
+
+    await deleteUserPermanent(profile.companyId, userId)
+    revalidateUserRelatedPaths()
+    return { ok: true }
+  } catch (e) {
+    return { error: formatActionError(e, 'Erro ao eliminar utilizador.') }
   }
 }
 
@@ -106,10 +150,10 @@ export async function deactivateUserAction(userId: string): Promise<UserActionSt
 
   try {
     await deactivateUser(profile.companyId, userId)
-    revalidatePath('/dashboard/users')
+    revalidateUserRelatedPaths()
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao desativar utilizador.' }
+    return { error: formatActionError(e, 'Erro ao desativar utilizador.') }
   }
 }
 
@@ -120,10 +164,10 @@ export async function updateUserRateAction(userId: string, hourlyRate: number): 
 
   try {
     await updateUserRate(profile.companyId, userId, hourlyRate)
-    revalidatePath('/dashboard/users')
+    revalidateUserRelatedPaths()
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao atualizar custo.' }
+    return { error: formatActionError(e, 'Erro ao atualizar custo.') }
   }
 }
 
@@ -137,10 +181,10 @@ export async function updateTechnicianTypesAction(types: string[]): Promise<User
 
   try {
     await updateTechnicianTypes(profile.companyId, types)
-    revalidatePath('/dashboard/users')
+    revalidateUserRelatedPaths()
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao atualizar tipos de técnico.' }
+    return { error: formatActionError(e, 'Erro ao atualizar tipos de técnico.') }
   }
 }
 
@@ -218,10 +262,10 @@ export async function updateUserByManagerAction(
     }
 
     await updateUserProfile(userId, updateData)
-    revalidatePath('/dashboard/users')
+    revalidateUserRelatedPaths()
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao atualizar perfil do utilizador.' }
+    return { error: formatActionError(e, 'Erro ao atualizar perfil do utilizador.') }
   }
 }
 
@@ -236,10 +280,10 @@ export async function toggleUserActiveAction(userId: string, active: boolean): P
     try {
       await adminAuth().updateUser(userId, { disabled: !active })
     } catch { /* ignore auth error for fallback users */ }
-    revalidatePath('/dashboard/users')
+    revalidateUserRelatedPaths()
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao alterar estado do utilizador.' }
+    return { error: formatActionError(e, 'Erro ao alterar estado do utilizador.') }
   }
 }
 
@@ -263,9 +307,39 @@ export async function resetUserPasswordAction(
     }
 
     await updateUserProfile(userId, { mustChangePassword: true })
-    revalidatePath('/dashboard/users')
+    revalidateUserRelatedPaths()
     return { ok: true, tempPassword: pwd }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao repor password do utilizador.' }
+    return { error: formatActionError(e, 'Erro ao repor password do utilizador.') }
+  }
+}
+
+export async function deleteExternalCompanyAction(companyId: string): Promise<UserActionState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+
+  try {
+    const db = adminDb()
+    const compDoc = await db.collection('external_companies').doc(companyId).get()
+    if (compDoc.exists && compDoc.data()?.companyId === profile.companyId) {
+      await compDoc.ref.delete()
+    }
+
+    const usersSnap = await db.collection('users')
+      .where('companyId', '==', profile.companyId)
+      .where('externalCompanyId', '==', companyId)
+      .get()
+
+    const batch = db.batch()
+    usersSnap.docs.forEach((d: any) => {
+      batch.update(d.ref, { externalCompanyId: null, externalCompanyName: null, isExternal: false })
+    })
+    await batch.commit()
+
+    revalidateUserRelatedPaths()
+    return { ok: true }
+  } catch (e) {
+    return { error: formatActionError(e, 'Erro ao eliminar empresa externa.') }
   }
 }

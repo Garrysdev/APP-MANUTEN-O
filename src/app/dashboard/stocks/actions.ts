@@ -25,6 +25,8 @@ export async function createStockItemAction(
   const unitCostRaw = Number(formData.get('unitCost') ?? '')
   const minQtyRaw = Number(formData.get('minQuantity') ?? '')
 
+  const assetIds = formData.getAll('assetIds').map(String).filter(Boolean)
+
   try {
     await createStockItem(profile.companyId, {
       name,
@@ -35,6 +37,8 @@ export async function createStockItemAction(
       unitCost: unitCostRaw > 0 ? unitCostRaw : null,
       minQuantity: minQtyRaw > 0 ? minQtyRaw : null,
       location: String(formData.get('location') ?? '').trim() || null,
+      assetIds: assetIds.length > 0 ? assetIds : null,
+      assetId: assetIds[0] || null,
     })
     revalidatePath('/dashboard/stocks')
     return { ok: true }
@@ -60,6 +64,7 @@ export async function updateStockItemAction(
   const quantity = Number(formData.get('quantity') ?? 0)
   const unitCostRaw = Number(formData.get('unitCost') ?? '')
   const minQtyRaw = Number(formData.get('minQuantity') ?? '')
+  const assetIds = formData.getAll('assetIds').map(String).filter(Boolean)
 
   try {
     await updateStockItem(profile.companyId, id, {
@@ -71,6 +76,8 @@ export async function updateStockItemAction(
       unitCost: unitCostRaw > 0 ? unitCostRaw : null,
       minQuantity: minQtyRaw > 0 ? minQtyRaw : null,
       location: String(formData.get('location') ?? '').trim() || null,
+      assetIds: assetIds.length > 0 ? assetIds : null,
+      assetId: assetIds[0] || null,
     })
     revalidatePath('/dashboard/stocks')
     return { ok: true }
@@ -122,5 +129,29 @@ export async function deleteStockItemAction(id: string): Promise<StockFormState>
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao eliminar item.' }
+  }
+}
+
+export async function bulkAssignStockAssetsAction(
+  stockItemIds: string[],
+  assetIds: string[]
+): Promise<StockFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+
+  const plan = (profile.company?.plan ?? 'free') as PlanName
+  if (!planHas(plan, 'stocks')) return { error: 'Funcionalidade não disponível no plano atual.' }
+
+  try {
+    for (const itemId of stockItemIds) {
+      await updateStockItem(profile.companyId, itemId, {
+        assetIds: assetIds.length > 0 ? assetIds : null,
+        assetId: assetIds[0] || null,
+      })
+    }
+    revalidatePath('/dashboard/stocks')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao atribuir equipamentos aos artigos.' }
   }
 }

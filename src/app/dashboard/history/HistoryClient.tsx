@@ -10,7 +10,7 @@ import { useLanguage } from '@/components/providers/LanguageProvider'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
 
 type Ref = { id: string; name: string }
-type UserRef = Ref & { avatarUrl?: string | null }
+type UserRef = Ref & { avatarUrl?: string | null; abbreviation?: string | null; active?: boolean; role?: string | null }
 
 export interface HistoryRow {
   id: string          // ID / Código com 3 dígitos (ex: 001, 002, 005)
@@ -86,7 +86,10 @@ export default function HistoryClient({
 }) {
   const { dict } = useLanguage()
   const [colF, setColF] = useState(emptyCol)
-  const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
+  const setCol = (k: keyof typeof emptyCol, v: string) => {
+    setCurrentPage(1)
+    setColF((c) => ({ ...c, [k]: v }))
+  }
   function clearFilters() { setColF(emptyCol) }
   const anyFilter = Object.values(colF).some(Boolean)
 
@@ -158,6 +161,29 @@ export default function HistoryClient({
     return list
   }, [interventions, tasks, taskMap, assetObjMap, userMap, users])
 
+  const uniqueTechnicians = useMemo(() => {
+    const map = new Map<string, string>()
+    users.forEach((u) => {
+      if ((u as any).active !== false) {
+        const isTech = (u as any).role === 'technician' || (u as any).role === 'tecnico' || (u as any).role === 'tech'
+        if (isTech) {
+          const val = u.abbreviation || u.name
+          const label = u.abbreviation ? `${u.abbreviation} - ${u.name}` : u.name
+          if (!map.has(val)) map.set(val, label)
+        }
+      }
+    })
+    rows.forEach((r) => {
+      if (r.tecnicos && r.tecnicos !== '—' && r.tecnicos !== 'N/D') {
+        const isDeleted = users.some((u) => (u as any).active === false && (u.abbreviation === r.tecnicos || u.name === r.tecnicos || u.id === r.tecnicos))
+        if (!isDeleted && !map.has(r.tecnicos)) {
+          map.set(r.tecnicos, r.tecnicos)
+        }
+      }
+    })
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], 'pt'))
+  }, [users, rows])
+
   // Filtragem por coluna
   const norm = (s: string | null | undefined) => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
   const inc = (val: string | null | undefined, f: string) => !f || norm(val).includes(norm(f))
@@ -215,15 +241,17 @@ export default function HistoryClient({
             A mostrar {sorted.length} / {rows.length} registo(s)
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <HistoryExportButtons
-            interventions={interventions}
-            tasks={tasks}
-            allMaterials={allMaterials}
-            userMap={userMap}
-            assetMap={assetMap}
-          />
-        </div>
+        {!isTechnician && (
+          <div className="flex items-center gap-2">
+            <HistoryExportButtons
+              interventions={interventions}
+              tasks={tasks}
+              allMaterials={allMaterials}
+              userMap={userMap}
+              assetMap={assetMap}
+            />
+          </div>
+        )}
       </div>
 
       {/* Controlo de Linhas por página + Limpar Filtros */}
@@ -253,64 +281,102 @@ export default function HistoryClient({
 
       {/* Tabela de Histórico (Sem UI e STS, ID com 3 dígitos) */}
       <div className="card overflow-x-auto">
-        {sorted.length === 0 ? (
-          <div className="px-5 py-12 text-center text-slate-400">
-            <HistoryIcon className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p className="text-sm font-medium">Nenhum registo de histórico encontrado com os filtros aplicados.</p>
-          </div>
-        ) : (
-          <table className="w-full text-xs min-w-[1000px]">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
-                <SortableTh label="ID" sortableKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="DATA" sortableKey="data" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="EQUIPAMENTO / TAG" sortableKey="equiTag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="TI" sortableKey="ti" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="AVARIA / DESCRIÇÃO" sortableKey="avaria" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="TÉCNICOS" sortableKey="tecnicos" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="INÍCIO" sortableKey="inicio" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="FIM" sortableKey="fim" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="CAUSA / OBS" sortableKey="causa" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <th className="px-3 py-2 text-center text-xs font-bold">AÇÕES</th>
+        <table className="w-full text-xs min-w-[1100px] table-fixed">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
+              <SortableTh label="ID" sortableKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[75px] px-2 py-2" />
+              <SortableTh label="DATA" sortableKey="data" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[95px] px-2 py-2" />
+              <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[80px] px-2 py-2" />
+              <SortableTh label="EQUIPAMENTO / TAG" sortableKey="equiTag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[140px] px-2 py-2" />
+              <SortableTh label="TI" sortableKey="ti" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[70px] px-2 py-2" />
+              <SortableTh label="AVARIA / DESCRIÇÃO" sortableKey="avaria" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[240px] px-2 py-2" />
+              <SortableTh label="TÉCNICOS" sortableKey="tecnicos" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[130px] px-2 py-2" />
+              <SortableTh label="INÍCIO" sortableKey="inicio" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[90px] px-2 py-2" />
+              <SortableTh label="FIM" sortableKey="fim" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[90px] px-2 py-2" />
+              <SortableTh label="CAUSA / OBS" sortableKey="causa" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[160px] px-2 py-2" />
+              <th className="w-[90px] px-2 py-2 text-center text-xs font-bold">AÇÕES</th>
+            </tr>
+            {/* Linha de Filtros Estilo Excel */}
+            <tr className="border-b border-slate-200 bg-slate-50">
+              <th className="px-1.5 py-1">
+                <input value={colF.id} onChange={(e) => setCol('id', e.target.value)} placeholder="000…" className={colFilterCls} />
+              </th>
+              <th className="px-1.5 py-1">
+                <input value={colF.data} onChange={(e) => setCol('data', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+              </th>
+              <th className="px-1.5 py-1">
+                <select value={colF.area} onChange={(e) => setCol('area', e.target.value)} className={colFilterCls}>
+                  <option value="">Área...</option>
+                  {Array.from(new Set(rows.map((r) => r.area).filter(Boolean))).sort().map((a) => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </th>
+              <th className="px-1.5 py-1">
+                <select value={colF.equiTag} onChange={(e) => setCol('equiTag', e.target.value)} className={colFilterCls}>
+                  <option value="">TAG...</option>
+                  {Array.from(new Set(rows.map((r) => r.equiTag).filter(Boolean))).sort().map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </th>
+              <th className="px-1.5 py-1">
+                <select value={colF.ti} onChange={(e) => setCol('ti', e.target.value)} className={colFilterCls}>
+                  <option value="">TI...</option>
+                  <option value="MC">MC</option>
+                  <option value="MP">MP</option>
+                  <option value="PM">PM</option>
+                  <option value="PI">PI</option>
+                  <option value="MI">MI</option>
+                  <option value="PR">PR</option>
+                  <option value="INS">INS</option>
+                  <option value="LUB">LUB</option>
+                  <option value="CAL">CAL</option>
+                  <option value="OUT">OUT</option>
+                </select>
+              </th>
+              <th className="px-1.5 py-1">
+                <input value={colF.avaria} onChange={(e) => setCol('avaria', e.target.value)} placeholder="Avaria…" className={colFilterCls} />
+              </th>
+              <th className="px-1.5 py-1">
+                <select value={colF.tecnicos} onChange={(e) => setCol('tecnicos', e.target.value)} className={colFilterCls}>
+                  <option value="">Técnico…</option>
+                  {uniqueTechnicians.map(([val, label]) => (
+                    <option key={val} value={val}>{label}</option>
+                  ))}
+                </select>
+              </th>
+              <th className="px-1.5 py-1">
+                <input value={colF.inicio} onChange={(e) => setCol('inicio', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+              </th>
+              <th className="px-1.5 py-1">
+                <input value={colF.fim} onChange={(e) => setCol('fim', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+              </th>
+              <th className="px-1.5 py-1">
+                <input value={colF.causa} onChange={(e) => setCol('causa', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+              </th>
+              <th className="px-1.5 py-1" />
+            </tr>
+          </thead>
+          <tbody>
+            {currentShown.length === 0 ? (
+              <tr>
+                <td colSpan={11} className="px-5 py-12 text-center text-slate-400">
+                  <HistoryIcon className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                  <p className="text-sm font-medium">Nenhum registo de histórico encontrado com os filtros aplicados.</p>
+                  {anyFilter && (
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="mt-3 text-xs font-bold text-[#2E86C1] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <X size={14} /> Limpar Filtros das Colunas
+                    </button>
+                  )}
+                </td>
               </tr>
-              {/* Linha de Filtros Estilo Excel */}
-              <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-1.5 py-1">
-                  <input value={colF.id} onChange={(e) => setCol('id', e.target.value)} placeholder="000…" className={colFilterCls} />
-                </th>
-                <th className="px-1.5 py-1">
-                  <input value={colF.data} onChange={(e) => setCol('data', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
-                </th>
-                <th className="px-1.5 py-1">
-                  <input value={colF.area} onChange={(e) => setCol('area', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
-                </th>
-                <th className="px-1.5 py-1">
-                  <input value={colF.equiTag} onChange={(e) => setCol('equiTag', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
-                </th>
-                <th className="px-1.5 py-1">
-                  <input value={colF.ti} onChange={(e) => setCol('ti', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
-                </th>
-                <th className="px-1.5 py-1">
-                  <input value={colF.avaria} onChange={(e) => setCol('avaria', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
-                </th>
-                <th className="px-1.5 py-1">
-                  <input value={colF.tecnicos} onChange={(e) => setCol('tecnicos', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
-                </th>
-                <th className="px-1.5 py-1">
-                  <input value={colF.inicio} onChange={(e) => setCol('inicio', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
-                </th>
-                <th className="px-1.5 py-1">
-                  <input value={colF.fim} onChange={(e) => setCol('fim', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
-                </th>
-                <th className="px-1.5 py-1">
-                  <input value={colF.causa} onChange={(e) => setCol('causa', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
-                </th>
-                <th className="px-1.5 py-1" />
-              </tr>
-            </thead>
-            <tbody>
-              {currentShown.map((r) => (
+            ) : (
+              currentShown.map((r) => (
                 <tr key={r.rawId} className="border-b border-slate-100 hover:bg-blue-50/50 transition-colors">
                   <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
                     <Link href={`/dashboard/tasks/${r.rawId}`} className="bg-slate-100/90 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-slate-300 text-blue-800 hover:underline">
@@ -346,10 +412,10 @@ export default function HistoryClient({
                     </Link>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              ))
+            )}
+          </tbody>
+        </table>
 
         {/* Paginação */}
         {sorted.length > 0 && pageSize !== -1 && (

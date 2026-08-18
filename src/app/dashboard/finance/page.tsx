@@ -10,7 +10,7 @@ export const metadata = {
 
 export default async function FinancePage() {
   const profile = await getCurrentProfile()
-  if (!profile || profile.role !== 'manager') redirect('/dashboard')
+  if (!profile || profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const plan = profile.company?.plan ?? 'free'
   if (!planHas(plan, 'finance')) redirect('/dashboard/billing')

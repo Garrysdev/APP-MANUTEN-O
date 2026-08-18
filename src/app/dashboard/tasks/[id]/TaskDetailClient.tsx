@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Plus, Trash2, X, Wrench, CheckSquare, Square, Package, ShieldAlert, Camera, Images, CheckCircle2 } from 'lucide-react'
@@ -9,12 +9,14 @@ import { uploadImage } from '@/lib/upload'
 import type { Intervention, ChecklistItem, TaskStatus, Material } from '@/types/models'
 import { formatDateTime, formatDuration } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
+import { TaskDocRequirementsTechnician } from '@/components/ui/TaskDocRequirements'
 import {
   createInterventionAction,
   deleteInterventionAction,
   createMaterialAction,
   deleteMaterialAction,
   startTaskAction,
+  closeTaskAction,
   reopenTaskAction,
 } from './actions'
 
@@ -31,6 +33,8 @@ type StockRef = {
   unit: string | null
   unitCost: number | null
   quantity: number
+  assetId?: string | null
+  assetIds?: string[] | null
 }
 
 type InlineMaterial = {
@@ -60,6 +64,11 @@ function nowLocalDateTime(): string {
 export default function TaskDetailClient({
   taskId,
   taskStatus,
+  taskAssetId,
+  requiredFRs = [],
+  requiredITs = [],
+  completedFRs = {},
+  acknowledgedITs = [],
   users,
   interventions,
   materialsByIntervention,
@@ -68,6 +77,11 @@ export default function TaskDetailClient({
 }: {
   taskId: string
   taskStatus: TaskStatus
+  taskAssetId?: string | null
+  requiredFRs?: string[]
+  requiredITs?: string[]
+  completedFRs?: Record<string, any>
+  acknowledgedITs?: string[]
   users: UserRef[]
   interventions: Intervention[]
   materialsByIntervention: Record<string, Material[]>
@@ -100,6 +114,18 @@ export default function TaskDetailClient({
   const [matOpen, setMatOpen] = useState<string | null>(null)
   const [matBusy, setMatBusy] = useState(false)
   const [matError, setMatError] = useState('')
+
+  const availableStockForTask = useMemo(() => {
+    return stockItems
+      .filter((s) => {
+        if (!taskAssetId) return true
+        if (!s.assetId && (!s.assetIds || s.assetIds.length === 0)) return true
+        if (s.assetId === taskAssetId) return true
+        if (s.assetIds && s.assetIds.includes(taskAssetId)) return true
+        return false
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+  }, [stockItems, taskAssetId])
 
   const userName = (id?: string | null) => users.find((u) => u.id === id)?.name ?? '—'
   const userRef = (id?: string | null) => users.find((u) => u.id === id)
@@ -201,6 +227,17 @@ export default function TaskDetailClient({
     e.preventDefault()
     setBusy(true)
     setError('')
+
+    if (markDone) {
+      const missingFRs = requiredFRs.filter(id => !completedFRs?.[id])
+      const missingITs = requiredITs.filter(id => !(acknowledgedITs || []).includes(id))
+      if (missingFRs.length > 0 || missingITs.length > 0) {
+        setBusy(false)
+        setError('Não é possível concluir a OT. Deves primeiro preencher todas as Folhas de Registo (FR) e confirmar a leitura de todas as Instruções de Trabalho (IT) obrigatórias.')
+        return
+      }
+    }
+
     const formData = new FormData(e.currentTarget)
     formData.set('taskId', taskId)
     formData.set('checklist', JSON.stringify(items.filter((i) => i.label.trim())))
@@ -275,6 +312,17 @@ export default function TaskDetailClient({
     else router.refresh()
   }
 
+  const [closeBusy, setCloseBusy] = useState(false)
+  async function handleClose() {
+    if (!confirm('Tem a certeza que pretende Fechar / Concluir esta Ordem de Trabalho?')) return
+    setCloseBusy(true)
+    setStartError('')
+    const result = await closeTaskAction(taskId)
+    setCloseBusy(false)
+    if (result.error) setStartError(result.error)
+    else router.refresh()
+  }
+
   const [reopenBusy, setReopenBusy] = useState(false)
   async function handleReopen() {
     if (!confirm('Deseja reabrir esta Ordem de Trabalho?')) return
@@ -290,10 +338,18 @@ export default function TaskDetailClient({
   const isPending = taskStatus === 'pending'
 
   return (
-    <div>
+    <div className="space-y-6">
+      <TaskDocRequirementsTechnician
+        taskId={taskId}
+        requiredFRs={requiredFRs}
+        requiredITs={requiredITs}
+        completedFRs={completedFRs}
+        acknowledgedITs={acknowledgedITs}
+      />
+
       <div className="flex items-center justify-between mb-3 pb-3 border-b border-outline/60">
         <h2 className="font-extrabold text-industrial-blue tracking-tight">Registos ({interventions.length})</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {isPending && (
             <button
               onClick={handleStart}
@@ -303,6 +359,17 @@ export default function TaskDetailClient({
               <Wrench className="h-4 w-4" /> {startBusy ? 'A iniciar…' : 'Iniciar'}
             </button>
           )}
+
+          {!isDone && (
+            <button
+              onClick={handleClose}
+              disabled={closeBusy}
+              className="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border border-emerald-700 flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <CheckCircle2 className="h-4 w-4 text-white" /> {closeBusy ? 'A fechar…' : 'Fechar OT'}
+            </button>
+          )}
+
           {isDone ? (
             <button
               onClick={handleReopen}
@@ -582,14 +649,14 @@ export default function TaskDetailClient({
                     {inlineMats.map((m) => (
                       <div key={m._key} className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
                         {/* Stock picker */}
-                        {stockItems.length > 0 && (
+                        {availableStockForTask.length > 0 && (
                           <select
-                            className="input text-sm"
+                            className="input text-sm font-semibold"
                             value={m.stockItemId ?? ''}
                             onChange={(e) => selectStockItem(m._key, e.target.value)}
                           >
                             <option value="">— Livre (sem stock) —</option>
-                            {stockItems.map((s) => (
+                            {availableStockForTask.map((s: StockRef) => (
                               <option key={s.id} value={s.id}>
                                 {s.name}{s.reference ? ` (${s.reference})` : ''} · {s.quantity} {s.unit ?? 'un'} disponíveis
                               </option>

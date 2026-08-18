@@ -1,6 +1,7 @@
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { listTasks, listAssetRefs, listUsers } from '@/lib/firebase/data'
+import { listTasks, listAssetRefs, listUsers, listExternalCompanies } from '@/lib/firebase/data'
 import TasksClient from './TasksClient'
 
 export const dynamic = 'force-dynamic'
@@ -10,10 +11,11 @@ export default async function TasksPage() {
   if (!profile) redirect('/login')
 
   // Planos NÃO são carregados aqui — o cliente busca-os sob demanda ao abrir o modal (loadPlanTaskRefsAction).
-  const [allTasks, assets, users] = await Promise.all([
+  const [allTasks, assets, users, externalCompanies] = await Promise.all([
     listTasks(profile.companyId),
     listAssetRefs(profile.companyId),
     listUsers(profile.companyId),
+    listExternalCompanies(profile.companyId).catch(() => []),
   ])
 
   const normalTasks = allTasks.filter(
@@ -24,17 +26,44 @@ export default async function TasksPage() {
       !(t.description || '').toLowerCase().includes('projeto')
   )
 
-  const tasks = profile.role === 'technician'
-    ? normalTasks.filter((t) => t.assignedTo === profile.id || t.createdBy === profile.id)
+  const isRGAdmin = profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
+  const isTechnician = profile.role === 'technician' && !isRGAdmin
+
+  const pId = (profile.id || '').toLowerCase()
+  const pAbbr = (profile.abbreviation || '').toLowerCase()
+  const pName = (profile.name || '').toLowerCase()
+
+  const tasks = isTechnician
+    ? normalTasks.filter((t) => {
+        const area = (t.area || '').trim()
+        const isArea80 = area === '80' || area.includes('80')
+        const isNotDone = t.status !== 'done'
+        return isArea80 && isNotDone
+      })
     : normalTasks
 
+  const activeTasks = tasks.filter((t) => t.status !== 'done')
+
   return (
-    <TasksClient
-      tasks={tasks}
-      assets={assets}
-      users={users.map((u) => ({ id: u.id, name: u.name, abbreviation: u.abbreviation || u.name, avatarUrl: u.avatarUrl, active: u.active }))}
-      role={profile.role}
-      userId={profile.id}
-    />
+    <Suspense fallback={<div className="p-6 text-slate-500 font-medium">A carregar Gestão de OTs...</div>}>
+      <TasksClient
+        tasks={activeTasks}
+        assets={assets}
+        users={users.map((u) => ({
+          id: u.id,
+          name: u.name,
+          abbreviation: u.abbreviation || u.name,
+          avatarUrl: u.avatarUrl,
+          active: u.active,
+          role: u.role,
+          isExternal: u.isExternal,
+          externalCompanyId: (u as any).externalCompanyId,
+          externalCompanyName: (u as any).externalCompanyName,
+        }))}
+        externalCompanies={externalCompanies}
+        role={isRGAdmin ? 'manager' : profile.role}
+        userId={profile.id}
+      />
+    </Suspense>
   )
 }

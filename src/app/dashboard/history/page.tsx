@@ -13,9 +13,14 @@ export default async function HistoryPage() {
   const plan = profile.company?.plan ?? 'free'
   if (profile.role === 'manager' && !planHas(plan, 'history')) redirect('/dashboard/billing')
 
-  const isTechnician = profile.role === 'technician'
+  const isRGAdmin = profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
+  const isTechnician = profile.role === 'technician' && !isRGAdmin
 
-  const [interventions, tasks, assets, users] = await Promise.all([
+  const pId = (profile.id || '').toLowerCase()
+  const pAbbr = (profile.abbreviation || '').toLowerCase()
+  const pName = (profile.name || '').toLowerCase()
+
+  const [interventions, allTasks, assets, users] = await Promise.all([
     isTechnician
       ? listInterventionsByTechnician(profile.companyId, profile.id)
       : listInterventions(profile.companyId),
@@ -24,13 +29,20 @@ export default async function HistoryPage() {
     listUsers(profile.companyId),
   ])
 
+  const tasks = isTechnician
+    ? allTasks.filter((t) => {
+        const area = (t.area || '').trim()
+        return area === '80' || area.includes('80')
+      })
+    : allTasks
+
   const allMaterials = await listMaterialsForInterventions(
     profile.companyId,
     interventions.map((i) => i.id)
   )
   const assetMap = Object.fromEntries(assets.map((a) => [a.id, a.name]))
   const userMap = Object.fromEntries(users.map((u) => [u.id, u.abbreviation || u.name]))
-  const userRefs = users.map((u) => ({ id: u.id, name: u.name, abbreviation: u.abbreviation || u.name, avatarUrl: u.avatarUrl }))
+  const userRefs = users.map((u) => ({ id: u.id, name: u.name, abbreviation: u.abbreviation || u.name, avatarUrl: u.avatarUrl, active: u.active, role: u.role }))
   const assetRefs = assets.map((a) => ({ id: a.id, name: a.name }))
 
   return (

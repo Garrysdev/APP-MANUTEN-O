@@ -27,6 +27,16 @@ export async function startTaskAction(taskId: string): Promise<InterventionFormS
   return { ok: true }
 }
 
+export async function closeTaskAction(taskId: string): Promise<InterventionFormState> {
+  if (!taskId) return { error: 'Tarefa em falta.' }
+  const result = await updateTaskStatusAction(taskId, 'done')
+  if (result.error) return { error: result.error }
+  revalidatePath(`/dashboard/tasks/${taskId}`)
+  revalidatePath('/dashboard/tasks')
+  revalidatePath('/dashboard/history')
+  return { ok: true }
+}
+
 export async function reopenTaskAction(taskId: string): Promise<InterventionFormState> {
   if (!taskId) return { error: 'Tarefa em falta.' }
   const result = await updateTaskStatusAction(taskId, 'pending')

@@ -9,7 +9,7 @@ export const metadata = {
 
 export default async function SafetyRulesPage() {
   const profile = await getCurrentProfile()
-  if (!profile || profile.role !== 'manager') redirect('/dashboard')
+  if (!profile || profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const rules = await listSafetyRules(profile.companyId)
 

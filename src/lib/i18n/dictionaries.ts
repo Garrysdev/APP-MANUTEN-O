@@ -5,7 +5,7 @@ export const dictionaries = {
     sidebar: {
       dashboard: 'Dashboard',
       tasks: 'OTs',
-      projects: 'Projetos',
+      projects: 'Gráficos Gantt',
       calendar: 'Calendário',
       maintenancePlan: 'Plano Manutenção',
       assets: 'Equipamentos',
@@ -21,8 +21,9 @@ export const dictionaries = {
       profile: 'O meu perfil',
       company: 'Perfil Empresa',
       logout: 'Terminar sessão',
-      knowledgeBase: 'Base de Conhecimento',
-      safetyRules: 'Itens & Regras de Segurança',
+      knowledgeBase: 'Documentação',
+      safetyRules: 'Regras de Segurança',
+      userManual: 'Manual do Utilizador',
     },
     common: {
       save: 'Guardar',
@@ -189,6 +190,7 @@ export const dictionaries = {
       logout: 'Logout',
       knowledgeBase: 'Knowledge Base',
       safetyRules: 'Safety Rules',
+      userManual: 'User Manual',
     },
     common: {
       save: 'Save',
@@ -355,6 +357,7 @@ export const dictionaries = {
       logout: 'Cerrar sesión',
       knowledgeBase: 'Base de Conocimiento',
       safetyRules: 'Reglas de Seguridad',
+      userManual: 'Manual del Usuario',
     },
     common: {
       save: 'Guardar',
@@ -521,6 +524,7 @@ export const dictionaries = {
       logout: 'Déconnexion',
       knowledgeBase: 'Base de Connaissances',
       safetyRules: 'Règles de Sécurité',
+      userManual: 'Manuel de l\'Utilisateur',
     },
     common: {
       save: 'Enregistrer',
