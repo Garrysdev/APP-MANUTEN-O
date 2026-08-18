@@ -34,8 +34,13 @@ export default function AssetDetailClient({
 }) {
   const router = useRouter()
 
+  const [taskList, setTaskList] = useState<Task[]>(tasks)
+  React.useEffect(() => {
+    setTaskList(tasks)
+  }, [tasks])
+
   const { sorted: sortedTasks, sortKey, sortDir, toggleSort } = useTableSort<Task>(
-    tasks,
+    taskList,
     {
       date: (t) => t.createdAt,
       title: (t) => t.title,
@@ -92,10 +97,11 @@ export default function AssetDetailClient({
     if (!formData.get('area')) formData.set('area', asset.area || '')
     if (!formData.get('tag')) formData.set('tag', asset.tag || '')
 
+    let uploadedUrl: string | null = null
     if (photoFileModal) {
       try {
-        const url = await uploadImage(photoFileModal, 'tasks')
-        formData.set('photoUrl', url)
+        uploadedUrl = await uploadImage(photoFileModal, 'tasks')
+        formData.set('photoUrl', uploadedUrl)
       } catch (err) {
         console.error('Erro no upload de foto da OT:', err)
       }
@@ -106,11 +112,43 @@ export default function AssetDetailClient({
     formData.set('addToMaintenancePlan', addToPmModal ? 'true' : 'false')
     formData.set('periodicidade', periodicidadeModal)
 
+    const titleVal = String(formData.get('title') || 'Nova OT')
+    const descriptionVal = String(formData.get('description') || '')
+    const tipoVal = (formData.get('tipo') as any) || 'preventiva'
+    const criticidadeVal = (formData.get('criticidade') as any) || 'verde'
+    const dueDateVal = String(formData.get('dueDate') || '')
+    const plannedStartVal = String(formData.get('plannedStartDate') || '')
+
     const result = await createTaskAction({}, formData)
     setBusyModal(false)
     if (result.error) {
       setErrorModal(result.error)
     } else {
+      // Adição otimista imediata ao histórico
+      const newTask: Task = {
+        id: 'ot_' + Date.now(),
+        companyId: asset.companyId,
+        title: titleVal,
+        description: descriptionVal || null,
+        assetId: asset.id,
+        tag: asset.tag || asset.id,
+        area: asset.area || 'Geral',
+        criticidade: criticidadeVal,
+        tipo: tipoVal,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        createdBy: 'eu',
+        createdByName: 'Eu',
+        assignedTo: null,
+        dueDate: dueDateVal || null,
+        plannedStartDate: plannedStartVal || null,
+        observacoes: String(formData.get('observacoes') || '') || null,
+        safetyRules: safetyRulesModal.length ? safetyRulesModal : null,
+        materialsRequired: materialsModal.filter(Boolean).length ? materialsModal.filter(Boolean) : null,
+        photoUrl: uploadedUrl,
+      }
+      setTaskList((prev) => [newTask, ...prev])
+
       setShowCreateModal(false)
       setPhotoFileModal(null)
       setPhotoPreviewModal(null)

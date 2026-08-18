@@ -170,6 +170,14 @@ export async function createTaskAction(
     revalidatePath('/dashboard/calendar')
     revalidatePath('/dashboard/projects')
     revalidatePath('/dashboard/maintenance-plan')
+    revalidatePath('/dashboard/assets')
+    revalidatePath('/dashboard/assets/[id]', 'page')
+    if (parsed.assetId) {
+      revalidatePath(`/dashboard/assets/${parsed.assetId}`)
+    }
+    if (parsed.tag) {
+      revalidatePath(`/dashboard/assets/${encodeURIComponent(parsed.tag)}`)
+    }
     revalidatePath('/dashboard')
     return { ok: true }
   } catch (e) {
