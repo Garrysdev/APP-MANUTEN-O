@@ -235,8 +235,21 @@ export const listAssets = cache(async function(companyId: string, limitCount = 2
       .where('companyId', '==', companyId)
       .limit(limitCount)
       .get()
-    const docs = snap.docs.map((d) => serialize<Asset>(d))
-    if (docs.length > 0) return docs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
+    const fallbacks = getFallbackAssets()
+    if (dbDocs.length === 0) return fallbacks
+
+    const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
+    const tagMap = new Map(dbDocs.filter(d => d.tag).map((d) => [d.tag!.toLowerCase().trim(), d]))
+
+    const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
+    const mergedFallbacks = fallbacks.map((f) => {
+      if (dbMap.has(f.id)) return dbMap.get(f.id)!
+      if (f.tag && tagMap.has(f.tag.toLowerCase().trim())) return tagMap.get(f.tag.toLowerCase().trim())!
+      return f
+    })
+
+    return [...customDocs, ...mergedFallbacks].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   } catch (err) {
     console.error('[listAssets] Error / Quota Exceeded:', err)
   }
