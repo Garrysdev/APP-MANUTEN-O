@@ -148,6 +148,8 @@ export interface Task {
   safetyRules?: string[] | null
   materialsRequired?: string[] | null
   maintenancePlanId?: string | null
+  photoUrl?: string | null
+  photoUrls?: string[] | null
   totalCost?: number | null
   requiredFRs?: string[] | null // Folhas de Registo obrigatorias
   requiredITs?: string[] | null // Instrucoes de Trabalho obrigatorias
