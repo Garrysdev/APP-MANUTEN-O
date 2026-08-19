@@ -412,37 +412,6 @@ export default function CreateTaskModal({
             )}
           </div>
 
-          {/* NOVO CAMPO: Foto da Avaria / Equipamento */}
-          <div className="space-y-1.5 bg-purple-50/50 dark:bg-slate-900/60 p-3 rounded-xl border border-purple-100 dark:border-slate-800">
-            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-              <Camera className="h-4 w-4 text-purple-600 shrink-0" />
-              Foto da Avaria / Equipamento (Opcional)
-            </label>
-            <div className="flex items-center gap-3">
-              {photoPreview ? (
-                <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-purple-200 dark:border-slate-700 shrink-0 shadow-sm">
-                  <Image src={photoPreview} alt="Preview" fill className="object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => { setPhotoFile(null); setPhotoPreview(null) }}
-                    className="absolute top-1 right-1 bg-black/70 text-white p-1 rounded-full hover:bg-red-600 transition-colors"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                  className="px-3 py-2 border-2 border-dashed border-purple-300 dark:border-slate-700 hover:border-purple-500 rounded-xl text-xs font-bold text-purple-700 dark:text-purple-300 flex items-center gap-2 transition-all hover:bg-purple-100/50"
-                >
-                  <Camera className="h-4 w-4 text-purple-600" /> Tirar / Carregar Foto
-                </button>
-              )}
-              <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-            </div>
-          </div>
-
           <div className="space-y-3">
             <label className="block text-xs font-bold text-gray-700 dark:text-slate-300">
               Técnico(s) Atribuído(s) ({selectedTechIds.length})
