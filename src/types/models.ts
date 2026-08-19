@@ -154,7 +154,9 @@ export interface Task {
   requiredFRs?: string[] | null // Folhas de Registo obrigatorias
   requiredITs?: string[] | null // Instrucoes de Trabalho obrigatorias
   completedFRs?: Record<string, any> | null // Dados preenchidos nas Folhas de Registo
-  acknowledgedITs?: string[] | null // IDs/nomes das ITs lidas e confirmadas
+  requesterEmail?: string | null // Email do Solicitante / Requerente PI
+  closureNotes?: string | null // Relatório de fecho (o que foi feito)
+  sendClosureEmail?: boolean | null // Indicação se foi notificado por email
   createdBy: string
   createdByName?: string | null // Nome do utilizador que criou/abriu a OT
   createdAt: string

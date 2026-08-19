@@ -76,6 +76,8 @@ function parseTask(formData: FormData) {
   const periodicidade = String(formData.get('periodicidade') ?? 'mensal').trim() || null
   const addToMaintenancePlan = formData.get('addToMaintenancePlan') === 'true' || formData.get('addToMaintenancePlan') === 'on'
 
+  const requesterEmail = String(formData.get('requesterEmail') ?? '').trim() || null
+
   return {
     title,
     description: String(formData.get('description') ?? '').trim() || null,
@@ -85,6 +87,7 @@ function parseTask(formData: FormData) {
     photoUrl,
     periodicidade,
     addToMaintenancePlan,
+    requesterEmail,
     assignedTo: String(formData.get('assignedTo') ?? '').trim() || null,
     assignedToIds,
     criticidade: CRITICIDADES.includes(criticidade) ? criticidade : 'verde',

@@ -16,11 +16,13 @@ export default function MaterialsSelector({
   onChange,
   stockRefs = [],
   onStockItemCreated,
+  isManager = true,
 }: {
   items: string[]
   onChange: (items: string[]) => void
   stockRefs?: StockItemRef[]
   onStockItemCreated?: (newItem: StockItemRef) => void
+  isManager?: boolean
 }) {
   const [addingNew, setAddingNew] = useState(false)
   const [newItemName, setNewItemName] = useState('')
@@ -87,12 +89,14 @@ export default function MaterialsSelector({
         <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center gap-1.5">
           <Package className="h-3.5 w-3.5 text-slate-500" /> Materiais a utilizar
         </label>
-        <Link
-          href="/dashboard/stocks"
-          className="text-[11px] font-bold text-safety-orange hover:underline"
-        >
-          Gerir inventário em Stocks ↗
-        </Link>
+        {isManager && (
+          <Link
+            href="/dashboard/stocks"
+            className="text-[11px] font-bold text-safety-orange hover:underline"
+          >
+            Gerir inventário em Stocks ↗
+          </Link>
+        )}
       </div>
 
       {/* Lista de Seleção de Materiais */}

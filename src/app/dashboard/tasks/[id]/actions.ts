@@ -27,10 +27,47 @@ export async function startTaskAction(taskId: string): Promise<InterventionFormS
   return { ok: true }
 }
 
-export async function closeTaskAction(taskId: string): Promise<InterventionFormState> {
+import { sendOTClosureEmailNotification } from '@/lib/notifications'
+
+export async function closeTaskAction(
+  taskId: string,
+  closureData?: {
+    closureNotes?: string | null
+    sendClosureEmail?: boolean
+  }
+): Promise<InterventionFormState> {
   if (!taskId) return { error: 'Tarefa em falta.' }
-  const result = await updateTaskStatusAction(taskId, 'done')
-  if (result.error) return { error: result.error }
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+
+  const task = await getTask(profile.companyId, taskId)
+  if (!task) return { error: 'Tarefa não encontrada.' }
+
+  const updateData: any = {
+    status: 'done',
+    completedAt: new Date().toISOString(),
+    closureNotes: closureData?.closureNotes || null,
+    sendClosureEmail: Boolean(closureData?.sendClosureEmail),
+  }
+
+  await updateTask(profile.companyId, taskId, updateData)
+
+  if (closureData?.sendClosureEmail && task.requesterEmail) {
+    try {
+      await sendOTClosureEmailNotification({
+        toEmail: task.requesterEmail,
+        taskTitle: task.title,
+        taskId: task.id,
+        tag: task.tag,
+        area: task.area,
+        closureNotes: closureData.closureNotes || task.description || 'Intervenção concluída.',
+        closedByName: profile.name || 'Técnico de Manutenção',
+      })
+    } catch (err) {
+      console.error('Erro ao enviar email de fecho de PI:', err)
+    }
+  }
+
   revalidatePath(`/dashboard/tasks/${taskId}`)
   revalidatePath('/dashboard/tasks')
   revalidatePath('/dashboard/history')

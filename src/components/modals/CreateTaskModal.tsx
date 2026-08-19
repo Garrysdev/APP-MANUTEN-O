@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useId } from 'react'
 import Image from 'next/image'
 import {
-  X, ShieldAlert, Camera, Plus, Trash2, MapPin, Tag, Wrench
+  X, ShieldAlert, Camera, Images, Plus, Trash2, MapPin, Tag, Wrench, Mail, ArrowLeft
 } from 'lucide-react'
 import type { Task, TaskCriticidade, TipoTarefa, User, Asset, Periodicidade } from '@/types/models'
 import { TIPO_LABELS, CRITICIDADE_LABELS, STATUS_LABELS } from '@/types/models'
@@ -169,8 +169,10 @@ export default function CreateTaskModal({
 
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
-  const photoInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
 
+  const [requesterEmail, setRequesterEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -188,6 +190,7 @@ export default function CreateTaskModal({
       setDueDate('')
       setDescription('')
       setObservacoes('')
+      setRequesterEmail('')
       setStatus('pending')
       setSafetyRules([])
       setMaterialsRequired([])
@@ -244,6 +247,7 @@ export default function CreateTaskModal({
       formData.set('assignedToIds', JSON.stringify(selectedTechIds))
       formData.set('addToMaintenancePlan', addToPmModal ? 'true' : 'false')
       formData.set('periodicidade', periodicidadeModal)
+      formData.set('requesterEmail', requesterEmail.trim())
 
       const result = await createTaskAction({}, formData)
       setBusy(false)
@@ -262,6 +266,7 @@ export default function CreateTaskModal({
           criticidade,
           tipo,
           status,
+          requesterEmail: requesterEmail.trim() || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           createdBy: 'eu',
@@ -293,19 +298,41 @@ export default function CreateTaskModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-4 sm:pt-8 overflow-y-auto">
-      <div className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="card relative w-full max-w-xl p-6 shadow-2xl my-auto sm:my-4 z-10 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
-            <span>Nova OT</span>
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
-            <X className="h-5 w-5" />
+    <div className="fixed inset-0 z-[200] bg-slate-50 dark:bg-slate-950 overflow-y-auto flex flex-col">
+      {/* Sticky Header de Página Completa */}
+      <div className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Voltar</span>
           </button>
+          <div>
+            <h1 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <span>Nova Ordem de Trabalho</span>
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
+              Ficha completa de registo de OT
+            </p>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <button
+          type="button"
+          onClick={onClose}
+          className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full"
+          title="Fechar"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Conteúdo Principal de Página Completa */}
+      <div className="flex-1 w-full max-w-3xl mx-auto p-4 sm:p-8 space-y-6 pb-28">
+        <form onSubmit={handleSubmit} className="card p-6 shadow-xl space-y-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Título *</label>
             <input
@@ -327,6 +354,7 @@ export default function CreateTaskModal({
                 onChange={(e) => setTipo(e.target.value as TipoTarefa)}
                 className="input"
               >
+                <option value="pi">PI (Pedido de Intervenção)</option>
                 <option value="preventiva">MP (Manutenção Preventiva)</option>
                 <option value="curativa">MC (Manutenção Curativa)</option>
                 <option value="inspecao">Inspeção</option>
@@ -348,6 +376,25 @@ export default function CreateTaskModal({
                 <option value="vermelho">Alta / Urgente (Vermelho)</option>
               </select>
             </div>
+          </div>
+
+          {/* Email do Requerente / Solicitante (PI) */}
+          <div className="bg-sky-50/60 dark:bg-sky-950/20 p-3.5 rounded-xl border border-sky-200 dark:border-sky-800/50 space-y-1.5">
+            <label className="block text-xs font-bold text-sky-900 dark:text-sky-300 flex items-center gap-1.5">
+              <Mail className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+              Email do Requerente / Solicitante (Pedido de Intervenção - PI)
+            </label>
+            <input
+              type="email"
+              name="requesterEmail"
+              value={requesterEmail}
+              onChange={(e) => setRequesterEmail(e.target.value)}
+              className="input text-xs bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-700"
+              placeholder="Ex.: requerente@empresa.pt"
+            />
+            <p className="text-[11px] text-sky-700 dark:text-sky-400">
+              💡 Ao fechar esta OT, poderá enviar a resposta do relatório de fecho para este e-mail.
+            </p>
           </div>
 
           <div>
@@ -536,13 +583,57 @@ export default function CreateTaskModal({
             </div>
           </div>
 
+          {/* Fotos da Avaria / Equipamento */}
+          <div className="space-y-2 bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <Camera className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              Foto da Avaria / Equipamento (Opcional)
+            </label>
+            
+            {photoPreview ? (
+              <div className="relative w-24 h-24 rounded-xl overflow-hidden border-2 border-purple-500 shrink-0 shadow-md">
+                <Image src={photoPreview} alt="Preview da Foto" fill className="object-cover" />
+                <button
+                  type="button"
+                  onClick={() => { setPhotoFile(null); setPhotoPreview(null) }}
+                  className="absolute top-1 right-1 bg-black/70 text-white p-1 rounded-full hover:bg-red-600 transition-colors cursor-pointer"
+                  title="Remover foto"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="px-3.5 py-2.5 border-2 border-dashed border-purple-300 dark:border-purple-800 hover:border-purple-500 rounded-xl text-xs font-bold text-purple-700 dark:text-purple-300 flex items-center gap-2 transition-all hover:bg-purple-50/60 dark:hover:bg-purple-900/30 cursor-pointer"
+                >
+                  <Camera className="h-4 w-4 text-purple-600" /> Tirar Foto (Câmera)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="px-3.5 py-2.5 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-slate-400 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 transition-all hover:bg-slate-100/60 dark:hover:bg-slate-800/60 cursor-pointer"
+                >
+                  <Images className="h-4 w-4 text-slate-500" /> Carregar (Galeria)
+                </button>
+              </div>
+            )}
+
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} className="hidden" />
+            <input ref={galleryInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+          </div>
+
           {/* Regras de segurança */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Regras de Segurança</span>
-              <a href="/dashboard/safety-rules" target="_blank" className="text-[11px] font-bold text-safety-orange hover:underline">
-                Gerir Itens de Segurança ↗
-              </a>
+              {isManager && (
+                <a href="/dashboard/safety-rules" target="_blank" className="text-[11px] font-bold text-safety-orange hover:underline">
+                  Gerir Itens de Segurança ↗
+                </a>
+              )}
             </div>
             <DynamicList
               label=""
@@ -560,6 +651,7 @@ export default function CreateTaskModal({
             items={materialsRequired}
             onChange={setMaterialsRequired}
             stockRefs={stockRefs}
+            isManager={isManager}
           />
 
           {/* Incluir no PM e Periodicidade */}
@@ -611,15 +703,29 @@ export default function CreateTaskModal({
             </div>
           )}
 
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="btn-secondary flex-1">
+          {/* Action bar no fundo do formulário */}
+          <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 py-3 text-sm font-bold">
               Cancelar
             </button>
-            <button type="submit" disabled={busy} className="btn-primary flex-1">
-              {busy ? 'A guardar…' : 'Guardar OT'}
+            <button type="submit" disabled={busy} className="btn-primary flex-1 py-3 text-sm font-bold shadow-lg">
+              {busy ? 'A guardar…' : 'Guardar Nova OT'}
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Barra Inferior Fixa para Dispositivos Móveis */}
+      <div className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 p-3 flex gap-3 shadow-2xl z-40 sm:hidden">
+        <button type="button" onClick={onClose} className="btn-secondary flex-1 py-2.5 text-xs font-bold">
+          Cancelar
+        </button>
+        <button type="button" onClick={(e) => {
+          const form = document.querySelector('form')
+          if (form) form.requestSubmit()
+        }} disabled={busy} className="btn-primary flex-1 py-2.5 text-xs font-bold shadow-md">
+          {busy ? 'A guardar…' : 'Guardar Nova OT'}
+        </button>
       </div>
     </div>
   )
