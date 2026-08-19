@@ -9,9 +9,11 @@ export type TaskCriticidade = 'vermelho' | 'amarelo' | 'verde'
 export type TipoTarefa =
   | 'preventiva'
   | 'curativa'
+  | 'mi'
   | 'plano'
   | 'pi'
   | 'stp'
+  | 'mp'
   | 'inspecao'
   | 'lubrificacao'
   | 'calibracao'
@@ -305,11 +307,13 @@ export const CRITICIDADE_LABELS: Record<TaskCriticidade, string> = {
 }
 
 export const TIPO_LABELS: Record<TipoTarefa, string> = {
-  preventiva: 'MP',
-  curativa: 'MC',
-  plano: 'PM',
   pi: 'PI',
+  curativa: 'MC',
+  mi: 'MI',
+  plano: 'PM',
   stp: 'STP',
+  preventiva: 'MP',
+  mp: 'MP',
   inspecao: 'INS',
   lubrificacao: 'LUB',
   calibracao: 'CAL',
