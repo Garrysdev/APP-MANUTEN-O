@@ -33,10 +33,10 @@
   }
 
   /* Badges Nítidos com Cores de Estado Definidas */
-  .badge-pending    { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-slate-500 text-white border border-slate-600 shadow-sm; }
-  .badge-in_progress{ @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-900 border border-blue-300; }
-  .badge-done       { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-300; }
-  .badge-cancelled  { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-red-100 text-red-900 border border-red-300; }
+  .badge-pending    { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-extrabold uppercase tracking-wider bg-slate-500 text-white border border-slate-600 shadow-sm; }
+  .badge-in_progress{ @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-extrabold uppercase tracking-wider bg-amber-500 text-slate-950 border border-amber-600 shadow-sm; }
+  .badge-done       { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-extrabold uppercase tracking-wider bg-emerald-600 text-white border border-emerald-700 shadow-sm; }
+  .badge-cancelled  { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-extrabold uppercase tracking-wider bg-red-800 text-white border border-red-900 shadow-sm; }
   
   .badge-urgent     { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-red-100 text-red-900 border border-red-300; }
   .badge-high       { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-orange-100 text-orange-900 border border-orange-300; }
