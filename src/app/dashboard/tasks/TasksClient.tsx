@@ -625,7 +625,7 @@ export default function TasksClient({
   const tipos: TipoTarefa[] = ['pi', 'curativa', 'mi', 'plano', 'stp', 'preventiva', 'mp', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 
   return (
-    <div className="max-w-6xl mx-auto animate-fade-in-up">
+    <div className="w-full max-w-[1500px] mx-auto animate-fade-in-up">
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-outline/60 gap-2">
         <div className="min-w-0">
           <h1 className="text-lg sm:text-2xl font-extrabold text-industrial-blue tracking-tight truncate">
@@ -714,23 +714,23 @@ export default function TasksClient({
         </div>
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs min-w-[1100px] table-fixed">
+      <div className="card overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-xs min-w-[1240px] table-fixed">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
-                <SortableTh label="ID" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[75px] px-2 py-2" />
-                <SortableTh label="DATA" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[95px] px-2 py-2" />
-                <SortableTh label="ÁREA" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[80px] px-2 py-2" />
-                <SortableTh label="EQUIPAMENTO / TAG" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[140px] px-2 py-2" />
-                <SortableTh label="TI" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[70px] px-2 py-2" />
-                <SortableTh label="AVARIA / DESCRIÇÃO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[240px] px-2 py-2" />
-                <SortableTh label="TÉCNICOS" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[130px] px-2 py-2" />
-                <SortableTh label="INÍCIO" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[90px] px-2 py-2" />
-                <SortableTh label="FIM" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[90px] px-2 py-2" />
-                <SortableTh label="CAUSA / OBS" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[160px] px-2 py-2" />
-                <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[95px] px-2 py-2" />
-                <th className="w-[90px] px-2 py-2 text-right font-mono text-xs font-bold text-slate-700 uppercase tracking-wider">AÇÕES</th>
+              <tr className="border-b border-slate-200 bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
+                <SortableTh label="ID" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[65px] px-2 py-2" />
+                <SortableTh label="DATA" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-2 py-2" />
+                <SortableTh label="ÁREA" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[65px] px-2 py-2" />
+                <SortableTh label="EQUIPAMENTO / TAG" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[130px] px-2 py-2" />
+                <SortableTh label="TI" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-2 py-2" />
+                <SortableTh label="AVARIA / DESCRIÇÃO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[220px] px-2 py-2" />
+                <SortableTh label="TÉCNICOS" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[120px] px-2 py-2" />
+                <SortableTh label="INÍCIO" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-2 py-2" />
+                <SortableTh label="FIM" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-2 py-2" />
+                <SortableTh label="CAUSA / OBS" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[140px] px-2 py-2" />
+                <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[90px] px-2 py-2" />
+                <th className="w-[95px] px-2 py-2 text-right font-mono text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">AÇÕES</th>
               </tr>
               {/* Linha de Filtro por Coluna */}
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
@@ -886,12 +886,7 @@ export default function TasksClient({
                         <span className="line-clamp-2" title={t.description ?? ''}>{t.description || '—'}</span>
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
-                          t.status === 'done' ? 'bg-green-100 text-green-900 border border-green-300' :
-                          t.status === 'in_progress' ? 'bg-blue-100 text-blue-900 border border-blue-300' :
-                          t.status === 'cancelled' ? 'bg-slate-100 text-slate-700 border border-slate-300' :
-                          'bg-amber-100 text-amber-900 border border-amber-300'
-                        }`}>
+                        <span className={`badge-${t.status}`}>
                           {STATUS_LABELS[t.status]}
                         </span>
                       </td>

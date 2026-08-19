@@ -166,67 +166,117 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
     setQrError(`Equipamento não encontrado para "${raw}". Tenta por TAG (ex: 90 H1 B1 ou 101 Y3 B3) ou ID.`)
   }
 
+  async function scanFromFile(file: File) {
+    try {
+      setQrError('')
+      const img = new Image()
+      img.src = URL.createObjectURL(file)
+      await new Promise((res, rej) => {
+        img.onload = res
+        img.onerror = rej
+      })
+      const cvs = document.createElement('canvas')
+      cvs.width = img.width
+      cvs.height = img.height
+      const c = cvs.getContext('2d')
+      if (c) {
+        c.drawImage(img, 0, 0)
+        const imgData = c.getImageData(0, 0, cvs.width, cvs.height)
+        const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'attemptBoth' })
+        if (code && code.data) {
+          resolveAndNavigateQR(code.data)
+          return
+        }
+      }
+      setQrError('Não foi possível detetar um QR Code válido na imagem. Tenta outra foto.')
+    } catch {
+      setQrError('Erro ao carregar ficheiro de imagem.')
+    }
+  }
+
   useEffect(() => {
     let stream: MediaStream | null = null
     let interval: NodeJS.Timeout | null = null
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
+    let active = true
 
-    if (showQRScanner) {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices
-          .getUserMedia({ video: { facingMode: 'environment' } })
-          .then((s) => {
-            stream = s
-            setCameraActive(true)
-            if (videoRef.current) {
-              videoRef.current.srcObject = s
-              videoRef.current.setAttribute('playsinline', 'true')
-              videoRef.current.play().catch(() => {})
-            }
-
-            interval = setInterval(async () => {
-              const video = videoRef.current
-              if (!video || video.readyState < 2) return
-
-              // 1. Tentar jsQR no canvas
-              try {
-                canvas.width = video.videoWidth || 300
-                canvas.height = video.videoHeight || 300
-                if (ctx && canvas.width > 0 && canvas.height > 0) {
-                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-                  const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                    inversionAttempts: 'dontInvert',
-                  })
-                  if (code && code.data) {
-                    resolveAndNavigateQR(code.data)
-                    return
-                  }
-                }
-              } catch {}
-
-              // 2. Fallback BarcodeDetector se suportado
-              if ('BarcodeDetector' in window) {
-                try {
-                  const detector = new (window as any).BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13'] })
-                  const barcodes = await detector.detect(video)
-                  if (barcodes.length > 0 && barcodes[0].rawValue) {
-                    resolveAndNavigateQR(barcodes[0].rawValue)
-                  }
-                } catch {}
-              }
-            }, 400)
-          })
-          .catch(() => {
-            setCameraActive(false)
-          })
+    async function startCamera() {
+      if (!showQRScanner) {
+        setCameraActive(false)
+        return
       }
-    } else {
-      setCameraActive(false)
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraActive(false)
+        return
+      }
+
+      try {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } },
+          })
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true })
+        }
+
+        if (!active) {
+          if (stream) stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+
+        setCameraActive(true)
+
+        setTimeout(() => {
+          if (videoRef.current && stream) {
+            videoRef.current.srcObject = stream
+            videoRef.current.setAttribute('playsinline', 'true')
+            videoRef.current.play().catch(() => {})
+          }
+        }, 100)
+
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+
+        interval = setInterval(async () => {
+          const video = videoRef.current
+          if (!video || video.readyState < 2) return
+
+          try {
+            canvas.width = video.videoWidth || 300
+            canvas.height = video.videoHeight || 300
+            if (ctx && canvas.width > 0 && canvas.height > 0) {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+              const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: 'attemptBoth',
+              })
+              if (code && code.data) {
+                resolveAndNavigateQR(code.data)
+                return
+              }
+            }
+          } catch {}
+
+          if ('BarcodeDetector' in window) {
+            try {
+              const detector = new (window as any).BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13'] })
+              const barcodes = await detector.detect(video)
+              if (barcodes.length > 0 && barcodes[0].rawValue) {
+                resolveAndNavigateQR(barcodes[0].rawValue)
+              }
+            } catch {}
+          }
+        }, 300)
+      } catch (err) {
+        console.error('Camera startup error:', err)
+        setCameraActive(false)
+      }
     }
 
+    startCamera()
+
     return () => {
+      active = false
       if (interval) clearInterval(interval)
       if (stream) stream.getTracks().forEach((t) => t.stop())
     }
@@ -1218,13 +1268,13 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
               </button>
             </div>
 
-            <div className="relative bg-slate-950 rounded-2xl overflow-hidden mb-4 min-h-[220px] flex items-center justify-center border border-slate-800">
+            <div className="relative bg-slate-950 rounded-2xl overflow-hidden mb-3 min-h-[220px] flex items-center justify-center border border-slate-800">
               <video ref={videoRef} className={`w-full h-[220px] object-cover ${cameraActive ? 'block' : 'hidden'}`} playsInline muted />
               {!cameraActive && (
                 <div className="text-center p-6 text-slate-400">
                   <Camera className="h-10 w-10 mx-auto mb-2 opacity-50 text-slate-500" />
                   <p className="text-xs">A câmara não está ativa ou a permissão foi recusada.</p>
-                  <p className="text-[11px] text-slate-500 mt-1">Usa a pesquisa por TAG ou ID abaixo.</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Podes carregar uma foto do QR ou usar a pesquisa abaixo.</p>
                 </div>
               )}
               {cameraActive && (
@@ -1233,6 +1283,19 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 </div>
               )}
             </div>
+
+            <label className="cursor-pointer text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center justify-center gap-2 py-2 px-4 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-xl border border-blue-200 dark:border-blue-800 transition-colors mb-3 w-full">
+              <Camera className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span>Tirar / Carregar Foto com QR Code</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) scanFromFile(e.target.files[0])
+                }}
+              />
+            </label>
 
             {qrError && (
               <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-600 dark:text-red-400 font-medium">
