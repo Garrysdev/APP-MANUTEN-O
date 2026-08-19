@@ -169,7 +169,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
   async function scanFromFile(file: File) {
     try {
       setQrError('')
-      const img = new Image()
+      const img = new window.Image()
       img.src = URL.createObjectURL(file)
       await new Promise((res, rej) => {
         img.onload = res
