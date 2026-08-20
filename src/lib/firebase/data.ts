@@ -15,7 +15,8 @@ function serialize<T>(doc: DocumentSnapshot): T {
 
 export const DEMO_COMPANY_ID = 'rjHNaSUbLm4qTMyKP0oX'
 export function isDemoCompany(companyId: string): boolean {
-  return companyId === DEMO_COMPANY_ID || companyId === 'demo'
+  if (!companyId) return true
+  return companyId === DEMO_COMPANY_ID || companyId === 'demo' || companyId.includes('rjHNaSUbLm4qTMyKP0oX')
 }
 
 // ── LOCAL FALLBACK LOADERS (Quando o Firebase Firestore atinge a quota diária) ──
