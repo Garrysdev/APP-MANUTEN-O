@@ -2,10 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { History as HistoryIcon, X, ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react'
+import { History as HistoryIcon, X, ChevronLeft, ChevronRight, FolderOpen, Printer, FileSpreadsheet } from 'lucide-react'
 import type { Intervention, Material, Task } from '@/types/models'
 import { formatDate, formatDateTime } from '@/lib/utils'
-import HistoryExportButtons from './HistoryExportButtons'
+import HistoryExportModal from './HistoryExportModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
 
@@ -94,6 +94,9 @@ export default function HistoryClient({
   }
   function clearFilters() { setColF(emptyCol) }
   const anyFilter = Object.values(colF).some(Boolean)
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const [modalMode, setModalMode] = useState<'print' | 'export'>('print')
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
@@ -267,14 +270,20 @@ export default function HistoryClient({
         </div>
         {!isTechnician && (
           <div className="flex items-center gap-2">
-            <HistoryExportButtons
-              interventions={interventions}
-              tasks={tasks}
-              allMaterials={allMaterials}
-              userMap={userMap}
-              assetMap={assetMap}
-              filteredRows={sorted}
-            />
+            <button
+              onClick={() => { setModalMode('print'); setModalOpen(true) }}
+              className="btn-secondary flex items-center gap-1.5 cursor-pointer"
+            >
+              <Printer className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">Imprimir</span>
+            </button>
+            <button
+              onClick={() => { setModalMode('export'); setModalOpen(true) }}
+              className="btn-secondary flex items-center gap-1.5 cursor-pointer"
+            >
+              <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-400" />
+              <span className="hidden sm:inline">Exportar (.xlsx)</span>
+            </button>
           </div>
         )}
       </div>
@@ -527,6 +536,29 @@ export default function HistoryClient({
           </div>
         )}
       </div>
+
+      <HistoryExportModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        initialMode={modalMode}
+        allRows={rows}
+        interventions={interventions}
+        tasks={tasks}
+        allMaterials={allMaterials}
+        userMap={userMap}
+        assetMap={assetMap}
+        onApplyFiltersToPage={(f) => {
+          setColF((prev) => ({
+            ...prev,
+            dateFrom: f.dateFrom,
+            dateTo: f.dateTo,
+            area: f.area,
+            equiTag: f.equiTag,
+            ti: f.ti,
+            tecnicos: f.tecnicos,
+          }))
+        }}
+      />
     </div>
   )
 }
