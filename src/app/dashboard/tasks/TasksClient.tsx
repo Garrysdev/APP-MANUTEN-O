@@ -716,21 +716,21 @@ export default function TasksClient({
 
       <div className="card overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800">
         <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-xs min-w-[1240px] table-fixed">
+          <table className="w-full text-xs min-w-[940px] table-fixed">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
-                <SortableTh label="ID" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[65px] px-2 py-2" />
-                <SortableTh label="DATA" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-2 py-2" />
-                <SortableTh label="ÁREA" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[65px] px-2 py-2" />
-                <SortableTh label="EQUIPAMENTO / TAG" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[130px] px-2 py-2" />
-                <SortableTh label="TI" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-2 py-2" />
-                <SortableTh label="AVARIA / DESCRIÇÃO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[220px] px-2 py-2" />
-                <SortableTh label="TÉCNICOS" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[120px] px-2 py-2" />
-                <SortableTh label="INÍCIO" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-2 py-2" />
-                <SortableTh label="FIM" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-2 py-2" />
-                <SortableTh label="CAUSA / OBS" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[140px] px-2 py-2" />
-                <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[90px] px-2 py-2" />
-                <th className="w-[95px] px-2 py-2 text-right font-mono text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">AÇÕES</th>
+                <SortableTh label="ID" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1.5 py-2" />
+                <SortableTh label="DATA" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[75px] px-1.5 py-2" />
+                <SortableTh label="ÁREA" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1.5 py-2" />
+                <SortableTh label="EQUIPAMENTO / TAG" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[110px] px-1.5 py-2" />
+                <SortableTh label="TI" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[50px] px-1.5 py-2" />
+                <SortableTh label="AVARIA / DESCRIÇÃO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[160px] px-1.5 py-2" />
+                <SortableTh label="TÉCNICOS" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[100px] px-1.5 py-2" />
+                <SortableTh label="INÍCIO" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[75px] px-1.5 py-2" />
+                <SortableTh label="FIM" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[75px] px-1.5 py-2" />
+                <SortableTh label="CAUSA / OBS" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[115px] px-1.5 py-2" />
+                <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[80px] px-1.5 py-2" />
+                <th className="w-[90px] px-1.5 py-2 text-right font-mono text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">AÇÕES</th>
               </tr>
               {/* Linha de Filtro por Coluna */}
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
@@ -892,33 +892,6 @@ export default function TasksClient({
                       </td>
                       <td className="px-3 py-2.5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
-                          {t.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => handleStatusChange(t.id, 'in_progress')}
-                                className="px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100 rounded bg-blue-50 border border-blue-200 flex items-center gap-1 transition-colors"
-                                title="Iniciar OT"
-                              >
-                                <Play className="h-3 w-3" /> Iniciar
-                              </button>
-                              <button
-                                onClick={() => handleStatusChange(t.id, 'done')}
-                                className="px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 rounded bg-emerald-50 border border-emerald-200 flex items-center gap-1 transition-colors"
-                                title="Fechar OT"
-                              >
-                                <CheckCircle2 className="h-3 w-3" /> Fechar
-                              </button>
-                            </>
-                          )}
-                          {t.status === 'in_progress' && (
-                            <button
-                              onClick={() => handleStatusChange(t.id, 'done')}
-                              className="px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 rounded bg-emerald-50 border border-emerald-200 flex items-center gap-1 transition-colors"
-                              title="Fechar OT"
-                            >
-                              <CheckCircle2 className="h-3 w-3" /> Fechar
-                            </button>
-                          )}
                           <Link href={`/dashboard/tasks/${t.id}`} className="p-1 text-slate-500 hover:text-blue-600 rounded" title="Ver Detalhes">
                             <Eye className="h-4 w-4" />
                           </Link>

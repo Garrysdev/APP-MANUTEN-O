@@ -30,6 +30,8 @@ export interface HistoryRow {
 
 const emptyCol = {
   id: '',
+  dateFrom: '',
+  dateTo: '',
   data: '',
   area: '',
   equiTag: '',
@@ -107,7 +109,7 @@ export default function HistoryClient({
     return u ? u.name : techStr
   }
 
-  // Normalizar linhas de histórico (sem UI e STS, ID com 3 dígitos)
+  // Normalizar linhas de histórico
   const rows: HistoryRow[] = useMemo(() => {
     const existingTaskIds = new Set(interventions.map((i) => i.taskId))
     const list: HistoryRow[] = []
@@ -184,19 +186,21 @@ export default function HistoryClient({
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], 'pt'))
   }, [users, rows])
 
-  // Filtragem por coluna
+  // Filtragem avançada por data, área, TAG, etc.
   const norm = (s: string | null | undefined) => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
   const inc = (val: string | null | undefined, f: string) => !f || norm(val).includes(norm(f))
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
+      if (colF.dateFrom && r.data && r.data < colF.dateFrom) return false
+      if (colF.dateTo && r.data && r.data > colF.dateTo) return false
       if (!inc(r.id, colF.id)) return false
       if (!inc(r.data, colF.data)) return false
-      if (!inc(r.area, colF.area)) return false
-      if (!inc(r.equiTag, colF.equiTag)) return false
-      if (!inc(r.ti, colF.ti)) return false
+      if (colF.area && norm(r.area) !== norm(colF.area) && !norm(r.area).includes(norm(colF.area))) return false
+      if (colF.equiTag && norm(r.equiTag) !== norm(colF.equiTag) && !norm(r.equiTag).includes(norm(colF.equiTag))) return false
+      if (colF.ti && norm(r.ti) !== norm(colF.ti)) return false
       if (!inc(r.avaria, colF.avaria)) return false
-      if (!inc(r.tecnicos, colF.tecnicos)) return false
+      if (colF.tecnicos && norm(r.tecnicos) !== norm(colF.tecnicos) && !norm(r.tecnicos).includes(norm(colF.tecnicos))) return false
       if (!inc(r.inicio, colF.inicio)) return false
       if (!inc(r.fim, colF.fim)) return false
       if (!inc(r.causa, colF.causa)) return false
@@ -225,15 +229,35 @@ export default function HistoryClient({
 
   const effectivePageSize = pageSize === -1 ? (sorted.length || 1) : pageSize
   const totalPages = Math.ceil(sorted.length / effectivePageSize) || 1
-  const currentShown = useMemo(() => {
-    if (pageSize === -1) return sorted
-    return sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize)
-  }, [sorted, currentPage, pageSize])
 
   const colFilterCls = 'w-full rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs font-bold text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-safety-orange focus:border-safety-orange shadow-sm'
 
   return (
     <div className="max-w-7xl mx-auto">
+      {/* Cabeçalho exclusivo para Impressão */}
+      <div className="hidden print:block mb-4">
+        <h1 className="text-xl font-bold text-slate-900 border-b-2 border-slate-900 pb-1">
+          RG MAINTENANCE — HISTÓRICO DE INTERVENÇÕES
+        </h1>
+        <div className="flex justify-between text-xs text-slate-700 font-bold mt-1">
+          <span>Total de Registos Impressos: {sorted.length}</span>
+          <span>Data de Impressão: {new Date().toLocaleDateString('pt-PT')}</span>
+        </div>
+        {(colF.dateFrom || colF.dateTo || colF.area || colF.equiTag || colF.ti || colF.tecnicos) && (
+          <p className="text-[11px] text-slate-600 font-mono mt-1">
+            Filtros Aplicados: {[
+              colF.dateFrom ? `De: ${colF.dateFrom}` : null,
+              colF.dateTo ? `Até: ${colF.dateTo}` : null,
+              colF.area ? `Área: ${colF.area}` : null,
+              colF.equiTag ? `TAG: ${colF.equiTag}` : null,
+              colF.ti ? `TI: ${colF.ti}` : null,
+              colF.tecnicos ? `Técnico: ${colF.tecnicos}` : null,
+            ].filter(Boolean).join(' | ')}
+          </p>
+        )}
+      </div>
+
+      {/* Topo da página (Ecrã) */}
       <div className="mb-4 flex items-start justify-between gap-3 no-print">
         <div className="min-w-0">
           <h1 className="text-lg sm:text-2xl font-bold text-slate-900 truncate">Histórico de Intervenções (UR)</h1>
@@ -249,20 +273,72 @@ export default function HistoryClient({
               allMaterials={allMaterials}
               userMap={userMap}
               assetMap={assetMap}
+              filteredRows={sorted}
             />
           </div>
         )}
       </div>
 
-      {/* Controlo de Linhas por página + Limpar Filtros */}
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="flex items-center gap-2">
+      {/* Painel de Filtros Avançados (Data, Área, TAG, Equipamento) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 mb-3 shadow-sm no-print">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap text-xs font-bold text-slate-800 dark:text-slate-200">
+            <div className="flex items-center gap-1.5">
+              <span>Data De:</span>
+              <input
+                type="date"
+                value={colF.dateFrom}
+                onChange={(e) => setCol('dateFrom', e.target.value)}
+                className="input !text-xs !py-1 !px-2 !w-auto font-semibold bg-white border border-slate-300 rounded"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span>Até:</span>
+              <input
+                type="date"
+                value={colF.dateTo}
+                onChange={(e) => setCol('dateTo', e.target.value)}
+                className="input !text-xs !py-1 !px-2 !w-auto font-semibold bg-white border border-slate-300 rounded"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span>Área:</span>
+              <select
+                value={colF.area}
+                onChange={(e) => setCol('area', e.target.value)}
+                className="input !text-xs !py-1 !px-2 !w-auto font-semibold bg-white border border-slate-300 rounded"
+              >
+                <option value="">Todas as Áreas</option>
+                {Array.from(new Set(rows.map((r) => r.area).filter(Boolean))).sort().map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span>TAG / Equipamento:</span>
+              <select
+                value={colF.equiTag}
+                onChange={(e) => setCol('equiTag', e.target.value)}
+                className="input !text-xs !py-1 !px-2 !w-auto font-semibold bg-white border border-slate-300 rounded max-w-[200px]"
+              >
+                <option value="">Todas as TAGs</option>
+                {Array.from(new Set(rows.map((r) => r.equiTag).filter(Boolean))).sort().map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+          </div>
           {anyFilter && (
-            <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-red-600 font-bold hover:underline">
-              <X className="h-3.5 w-3.5" /> Limpar filtros por coluna
+            <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-red-600 font-bold hover:underline cursor-pointer">
+              <X className="h-3.5 w-3.5" /> Limpar Todos os Filtros
             </button>
           )}
         </div>
+      </div>
+
+      {/* Controlo de Linhas por página (Ecrã) */}
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap no-print">
+        <div className="flex items-center gap-2" />
         <div className="flex items-center gap-1.5 text-xs text-slate-900 font-bold">
           <span>Linhas por página:</span>
           <select
@@ -279,9 +355,9 @@ export default function HistoryClient({
         </div>
       </div>
 
-      {/* Tabela de Histórico (Sem UI e STS, ID com 3 dígitos) */}
+      {/* Tabela de Histórico */}
       <div className="card overflow-x-auto">
-        <table className="w-full text-xs min-w-[1100px] table-fixed">
+        <table className="w-full text-xs min-w-[1000px] table-fixed">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
               <SortableTh label="ID" sortableKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[75px] px-2 py-2" />
@@ -294,10 +370,10 @@ export default function HistoryClient({
               <SortableTh label="INÍCIO" sortableKey="inicio" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[90px] px-2 py-2" />
               <SortableTh label="FIM" sortableKey="fim" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[90px] px-2 py-2" />
               <SortableTh label="CAUSA / OBS" sortableKey="causa" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[160px] px-2 py-2" />
-              <th className="w-[90px] px-2 py-2 text-center text-xs font-bold">AÇÕES</th>
+              <th className="w-[90px] px-2 py-2 text-center text-xs font-bold no-print">AÇÕES</th>
             </tr>
-            {/* Linha de Filtros Estilo Excel */}
-            <tr className="border-b border-slate-200 bg-slate-50">
+            {/* Linha de Filtros por Coluna (Ecrã) */}
+            <tr className="border-b border-slate-200 bg-slate-50 no-print">
               <th className="px-1.5 py-1">
                 <input value={colF.id} onChange={(e) => setCol('id', e.target.value)} placeholder="000…" className={colFilterCls} />
               </th>
@@ -355,11 +431,11 @@ export default function HistoryClient({
               <th className="px-1.5 py-1">
                 <input value={colF.causa} onChange={(e) => setCol('causa', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
               </th>
-              <th className="px-1.5 py-1" />
+              <th className="px-1.5 py-1 no-print" />
             </tr>
           </thead>
           <tbody>
-            {currentShown.length === 0 ? (
+            {sorted.length === 0 ? (
               <tr>
                 <td colSpan={11} className="px-5 py-12 text-center text-slate-400">
                   <HistoryIcon className="h-10 w-10 mx-auto mb-3 opacity-40" />
@@ -368,58 +444,66 @@ export default function HistoryClient({
                     <button
                       type="button"
                       onClick={clearFilters}
-                      className="mt-3 text-xs font-bold text-[#2E86C1] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      className="mt-3 text-xs font-bold text-[#2E86C1] hover:underline inline-flex items-center gap-1 cursor-pointer no-print"
                     >
-                      <X size={14} /> Limpar Filtros das Colunas
+                      <X size={14} /> Limpar Todos os Filtros
                     </button>
                   )}
                 </td>
               </tr>
             ) : (
-              currentShown.map((r) => (
-                <tr key={r.rawId} className="border-b border-slate-100 hover:bg-blue-50/50 transition-colors">
-                  <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
-                    <Link href={`/dashboard/tasks/${r.rawId}`} className="bg-slate-100/90 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-slate-300 text-blue-800 hover:underline">
-                      {r.id}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2.5 font-mono text-slate-800 font-semibold whitespace-nowrap">{r.data}</td>
-                  <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">{r.area}</td>
-                  <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">{r.equiTag}</td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
-                      {r.ti}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-900 font-semibold max-w-[280px]">
-                    <Link href={`/dashboard/tasks/${r.rawId}`} className="hover:text-blue-600 hover:underline line-clamp-2" title={r.avaria}>
-                      {r.avaria}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">{r.tecnicos}</td>
-                  <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">{r.inicio}</td>
-                  <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">{r.fim}</td>
-                  <td className="px-3 py-2.5 text-slate-700 max-w-[200px]">
-                    <span className="line-clamp-2" title={r.causa}>{r.causa}</span>
-                  </td>
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                    <Link
-                      href={`/dashboard/tasks/${r.rawId}`}
-                      className="inline-flex items-center gap-1 bg-white hover:bg-slate-100 text-blue-700 font-bold border border-slate-300 px-2 py-1 rounded text-[11px] shadow-sm transition-colors"
-                    >
-                      <FolderOpen className="h-3.5 w-3.5 text-blue-600" />
-                      Abrir
-                    </Link>
-                  </td>
-                </tr>
-              ))
+              sorted.map((r, idx) => {
+                const isPageHidden = pageSize !== -1 && (idx < (currentPage - 1) * pageSize || idx >= currentPage * pageSize)
+                return (
+                  <tr
+                    key={r.rawId + '_' + idx}
+                    className={`border-b border-slate-100 hover:bg-blue-50/50 transition-colors ${
+                      isPageHidden ? 'hidden print:table-row' : ''
+                    }`}
+                  >
+                    <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
+                      <Link href={`/dashboard/tasks/${r.rawId}`} className="bg-slate-100/90 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-slate-300 text-blue-800 hover:underline">
+                        {r.id}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2.5 font-mono text-slate-800 font-semibold whitespace-nowrap">{r.data}</td>
+                    <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">{r.area}</td>
+                    <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">{r.equiTag}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-300">
+                        {r.ti}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-900 font-semibold max-w-[280px]">
+                      <Link href={`/dashboard/tasks/${r.rawId}`} className="hover:text-blue-600 hover:underline line-clamp-2" title={r.avaria}>
+                        {r.avaria}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">{r.tecnicos}</td>
+                    <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">{r.inicio}</td>
+                    <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">{r.fim}</td>
+                    <td className="px-3 py-2.5 text-slate-700 max-w-[200px]">
+                      <span className="line-clamp-2" title={r.causa}>{r.causa}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-center whitespace-nowrap no-print">
+                      <Link
+                        href={`/dashboard/tasks/${r.rawId}`}
+                        className="inline-flex items-center gap-1 bg-white hover:bg-slate-100 text-blue-700 font-bold border border-slate-300 px-2 py-1 rounded text-[11px] shadow-sm transition-colors"
+                      >
+                        <FolderOpen className="h-3.5 w-3.5 text-blue-600" />
+                        Abrir
+                      </Link>
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
 
-        {/* Paginação */}
+        {/* Paginação (Ecrã) */}
         {sorted.length > 0 && pageSize !== -1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50 text-xs text-slate-800 font-semibold">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50 text-xs text-slate-800 font-semibold no-print">
             <span>
               Página {currentPage} de {totalPages} ({sorted.length} registos)
             </span>

@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listTasks, listAssets, listInterventions, listUsers } from '@/lib/firebase/data'
 import { STATUS_LABELS, CRITICIDADE_LABELS, TIPO_LABELS, type TipoTarefa } from '@/types/models'
@@ -116,15 +117,18 @@ export default async function ReportsPage() {
         {/* KPIs principais */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
-            { label: 'Total OTs', value: tasks.length, color: 'text-[#1B4F72]' },
-            { label: 'Concluídas', value: done, color: 'text-green-600' },
-            { label: 'Em curso', value: inProgress, color: 'text-blue-500' },
-            { label: urgentOpen > 0 ? '⚠ Urgentes abertas' : 'Pendentes', value: urgentOpen > 0 ? urgentOpen : pending, color: urgentOpen > 0 ? 'text-red-600' : 'text-orange-500' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="card p-4 text-center">
-              <p className={`text-3xl font-black ${color.includes('text-[#1B4F72]') ? 'text-[#1B4F72] dark:text-blue-400' : color}`}>{value}</p>
-              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{label}</p>
-            </div>
+            { label: 'Total OTs', value: tasks.length, color: 'text-[#1B4F72]', href: '/dashboard/tasks' },
+            { label: 'Concluídas', value: done, color: 'text-green-600', href: '/dashboard/tasks' },
+            { label: 'Em curso', value: inProgress, color: 'text-blue-500', href: '/dashboard/tasks' },
+            { label: urgentOpen > 0 ? '⚠ Urgentes abertas' : 'Pendentes', value: urgentOpen > 0 ? urgentOpen : pending, color: urgentOpen > 0 ? 'text-red-600' : 'text-orange-500', href: '/dashboard/tasks' },
+          ].map(({ label, value, color, href }) => (
+            <Link key={label} href={href} className="card p-4 text-center hover:border-purple-300 dark:hover:border-slate-700 transition-all hover:shadow-md group">
+              <p className={`text-3xl font-black ${color.includes('text-[#1B4F72]') ? 'text-[#1B4F72] dark:text-blue-400' : color} group-hover:scale-105 transition-transform`}>{value}</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 flex items-center justify-center gap-1 group-hover:text-purple-600 dark:group-hover:text-purple-300">
+                <span>{label}</span>
+                <span className="text-[10px]">↗</span>
+              </p>
+            </Link>
           ))}
         </div>
 
@@ -137,7 +141,12 @@ export default async function ReportsPage() {
 
         {/* Análise dos Equipamentos Mais Críticos */}
         <div className="mt-8">
-          <h2 className="text-base font-bold text-gray-800 dark:text-slate-200 mb-3">Análise dos Equipamentos Mais Críticos</h2>
+          <h2 className="text-base font-bold text-gray-800 dark:text-slate-200 mb-3 flex items-center justify-between">
+            <span>Análise dos Equipamentos Mais Críticos</span>
+            <Link href="/dashboard/assets" className="text-xs font-bold text-purple-700 dark:text-purple-300 hover:underline">
+              Ver Todos os Equipamentos →
+            </Link>
+          </h2>
           {criticalAssets.length === 0 ? (
             <div className="card px-5 py-10 text-center text-gray-400 dark:text-slate-500 text-sm">
               Sem equipamentos cadastrados.
@@ -164,12 +173,14 @@ export default async function ReportsPage() {
                           {asset.area || '—'}
                         </td>
                         <td className="px-3 py-2.5 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                          <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                          <Link href={`/dashboard/assets/${asset.id}`} className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 hover:border-purple-400 hover:text-purple-600 transition-colors">
                             {asset.tag || '—'}
-                          </span>
+                          </Link>
                         </td>
                         <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100">
-                          {asset.name}
+                          <Link href={`/dashboard/assets/${asset.id}`} className="hover:text-purple-600 dark:hover:text-purple-400 hover:underline transition-colors">
+                            {asset.name}
+                          </Link>
                         </td>
                         <td className="px-3 py-2.5 text-center">
                           <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[11px] font-extrabold ${
@@ -181,13 +192,15 @@ export default async function ReportsPage() {
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-center font-bold font-mono text-slate-800 dark:text-slate-200">
-                          {totalTasks}
+                          <Link href={`/dashboard/tasks?search=${encodeURIComponent(asset.tag || asset.name)}`} className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors">
+                            {totalTasks} OT(s) ↗
+                          </Link>
                         </td>
                         <td className="px-3 py-2.5 text-center font-mono">
                           {openUrgent > 0 ? (
-                            <span className="bg-red-50 text-red-700 font-extrabold px-2 py-0.5 rounded border border-red-200">
+                            <Link href={`/dashboard/tasks?search=${encodeURIComponent(asset.tag || asset.name)}`} className="bg-red-50 text-red-700 font-extrabold px-2 py-0.5 rounded border border-red-200 hover:bg-red-100 transition-colors">
                               ⚠️ {openUrgent}
-                            </span>
+                            </Link>
                           ) : (
                             <span className="text-slate-400">0</span>
                           )}

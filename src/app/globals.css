@@ -43,3 +43,31 @@
   .badge-medium     { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300; }
   .badge-low        { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-300; }
 }
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 8mm;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .no-print, nav, sidebar, header, footer, .no-print * {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  table {
+    width: 100% !important;
+    font-size: 10px !important;
+    border-collapse: collapse !important;
+  }
+  th, td {
+    padding: 3px 5px !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+}

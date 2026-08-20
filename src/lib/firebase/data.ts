@@ -13,6 +13,11 @@ function serialize<T>(doc: DocumentSnapshot): T {
   return { id: doc.id, ...doc.data() } as T
 }
 
+export const DEMO_COMPANY_ID = 'rjHNaSUbLm4qTMyKP0oX'
+export function isDemoCompany(companyId: string): boolean {
+  return companyId === DEMO_COMPANY_ID || companyId === 'demo'
+}
+
 // ── LOCAL FALLBACK LOADERS (Quando o Firebase Firestore atinge a quota diária) ──
 let cachedFallbackAssets: Asset[] | null = null
 function getFallbackAssets(): Asset[] {
@@ -150,11 +155,11 @@ export const listExternalCompanies = cache(async function(companyId: string): Pr
       .where('companyId', '==', companyId)
       .get()
     const docs = snap.docs.map((d) => serialize<ExternalCompany>(d))
-    if (docs.length > 0) return docs
+    if (docs.length > 0 || !isDemoCompany(companyId)) return docs
   } catch (err) {
-    console.error('[listExternalCompanies] Error / Quota Exceeded:', err)
+    console.error('[listExternalCompanies] Error:', err)
   }
-  return getFallbackExternalCompanies()
+  return isDemoCompany(companyId) ? getFallbackExternalCompanies() : []
 })
 
 function getFallbackExternalCompanies(): ExternalCompany[] {
@@ -236,6 +241,9 @@ export const listAssets = cache(async function(companyId: string, limitCount = 2
       .limit(limitCount)
       .get()
     const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
+    if (!isDemoCompany(companyId)) {
+      return dbDocs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    }
     const fallbacks = getFallbackAssets()
     if (dbDocs.length === 0) return fallbacks
 
@@ -251,9 +259,9 @@ export const listAssets = cache(async function(companyId: string, limitCount = 2
 
     return [...customDocs, ...mergedFallbacks].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   } catch (err) {
-    console.error('[listAssets] Error / Quota Exceeded:', err)
+    console.error('[listAssets] Error:', err)
   }
-  return getFallbackAssets()
+  return isDemoCompany(companyId) ? getFallbackAssets() : []
 })
 
 /** Versão LEVE: id + name + tag (para dropdowns e mapa id→nome/tag). */
@@ -270,6 +278,9 @@ export const listAssetRefs = cache(async function(companyId: string): Promise<{ 
       tag: (d.data().tag as string) ?? null,
       area: (d.data().area as string) ?? null,
     }))
+    if (!isDemoCompany(companyId)) {
+      return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
+    }
     const fallbacks = getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))
     if (dbDocs.length === 0) return fallbacks
 
@@ -285,9 +296,9 @@ export const listAssetRefs = cache(async function(companyId: string): Promise<{ 
 
     return [...customDocs, ...mergedFallbacks].sort((a, b) => a.name.localeCompare(b.name))
   } catch (err) {
-    console.error('[listAssetRefs] Error / Quota Exceeded:', err)
+    console.error('[listAssetRefs] Error:', err)
   }
-  return getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))
+  return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
 })
 
 /** Refs LEVES de planos para o modal de criação de tarefas (só os campos usados, ativos com equipamento). */
@@ -374,8 +385,9 @@ export const getAsset = cache(async function(companyId: string, id: string): Pro
     })
     if (matched) return matched
   } catch (err) {
-    console.error('[getAsset] Error / Quota Exceeded:', err)
+    console.error('[getAsset] Error:', err)
   }
+  if (!isDemoCompany(companyId)) return null
   const normAlphaFallback = id.toLowerCase().replace(/[^a-z0-9]/g, '')
   return getFallbackAssets().find((a) => a.id === id || a.tag === id || (normAlphaFallback && (a.id || '').replace(/[^a-z0-9]/g, '') === normAlphaFallback || (a.tag || '').replace(/[^a-z0-9]/g, '') === normAlphaFallback)) || null
 })
@@ -417,6 +429,9 @@ export const listTasks = cache(async function(companyId: string, limitCount = 20
       .limit(limitCount)
       .get()
     const dbDocs = snap.docs.map((d) => serialize<Task>(d))
+    if (!isDemoCompany(companyId)) {
+      return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    }
     const fallbacks = getFallbackTasks()
     if (dbDocs.length === 0) return fallbacks
 
@@ -425,9 +440,9 @@ export const listTasks = cache(async function(companyId: string, limitCount = 20
     const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
     return [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
   } catch (err) {
-    console.error('[listTasks] Error / Quota Exceeded:', err)
+    console.error('[listTasks] Error:', err)
   }
-  return getFallbackTasks()
+  return isDemoCompany(companyId) ? getFallbackTasks() : []
 })
 
 export const listTasksByAsset = cache(async function(companyId: string, assetId: string, providedAssetTag?: string | null): Promise<Task[]> {
@@ -467,15 +482,19 @@ export const listTasksByAsset = cache(async function(companyId: string, assetId:
       }
     })
 
+    if (!isDemoCompany(companyId)) {
+      return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    }
+
     const fallbacks = getFallbackTasks().filter((t) => t.assetId === assetId || (assetTag && t.tag === assetTag))
     const merged = Array.from(new Map([...dbDocs, ...fallbacks].map((t) => [t.id, t])).values())
     if (merged.length > 0) {
       return merged.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     }
   } catch (err) {
-    console.error('[listTasksByAsset] Error / Quota Exceeded:', err)
+    console.error('[listTasksByAsset] Error:', err)
   }
-  return getFallbackTasks().filter((t) => t.assetId === assetId)
+  return isDemoCompany(companyId) ? getFallbackTasks().filter((t) => t.assetId === assetId) : []
 })
 
 export const getTask = cache(async function(companyId: string, id: string): Promise<Task | null> {
@@ -485,9 +504,9 @@ export const getTask = cache(async function(companyId: string, id: string): Prom
       return serialize<Task>(doc)
     }
   } catch (err) {
-    console.error('[getTask] Error / Quota Exceeded:', err)
+    console.error('[getTask] Error:', err)
   }
-  return getFallbackTasks().find(t => t.id === id) || null
+  return isDemoCompany(companyId) ? (getFallbackTasks().find(t => t.id === id) || null) : null
 })
 
 export async function createTask(
@@ -646,16 +665,16 @@ export const listUsers = cache(async function(companyId: string): Promise<User[]
 
     const validDbDocs = dbDocs.filter((d) => !isDeleted(d))
 
-    if (validDbDocs.length > 0) {
+    if (validDbDocs.length > 0 || !isDemoCompany(companyId)) {
       return validDbDocs
     }
 
     const fallbacks = getFallbackUsers().filter((f) => !isDeleted(f))
     return fallbacks
   } catch (err) {
-    console.error('[listUsers] Error / Quota Exceeded:', err)
+    console.error('[listUsers] Error:', err)
   }
-  return getFallbackUsers().filter((f) => f.active !== false)
+  return isDemoCompany(companyId) ? getFallbackUsers().filter((f) => f.active !== false) : []
 })
 
 // ── REGISTO (cria empresa + gestor) ───────────────────────────────────────────
@@ -1094,30 +1113,35 @@ export const listMaintenancePlans = cache(async function(companyId: string): Pro
       .collection('maintenance_plans')
       .where('companyId', '==', companyId)
       .get()
-    const dbDocs = snap.docs.map((d) => serialize<MaintenancePlan>(d))
+    const dbDocs = snap.docs.map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
+    if (!isDemoCompany(companyId)) {
+      return dbDocs.filter((p) => !p.deleted).sort((a, b) => a.title.localeCompare(b.title))
+    }
     const fallbacks = getFallbackPlans()
-    if (dbDocs.length === 0) return fallbacks
 
     const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
-    const mergedFallbacks = fallbacks.map((f) => dbMap.get(f.id) || f)
-    const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
+    const mergedFallbacks = fallbacks
+      .map((f) => dbMap.get(f.id) || f)
+      .filter((p) => !(p as any).deleted)
+
+    const customDocs = dbDocs.filter((d) => !(d as any).deleted && !fallbacks.some((f) => f.id === d.id))
     return [...customDocs, ...mergedFallbacks]
   } catch (err) {
-    console.error('[listMaintenancePlans] Error / Quota Exceeded:', err)
+    console.error('[listMaintenancePlans] Error:', err)
   }
-  return getFallbackPlans()
+  return isDemoCompany(companyId) ? getFallbackPlans() : []
 })
 
 export const getMaintenancePlan = cache(async function(companyId: string, id: string): Promise<MaintenancePlan | null> {
   try {
     const doc = await adminDb().collection('maintenance_plans').doc(id).get()
-    if (doc.exists && doc.data()?.companyId === companyId) {
+    if (doc.exists && doc.data()?.companyId === companyId && !doc.data()?.deleted) {
       return serialize<MaintenancePlan>(doc)
     }
   } catch (err) {
-    console.error('[getMaintenancePlan] Error / Quota Exceeded:', err)
+    console.error('[getMaintenancePlan] Error:', err)
   }
-  return getFallbackPlans().find(p => p.id === id) || null
+  return isDemoCompany(companyId) ? (getFallbackPlans().find(p => p.id === id) || null) : null
 })
 
 export async function createMaintenancePlan(
@@ -1138,33 +1162,28 @@ export async function updateMaintenancePlan(
   data: Partial<Omit<MaintenancePlan, 'id' | 'companyId' | 'createdBy' | 'createdAt'>>
 ): Promise<void> {
   const now = new Date().toISOString()
-  const fallback = getFallbackPlans().find((p) => p.id === id)
-  try {
-    const ref = adminDb().collection('maintenance_plans').doc(id)
-    const doc = await ref.get()
-    if (doc.exists) {
-      await ref.update({ ...data, updatedAt: now })
-    } else {
-      const baseObj = fallback ? { ...fallback, ...data, companyId, updatedAt: now } : { ...data, companyId, createdAt: now, updatedAt: now }
-      await ref.set(baseObj, { merge: true })
-    }
-  } catch (err) {
-    console.error('[updateMaintenancePlan] Error:', err)
-  }
-
-  if (cachedFallbackPlans) {
-    const idx = cachedFallbackPlans.findIndex((p) => p.id === id)
-    if (idx !== -1) {
-      cachedFallbackPlans[idx] = { ...cachedFallbackPlans[idx], ...data, updatedAt: now }
-    }
+  const ref = adminDb().collection('maintenance_plans').doc(id)
+  const doc = await ref.get()
+  if (doc.exists) {
+    if (doc.data()?.companyId !== companyId) throw new Error('Plano de manutenção não encontrado')
+    await ref.update({ ...data, updatedAt: now })
+  } else {
+    const fallback = isDemoCompany(companyId) ? getFallbackPlans().find((p) => p.id === id) : null
+    const baseObj = fallback ? { ...fallback, ...data, companyId, updatedAt: now } : { ...data, companyId, createdAt: now, updatedAt: now }
+    await ref.set(baseObj, { merge: true })
   }
 }
 
 export async function deleteMaintenancePlan(companyId: string, id: string): Promise<void> {
+  const now = new Date().toISOString()
   const ref = adminDb().collection('maintenance_plans').doc(id)
   const doc = await ref.get()
-  if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Plano não encontrado')
-  await ref.delete()
+  if (doc.exists) {
+    if (doc.data()?.companyId !== companyId) throw new Error('Plano de manutenção não encontrado')
+    await ref.delete()
+  } else {
+    await ref.set({ id, companyId, deleted: true, updatedAt: now })
+  }
 }
 
 export const getUsersByCompany = cache(async function(companyId: string): Promise<User[]> {
@@ -1216,11 +1235,11 @@ export const listStockItems = cache(async function(companyId: string): Promise<S
       .where('companyId', '==', companyId)
       .get()
     const docs = snap.docs.map((d) => serialize<StockItem>(d))
-    if (docs.length > 0) return docs.sort((a, b) => a.name.localeCompare(b.name))
+    if (docs.length > 0 || !isDemoCompany(companyId)) return docs.sort((a, b) => a.name.localeCompare(b.name))
   } catch (err) {
     console.error('[listStockItems] Error:', err)
   }
-  return getFallbackStockItems()
+  return isDemoCompany(companyId) ? getFallbackStockItems() : []
 })
 
 export const getStockItem = cache(async function(companyId: string, id: string): Promise<StockItem | null> {
@@ -1229,9 +1248,9 @@ export const getStockItem = cache(async function(companyId: string, id: string):
     if (!snap.exists || snap.data()?.companyId !== companyId) return null
     return serialize<StockItem>(snap)
   } catch (err) {
-    console.error('[getStockItem] Error / Quota Exceeded:', err)
+    console.error('[getStockItem] Error:', err)
   }
-  return getFallbackStockItems().find((s) => s.id === id) || null
+  return isDemoCompany(companyId) ? (getFallbackStockItems().find((s) => s.id === id) || null) : null
 })
 
 export async function createStockItem(

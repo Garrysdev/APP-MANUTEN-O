@@ -18,7 +18,7 @@ import { periodicidadeToRecurrence, CRITICIDADE_LABELS, PERIODICIDADE_LABELS } f
 export type PlanFormState = { error?: string; ok?: boolean; id?: string }
 
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
-const TIPOS: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
+const TIPOS: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'pi', 'stp', 'mi', 'mp', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 const PERIODICIDADES: Periodicidade[] = ['semanal', 'mensal', 'trimestral', 'bianual', 'anual', 'bienal', 'trianual', 'horas', 'pontual']
 const EXECUTORES: Executor[] = ['interno', 'externo']
 

@@ -372,11 +372,12 @@ export default function TaskDetailClient({
 
           {isDone ? (
             <button
+              type="button"
               onClick={handleReopen}
               disabled={reopenBusy}
-              className="btn-secondary bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 font-bold flex items-center gap-2"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-500 hover:bg-amber-600 !text-white px-4 py-2 text-sm font-bold shadow-sm transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer border border-amber-600"
             >
-              <Wrench className="h-4 w-4 text-amber-700" /> {reopenBusy ? 'A reabrir…' : 'Reabrir OT'}
+              <Wrench className="h-4 w-4 text-white" /> {reopenBusy ? 'A reabrir…' : 'Reabrir OT'}
             </button>
           ) : (
             <button

@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
+import Link from 'next/link'
 import type { Task, Asset, Intervention } from '@/types/models'
 import { TIPO_LABELS } from '@/types/models'
 
@@ -146,22 +147,26 @@ export default function ReportsChartsClient({
               const count = tiposCounts[tipo] || 0
               const pct = Math.round((count / totalTasks) * 100)
               return (
-                <div key={tipo} className="space-y-1">
+                <Link key={tipo} href={`/dashboard/tasks?tipo=${tipo}`} className="block space-y-1 group">
                   <div className="flex justify-between text-xs font-bold">
-                    <span className="text-slate-800 dark:text-slate-200">{label} ({tipo})</span>
+                    <span className="text-slate-800 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                      {label} ({tipo.toUpperCase()}) ↗
+                    </span>
                     <span className="text-slate-500">{count} OTs ({pct}%)</span>
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full overflow-hidden">
                     <div
                       style={{ width: `${Math.max(4, pct)}%` }}
                       className={`h-full transition-all rounded-full ${
-                        tipo === 'curativa' ? 'bg-red-500' :
-                        tipo === 'preventiva' || tipo === 'plano' ? 'bg-blue-500' :
-                        tipo === 'pi' ? 'bg-purple-500' : 'bg-slate-400'
+                        tipo === 'curativa' || tipo === 'mc' ? 'bg-amber-600' :
+                        tipo === 'preventiva' || tipo === 'mp' ? 'bg-purple-600' :
+                        tipo === 'plano' || tipo === 'pm' ? 'bg-blue-900' :
+                        tipo === 'pi' ? 'bg-red-900' :
+                        tipo === 'stp' ? 'bg-lime-500' : 'bg-slate-400'
                       }`}
                     />
                   </div>
-                </div>
+                </Link>
               )
             })}
           </div>
@@ -170,29 +175,34 @@ export default function ReportsChartsClient({
         {/* Quadro resumo MTBF, MTTR e Disponibilidade */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
           <div>
-            <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100 mb-1">
-              Fiabilidade Industrial
-            </h3>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100">
+                Fiabilidade Industrial
+              </h3>
+              <Link href="/dashboard/reliability" className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                Ver Página →
+              </Link>
+            </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Indicadores globais de desempenho da fábrica</p>
 
             <div className="space-y-4">
-              <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800">
+              <Link href="/dashboard/reliability" className="block p-3 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 hover:border-blue-300 transition-colors">
                 <p className="text-xs font-bold text-blue-800 dark:text-blue-300">MTBF (Tempo Médio Entre Avarias)</p>
                 <p className="text-2xl font-black text-blue-900 dark:text-blue-100 mt-1">184.5 h</p>
                 <p className="text-[10px] text-blue-700 dark:text-blue-400 mt-0.5">+4.2% em relação ao mês anterior</p>
-              </div>
+              </Link>
 
-              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30 border border-amber-100 dark:border-amber-800">
+              <Link href="/dashboard/reliability" className="block p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30 border border-amber-100 dark:border-amber-800 hover:border-amber-300 transition-colors">
                 <p className="text-xs font-bold text-amber-800 dark:text-amber-300">MTTR (Tempo Médio de Reparação)</p>
                 <p className="text-2xl font-black text-amber-900 dark:text-amber-100 mt-1">2.1 h</p>
                 <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">-12 min na resolução de curativas</p>
-              </div>
+              </Link>
 
-              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800">
+              <Link href="/dashboard/reliability" className="block p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800 hover:border-emerald-300 transition-colors">
                 <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Disponibilidade Operacional</p>
                 <p className="text-2xl font-black text-emerald-900 dark:text-emerald-100 mt-1">98.4%</p>
                 <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">Dentro da meta de produção</p>
-              </div>
+              </Link>
             </div>
           </div>
         </div>

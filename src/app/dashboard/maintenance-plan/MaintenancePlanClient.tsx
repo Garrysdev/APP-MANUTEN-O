@@ -285,15 +285,26 @@ export default function MaintenancePlanClient({
       ? await updateMaintenancePlanAction({}, fd)
       : await createMaintenancePlanAction({}, fd)
     setBusy(false)
-    if (result.error) setError(result.error)
-    else { closeModal(); router.refresh() }
+    if (result?.error) {
+      setError(result.error)
+    } else {
+      closeModal()
+      router.refresh()
+    }
   }
 
   async function handleDelete(plan: MaintenancePlan) {
     if (!confirm(`Eliminar o plano "${plan.title}"?`)) return
-    await deleteMaintenancePlanAction(plan.id)
-    router.refresh()
+    setBusy(true)
+    const res = await deleteMaintenancePlanAction(plan.id)
+    setBusy(false)
+    if (res?.error) {
+      alert(res.error)
+    } else {
+      router.refresh()
+    }
   }
+
   function handleToggleActive(plan: MaintenancePlan) {
     startTransition(async () => {
       await toggleMaintenancePlanActiveAction(plan.id, !plan.active)
@@ -576,31 +587,31 @@ export default function MaintenancePlanClient({
         <span className="text-xs font-semibold text-slate-700 ml-auto">Filtra por coluna na linha abaixo dos títulos (estilo Excel).</span>
       </div>
 
-      <div className="card overflow-x-auto">
+      <div className="card overflow-x-auto shadow-lg border border-slate-200 dark:border-slate-800">
         {shown.length === 0 ? (
           <div className="px-5 py-12 text-center text-slate-400">
             <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />
             <p className="text-sm">{dict.maintenancePlan.empty}</p>
           </div>
         ) : (
-          <table className="w-full text-xs min-w-[1250px] table-fixed">
+          <table className="w-full text-[11px] min-w-[860px] table-fixed">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
-                <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[105px] px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[115px] px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[160px] px-2 py-2" />
-                <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[220px] px-2 py-2" />
-                <SortableTh label="TIPO / MARCADOR" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[185px] px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[115px] px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[70px] px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[100px] px-2 py-2 whitespace-nowrap" />
-                <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[90px] px-2 py-2 whitespace-nowrap" />
-                <th className="w-[105px] px-2 py-2 text-center text-xs font-bold text-slate-700 uppercase tracking-wide">AÇÕES</th>
+              <tr className="border-b border-slate-200 bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
+                <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[50px] px-1 py-1.5 whitespace-nowrap text-left" />
+                <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[70px] px-1 py-1.5 whitespace-nowrap text-left" />
+                <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[70px] px-1 py-1.5 whitespace-nowrap text-left" />
+                <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[110px] px-1 py-1.5 text-left" />
+                <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[140px] px-1 py-1.5 text-left" />
+                <SortableTh label="TIPO / MARCADOR" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[115px] px-1 py-1.5 text-left" />
+                <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[100px] px-1 py-1.5 text-left" />
+                <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[45px] px-1 py-1.5 whitespace-nowrap text-left" />
+                <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1 py-1.5 whitespace-nowrap text-left" />
+                <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[50px] px-1 py-1.5 whitespace-nowrap text-left" />
+                <th className="w-[75px] px-1 py-1.5 text-center font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wide">AÇÕES</th>
               </tr>
               {/* Linha de filtros por coluna (estilo Excel) */}
               <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-1 py-1">
+                <th className="px-0.5 py-0.5">
                   <select
                     value={colF.area}
                     onChange={(e) => {
@@ -616,7 +627,7 @@ export default function MaintenancePlanClient({
                     ))}
                   </select>
                 </th>
-                <th className="px-1 py-1">
+                <th className="px-0.5 py-0.5">
                   <select
                     value={colF.tag}
                     onChange={(e) => setCol('tag', e.target.value)}
@@ -629,16 +640,16 @@ export default function MaintenancePlanClient({
                     ))}
                   </select>
                 </th>
-                <th className="px-1 py-1">
+                <th className="px-0.5 py-0.5">
                   <input value={colF.system} onChange={(e) => setCol('system', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-1 py-1">
+                <th className="px-0.5 py-0.5">
                   <input value={colF.asset} onChange={(e) => setCol('asset', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-1 py-1">
+                <th className="px-0.5 py-0.5">
                   <input value={colF.title} onChange={(e) => setCol('title', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
-                <th className="px-1 py-1">
+                <th className="px-0.5 py-0.5">
                   <select value={colF.tipo} onChange={(e) => setCol('tipo', e.target.value)} className={colFilterCls} title="Filtrar tipo">
                     <option value="">Todos</option>
                     {Object.entries(TIPO_LABELS).map(([k, label]) => (
@@ -646,7 +657,7 @@ export default function MaintenancePlanClient({
                     ))}
                   </select>
                 </th>
-                <th className="px-1 py-1">
+                <th className="px-0.5 py-0.5">
                   <select value={colF.period} onChange={(e) => setCol('period', e.target.value)} className={colFilterCls} title="Filtrar periodicidade">
                     <option value="">Todas</option>
                     {Object.entries(PERIODICIDADE_LABELS).map(([k, label]) => (
@@ -654,7 +665,7 @@ export default function MaintenancePlanClient({
                     ))}
                   </select>
                 </th>
-                <th className="px-1 py-1">
+                <th className="px-0.5 py-0.5">
                   <select value={colF.crit} onChange={(e) => setCol('crit', e.target.value)} className={colFilterCls} title="Filtrar criticidade">
                     <option value="">Todas</option>
                     {Object.entries(CRITICIDADE_LABELS).map(([k, label]) => (
@@ -662,80 +673,72 @@ export default function MaintenancePlanClient({
                     ))}
                   </select>
                 </th>
-                <th className="px-1 py-1">
+                <th className="px-0.5 py-0.5">
                   <select value={colF.executor} onChange={(e) => setCol('executor', e.target.value)} className={colFilterCls} title="Filtrar executor">
                     <option value="">Todos</option>
                     <option value="interno">Interno</option>
                     <option value="externo">Externo</option>
                   </select>
                 </th>
-                <th className="px-1 py-1">
+                <th className="px-0.5 py-0.5">
                   <select value={colF.estado} onChange={(e) => setCol('estado', e.target.value)} className={colFilterCls} title="Filtrar estado">
                     <option value="">Todos</option>
                     <option value="ativo">Ativo</option>
                     <option value="inativo">Inativo</option>
                   </select>
                 </th>
-                <th className="px-1 py-1" />
+                <th className="px-0.5 py-0.5" />
               </tr>
             </thead>
             <tbody>
               {currentShown.map((p) => (
                 <tr key={p.id} className={`border-b border-slate-100 hover:bg-slate-50/80 transition-colors ${!p.active ? 'opacity-50' : ''}`}>
-                  <td className="px-2 py-2 font-mono font-bold text-slate-900 whitespace-nowrap">{p.area || '—'}</td>
-                  <td className="px-2 py-2 font-mono font-bold text-slate-900 whitespace-nowrap">
-                    <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{getPlanTag(p) || '—'}</span>
+                  <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">{p.area || '—'}</td>
+                  <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">
+                    <span className="bg-slate-100 px-1 py-0.5 rounded border border-slate-200">{getPlanTag(p) || '—'}</span>
                   </td>
-                  <td className="px-2 py-2 text-slate-800 font-semibold whitespace-nowrap">{p.system || '—'}</td>
-                  <td className="px-2 py-2 text-slate-900 font-bold max-w-[180px]">
+                  <td className="px-1 py-1.5 text-slate-800 font-semibold whitespace-nowrap">{p.system || '—'}</td>
+                  <td className="px-1 py-1.5 text-slate-900 font-bold max-w-[110px]">
                     <span className="line-clamp-2" title={assetName(p.assetId)}>{assetName(p.assetId)}</span>
                   </td>
-                  <td className="px-2 py-2 font-bold text-slate-900 max-w-[240px]">
-                    <div className="flex items-center gap-1.5">
+                  <td className="px-1 py-1.5 font-bold text-slate-900 max-w-[140px]">
+                    <div className="flex items-center gap-1">
                       <span className="line-clamp-2" title={p.title}>{p.title}</span>
                       {p.legal && (
-                        <span title="Inspeção legal/obrigatória" className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[10px] text-red-800 font-bold border border-red-300 shrink-0">
-                          <Scale className="h-3 w-3" /> Legal
+                        <span title="Inspeção legal/obrigatória" className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[9px] text-red-800 font-bold border border-red-300 shrink-0">
+                          <Scale className="h-2.5 w-2.5" /> Legal
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-2 py-2 whitespace-nowrap">
-                    <div className="flex flex-col gap-1 items-start">
+                  <td className="px-1 py-1.5">
+                    <div className="flex flex-col gap-0.5 items-start">
                       <TipoBadge tipo={p.tipo || 'plano'} codeOnly={true} />
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 flex-wrap text-[9px]">
                         {(() => {
                           const isCalActive = Boolean(p.showInCalendar || (p.calendarDates && p.calendarDates.length > 0) || p.active !== false)
                           return (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <label className="inline-flex items-center gap-1 cursor-pointer select-none text-[10px] font-bold">
-                                <input
-                                  type="checkbox"
-                                  checked={isCalActive}
-                                  onChange={async (e) => {
-                                    if (!e.target.checked) {
-                                      await togglePlanCalendarAction(p.id, false)
-                                      router.refresh()
-                                    } else {
-                                      openCalendarModal(p)
-                                    }
-                                  }}
-                                  className="rounded border-slate-300 text-safety-orange focus:ring-safety-orange h-3.5 w-3.5"
-                                />
-                                <span className={isCalActive ? "text-blue-800 dark:text-blue-300 font-bold" : "text-slate-500"}>
-                                  Calendário
-                                </span>
-                              </label>
-                              {isCalActive && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 text-[10px] font-extrabold shadow-xs" title="OT agendada e ativa no Calendário">
-                                  <CheckCircle2 size={11} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                  <span>✓ No Calendário</span>
-                                </span>
-                              )}
-                            </div>
+                            <label className="inline-flex items-center gap-0.5 cursor-pointer select-none font-bold">
+                              <input
+                                type="checkbox"
+                                checked={isCalActive}
+                                onChange={async (e) => {
+                                  if (!e.target.checked) {
+                                    await togglePlanCalendarAction(p.id, false)
+                                    router.refresh()
+                                  } else {
+                                    openCalendarModal(p)
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-safety-orange focus:ring-safety-orange h-3 w-3"
+                              />
+                              <span className={isCalActive ? "text-blue-800 dark:text-blue-300 font-bold" : "text-slate-500"}>
+                                Cal.
+                              </span>
+                            </label>
                           )
                         })()}
-                        <label className="inline-flex items-center gap-1 cursor-pointer select-none text-[10px] font-bold" title="Incluir tarefa no Gráfico de Gantt da página de Projetos">
+                        <label className="inline-flex items-center gap-0.5 cursor-pointer select-none font-bold" title="Incluir tarefa no Gráfico de Gantt da página de Projetos">
                           <input
                             type="checkbox"
                             checked={isPlanGanttActive(p)}
@@ -743,7 +746,7 @@ export default function MaintenancePlanClient({
                               await togglePlanGanttAction(p.id, e.target.checked)
                               router.refresh()
                             }}
-                            className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-3.5 w-3.5"
+                            className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-3 w-3"
                           />
                           <span className={isPlanGanttActive(p) ? "text-teal-700 dark:text-teal-300 font-bold" : "text-slate-400"}>
                             Gantt
@@ -752,14 +755,14 @@ export default function MaintenancePlanClient({
                       </div>
                     </div>
                   </td>
-                  <td className="px-2 py-2 text-slate-800 whitespace-nowrap">
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold">
-                      <CalendarClock className="h-3.5 w-3.5 text-slate-500" />
-                      {periodLabel(p)}
+                  <td className="px-1 py-1.5 text-slate-800 dark:text-slate-200">
+                    <span className="inline-flex items-start gap-1 text-[11px] font-semibold leading-tight">
+                      <CalendarClock className="h-3 w-3 text-slate-500 shrink-0 mt-0.5" />
+                      <span>{periodLabel(p)}</span>
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
-                    <span title={CRITICIDADE_LABELS[p.criticidade]} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                  <td className="px-1 py-1.5 whitespace-nowrap">
+                    <span title={CRITICIDADE_LABELS[p.criticidade]} className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold ${
                       p.criticidade === 'vermelho' ? 'bg-red-100 text-red-800 border border-red-300' :
                       p.criticidade === 'amarelo' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                       'bg-emerald-100 text-emerald-800 border border-emerald-300'
@@ -767,28 +770,30 @@ export default function MaintenancePlanClient({
                       {CRITICIDADE_LABELS[p.criticidade]}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+                  <td className="px-1 py-1.5 text-[10px] whitespace-nowrap">
                     {p.executor === 'externo' ? (
-                      <span className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200"><Building2 className="h-3.5 w-3.5" /> Externo</span>
+                      <span className="inline-flex items-center gap-0.5 font-bold text-amber-800 bg-amber-50 px-1 py-0.5 rounded border border-amber-200"><Building2 className="h-3 w-3" /> Ext.</span>
                     ) : (
-                      <span className="text-slate-600 font-medium">Interno</span>
+                      <span className="text-slate-600 font-medium">Int.</span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${p.active ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-slate-100 text-slate-600 border border-slate-300'}`}>
-                      {p.active ? 'Ativo' : 'Inativo'}
+                  <td className="px-1 py-1.5 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold ${p.active ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-slate-100 text-slate-600 border border-slate-300'}`}>
+                      {p.active ? 'Ativo' : 'Inat.'}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                    <button onClick={() => handleToggleActive(p)} disabled={isPending} className={`p-1 rounded ${p.active ? 'text-green-600 hover:text-slate-400' : 'text-slate-400 hover:text-green-600'}`} title={p.active ? 'Desativar' : 'Ativar'}>
-                      {p.active ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
-                    </button>
-                    <button onClick={() => openEdit(p)} className="p-1 text-slate-500 hover:text-blue-600 rounded" title="Editar">
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => handleDelete(p)} className="p-1 text-slate-500 hover:text-red-600 rounded" title="Eliminar">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                  <td className="px-1 py-1.5 text-center whitespace-nowrap">
+                    <div className="flex items-center justify-center gap-0.5">
+                      <button onClick={() => handleToggleActive(p)} disabled={isPending} className={`p-0.5 rounded ${p.active ? 'text-green-600 hover:text-slate-400' : 'text-slate-400 hover:text-green-600'}`} title={p.active ? 'Desativar' : 'Ativar'}>
+                        {p.active ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
+                      </button>
+                      <button onClick={() => openEdit(p)} className="p-0.5 text-slate-500 hover:text-blue-600 rounded" title="Editar">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(p)} className="p-0.5 text-slate-500 hover:text-red-600 rounded" title="Eliminar">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

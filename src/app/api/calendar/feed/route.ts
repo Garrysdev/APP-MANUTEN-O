@@ -1,5 +1,7 @@
+import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
-import { listTasks, listMaintenancePlans } from '@/lib/firebase/data'
+import { getCurrentProfile } from '@/lib/firebase/session'
+import { listTasks, listMaintenancePlans, DEMO_COMPANY_ID } from '@/lib/firebase/data'
 
 export const runtime = 'nodejs'
 
@@ -16,9 +18,39 @@ function escapeICalText(str: string): string {
   return str.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
 }
 
+function generateCompanyCalendarToken(companyId: string): string {
+  const secret = process.env.FIREBASE_PRIVATE_KEY || 'rg-calendar-secret-2026'
+  return crypto.createHmac('sha256', secret).update(`calendar_${companyId}`).digest('hex').slice(0, 32)
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const companyId = searchParams.get('companyId') || 'rjHNaSUbLm4qTMyKP0oX'
+  const tokenParam = searchParams.get('token')
+  const companyIdParam = searchParams.get('companyId')
+
+  let targetCompanyId: string | null = null
+
+  // 1. Validar via token de calendário seguro enviado na URL (para clientes iCal de terceiros)
+  if (companyIdParam && tokenParam) {
+    const expectedToken = generateCompanyCalendarToken(companyIdParam)
+    if (tokenParam === expectedToken || (companyIdParam === DEMO_COMPANY_ID && tokenParam === 'demo')) {
+      targetCompanyId = companyIdParam
+    }
+  }
+
+  // 2. Fallback: Se não houver token válido, exige sessão autenticada do utilizador
+  if (!targetCompanyId) {
+    const profile = await getCurrentProfile().catch(() => null)
+    if (profile?.companyId) {
+      targetCompanyId = profile.companyId
+    }
+  }
+
+  if (!targetCompanyId) {
+    return NextResponse.json({ error: 'Acesso não autorizado ao calendário iCal. Token inválido ou sessão ausente.' }, { status: 401 })
+  }
+
+  const companyId = targetCompanyId
 
   try {
     const [tasks, plans] = await Promise.all([
