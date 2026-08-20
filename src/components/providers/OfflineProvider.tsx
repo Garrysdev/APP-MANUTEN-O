@@ -35,6 +35,14 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       setIsOnline(navigator.onLine)
 
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const registration of registrations) {
+            registration.update()
+          }
+        })
+      }
+
       const handleOnline = () => {
         setIsOnline(true)
         triggerSync()

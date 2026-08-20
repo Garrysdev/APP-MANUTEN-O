@@ -16,8 +16,8 @@ const nextConfig: NextConfig = {
 export default withPWA({
   dest: 'public',
   customWorkerSrc: 'worker',
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
+  cacheOnFrontEndNav: false,
+  aggressiveFrontEndNavCaching: false,
   reloadOnOnline: true,
   disable: process.env.NODE_ENV === 'development',
 })(nextConfig)
