@@ -12,7 +12,7 @@ export default async function CompliancePage() {
   if (!profile || profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const plan = profile.company?.plan ?? 'free'
-  if (!planHas(plan, 'compliance')) redirect('/dashboard/billing')
+  if (!planHas(plan, 'compliance')) redirect('/dashboard/billing?feature=compliance')
 
   return <ComplianceClient companyName={profile.company?.name ?? ''} />
 }

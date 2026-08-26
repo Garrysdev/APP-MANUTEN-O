@@ -1,15 +1,19 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { History as HistoryIcon, X, ChevronLeft, ChevronRight, FolderOpen, Printer, FileSpreadsheet } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { History as HistoryIcon, X, ChevronLeft, ChevronRight, FolderOpen, Printer, FileSpreadsheet, Upload } from 'lucide-react'
 import type { Intervention, Material, Task } from '@/types/models'
-import { formatDate, formatDateTime } from '@/lib/utils'
+import { formatDate, formatDateTime, toNormalizedIsoDate, compareDates, resolveTechInitials } from '@/lib/utils'
 import HistoryExportModal from './HistoryExportModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
+import { importHistoryAction } from './actions'
+import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
+import CreateTaskModal from '@/components/modals/CreateTaskModal'
 
-type Ref = { id: string; name: string }
+type Ref = { id: string; name: string; area?: string | null; tag?: string | null }
 type UserRef = Ref & { avatarUrl?: string | null; abbreviation?: string | null; active?: boolean; role?: string | null }
 
 export interface HistoryRow {
@@ -86,7 +90,8 @@ export default function HistoryClient({
   assetMap: Record<string, string>
   isTechnician: boolean
 }) {
-  const { dict } = useLanguage()
+  const router = useRouter()
+  const { dict, lang } = useLanguage()
   const [colF, setColF] = useState(emptyCol)
   const setCol = (k: keyof typeof emptyCol, v: string) => {
     setCurrentPage(1)
@@ -97,6 +102,29 @@ export default function HistoryClient({
 
   const [modalOpen, setModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<'print' | 'export'>('print')
+
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState('')
+  const [importResult, setImportResult] = useState<{ created: number; skipped: number } | null>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setImporting(true)
+    setImportError('')
+    setImportResult(null)
+    const fd = new FormData()
+    fd.set('file', file)
+    const result = await importHistoryAction(fd)
+    setImporting(false)
+    if (result.error) setImportError(result.error)
+    else {
+      setImportResult({ created: result.created ?? 0, skipped: result.skipped ?? 0 })
+      router.refresh()
+    }
+  }
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
@@ -126,12 +154,12 @@ export default function HistoryClient({
       list.push({
         id: formattedId,
         rawId: t?.id || iv.id,
-        data: (iv.startedAt || iv.createdAt || '').slice(0, 10),
+        data: toNormalizedIsoDate(iv.createdAt || iv.startedAt),
         area: (asset as any)?.area || (t as any)?.area || '—',
         equiTag: (asset as any)?.tag || asset?.name || (t as any)?.tag || '—',
         ti: formatTiCode(t?.tipo || 'MP'),
         avaria: t?.title || iv.observations || '—',
-        tecnicos: resolveTechName(iv.technicianId || t?.assignedTo),
+        tecnicos: resolveTechInitials(iv.technicianId || t?.assignedTo, (t as any)?.assignedToIds, (t as any)?.assignedToText, users),
         inicio: formatDateTime(iv.startedAt || iv.createdAt),
         fim: formatDateTime(iv.endedAt || (iv as any).updatedAt || iv.createdAt),
         causa: iv.observations || t?.description || '—',
@@ -140,27 +168,25 @@ export default function HistoryClient({
       })
     }
 
-    // 2. OTs importadas da folha UR (source: folha_ur_historico) ou concluídas
+    // 2. Todas as OTs (seja importadas de ficheiros Excel, folha UR, pendentes, concluídas ou em curso)
     for (const t of tasks) {
-      if ((t as any).source === 'folha_ur_historico' || t.status === 'done' || t.status === 'cancelled') {
-        if (!existingTaskIds.has(t.id)) {
-          const asset = t.assetId ? assetObjMap.get(t.assetId) : null
-          const formattedId = format3DigitId(t.id, index++)
-          list.push({
-            id: formattedId,
-            rawId: t.id,
-            data: t.plannedStartDate ? formatDate(t.plannedStartDate) : (t.createdAt ? formatDate(t.createdAt) : '—'),
-            area: (t as any).area || (asset as any)?.area || '—',
-            equiTag: (asset as any)?.tag || (t as any).tag || asset?.name || '—',
-            ti: formatTiCode((t as any).tipo || (t as any).ti || 'MC'),
-            avaria: t.title || t.description || '—',
-            tecnicos: resolveTechName(t.assignedTo) !== '—' ? resolveTechName(t.assignedTo) : ((t as any).assignedToText || '—'),
-            inicio: t.plannedStartDate ? formatDate(t.plannedStartDate) : '—',
-            fim: t.completedAt ? formatDate(t.completedAt) : '—',
-            causa: t.description || '—',
-            rawTask: t
-          })
-        }
+      if (!existingTaskIds.has(t.id)) {
+        const asset = t.assetId ? assetObjMap.get(t.assetId) : null
+        const formattedId = format3DigitId(t.id, index++)
+        list.push({
+          id: formattedId,
+          rawId: t.id,
+          data: toNormalizedIsoDate(t.createdAt || t.plannedStartDate),
+          area: (t as any).area || (asset as any)?.area || '—',
+          equiTag: (asset as any)?.tag || (t as any).tag || asset?.name || '—',
+          ti: formatTiCode((t as any).tipo || (t as any).ti || 'MC'),
+          avaria: t.title || t.description || '—',
+          tecnicos: resolveTechInitials(t.assignedTo, (t as any)?.assignedToIds, (t as any)?.assignedToText, users),
+          inicio: t.plannedStartDate ? formatDate(t.plannedStartDate) : '—',
+          fim: t.completedAt ? formatDate(t.completedAt) : '—',
+          causa: t.description || '—',
+          rawTask: t
+        })
       }
     }
     return list
@@ -189,12 +215,54 @@ export default function HistoryClient({
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], 'pt'))
   }, [users, rows])
 
+  const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [excelInicioFilter, setExcelInicioFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [excelFimFilter, setExcelFimFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+
+  function handleOpenRow(r: HistoryRow) {
+    if (r.rawTask) {
+      setEditingTask(r.rawTask)
+    } else {
+      const constructedTask: Task = {
+        id: r.rawId,
+        companyId: r.rawIntervention?.companyId || '',
+        title: r.avaria,
+        description: r.causa,
+        area: r.area,
+        tag: r.equiTag,
+        tipo: (r.ti.toLowerCase() as any) || 'preventiva',
+        criticidade: 'verde',
+        status: 'done',
+        createdAt: r.data || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: r.rawIntervention?.technicianId || 'sistema',
+        createdByName: r.tecnicos,
+        assignedTo: r.tecnicos,
+        auditTrail: [
+          {
+            timestamp: r.data || new Date().toISOString(),
+            userId: r.rawIntervention?.technicianId || 'system',
+            userName: r.tecnicos,
+            userAbbr: resolveTechInitials(r.tecnicos, null, null, users),
+            action: 'Registo Histórico (ERP)',
+            details: `Intervenção registada na área ${r.area} para ${r.equiTag}`
+          }
+        ]
+      }
+      setEditingTask(constructedTask)
+    }
+  }
+
   // Filtragem avançada por data, área, TAG, etc.
   const norm = (s: string | null | undefined) => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
   const inc = (val: string | null | undefined, f: string) => !f || norm(val).includes(norm(f))
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
+      if (!filterByExcelDate(r.data, excelDateFilter)) return false
+      if (!filterByExcelDate(r.inicio, excelInicioFilter)) return false
+      if (!filterByExcelDate(r.fim, excelFimFilter)) return false
       if (colF.dateFrom && r.data && r.data < colF.dateFrom) return false
       if (colF.dateTo && r.data && r.data > colF.dateTo) return false
       if (!inc(r.id, colF.id)) return false
@@ -209,9 +277,9 @@ export default function HistoryClient({
       if (!inc(r.causa, colF.causa)) return false
       return true
     })
-  }, [rows, colF])
+  }, [rows, colF, excelDateFilter, excelInicioFilter, excelFimFilter])
 
-  // Ordenação
+  // Ordenação pela coluna DATA por defeito
   const { sorted, sortKey, sortDir, toggleSort } = useTableSort<HistoryRow>(
     filtered,
     {
@@ -226,7 +294,7 @@ export default function HistoryClient({
       fim: (r) => r.fim,
       causa: (r) => r.causa,
     },
-    'id',
+    'data',
     'asc'
   )
 
@@ -261,55 +329,73 @@ export default function HistoryClient({
       </div>
 
       {/* Topo da página (Ecrã) */}
-      <div className="mb-4 flex items-start justify-between gap-3 no-print">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-2xl font-bold text-slate-900 truncate">Histórico de Intervenções (UR)</h1>
-          <p className="text-xs sm:text-sm text-slate-700 font-semibold mt-0.5">
-            A mostrar {sorted.length} / {rows.length} registo(s)
+      <div className="mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <span>Histórico de Intervenções (UR)</span>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+              {sorted.length} / {rows.length}
+            </span>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Registo detalhado de ordens de trabalho de avaria executadas
           </p>
         </div>
         {!isTechnician && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <button
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing}
+              className="btn-secondary flex items-center gap-1.5 text-xs font-bold px-3 py-2 cursor-pointer"
+            >
+              <Upload className="h-4 w-4 shrink-0 text-sky-500" />
+              <span>{importing ? 'A importar…' : 'Importar (.xls)'}</span>
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xls,.xlsx"
+              onChange={handleImportFile}
+              className="hidden"
+            />
             <button
               onClick={() => { setModalMode('print'); setModalOpen(true) }}
-              className="btn-secondary flex items-center gap-1.5 cursor-pointer"
+              className="btn-secondary flex items-center gap-1.5 text-xs font-bold px-3 py-2 cursor-pointer"
             >
               <Printer className="h-4 w-4 shrink-0" />
-              <span className="hidden sm:inline">Imprimir</span>
+              <span>Imprimir</span>
             </button>
             <button
               onClick={() => { setModalMode('export'); setModalOpen(true) }}
-              className="btn-secondary flex items-center gap-1.5 cursor-pointer"
+              className="btn-secondary flex items-center gap-1.5 text-xs font-bold px-3 py-2 cursor-pointer"
             >
               <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-400" />
-              <span className="hidden sm:inline">Exportar (.xlsx)</span>
+              <span>Exportar (.xls)</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* Painel de Filtros Avançados (Data, Área, TAG, Equipamento) */}
+      {importError && (
+        <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-xs text-red-700 font-medium no-print">
+          {importError}
+        </div>
+      )}
+      {importResult && (
+        <div className="mb-4 rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between text-xs text-green-800 font-medium no-print">
+          <span>
+            Importação de histórico concluída: {importResult.created} registos importados{importResult.skipped > 0 ? `, ${importResult.skipped} ignorados (vazios)` : ''}.
+          </span>
+          <button onClick={() => setImportResult(null)} className="text-green-500 hover:text-green-700 dark:hover:text-emerald-300 flex-shrink-0" aria-label="Dispensar">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Painel de Filtros Avançados (Área, TAG, Equipamento) */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 mb-3 shadow-sm no-print">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap text-xs font-bold text-slate-800 dark:text-slate-200">
-            <div className="flex items-center gap-1.5">
-              <span>Data De:</span>
-              <input
-                type="date"
-                value={colF.dateFrom}
-                onChange={(e) => setCol('dateFrom', e.target.value)}
-                className="input !text-xs !py-1 !px-2 !w-auto font-semibold bg-white border border-slate-300 rounded"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span>Até:</span>
-              <input
-                type="date"
-                value={colF.dateTo}
-                onChange={(e) => setCol('dateTo', e.target.value)}
-                className="input !text-xs !py-1 !px-2 !w-auto font-semibold bg-white border border-slate-300 rounded"
-              />
-            </div>
             <div className="flex items-center gap-1.5">
               <span>Área:</span>
               <select
@@ -386,8 +472,8 @@ export default function HistoryClient({
               <th className="px-1.5 py-1">
                 <input value={colF.id} onChange={(e) => setCol('id', e.target.value)} placeholder="000…" className={colFilterCls} />
               </th>
-              <th className="px-1.5 py-1">
-                <input value={colF.data} onChange={(e) => setCol('data', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+              <th className="px-1.5 py-1 relative">
+                <ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} />
               </th>
               <th className="px-1.5 py-1">
                 <select value={colF.area} onChange={(e) => setCol('area', e.target.value)} className={colFilterCls}>
@@ -431,11 +517,11 @@ export default function HistoryClient({
                   ))}
                 </select>
               </th>
-              <th className="px-1.5 py-1">
-                <input value={colF.inicio} onChange={(e) => setCol('inicio', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+              <th className="px-1.5 py-1 relative">
+                <ExcelColumnDateFilter values={excelInicioFilter} onChange={setExcelInicioFilter} />
               </th>
-              <th className="px-1.5 py-1">
-                <input value={colF.fim} onChange={(e) => setCol('fim', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
+              <th className="px-1.5 py-1 relative">
+                <ExcelColumnDateFilter values={excelFimFilter} onChange={setExcelFimFilter} />
               </th>
               <th className="px-1.5 py-1">
                 <input value={colF.causa} onChange={(e) => setCol('causa', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
@@ -471,11 +557,15 @@ export default function HistoryClient({
                     }`}
                   >
                     <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
-                      <Link href={`/dashboard/tasks/${r.rawId}`} className="bg-slate-100/90 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-slate-300 text-blue-800 hover:underline">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRow(r)}
+                        className="bg-slate-100/90 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-slate-300 text-blue-800 hover:underline cursor-pointer"
+                      >
                         {r.id}
-                      </Link>
+                      </button>
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-slate-800 font-semibold whitespace-nowrap">{r.data}</td>
+                    <td className="px-3 py-2.5 font-mono text-slate-800 font-semibold whitespace-nowrap">{formatDate(r.data, lang)}</td>
                     <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">{r.area}</td>
                     <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">{r.equiTag}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
@@ -484,9 +574,14 @@ export default function HistoryClient({
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-slate-900 font-semibold max-w-[280px]">
-                      <Link href={`/dashboard/tasks/${r.rawId}`} className="hover:text-blue-600 hover:underline line-clamp-2" title={r.avaria}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRow(r)}
+                        className="hover:text-blue-600 hover:underline text-left line-clamp-2 cursor-pointer font-semibold"
+                        title={r.avaria}
+                      >
                         {r.avaria}
-                      </Link>
+                      </button>
                     </td>
                     <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">{r.tecnicos}</td>
                     <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">{r.inicio}</td>
@@ -495,13 +590,14 @@ export default function HistoryClient({
                       <span className="line-clamp-2" title={r.causa}>{r.causa}</span>
                     </td>
                     <td className="px-3 py-2.5 text-center whitespace-nowrap no-print">
-                      <Link
-                        href={`/dashboard/tasks/${r.rawId}`}
-                        className="inline-flex items-center gap-1 bg-white hover:bg-slate-100 text-blue-700 font-bold border border-slate-300 px-2 py-1 rounded text-[11px] shadow-sm transition-colors"
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRow(r)}
+                        className="inline-flex items-center gap-1 bg-white hover:bg-slate-100 text-blue-700 font-bold border border-slate-300 px-2 py-1 rounded text-[11px] shadow-sm transition-colors cursor-pointer"
                       >
                         <FolderOpen className="h-3.5 w-3.5 text-blue-600" />
                         Abrir
-                      </Link>
+                      </button>
                     </td>
                   </tr>
                 )
@@ -558,6 +654,15 @@ export default function HistoryClient({
             tecnicos: f.tecnicos,
           }))
         }}
+      />
+
+      <CreateTaskModal
+        isOpen={editingTask !== null}
+        editingTask={editingTask}
+        onClose={() => setEditingTask(null)}
+        assets={assets}
+        users={users}
+        isManager={!isTechnician}
       />
     </div>
   )

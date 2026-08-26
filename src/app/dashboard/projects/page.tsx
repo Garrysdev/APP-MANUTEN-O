@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listTasks, listAssetRefs, listUsers, listMaintenancePlans } from '@/lib/firebase/data'
+import { planHas } from '@/lib/plans'
+import type { PlanName } from '@/types/models'
 import ProjectsClient from './ProjectsClient'
 
 export const dynamic = 'force-dynamic'
@@ -9,6 +11,8 @@ export default async function ProjectsPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
   if (profile.role !== 'manager') redirect('/dashboard/tasks')
+
+  const plan = (profile.company?.plan ?? 'free') as PlanName
 
   const [allTasks, assets, users, plans] = await Promise.all([
     listTasks(profile.companyId),

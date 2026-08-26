@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs'
 import type { MaintenancePlan, Task, Asset, User } from '@/types/models'
+import { compareDates } from '@/lib/utils'
 
 const CRITICIDADE_LABELS: Record<string, string> = {
   vermelho: 'Vermelho (Alta)',
@@ -103,8 +104,12 @@ export async function generateMaintenancePlanExcel(
     }
   })
 
-  // Adicionar Dados dos Planos
-  plans.forEach((plan, idx) => {
+  // Adicionar Dados dos Planos (Ordenados por DATA)
+  const sortedPlans = [...plans].sort((a, b) =>
+    compareDates(a.nextDueDate || a.calendarStartDate || a.createdAt, b.nextDueDate || b.calendarStartDate || b.createdAt)
+  )
+
+  sortedPlans.forEach((plan, idx) => {
     const asset = plan.assetId ? assetMap.get(plan.assetId) : null
     const area = plan.area || asset?.area || '—'
     const tag = plan.tag || asset?.tag || '—'
@@ -248,8 +253,10 @@ export async function generateTasksHistoryExcel(
     }
   })
 
-  // Ordenar tarefas por data (mais recentes primeiro)
-  const sortedTasks = [...tasks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+  // Ordenar tarefas por data (usando compareDates para ordenação robusta por DATA)
+  const sortedTasks = [...tasks].sort((a, b) =>
+    compareDates(a.plannedStartDate || a.createdAt, b.plannedStartDate || b.createdAt)
+  )
 
   sortedTasks.forEach((task, idx) => {
     const asset = task.assetId ? assetMap.get(task.assetId) : null

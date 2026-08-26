@@ -46,13 +46,22 @@ const STATUSES: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
 
 function parseTask(formData: FormData) {
   const title = String(formData.get('title') ?? '').trim()
-  if (!title) throw new Error('O título é obrigatório.')
+  if (!title) {
+    throw new Error('O Título / Descrição da Avaria é um campo obrigatório.')
+  }
 
   const assetId = String(formData.get('assetId') ?? '').trim() || null
 
   const criticidade = String(formData.get('criticidade') ?? 'verde') as TaskCriticidade
   const tipo = String(formData.get('tipo') ?? 'preventiva') as TipoTarefa
-  const status = String(formData.get('status') ?? 'pending') as TaskStatus
+  const rawStatus = String(formData.get('status') ?? 'pending') as TaskStatus
+  const dueDate = String(formData.get('dueDate') ?? '').trim() || null
+
+  let status = STATUSES.includes(rawStatus) ? rawStatus : 'pending'
+  // Se a data de conclusão/prazo foi apagada, a OT passa automaticamente para 'pending' (Pendente)
+  if (!dueDate && (status === 'done' || status === 'cancelled')) {
+    status = 'pending'
+  }
 
   function parseStringArray(key: string): string[] | null {
     try {
@@ -92,8 +101,9 @@ function parseTask(formData: FormData) {
     assignedToIds,
     criticidade: CRITICIDADES.includes(criticidade) ? criticidade : 'verde',
     tipo: TIPOS.includes(tipo) ? tipo : 'preventiva',
-    status: STATUSES.includes(status) ? status : 'pending',
-    dueDate: String(formData.get('dueDate') ?? '').trim() || null,
+    status,
+    dueDate,
+    completedAt: status === 'done' ? (dueDate || new Date().toISOString()) : null,
     plannedStartDate: String(formData.get('plannedStartDate') ?? '').trim() || null,
     observacoes: String(formData.get('observacoes') ?? '').trim() || null,
     safetyRules: parseStringArray('safetyRules'),
@@ -132,13 +142,15 @@ export async function createTaskAction(
   if (!profile) return { error: 'Sessão expirada.' }
   try {
     const parsed = parseTask(formData)
-    if (parsed.assetId && (!parsed.tag || !parsed.area)) {
-      const assetRefs = await listAssetRefs(profile.companyId)
-      const found = assetRefs.find((a) => a.id === parsed.assetId)
-      if (found) {
-        if (!parsed.tag && found.tag) parsed.tag = found.tag
-        if (!parsed.area && found.area) parsed.area = found.area
-      }
+    if (!parsed.assetId) {
+      parsed.assetId = parsed.tag || parsed.area || 'Geral'
+    }
+    const assetRefs = await listAssetRefs(profile.companyId)
+    const found = assetRefs.find((a) => a.id === parsed.assetId || (a.tag && parsed.tag && a.tag.toLowerCase().trim() === parsed.tag.toLowerCase().trim()))
+    if (found) {
+      parsed.assetId = found.id
+      if (!parsed.tag && found.tag) parsed.tag = found.tag
+      if (!parsed.area && found.area) parsed.area = found.area
     }
 
     if (parsed.addToMaintenancePlan && parsed.periodicidade) {

@@ -8,7 +8,7 @@ import { signOut } from 'firebase/auth'
 import { getFirebaseAuth } from '@/lib/firebase/client'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard, ClipboardList, Package, History, LogOut, X,
+  LayoutDashboard, ClipboardList, Package, History, LogOut, X, MessageSquare,
   Users, FileBarChart, CreditCard, Lock, UserCircle, Calendar, Wrench, Boxes, Activity, DollarSign, Brain, BookOpen,
   Plus, ShieldCheck, FolderKanban
 } from 'lucide-react'
@@ -47,6 +47,7 @@ const managerNavGroups: NavGroup[] = [
     items: [
       { href: '/dashboard',                    key: 'dashboard',       icon: LayoutDashboard },
       { href: '/dashboard/tasks',              key: 'tasks',           icon: ClipboardList },
+      { href: '/dashboard/messages',           key: 'messages',        icon: MessageSquare },
       { href: '/dashboard/users',              key: 'users',           icon: Users,          feature: 'users' },
       { href: '/dashboard/history',            key: 'history',         icon: History,        feature: 'history' },
     ]
@@ -93,18 +94,24 @@ const managerNavGroups: NavGroup[] = [
   }
 ]
 
-const techNavKeys: NavItem[] = [
-  { href: '/dashboard/tasks',   key: 'tasks',   icon: ClipboardList },
-  { href: '/dashboard/assets',  key: 'assets',  icon: Package, feature: 'assets' },
-  { href: '/dashboard/history', key: 'history', icon: History },
-  { href: '/dashboard/profile', key: 'profile', icon: UserCircle },
-]
-
-function isTechRole(role?: string | null): boolean {
+function isManagerRole(role?: string | null): boolean {
   if (!role) return false
   const r = role.toLowerCase().trim()
-  return r === 'technician' || r === 'tecnico' || r === 'técnico' || r === 'tech'
+  return r === 'manager' || r === 'gestor' || r === 'admin' || r === 'administrador'
 }
+
+function isTechRole(role?: string | null): boolean {
+  return !isManagerRole(role)
+}
+
+const techNavKeys: NavItem[] = [
+  { href: '/dashboard/tasks',    key: 'tasks',    icon: ClipboardList },
+  { href: '/dashboard/messages', key: 'messages', icon: MessageSquare },
+  { href: '/dashboard/assets',   key: 'assets',   icon: Package },
+  { href: '/dashboard/history',  key: 'history',  icon: History },
+  { href: '/dashboard/manual',   key: 'userManual', icon: BookOpen },
+  { href: '/dashboard/profile',  key: 'profile',  icon: UserCircle },
+]
 
 export default function Sidebar({ user, open: externalOpen, onOpenChange }: SidebarProps) {
   const pathname = usePathname()
@@ -121,7 +128,7 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
   const isTechnician = isTechRole(user.role)
   const isManager = !isTechnician
 
-  const plan = (user.company?.plan ?? 'free') as PlanName
+  const plan = (user.company?.plan ?? 'starter') as PlanName
   const lang = (user.language || 'pt') as Language
   const dict = dictionaries[lang] || dictionaries['pt']
 
@@ -143,8 +150,7 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
             <div className="flex flex-col gap-1">
               {group.items.map(({ href, key, icon: Icon, feature }) => {
                 const isLocked = !!feature && !planHas(plan, feature)
-                const isTeaser = !!feature && (TEASER_LIMITS[feature] ?? 0) > 0
-                const shouldBlockClick = isLocked && !isTeaser
+                const shouldBlockClick = isLocked
                 const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
                 const label = dict.sidebar[key as keyof typeof dict.sidebar] || key
 
@@ -231,18 +237,8 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
         <div className="px-6 flex items-center justify-between border-b border-outline/60 pb-4">
           <div className="flex flex-col items-start gap-1">
             <Image src="/logo-rg.png" alt="RG Maintenance" width={140} height={78} className="h-10 w-auto" priority />
-            <p className="font-mono text-[9px] text-industrial-blue-light bg-slate-200/50 px-1.5 py-0.5 rounded mt-1 w-fit font-bold">ID: 442-B</p>
           </div>
         </div>
-        
-        {isManager && (
-          <div className="px-6">
-            <button onClick={() => router.push('/dashboard/tasks')} className="w-full btn-primary h-10 uppercase text-[11px] tracking-widest font-bold">
-              <Plus size={16} />
-              Nova Ordem
-            </button>
-          </div>
-        )}
 
         <NavLinks />
         

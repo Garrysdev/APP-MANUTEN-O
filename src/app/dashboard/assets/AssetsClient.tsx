@@ -508,17 +508,22 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
       {lockedFeature && (
         <UpgradeModal feature={lockedFeature} isTeaser={true} onClose={() => setLockedFeature(null)} />
       )}
-      <div className="flex items-center justify-between mb-6 gap-2">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-100 truncate">{dict.assets.title}</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+            <span>{dict.assets.title}</span>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+              {shown.length} / {assets.length}
+            </span>
+          </h1>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-0.5">
-            {shown.length} / {assets.length}
+            Cadastro de equipamentos, QR Codes, manuais e histórico técnico
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           <button
             onClick={() => setShowQRScanner(true)}
-            className="bg-[#2E86C1] hover:bg-[#21618C] text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm shrink-0 active:scale-95 transition-all"
+            className="bg-[#2E86C1] hover:bg-[#21618C] text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-xs shrink-0 active:scale-95 transition-all"
             title="Digitalizar QR Code de equipamento"
           >
             <QrCode className="h-4 w-4 shrink-0 text-white stroke-[2.5]" />
@@ -529,7 +534,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
               setBatchSelectedIds(new Set(assets.map(a => a.id)))
               setShowBatchQRModal(true)
             }}
-            className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm shrink-0 active:scale-95 transition-all"
+            className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-xs shrink-0 active:scale-95 transition-all"
             title="Gerar e imprimir QR Codes em lote"
           >
             <Printer className="h-4 w-4 shrink-0 text-white stroke-[2.5]" />
@@ -538,14 +543,14 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
           <button
             onClick={() => importInputRef.current?.click()}
             disabled={importing}
-            className="btn-secondary flex items-center gap-1.5"
+            className="btn-secondary flex items-center gap-1.5 text-xs font-bold px-3 py-2"
           >
             <Upload className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">{importing ? dict.common.importing : dict.common.import}</span>
+            <span>{importing ? dict.common.importing : dict.common.import}</span>
           </button>
-          <button onClick={openCreate} className="btn-primary flex items-center gap-1.5">
+          <button onClick={openCreate} className="btn-primary flex items-center gap-1.5 text-xs font-bold px-3 py-2">
             <Plus className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">{dict.assets.newAsset}</span>
+            <span>{dict.assets.newAsset}</span>
           </button>
         </div>
         <input

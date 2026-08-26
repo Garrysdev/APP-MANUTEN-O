@@ -13,7 +13,7 @@ export default async function CalendarPage() {
   if (profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const plan = (profile.company?.plan ?? 'free') as PlanName
-  if (!planHas(plan, 'calendar')) redirect('/dashboard/billing')
+  if (!planHas(plan, 'calendar')) redirect('/dashboard/billing?feature=calendar')
 
   const [tasks, plans, assets, users] = await Promise.all([
     listTasks(profile.companyId),

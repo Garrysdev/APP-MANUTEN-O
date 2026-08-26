@@ -27,8 +27,8 @@ export async function GET(request: Request) {
       return new NextResponse(buffer as any, {
         status: 200,
         headers: {
-          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'Content-Disposition': `attachment; filename="PL-MAN-01 PLANO MANUTENÇÃO_2026.xlsx"`
+          'Content-Type': 'application/vnd.ms-excel',
+          'Content-Disposition': `attachment; filename="PL-MAN-01 PLANO MANUTENÇÃO_2026.xls"`
         }
       })
     }
@@ -38,8 +38,8 @@ export async function GET(request: Request) {
       return new NextResponse(buffer as any, {
         status: 200,
         headers: {
-          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'Content-Disposition': `attachment; filename="FR-MAN-09 MANUTENÇÃO_${dateStr}.xlsx"`
+          'Content-Type': 'application/vnd.ms-excel',
+          'Content-Disposition': `attachment; filename="FR-MAN-09 MANUTENÇÃO_${dateStr}.xls"`
         }
       })
     }

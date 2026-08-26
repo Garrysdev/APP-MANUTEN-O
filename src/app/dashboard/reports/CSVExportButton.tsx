@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Download } from 'lucide-react'
 import type { Task, Intervention } from '@/types/models'
 import { STATUS_LABELS, CRITICIDADE_LABELS, TIPO_LABELS } from '@/types/models'
+import { compareDates } from '@/lib/utils'
 
 function toCSV(rows: string[][]): string {
   return rows
@@ -37,7 +38,8 @@ export default function CSVExportButton({
 
   function exportTasks() {
     const header = ['ID', 'Título', 'Tipo', 'Criticidade', 'Estado', 'Equipamento', 'Responsável', 'Prazo', 'Criado em']
-    const rows = tasks.map((t) => [
+    const sortedTasks = [...tasks].sort((a, b) => compareDates(a.createdAt || a.plannedStartDate, b.createdAt || b.plannedStartDate))
+    const rows = sortedTasks.map((t) => [
       t.id,
       t.title,
       TIPO_LABELS[t.tipo] ?? t.tipo,
@@ -46,7 +48,7 @@ export default function CSVExportButton({
       assetMap[t.assetId ?? ''] ?? '',
       userMap[t.assignedTo ?? ''] ?? '',
       t.dueDate ?? '',
-      t.createdAt.split('T')[0],
+      t.createdAt ? t.createdAt.split('T')[0] : '',
     ])
     download(toCSV([header, ...rows]), `tarefas_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;')
     setOpen(false)
@@ -54,7 +56,8 @@ export default function CSVExportButton({
 
   function exportInterventions() {
     const header = ['ID', 'Ordem de Trabalho (OT)', 'Técnico', 'Início', 'Fim', 'Duração (min)', 'Observações']
-    const rows = interventions.map((iv) => {
+    const sortedInterventions = [...interventions].sort((a, b) => compareDates(a.startedAt || a.createdAt, b.startedAt || b.createdAt))
+    const rows = sortedInterventions.map((iv) => {
       const duration = iv.startedAt && iv.endedAt
         ? Math.round((new Date(iv.endedAt).getTime() - new Date(iv.startedAt).getTime()) / 60000)
         : ''

@@ -28,24 +28,33 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
   if (!session) return null
 
   const userEmail = (session.email || '').toLowerCase().trim()
-  const isRGAdmin = userEmail.includes('garrido.rui') || userEmail.includes('garrido') || userEmail.includes('rgmaintenance') || !userEmail
+  const isRGAdmin = userEmail === 'garrido.rui@gmail.com' || userEmail === 'admin@rgmaintenance.com'
 
   try {
     const db = adminDb()
-    const userSnap = await db.collection('users').doc(session.uid).get()
+    let userSnap = await db.collection('users').doc(session.uid).get()
     
+    // Se o documento por session.uid não existir no Firestore, procurar por email
+    if (!userSnap.exists && userEmail) {
+      const emailSnap = await db.collection('users').where('email', '==', userEmail).limit(1).get().catch(() => null)
+      if (emailSnap && !emailSnap.empty) {
+        userSnap = emailSnap.docs[0]
+      }
+    }
+
     if (!userSnap.exists) {
-      const targetCompanyId = isRGAdmin ? DEMO_COMPANY_ID : (session.companyId || `company_${session.uid}`)
+      const targetCompanyId = (session as any).companyId || DEMO_COMPANY_ID
+      const fallbackRole = isRGAdmin ? 'manager' : 'technician'
       return {
         id: session.uid,
         email: session.email || '',
-        name: session.name || 'Rui Garrido',
-        role: 'manager',
+        name: session.name || 'Utilizador',
+        role: fallbackRole,
         companyId: targetCompanyId,
         company: {
           id: targetCompanyId,
-          name: isRGAdmin ? 'Empresa UR' : 'Minha Empresa',
-          plan: 'starter',
+          name: 'Empresa UR',
+          plan: 'enterprise',
           activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
           aiCredits: 100
         }
@@ -54,10 +63,9 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
 
     const docData = userSnap.data() || {}
     const rawRole = (docData.role as string)?.toLowerCase()?.trim()
-    const userRole = isRGAdmin ? 'manager' : ((rawRole === 'technician' || rawRole === 'tecnico' || rawRole === 'tech') ? 'technician' : 'manager')
+    const userRole = (rawRole === 'technician' || rawRole === 'tecnico' || rawRole === 'técnico' || rawRole === 'tech') ? 'technician' : 'manager'
 
-    // Garantir que a conta admin (garrido.rui) ou utilizadores sem empresa usam a Empresa UR por defeito
-    const companyId = isRGAdmin ? DEMO_COMPANY_ID : (docData.companyId || DEMO_COMPANY_ID)
+    const companyId = docData.companyId || DEMO_COMPANY_ID
 
     const user = { 
       id: userSnap.id, 
@@ -74,15 +82,15 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
       user.company = { 
         id: companySnap.id, 
         name: c.name || 'Empresa UR', 
-        plan: c.plan || 'starter', 
-        activeModules: c.activeModules && c.activeModules.length > 0 ? c.activeModules : ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
+        plan: (isRGAdmin || companyId === DEMO_COMPANY_ID) ? 'enterprise' : (c.plan || 'starter'), 
+        activeModules: c.activeModules || ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
         aiCredits: c.aiCredits || 100 
       }
     } else {
       user.company = {
         id: companyId,
         name: isRGAdmin ? 'Empresa UR' : 'Minha Empresa',
-        plan: 'starter',
+        plan: (isRGAdmin || companyId === DEMO_COMPANY_ID) ? 'enterprise' : 'starter',
         activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
         aiCredits: 100
       }
@@ -91,17 +99,18 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
     return user
   } catch (err: any) {
     console.error('[getCurrentProfile] Firestore query error:', err?.message || err)
-    const targetCompanyId = isRGAdmin ? DEMO_COMPANY_ID : (session.companyId || DEMO_COMPANY_ID)
+    const targetCompanyId = isRGAdmin ? DEMO_COMPANY_ID : ((session as any).companyId || DEMO_COMPANY_ID)
+    const fallbackRole = isRGAdmin ? 'manager' : 'technician'
     return {
       id: session.uid,
       email: session.email || '',
-      name: session.name || 'Rui Garrido',
-      role: 'manager',
+      name: session.name || 'Utilizador',
+      role: fallbackRole,
       companyId: targetCompanyId,
       company: {
         id: targetCompanyId,
         name: isRGAdmin ? 'Empresa UR' : 'Minha Empresa',
-        plan: 'starter',
+        plan: (isRGAdmin || targetCompanyId === DEMO_COMPANY_ID) ? 'enterprise' : 'starter',
         activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
         aiCredits: 100
       }

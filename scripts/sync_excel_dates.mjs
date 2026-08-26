@@ -146,6 +146,18 @@ async function run() {
             opCounter = 0
           }
         }
+
+        // Atualizar também intervenções associadas a esta OT no Firestore
+        const intSnap = await db.collection('interventions').where('companyId', '==', cid).where('taskId', '==', docId).get()
+        for (const intDoc of intSnap.docs) {
+          const intUpdates = {}
+          if (matched.data) intUpdates.createdAt = matched.data
+          if (matched.inicio) intUpdates.startedAt = matched.inicio
+          if (matched.fim) intUpdates.endedAt = matched.fim
+          if (Object.keys(intUpdates).length > 0) {
+            await intDoc.ref.update(intUpdates)
+          }
+        }
       }
     }
 

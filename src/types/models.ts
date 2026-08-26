@@ -160,10 +160,25 @@ export interface Task {
   requesterEmail?: string | null // Email do Solicitante / Requerente PI
   closureNotes?: string | null // Relatório de fecho (o que foi feito)
   sendClosureEmail?: boolean | null // Indicação se foi notificado por email
+  source?: string | null // Origem da tarefa (ex: folha_ur_historico)
   createdBy: string
   createdByName?: string | null // Nome do utilizador que criou/abriu a OT
+  createdByAbbr?: string | null // Abreviatura do utilizador que criou a OT
   createdAt: string
+  updatedBy?: string | null // ID do utilizador que fez a última alteração ERP
+  updatedByName?: string | null // Nome do utilizador que fez a última alteração ERP
+  updatedByAbbr?: string | null // Abreviatura do utilizador que alterou
   updatedAt: string
+  auditTrail?: TaskAuditEntry[] | null // Registo auditado ERP de histórico de edições/criação
+}
+
+export interface TaskAuditEntry {
+  timestamp: string // Data e hora ISO
+  userId: string // ID do utilizador
+  userName: string // Nome do utilizador
+  userAbbr?: string | null // Iniciais do utilizador (ex: LM, RG, MS)
+  action: string // Ação realizada (ex: "Criação de OT", "Edição de Dados", "Fecho de OT")
+  details?: string | null // Detalhes da alteração
 }
 
 export interface SafetyRule {
@@ -368,4 +383,35 @@ export function periodicidadeToRecurrence(
     case 'horas': return { recurrence: 'monthly', recurrenceValue: 1 }
     case 'pontual': return { recurrence: 'annual', recurrenceValue: 1 }
   }
+}
+
+export interface AppNotification {
+  id: string
+  companyId: string
+  userId: string // ID do técnico/utilizador destinatário
+  title: string
+  body: string
+  type: 'task_assigned' | 'internal_message' | 'task_status' | 'system'
+  link?: string | null
+  read: boolean
+  createdAt: string
+  senderName?: string | null
+  senderAbbr?: string | null
+}
+
+export interface InternalMessage {
+  id: string
+  companyId: string
+  senderId: string
+  senderName: string
+  senderAbbr?: string | null
+  recipientIds: string[] // IDs dos técnicos ou ['ALL']
+  recipientNames?: string | null
+  subject?: string | null
+  content: string
+  taskId?: string | null
+  taskTitle?: string | null
+  photoUrl?: string | null
+  createdAt: string
+  readBy?: string[]
 }

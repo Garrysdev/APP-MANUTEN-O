@@ -17,7 +17,7 @@ export default async function ReportsPage() {
   if (profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const plan = profile.company?.plan ?? 'free'
-  if (!planHas(plan, 'reports')) redirect('/dashboard/billing')
+  if (!planHas(plan, 'reports')) redirect('/dashboard/billing?feature=reports')
 
   const [tasks, assets, interventions, users] = await Promise.all([
     listTasks(profile.companyId),

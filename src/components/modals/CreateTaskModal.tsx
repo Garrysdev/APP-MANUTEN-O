@@ -9,10 +9,11 @@ import type { Task, TaskCriticidade, TipoTarefa, User, Asset, Periodicidade } fr
 import { TIPO_LABELS, CRITICIDADE_LABELS, STATUS_LABELS } from '@/types/models'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
+import { formatDate, formatDateTime } from '@/lib/utils'
 import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
 import MaterialsSelector from '@/components/ui/MaterialsSelector'
 import { TaskDocPickerManager } from '@/components/ui/TaskDocRequirements'
-import { createTaskAction, type StockMaterialRef } from '@/app/dashboard/tasks/actions'
+import { createTaskAction, updateTaskAction, type StockMaterialRef } from '@/app/dashboard/tasks/actions'
 
 export const PREDEFINED_SAFETY_RULES = [
   'EPI: Capacete',
@@ -132,6 +133,7 @@ function DynamicList({
 export interface CreateTaskModalProps {
   isOpen: boolean
   onClose: () => void
+  editingTask?: Task | null
   initialAssetId?: string | null
   assets: any[]
   users: any[]
@@ -143,6 +145,7 @@ export interface CreateTaskModalProps {
 export default function CreateTaskModal({
   isOpen,
   onClose,
+  editingTask = null,
   initialAssetId = '',
   assets,
   users,
@@ -178,7 +181,29 @@ export default function CreateTaskModal({
 
   useEffect(() => {
     if (isOpen) {
-      if (initialAssetId) setAssetId(initialAssetId)
+      if (editingTask) {
+        setTitle(editingTask.title || '')
+        setTipo(editingTask.tipo || 'preventiva')
+        setCriticidade(editingTask.criticidade || 'verde')
+        setAssetId(editingTask.assetId || editingTask.tag || initialAssetId || '')
+        const techIds = (editingTask.assignedToIds && editingTask.assignedToIds.length > 0)
+          ? editingTask.assignedToIds
+          : (editingTask.assignedTo ? [editingTask.assignedTo] : [])
+        setSelectedTechIds(techIds)
+        setPlannedStartDate(editingTask.plannedStartDate ? editingTask.plannedStartDate.slice(0, 16) : '')
+        setDueDate(editingTask.dueDate ? editingTask.dueDate.slice(0, 10) : '')
+        setDescription(editingTask.description || '')
+        setObservacoes(editingTask.observacoes || editingTask.observations || '')
+        setStatus(editingTask.status || 'pending')
+        setSafetyRules(editingTask.safetyRules?.length ? editingTask.safetyRules : [])
+        setMaterialsRequired(editingTask.materialsRequired?.length ? editingTask.materialsRequired : [])
+        setRequiredFRs(editingTask.requiredFRs || [])
+        setRequiredITs(editingTask.requiredITs || [])
+        setRequesterEmail(editingTask.requesterEmail || '')
+        setPhotoPreview(editingTask.photoUrl || (editingTask.photoUrls && editingTask.photoUrls[0]) || null)
+      } else {
+        if (initialAssetId) setAssetId(initialAssetId)
+      }
     } else {
       // Reset form on close
       setTitle('')
@@ -203,7 +228,7 @@ export default function CreateTaskModal({
       setError('')
       setBusy(false)
     }
-  }, [isOpen, initialAssetId])
+  }, [isOpen, initialAssetId, editingTask])
 
   if (!isOpen) return null
 
@@ -220,7 +245,11 @@ export default function CreateTaskModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!title.trim()) {
-      setError('O título da OT é obrigatório.')
+      setError('⚠️ O Título / Descrição da Avaria é um campo obrigatório (*). Por favor preencha o título antes de guardar.')
+      return
+    }
+    if (!assetId.trim()) {
+      setError('⚠️ A Seleção do Equipamento / TAG é um campo obrigatório (*). Por favor selecione a Área e a TAG do equipamento.')
       return
     }
 
@@ -248,8 +277,20 @@ export default function CreateTaskModal({
       formData.set('addToMaintenancePlan', addToPmModal ? 'true' : 'false')
       formData.set('periodicidade', periodicidadeModal)
       formData.set('requesterEmail', requesterEmail.trim())
+      if (!dueDate.trim() && (status === 'done' || status === 'cancelled' || editingTask?.status === 'done' || editingTask?.status === 'cancelled')) {
+        formData.set('status', 'pending')
+      } else {
+        formData.set('status', status)
+      }
 
-      const result = await createTaskAction({}, formData)
+      if (editingTask) {
+        formData.set('id', editingTask.id)
+      }
+
+      const result = editingTask
+        ? await updateTaskAction({}, formData)
+        : await createTaskAction({}, formData)
+
       setBusy(false)
 
       if (result.error) {
@@ -509,7 +550,13 @@ export default function CreateTaskModal({
                 type="date"
                 name="dueDate"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setDueDate(val)
+                  if (!val.trim() && (status === 'done' || status === 'cancelled' || editingTask?.status === 'done' || editingTask?.status === 'cancelled')) {
+                    setStatus('pending')
+                  }
+                }}
                 className="input"
               />
             </div>
@@ -667,6 +714,59 @@ export default function CreateTaskModal({
               onChangeFRs={setRequiredFRs}
               onChangeITs={setRequiredITs}
             />
+          )}
+
+          {/* SECÇÃO REGISTO ERP & AUDITORIA */}
+          {editingTask && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Wrench className="h-4 w-4 text-industrial-blue dark:text-sky-400" />
+                  Registo ERP & Auditoria (Histórico de Alterações)
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800 font-medium">
+                <div>
+                  <span className="text-slate-500 block text-[10px]">👤 Criado por:</span>
+                  <strong className="text-slate-900 dark:text-slate-100">
+                    {editingTask.createdByName || editingTask.createdBy || 'Sistema (Excel)'}
+                    {editingTask.createdByAbbr ? ` (${editingTask.createdByAbbr})` : ''}
+                  </strong>
+                  <span className="text-slate-500 text-[10px] block font-mono">
+                    {formatDateTime(editingTask.createdAt)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px]">✏️ Última Alteração por:</span>
+                  <strong className="text-slate-900 dark:text-slate-100">
+                    {editingTask.updatedByName || editingTask.updatedBy || editingTask.createdByName || 'Sistema'}
+                    {editingTask.updatedByAbbr ? ` (${editingTask.updatedByAbbr})` : ''}
+                  </strong>
+                  <span className="text-slate-500 text-[10px] block font-mono">
+                    {formatDateTime(editingTask.updatedAt || editingTask.createdAt)}
+                  </span>
+                </div>
+              </div>
+
+              {editingTask.auditTrail && editingTask.auditTrail.length > 0 && (
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Linha do Tempo de Auditoria:</span>
+                  {editingTask.auditTrail.map((entry, i) => (
+                    <div key={i} className="text-[11px] p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-0.5 shadow-xs">
+                      <div className="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200">
+                        <span>{entry.action}</span>
+                        <span className="font-mono text-[10px] text-slate-500">{formatDateTime(entry.timestamp)}</span>
+                      </div>
+                      <div className="text-slate-600 dark:text-slate-300">
+                        Utilizador: <strong>{entry.userName}{entry.userAbbr ? ` (${entry.userAbbr})` : ''}</strong>
+                      </div>
+                      {entry.details && <div className="text-[10px] text-slate-500 font-mono italic">{entry.details}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {error && (

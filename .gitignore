@@ -8,9 +8,11 @@
 /.next/
 /out/
 
-# Ambiente (NUNCA commitar este ficheiro)
-.env.local
-.env.*.local
+# Ambiente (NUNCA commitar estes ficheiros)
+.env
+.env*
+.env.*
+*.bak*
 
 # Debug
 npm-debug.log*

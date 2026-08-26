@@ -44,8 +44,14 @@ export default async function DashboardPage() {
     listUsers(profile.companyId),
   ])
 
-  const internalTechs = usersList.filter(u => u.role === 'technician' && u.active !== false && !u.isExternal);
-  const externalTechs = usersList.filter(u => u.role === 'technician' && u.active !== false && u.isExternal === true);
+  const isTech = (role?: string | null) => {
+    const r = (role || '').toLowerCase().trim()
+    return r === 'technician' || r === 'tecnico' || r === 'técnico' || r === 'tech'
+  }
+
+  const activeUsers = usersList.filter(u => u.active !== false)
+  const internalTechs = activeUsers.filter(u => isTech(u.role) && !u.isExternal)
+  const externalTechs = activeUsers.filter(u => isTech(u.role) && u.isExternal === true)
   
   const isProject = (t: any) =>
     t.source === 'folha_projetos' ||
@@ -100,7 +106,7 @@ export default async function DashboardPage() {
       </div>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-        <Link href="/dashboard/tasks" className="block">
+        <Link href="/dashboard/tasks?status=pending,in_progress" className="block">
           <div className="bg-white border border-outline rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-safety-orange/40 transition-all cursor-pointer group h-[125px]">
             <div className="flex justify-between items-start">
               <span className="font-mono text-[11px] font-bold text-industrial-blue-light uppercase tracking-wider group-hover:text-safety-orange transition-colors">Ordens Ativas</span>

@@ -13,7 +13,9 @@ import {
   CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS,
   PERIODICIDADE_LABELS, EXECUTOR_LABELS,
 } from '@/types/models'
+import ExcelJS from 'exceljs'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
+import { compareDates, toNormalizedIsoDate } from '@/lib/utils'
 import {
   createMaintenancePlanAction,
   updateMaintenancePlanAction,
@@ -28,6 +30,7 @@ import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { TipoBadge } from '@/components/ui/TipoBadge'
 import { PREDEFINED_SAFETY_RULES } from '../tasks/TasksClient'
+import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 
 export function isPlanGanttActive(p: MaintenancePlan): boolean {
   if (p.includeInGantt !== undefined && p.includeInGantt !== null) {
@@ -334,22 +337,72 @@ export default function MaintenancePlanClient({
     }
   }
 
-  function handleExportCSV() {
-    const header = ['ÁREA', 'TAG', 'SISTEMA', 'EQUIPAMENTO', 'AÇÃO / TAREFA', 'DESCRIÇÃO', 'PERIODICIDADE', 'CAT', 'EXECUTOR', 'ESTADO']
-    const rows = shown.map((p) => [
-      p.area ?? '',
-      getPlanTag(p),
-      p.system ?? '',
-      assetName(p.assetId),
-      p.title,
-      p.description ?? '',
-      p.periodicidade ? PERIODICIDADE_LABELS[p.periodicidade] : '',
-      CRITICIDADE_LABELS[p.criticidade],
-      p.executor ? EXECUTOR_LABELS[p.executor] : EXECUTOR_LABELS.interno,
-      p.active ? 'Ativo' : 'Inativo',
-    ])
+  async function handleExportXLS() {
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Plano de Manutenção', { views: [{ showGridLines: true }] })
+
+    sheet.mergeCells('A1:M1')
+    const titleCell = sheet.getCell('A1')
+    titleCell.value = 'PL-MAN-01 PLANO DE MANUTENÇÃO PREVENTIVA'
+    titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFFFF' } }
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B4F72' } }
+    titleCell.alignment = { vertical: 'middle', horizontal: 'center' }
+    sheet.getRow(1).height = 32
+
+    const headers = ['ÁREA', 'TAG', 'SISTEMA', 'EQUIPAMENTO', 'AÇÃO / TAREFA', 'DESCRIÇÃO', 'PERIODICIDADE', 'CRITICIDADE', 'EXECUTOR', 'OBRIGATÓRIA (LEGAL)', 'REGRAS DE SEGURANÇA', 'PRÓXIMA DATA / AGENDAMENTO', 'ESTADO']
+    const headerRow = sheet.getRow(3)
+    headerRow.values = headers
+    headerRow.height = 26
+    headerRow.eachCell((cell) => {
+      cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E86C1' } }
+      cell.alignment = { vertical: 'middle', horizontal: 'center' }
+    })
+
+    const sortedPlans = [...shown].sort((a, b) =>
+      compareDates(a.nextDueDate || a.calendarStartDate || a.createdAt, b.nextDueDate || b.calendarStartDate || b.createdAt)
+    )
+
+    sortedPlans.forEach((p) => {
+      const row = sheet.addRow([
+        p.area ?? '—',
+        getPlanTag(p) || '—',
+        p.system ?? '—',
+        assetName(p.assetId) || 'Vários / Geral',
+        p.title,
+        p.description ?? '—',
+        periodLabel(p),
+        CRITICIDADE_LABELS[p.criticidade] || p.criticidade,
+        p.executor ? EXECUTOR_LABELS[p.executor] : EXECUTOR_LABELS.interno,
+        p.legal ? 'SIM' : 'NÃO',
+        p.safetyRules ? p.safetyRules.join('; ') : '—',
+        p.nextDueDate || p.calendarStartDate ? formatDate(p.nextDueDate || p.calendarStartDate) : '—',
+        p.active ? 'Ativo' : 'Inativo',
+      ])
+      row.height = 20
+      row.eachCell((cell) => {
+        cell.font = { name: 'Arial', size: 9 }
+      })
+    })
+
+    sheet.columns.forEach((col) => {
+      let maxLen = 10
+      col.eachCell?.({ includeEmpty: false }, (cell) => {
+        const len = String(cell.value || '').length
+        if (len > maxLen && len < 50) maxLen = len
+      })
+      col.width = Math.max(maxLen + 4, 10)
+    })
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.ms-excel' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
     const date = new Date().toISOString().split('T')[0]
-    downloadCSV(toCSV([header, ...rows]), `plano_manutencao_${date}.csv`)
+    a.href = url
+    a.download = `PL-MAN-01_PLANO_MANUTENCAO_${date}.xls`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   // ── Filtragem por coluna (estilo Excel) ──
@@ -357,8 +410,12 @@ export default function MaintenancePlanClient({
   const inc = (val: string | null | undefined, f: string) =>
     !f || norm(val).includes(norm(f))
 
+  const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+
   const filtered = useMemo(() => {
     return plans.filter((p) => {
+      const planDate = p.nextDueDate || p.calendarStartDate || p.createdAt
+      if (!filterByExcelDate(planDate, excelDateFilter)) return false
       if (colF.area && norm(p.area) !== norm(colF.area)) return false
       if (colF.tag && norm(getPlanTag(p)) !== norm(colF.tag)) return false
       if (!inc(p.system, colF.system)) return false
@@ -382,7 +439,7 @@ export default function MaintenancePlanClient({
 
       return true
     })
-  }, [plans, colF, fLegal, fCalendar, fGantt, assetMap, assetTagMap])
+  }, [plans, colF, fLegal, fCalendar, fGantt, assetMap, assetTagMap, excelDateFilter])
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
@@ -401,6 +458,7 @@ export default function MaintenancePlanClient({
       crit: (p) => p.criticidade,
       executor: (p) => (p.executor ? EXECUTOR_LABELS[p.executor] : ''),
       estado: (p) => (p.active ? 0 : 1),
+      data: (p) => toNormalizedIsoDate(p.nextDueDate || p.calendarStartDate || p.createdAt),
     },
     'title',
   )
@@ -451,19 +509,19 @@ export default function MaintenancePlanClient({
             <FileSpreadsheet className="h-4 w-4 shrink-0" />
             <span>Backup Excel (Planos + OTs)</span>
           </button>
-          <button onClick={handleExportCSV} className="btn-secondary flex items-center gap-1.5">
-            <Download className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Exportar CSV</span>
+          <button onClick={handleExportXLS} className="btn-secondary flex items-center gap-1.5 cursor-pointer">
+            <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-500" />
+            <span className="hidden sm:inline">Exportar Excel (.xls)</span>
           </button>
           <button
             onClick={() => importInputRef.current?.click()}
             disabled={importing}
-            className="btn-secondary flex items-center gap-1.5"
+            className="btn-secondary flex items-center gap-1.5 cursor-pointer"
           >
             <Upload className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">{importing ? dict.common.importing : dict.common.import}</span>
           </button>
-          <input ref={importInputRef} type="file" accept=".xlsx" onChange={handleImportFile} className="hidden" />
+          <input ref={importInputRef} type="file" accept=".xls,.xlsx" onChange={handleImportFile} className="hidden" />
           <button onClick={openCreate} className="btn-primary flex items-center gap-1.5">
             <Plus className="h-4 w-4 shrink-0" />
             <span>Criar Tarefa</span>

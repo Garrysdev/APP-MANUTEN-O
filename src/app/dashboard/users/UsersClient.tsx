@@ -82,7 +82,10 @@ export default function UsersClient({
       if (activeTab === 'external' && !u.isExternal) return false
       if (filterActive === 'active' && !u.active) return false
       if (filterActive === 'inactive' && u.active) return false
-      if (filterRole !== 'all' && u.role !== filterRole) return false
+      const roleStr = String(u.role || '').toLowerCase().trim()
+      const isTechUser = roleStr === 'technician' || roleStr === 'tecnico' || roleStr === 'técnico' || roleStr === 'tech'
+      if (filterRole === 'technician' && !isTechUser) return false
+      if (filterRole === 'manager' && isTechUser) return false
       if (filterSpecialty !== 'all' && (u.specialty || '') !== filterSpecialty) return false
       if (searchAbbr.trim() && !(u.abbreviation || '').toLowerCase().includes(searchAbbr.toLowerCase().trim())) return false
       if (searchName.trim()) {
@@ -270,7 +273,7 @@ export default function UsersClient({
   return (
     <div className="space-y-4">
       {/* Navegação entre Técnicos Internos vs Prestadores Externos */}
-      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-slate-800 pb-2">
+      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-slate-800 pb-2 flex-wrap sm:flex-nowrap">
         <button
           onClick={() => setActiveTab('internal')}
           className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-colors ${

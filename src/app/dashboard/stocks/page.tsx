@@ -13,6 +13,7 @@ export default async function StocksPage() {
   if (profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const plan = (profile.company?.plan ?? 'free') as PlanName
+  if (!planHas(plan, 'stocks')) redirect('/dashboard/billing?feature=stocks')
 
   const [items, assets] = await Promise.all([
     listStockItems(profile.companyId),

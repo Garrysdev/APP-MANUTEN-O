@@ -5,11 +5,13 @@ import { Printer, Download, X, Eye, FileSpreadsheet, ArrowLeft, Filter } from 'l
 import ExcelJS from 'exceljs'
 import type { Intervention, Material, Task } from '@/types/models'
 import { TIPO_LABELS } from '@/types/models'
+import { compareDates, toNormalizedIsoDate, formatDate } from '@/lib/utils'
+import { useLanguage } from '@/components/providers/LanguageProvider'
 import type { HistoryRow } from './HistoryClient'
 
 async function downloadXLSX(workbook: ExcelJS.Workbook, filename: string) {
   const buffer = await workbook.xlsx.writeBuffer()
-  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const blob = new Blob([buffer], { type: 'application/vnd.ms-excel' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -48,6 +50,7 @@ export default function HistoryExportModal({
     tecnicos: string
   }) => void
 }) {
+  const { lang } = useLanguage()
   const [mode, setMode] = useState<'print' | 'export'>(initialMode)
   const [contentType, setContentType] = useState<'interventions' | 'materials' | 'backup'>('interventions')
 
@@ -79,15 +82,17 @@ export default function HistoryExportModal({
   const inc = (val: string | null | undefined, f: string) => !f || norm(val).includes(norm(f))
 
   const filteredPreview = useMemo(() => {
-    return allRows.filter((r) => {
-      if (dateFrom && r.data && r.data < dateFrom) return false
-      if (dateTo && r.data && r.data > dateTo) return false
-      if (area && norm(r.area) !== norm(area) && !norm(r.area).includes(norm(area))) return false
-      if (equiTag && norm(r.equiTag) !== norm(equiTag) && !norm(r.equiTag).includes(norm(equiTag))) return false
-      if (ti && norm(r.ti) !== norm(ti)) return false
-      if (tecnicos && norm(r.tecnicos) !== norm(tecnicos) && !norm(r.tecnicos).includes(norm(tecnicos))) return false
-      return true
-    })
+    return allRows
+      .filter((r) => {
+        if (dateFrom && r.data && r.data < dateFrom) return false
+        if (dateTo && r.data && r.data > dateTo) return false
+        if (area && norm(r.area) !== norm(area) && !norm(r.area).includes(norm(area))) return false
+        if (equiTag && norm(r.equiTag) !== norm(equiTag) && !norm(r.equiTag).includes(norm(equiTag))) return false
+        if (ti && norm(r.ti) !== norm(ti)) return false
+        if (tecnicos && norm(r.tecnicos) !== norm(tecnicos) && !norm(r.tecnicos).includes(norm(tecnicos))) return false
+        return true
+      })
+      .sort((a, b) => compareDates(a.data, b.data))
   }, [allRows, dateFrom, dateTo, area, equiTag, ti, tecnicos])
 
   function resetFilters() {
@@ -188,7 +193,7 @@ export default function HistoryExportModal({
         })
 
         const date = new Date().toISOString().split('T')[0]
-        await downloadXLSX(workbook, `HISTORICO_MATERIAIS_${date}.xlsx`)
+        await downloadXLSX(workbook, `HISTORICO_MATERIAIS_${date}.xls`)
       } else {
         // Intervenções (Padrão)
         const sheet = workbook.addWorksheet('Histórico de Intervenções', { views: [{ showGridLines: true }] })
@@ -229,7 +234,7 @@ export default function HistoryExportModal({
 
         filteredPreview.forEach((r, idx) => {
           const row = sheet.addRow([
-            r.id, r.data, r.area, r.equiTag, r.ti, r.avaria, r.tecnicos, r.inicio, r.fim, r.causa
+            r.id, formatDate(r.data, lang), r.area, r.equiTag, r.ti, r.avaria, r.tecnicos, r.inicio, r.fim, r.causa
           ])
           row.height = 20
           const isEven = idx % 2 === 0
@@ -257,7 +262,7 @@ export default function HistoryExportModal({
         })
 
         const date = new Date().toISOString().split('T')[0]
-        await downloadXLSX(workbook, `FR-MAN-09_HISTORICO_INTERVENCOES_${date}.xlsx`)
+        await downloadXLSX(workbook, `FR-MAN-09_HISTORICO_INTERVENCOES_${date}.xls`)
       }
 
       onApplyFiltersToPage({ dateFrom, dateTo, area, equiTag, ti, tecnicos })
@@ -280,7 +285,7 @@ export default function HistoryExportModal({
           <div className="flex items-center gap-2">
             <Filter className="h-5 w-5 text-[#2E86C1]" />
             <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
-              {mode === 'print' ? 'Opções de Impressão de Histórico' : 'Opções de Exportação Excel (.xlsx)'}
+              {mode === 'print' ? 'Opções de Impressão de Histórico' : 'Opções de Exportação Excel (.xls)'}
             </h2>
           </div>
           <button
@@ -314,7 +319,7 @@ export default function HistoryExportModal({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
               }`}
             >
-              <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Exportar Excel (.xlsx)
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Exportar Excel (.xls)
             </button>
           </div>
 
@@ -431,7 +436,7 @@ export default function HistoryExportModal({
                       onChange={() => setContentType('interventions')}
                       className="text-emerald-600 focus:ring-emerald-500"
                     />
-                    <span>Histórico de Intervenções (.xlsx)</span>
+                    <span>Histórico de Intervenções (.xls)</span>
                   </label>
 
                   <label className="flex items-center gap-1.5 cursor-pointer">
@@ -442,7 +447,7 @@ export default function HistoryExportModal({
                       onChange={() => setContentType('materials')}
                       className="text-emerald-600 focus:ring-emerald-500"
                     />
-                    <span>Materiais Utilizados (.xlsx)</span>
+                    <span>Materiais Utilizados (.xls)</span>
                   </label>
 
                   <label className="flex items-center gap-1.5 cursor-pointer">
@@ -496,7 +501,7 @@ export default function HistoryExportModal({
                     {filteredPreview.slice(0, 30).map((r, idx) => (
                       <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                         <td className="px-2 py-1.5 font-mono font-bold text-slate-900 dark:text-slate-100">{r.id}</td>
-                        <td className="px-2 py-1.5 font-mono text-slate-700 dark:text-slate-300">{r.data}</td>
+                        <td className="px-2 py-1.5 font-mono text-slate-700 dark:text-slate-300">{formatDate(r.data, lang)}</td>
                         <td className="px-2 py-1.5 font-mono font-semibold">{r.area}</td>
                         <td className="px-2 py-1.5 font-semibold truncate">{r.equiTag}</td>
                         <td className="px-2 py-1.5 font-bold text-blue-700 dark:text-blue-400">{r.ti}</td>
@@ -540,7 +545,7 @@ export default function HistoryExportModal({
                 disabled={filteredPreview.length === 0 || busy}
                 className="px-5 py-2 rounded-lg text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer"
               >
-                <FileSpreadsheet className="h-4 w-4" /> {busy ? 'A gerar Excel…' : `Exportar Excel (.xlsx)`}
+                <FileSpreadsheet className="h-4 w-4" /> {busy ? 'A gerar Excel…' : `Exportar Excel (.xls)`}
               </button>
             )}
           </div>

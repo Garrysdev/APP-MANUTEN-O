@@ -3,6 +3,7 @@
 import { Bell, Search, Settings, Menu } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import NotificationBell from './NotificationBell'
 
 export default function TopHeader({ user, onMenuClick }: { user: any, onMenuClick?: () => void }) {
   const router = useRouter()
@@ -25,9 +26,7 @@ export default function TopHeader({ user, onMenuClick }: { user: any, onMenuClic
           height={56}
           className="lg:hidden h-8 w-auto"
         />
-        <div className="hidden lg:flex items-center">
-          <span className="font-mono text-xs font-bold text-industrial-blue-light tracking-widest uppercase">ID: 442-B</span>
-        </div>
+
         
         <div className="hidden md:flex items-center bg-background rounded-full px-4 py-1.5 border border-transparent focus-within:border-safety-orange transition-all">
           <Search size={18} className="text-industrial-blue-light mr-2" />
@@ -40,12 +39,7 @@ export default function TopHeader({ user, onMenuClick }: { user: any, onMenuClic
       </div>
 
       <div className="flex items-center gap-3">
-        <button 
-          className="p-2 text-industrial-blue-light hover:bg-slate-100 rounded-full transition-colors relative"
-        >
-          <Bell size={20} />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-safety-orange rounded-full border-2 border-white"></span>
-        </button>
+        <NotificationBell initialNotifications={user?.notifications || []} />
         <button 
           onClick={() => router.push('/dashboard/profile')}
           className="hidden sm:flex p-2 text-industrial-blue-light hover:bg-slate-100 rounded-full transition-colors"

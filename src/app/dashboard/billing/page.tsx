@@ -56,16 +56,30 @@ const ALL_PLANS = [
   },
 ]
 
+const FEATURE_NAMES: Record<string, { label: string; minPlan: string }> = {
+  history: { label: 'Histórico de Intervenções', minPlan: 'Pro' },
+  reports: { label: 'Relatórios Avançados', minPlan: 'Starter' },
+  'maintenance-plan': { label: 'Plano de Manutenção', minPlan: 'Pro' },
+  calendar: { label: 'Calendário de Manutenção', minPlan: 'Starter' },
+  stocks: { label: 'Gestão de Stocks', minPlan: 'Starter' },
+  finance: { label: 'Gestão Financeira', minPlan: 'Business' },
+  aiConsultant: { label: 'Consultor IA & RAG', minPlan: 'Business' },
+  reliability: { label: 'Fiabilidade & KPIs (MTTR/MTBF)', minPlan: 'Pro' },
+  compliance: { label: 'Compliance ISO & Auditorias', minPlan: 'Enterprise' },
+  projects: { label: 'Gestão de Projetos (Gantt)', minPlan: 'Pro' },
+}
+
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; cancelled?: string }>
+  searchParams: Promise<{ success?: string; cancelled?: string; feature?: string }>
 }) {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
   if (profile.role !== 'manager') redirect('/dashboard')
 
   const params = await searchParams
+  const featureInfo = params.feature ? FEATURE_NAMES[params.feature] : null
   const currentPlanId = (profile.company?.plan ?? 'free').toLowerCase()
   
   // Determinar tier atual
@@ -97,6 +111,20 @@ export default async function BillingPage({
           {profile.company?.name} · Estado da subscrição e opções de expansão
         </p>
       </div>
+
+      {featureInfo && (
+        <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-400 dark:border-amber-700 px-5 py-4 flex items-start gap-3 text-amber-900 dark:text-amber-200 text-sm shadow-sm">
+          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-extrabold text-base text-amber-900 dark:text-amber-100">
+              Acesso Restrito: Módulo &quot;{featureInfo.label}&quot;
+            </h3>
+            <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">
+              Para aceder ao módulo de <strong>{featureInfo.label}</strong>, a sua empresa precisa de atualizar para o plano <strong>{featureInfo.minPlan}</strong> ou superior. Escolha uma das opções de upgrade abaixo.
+            </p>
+          </div>
+        </div>
+      )}
 
       {params.success === '1' && (
         <div className="rounded-xl bg-green-50 dark:bg-emerald-900/30 border border-green-200 dark:border-emerald-800/50 px-4 py-3 flex items-center gap-2 text-green-700 dark:text-emerald-400 text-sm">

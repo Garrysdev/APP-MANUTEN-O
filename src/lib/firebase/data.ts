@@ -7,7 +7,7 @@ import type { DocumentSnapshot } from 'firebase-admin/firestore'
 import { adminDb, adminAuth } from './admin'
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { calculateTotalCost } from '../finance'
-import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule } from '@/types/models'
+import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
   return { id: doc.id, ...doc.data() } as T
@@ -243,7 +243,10 @@ export const listAssets = cache(async function(companyId: string, limitCount = 2
       .get()
     const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
     if (!isDemoCompany(companyId)) {
-      return dbDocs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      if (dbDocs.length > 0) {
+        return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      }
+      return getFallbackAssets()
     }
     const fallbacks = getFallbackAssets()
     if (dbDocs.length === 0) return fallbacks
@@ -258,11 +261,11 @@ export const listAssets = cache(async function(companyId: string, limitCount = 2
       return f
     })
 
-    return [...customDocs, ...mergedFallbacks].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
   } catch (err) {
     console.error('[listAssets] Error:', err)
   }
-  return isDemoCompany(companyId) ? getFallbackAssets() : []
+  return getFallbackAssets()
 })
 
 /** Versão LEVE: id + name + tag (para dropdowns e mapa id→nome/tag). */
@@ -280,7 +283,10 @@ export const listAssetRefs = cache(async function(companyId: string): Promise<{ 
       area: (d.data().area as string) ?? null,
     }))
     if (!isDemoCompany(companyId)) {
-      return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
+      if (dbDocs.length > 0) {
+        return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
+      }
+      return getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))
     }
     const fallbacks = getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))
     if (dbDocs.length === 0) return fallbacks
@@ -299,7 +305,7 @@ export const listAssetRefs = cache(async function(companyId: string): Promise<{ 
   } catch (err) {
     console.error('[listAssetRefs] Error:', err)
   }
-  return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
+  return getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))
 })
 
 /** Refs LEVES de planos para o modal de criação de tarefas (só os campos usados, ativos com equipamento). */
@@ -513,11 +519,14 @@ export const getTask = cache(async function(companyId: string, id: string): Prom
 export async function createTask(
   companyId: string,
   createdBy: string,
-  data: Omit<Task, 'id' | 'companyId' | 'createdAt' | 'updatedAt' | 'createdBy'>
+  data: Omit<Task, 'id' | 'companyId' | 'createdAt' | 'updatedAt' | 'createdBy'> & { createdAt?: string }
 ): Promise<string> {
   const now = new Date().toISOString()
   let generatedId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
   try {
+    if (!data.assetId) {
+      (data as any).assetId = data.tag || data.area || 'Geral'
+    }
     if (data.assetId && (!data.tag || !data.area)) {
       const asset = await getAsset(companyId, data.assetId)
       if (asset) {
@@ -527,22 +536,44 @@ export async function createTask(
     }
     const ref = await adminDb()
       .collection('tasks')
-      .add({ ...data, companyId, createdBy, createdAt: now, updatedAt: now })
+      .add({ createdAt: now, updatedAt: now, ...data, companyId, createdBy })
     generatedId = ref.id
 
-    // NOTIFICAÇÕES (MOCK)
-    if (data.assignedTo) {
-      const uSnap = await adminDb().collection('users').doc(data.assignedTo).get()
-      if (uSnap.exists) {
-        const uData = uSnap.data() as User
-        await sendTaskAssignedEmail(
-          { name: uData.name, email: uData.email, pushSubscription: uData.pushSubscription },
-          { id: generatedId, title: data.title }
-        )
+    // NOTIFICAÇÕES PARA TÉCNICOS ATRIBUÍDOS
+    const techIdsToNotify = new Set<string>()
+    if (data.assignedToIds && Array.isArray(data.assignedToIds)) {
+      data.assignedToIds.forEach((id) => { if (id && id !== createdBy) techIdsToNotify.add(id) })
+    }
+    if (techIdsToNotify.size === 0 && data.assignedTo) {
+      try {
+        const allUsersSnap = await adminDb().collection('users').where('companyId', '==', companyId).get()
+        allUsersSnap.docs.forEach((d) => {
+          const u = d.data() as User
+          if (
+            d.id !== createdBy &&
+            (d.id === data.assignedTo || u.abbreviation === data.assignedTo || u.name === data.assignedTo)
+          ) {
+            techIdsToNotify.add(d.id)
+          }
+        })
+      } catch (err) {
+        console.error('[createTask notify users] Error:', err)
       }
     }
+
+    for (const techId of techIdsToNotify) {
+      await createNotification(companyId, {
+        userId: techId,
+        title: `📋 Nova OT Atribuída: ${data.title}`,
+        body: `Foi-lhe atribuída uma nova OT na Área ${data.area || 'Geral'} (TAG: ${data.tag || '—'})`,
+        type: 'task_assigned',
+        link: `/dashboard/tasks/${generatedId}`,
+        senderName: data.createdByName || 'Gestor',
+      }).catch(console.error)
+    }
+
     if (data.criticidade === 'vermelho' || data.tipo === 'curativa') {
-      await sendUrgentTaskEmail({ id: generatedId, title: data.title, companyId })
+      await sendUrgentTaskEmail({ id: generatedId, title: data.title, companyId }).catch(() => {})
     }
   } catch (err) {
     console.error('Erro em createTask:', err)
@@ -1491,4 +1522,165 @@ export async function deleteSafetyRule(companyId: string, id: string): Promise<v
   } catch (err) {
     console.error('[deleteSafetyRule] Error:', err)
   }
+}
+
+// ── NOTIFICAÇÕES E MENSAGENS INTERNAS ────────────────────────────────────────
+
+let cachedNotifications: AppNotification[] = []
+let cachedInternalMessages: InternalMessage[] = []
+
+export const listNotifications = cache(async function(companyId: string, userId: string): Promise<AppNotification[]> {
+  try {
+    const snap = await adminDb()
+      .collection('notifications')
+      .where('companyId', '==', companyId)
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get()
+    const docs = snap.docs.map((d) => serialize<AppNotification>(d))
+    if (docs.length > 0) return docs
+  } catch (err) {
+    console.error('[listNotifications] Error:', err)
+  }
+  return cachedNotifications.filter((n) => n.companyId === companyId && n.userId === userId)
+})
+
+export async function createNotification(
+  companyId: string,
+  data: Omit<AppNotification, 'id' | 'companyId' | 'createdAt' | 'read'>
+): Promise<string> {
+  const now = new Date().toISOString()
+  const notif: AppNotification = {
+    id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    companyId,
+    createdAt: now,
+    read: false,
+    ...data,
+  }
+  try {
+    const ref = await adminDb().collection('notifications').add(notif)
+    notif.id = ref.id
+  } catch (err) {
+    console.error('[createNotification] Error:', err)
+  }
+  cachedNotifications.unshift(notif)
+  return notif.id
+}
+
+export async function markNotificationRead(companyId: string, id: string): Promise<void> {
+  try {
+    await adminDb().collection('notifications').doc(id).update({ read: true })
+  } catch (err) {
+    console.error('[markNotificationRead] Error:', err)
+  }
+  const item = cachedNotifications.find((n) => n.id === id)
+  if (item) item.read = true
+}
+
+export async function markAllNotificationsRead(companyId: string, userId: string): Promise<void> {
+  try {
+    const snap = await adminDb()
+      .collection('notifications')
+      .where('companyId', '==', companyId)
+      .where('userId', '==', userId)
+      .where('read', '==', false)
+      .get()
+    const batch = adminDb().batch()
+    snap.docs.forEach((doc) => batch.update(doc.ref, { read: true }))
+    await batch.commit()
+  } catch (err) {
+    console.error('[markAllNotificationsRead] Error:', err)
+  }
+  cachedNotifications.forEach((n) => {
+    if (n.companyId === companyId && n.userId === userId) n.read = true
+  })
+}
+
+export const listInternalMessages = cache(async function(companyId: string, userId?: string): Promise<InternalMessage[]> {
+  try {
+    const snap = await adminDb()
+      .collection('internal_messages')
+      .get()
+    const docs = snap.docs
+      .map((d) => ({ ...serialize<InternalMessage>(d), id: d.id }))
+      .filter((m) => !m.companyId || m.companyId === companyId || companyId === DEMO_COMPANY_ID)
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+
+    if (!userId) return docs
+    return docs.filter(
+      (m) =>
+        m.senderId === userId ||
+        (m.recipientIds || []).includes(userId) ||
+        (m.recipientIds || []).includes('ALL')
+    )
+  } catch (err) {
+    console.error('[listInternalMessages] Error:', err)
+  }
+  return cachedInternalMessages.filter(
+    (m) =>
+      (!m.companyId || m.companyId === companyId) &&
+      (!userId || m.senderId === userId || (m.recipientIds || []).includes(userId) || (m.recipientIds || []).includes('ALL'))
+  )
+})
+
+export async function createInternalMessage(
+  companyId: string,
+  senderId: string,
+  data: Omit<InternalMessage, 'id' | 'companyId' | 'senderId' | 'createdAt'>
+): Promise<string> {
+  const now = new Date().toISOString()
+  const msgObj: InternalMessage = {
+    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    companyId,
+    senderId,
+    createdAt: now,
+    readBy: [senderId],
+    ...data,
+  }
+  
+  // Limpa campos undefined para o Firestore aceitar a gravação sem erros
+  const sanitizedObj = JSON.parse(JSON.stringify(msgObj))
+  
+  try {
+    const ref = await adminDb().collection('internal_messages').add(sanitizedObj)
+    msgObj.id = ref.id
+  } catch (err) {
+    console.error('[createInternalMessage] Error:', err)
+  }
+  cachedInternalMessages.unshift(msgObj)
+
+  try {
+    const allUsersSnap = await adminDb().collection('users').get()
+    const companyUsers = allUsersSnap.docs.map((d) => serialize<User>(d))
+
+    const targetUserIds = new Set<string>()
+    if (data.recipientIds.includes('ALL')) {
+      companyUsers.forEach((u) => { if (u.id !== senderId) targetUserIds.add(u.id) })
+    } else {
+      data.recipientIds.forEach((rec) => {
+        companyUsers.forEach((u) => {
+          if (u.id !== senderId && (u.id === rec || u.abbreviation === rec || u.name === rec)) {
+            targetUserIds.add(u.id)
+          }
+        })
+      })
+    }
+
+    for (const uId of Array.from(targetUserIds)) {
+      await createNotification(companyId, {
+        userId: uId,
+        title: `💬 Nova Mensagem de ${data.senderName}`,
+        body: data.content.slice(0, 80) + (data.content.length > 80 ? '...' : ''),
+        type: 'internal_message',
+        link: '/dashboard/messages',
+        senderName: data.senderName,
+        senderAbbr: data.senderAbbr,
+      }).catch(console.error)
+    }
+  } catch (err) {
+    console.error('[createInternalMessage notifications] Error:', err)
+  }
+
+  return msgObj.id
 }

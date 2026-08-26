@@ -12,7 +12,7 @@ export default async function KnowledgePage() {
   if (profile.role === 'technician') redirect('/dashboard/tasks')
 
   const plan = profile.company?.plan ?? 'free'
-  if (!planHas(plan, 'aiConsultant')) redirect('/dashboard/billing')
+  if (!planHas(plan, 'aiConsultant')) redirect('/dashboard/billing?feature=aiConsultant')
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">

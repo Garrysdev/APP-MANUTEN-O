@@ -35,6 +35,7 @@ import {
   loadPlanTaskRefsAction, loadStockRefsAction, type StockMaterialRef,
 } from './actions'
 import { createMaintenancePlanAction } from '../maintenance-plan/actions'
+import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 
 const PERIODICIDADE_OPTIONS: Periodicidade[] = ['semanal', 'mensal', 'trimestral', 'bianual', 'anual', 'bienal', 'trianual', 'horas', 'pontual']
 
@@ -746,6 +747,9 @@ export default function ProjectsClient({
 
   const [dateStartFilter, setDateStartFilter] = useState('')
   const [dateEndFilter, setDateEndFilter] = useState('')
+  const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [excelInicioFilter, setExcelInicioFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [excelFimFilter, setExcelFimFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
   const [areaFilter, setAreaFilter] = useState('')
   const [tagFilter, setTagFilter] = useState('')
 
@@ -915,6 +919,10 @@ export default function ProjectsClient({
           if (aTag !== tf && !aTag.split(/[\s,/]+/).includes(tf)) return false
         }
 
+        if (!filterByExcelDate(t.dueDate || t.createdAt, excelDateFilter)) return false
+        if (!filterByExcelDate(t.plannedStartDate || t.createdAt, excelInicioFilter)) return false
+        if (!filterByExcelDate(t.dueDate || t.completedAt, excelFimFilter)) return false
+
         if (dateStartFilter) {
           const startMs = new Date(dateStartFilter + 'T00:00:00').getTime()
           const taskStartMs = t.createdAt ? new Date(t.createdAt).getTime() : (t.dueDate ? new Date(t.dueDate).getTime() - 7 * 86400000 : 0)
@@ -930,7 +938,7 @@ export default function ProjectsClient({
         return true
       })
       .map(({ task }) => task)
-  }, [searchIndex, filter, pmTypeFilter, selectedTech, showParagensOnly, areaFilter, tagFilter, dateStartFilter, dateEndFilter, search, assetAreaMap, assetTagMap])
+  }, [searchIndex, filter, pmTypeFilter, selectedTech, showParagensOnly, areaFilter, tagFilter, dateStartFilter, dateEndFilter, search, assetAreaMap, assetTagMap, excelDateFilter, excelInicioFilter, excelFimFilter])
 
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Task>(
     filtered,
@@ -964,14 +972,15 @@ export default function ProjectsClient({
 
   return (
     <div className="max-w-7xl mx-auto animate-fade-in-up space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-outline/60 gap-2 flex-wrap">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-2xl font-extrabold text-industrial-blue tracking-tight truncate flex items-center gap-2">
-            <FolderKanban size={26} className="text-safety-orange" />
-            Controlo de Projetos (Gantt - Módulo Pro)
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-industrial-blue dark:text-slate-100 tracking-tight flex items-center gap-2">
+            <span>Controlo de Projetos (Gantt)</span>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+              {filtered.length} / {combinedTasks.length}
+            </span>
           </h1>
-          <p className="text-xs sm:text-sm font-medium text-industrial-blue-light mt-1">
+          <p className="text-xs sm:text-sm font-medium text-industrial-blue-light dark:text-slate-400 mt-1">
             Gestão visual de cronogramas, OTs do Plano de Manutenção e alocação de técnicos.
           </p>
         </div>
@@ -986,7 +995,7 @@ export default function ProjectsClient({
             }`}
           >
             <CalendarClock className="h-4 w-4 shrink-0" />
-            <span>Paragens Manutenção (AGO/DEZ)</span>
+            <span>Paragens (AGO/DEZ)</span>
           </button>
 
           {/* View Mode Toggle Buttons */}
@@ -999,7 +1008,7 @@ export default function ProjectsClient({
                   : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
               }`}
             >
-              <FolderKanban className="h-3.5 w-3.5" /> Gantt (Cronograma)
+              <FolderKanban className="h-3.5 w-3.5" /> Gantt
             </button>
             <button
               onClick={() => setViewMode('table')}
@@ -1009,7 +1018,7 @@ export default function ProjectsClient({
                   : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
               }`}
             >
-              <Package className="h-3.5 w-3.5" /> Lista de Projetos
+              <Package className="h-3.5 w-3.5" /> Lista
             </button>
           </div>
 
@@ -1116,35 +1125,9 @@ export default function ProjectsClient({
           </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Filtro entre datas */}
-          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
-            <CalendarClock className="h-3.5 w-3.5 text-safety-orange shrink-0" />
-            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 shrink-0">Datas:</span>
-            <input
-              type="date"
-              value={dateStartFilter}
-              onChange={(e) => setDateStartFilter(e.target.value)}
-              className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none w-28"
-              title="Data de Início"
-            />
-            <span className="text-xs font-bold text-slate-400">a</span>
-            <input
-              type="date"
-              value={dateEndFilter}
-              onChange={(e) => setDateEndFilter(e.target.value)}
-              className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none w-28"
-              title="Data de Fim"
-            />
-            {(dateStartFilter || dateEndFilter) && (
-              <button
-                type="button"
-                onClick={() => { setDateStartFilter(''); setDateEndFilter('') }}
-                className="text-slate-400 hover:text-red-500 font-bold ml-1 text-xs"
-                title="Limpar filtro de datas"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
+          {/* Filtro de Data Estilo Excel */}
+          <div className="w-36">
+            <ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} />
           </div>
 
           {/* Seletor de Filtro por Área */}
@@ -1253,14 +1236,14 @@ export default function ProjectsClient({
                 {/* Linha de Filtro por Coluna */}
                 <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
                   <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filtrar..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
-                  <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Data..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
+                  <td className="p-1 relative"><ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} /></td>
                   <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Área..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
                   <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="TAG..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
                   <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="TI..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
                   <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Projeto..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
                   <td className="p-1"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Técnico..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
-                  <td className="p-1 hidden xl:table-cell" />
-                  <td className="p-1 hidden xl:table-cell" />
+                  <td className="p-1 hidden xl:table-cell relative"><ExcelColumnDateFilter values={excelInicioFilter} onChange={setExcelInicioFilter} /></td>
+                  <td className="p-1 hidden xl:table-cell relative"><ExcelColumnDateFilter values={excelFimFilter} onChange={setExcelFimFilter} /></td>
                   <td className="p-1 hidden lg:table-cell" />
                   <td className="p-1" />
                   <td className="p-1" />

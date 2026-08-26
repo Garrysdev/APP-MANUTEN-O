@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
+import { listNotifications } from '@/lib/firebase/data'
 import LayoutShell from '@/components/layout/LayoutShell'
 import { LanguageProvider } from '@/components/providers/LanguageProvider'
 import MustChangePasswordBanner from '@/components/ui/MustChangePasswordBanner'
@@ -14,6 +15,8 @@ export default async function DashboardLayout({
   const profile = await getCurrentProfile()
   if (!profile) redirect('/api/auth/logout')
 
+  const notifications = await listNotifications(profile.companyId, profile.id)
+
   const userForHeader = {
     name: profile.name,
     role: profile.role,
@@ -21,7 +24,8 @@ export default async function DashboardLayout({
     company: profile.company
       ? { name: profile.company.name, plan: profile.company.plan }
       : null,
-    language: profile.language
+    language: profile.language,
+    notifications,
   }
 
   return (

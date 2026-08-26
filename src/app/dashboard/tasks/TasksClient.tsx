@@ -33,6 +33,7 @@ import {
   createTaskAction, updateTaskAction, deleteTaskAction, updateTaskStatusAction,
   loadPlanTaskRefsAction, loadStockRefsAction, type StockMaterialRef,
 } from './actions'
+import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import { createMaintenancePlanAction } from '../maintenance-plan/actions'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
 
@@ -227,6 +228,16 @@ export default function TasksClient({
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [selectedStatuses, setSelectedStatuses] = useState<TaskStatus[]>(() => {
+    const paramStatus = searchParams.get('status')
+    if (paramStatus) {
+      const list = paramStatus.split(',').map((s) => s.trim()) as TaskStatus[]
+      const valid = list.filter((s) => ['pending', 'in_progress', 'done', 'cancelled'].includes(s))
+      if (valid.length > 0) return valid
+    }
+    return ['pending', 'in_progress', 'done', 'cancelled'] // Padrão: Mostrar TODAS as OTs (Ativas + Histórico)
+  })
+  const [selectedTis, setSelectedTis] = useState<string[]>([])
   const [filter, setFilter] = useState<'all' | 'open' | TaskStatus>('all')
   const [statusPending, startStatusTransition] = useTransition()
 
@@ -410,7 +421,9 @@ export default function TasksClient({
   const [currentPage, setCurrentPage] = useState(1)
   const [areaFilter, setAreaFilter] = useState('')
   const [tagFilter, setTagFilter] = useState('')
-
+  const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [excelInicioFilter, setExcelInicioFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [excelFimFilter, setExcelFimFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
   const emptyCol = { id: '', data: '', area: '', tag: '', ti: '', avaria: '', tecnico: '', obs: '' }
   const [colF, setColF] = useState(emptyCol)
   const setCol = (k: keyof typeof emptyCol, v: string) => {
@@ -426,7 +439,6 @@ export default function TasksClient({
 
   const assetAreaMap = useMemo(() => new Map(assets.map((a) => [a.id, a.area || ''])), [assets])
   const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
-
   const uniqueAreas = useMemo(() => {
     const set = new Set<string>()
     assets.forEach((a) => { if (a.area && a.area.trim()) set.add(a.area.trim()) })
@@ -441,14 +453,16 @@ export default function TasksClient({
     const set = new Set<string>()
     const af = areaFilter.trim().toLowerCase()
     assets.forEach((a) => {
-      if (!af || (a.area || '').trim().toLowerCase() === af || (a.area || '').trim().toLowerCase().includes(af)) {
-        if (a.tag && a.tag.trim()) set.add(a.tag.trim())
+      const aArea = (a.area || '').trim().toLowerCase()
+      const aTag = (a.tag || '').trim()
+      if (!af || aArea === af || aArea.startsWith(af) || aTag.toLowerCase().startsWith(af)) {
+        if (aTag) set.add(aTag)
       }
     })
     tasks.forEach((t: any) => {
       const tArea = ((t as any).area || assetAreaMap.get(t.assetId) || '').trim().toLowerCase()
-      if (!af || tArea === af || tArea.includes(af)) {
-        const tag = (t as any).tag || assetTagMap.get(t.assetId)
+      const tag = (t as any).tag || assetTagMap.get(t.assetId)
+      if (!af || tArea === af || tArea.startsWith(af) || (tag && tag.toLowerCase().startsWith(af))) {
         if (tag && tag.trim() && tag !== '—') set.add(tag.trim())
       }
     })
@@ -496,7 +510,7 @@ export default function TasksClient({
     })
   }, [tasks, assets, users])
 
-  useEffect(() => { setCurrentPage(1) }, [search, filter, areaFilter, tagFilter, colF, pageSize])
+  useEffect(() => { setCurrentPage(1) }, [search, filter, selectedStatuses, selectedTis, areaFilter, tagFilter, colF, pageSize])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -505,20 +519,51 @@ export default function TasksClient({
 
     return searchIndex
       .filter(({ task: t, text }) => {
-        if (filter === 'open' && (t.status === 'done' || t.status === 'cancelled')) return false
-        if (filter !== 'open' && filter !== 'all' && t.status !== filter) return false
+        if (!filterByExcelDate(t.createdAt || t.plannedStartDate || (t as any).completedAt, excelDateFilter)) return false
+        if (!filterByExcelDate(t.createdAt || t.plannedStartDate, excelInicioFilter)) return false
+        if (!filterByExcelDate(t.dueDate || t.completedAt, excelFimFilter)) return false
+
+        // Filtro Multi-Seleção de Estados
+        if (selectedStatuses.length > 0 && selectedStatuses.length < 4) {
+          if (!selectedStatuses.includes(t.status)) return false
+        } else if (filter === 'open' && (t.status === 'done' || t.status === 'cancelled')) {
+          return false
+        } else if (filter !== 'open' && filter !== 'all' && t.status !== filter) {
+          return false
+        }
+
+        // Filtro Multi-Seleção de TIs (Tipos de Intervenção)
+        if (selectedTis.length > 0) {
+          const tTipo = String(t.tipo || '').toLowerCase()
+          const tTi = String((t as any).ti || (t as any).tipoText || '').toLowerCase()
+          const matchesAnyTi = selectedTis.some((tiFilter) => {
+            const tf = tiFilter.toLowerCase()
+            if (tf === 'pi') return tTipo === 'pi' || tTi === 'pi'
+            if (tf === 'mc' || tf === 'curativa') return tTipo === 'curativa' || tTipo === 'mc' || tTi === 'mc'
+            if (tf === 'mp' || tf === 'preventiva') return tTipo === 'preventiva' || tTipo === 'mp' || tTi === 'mp'
+            if (tf === 'pm' || tf === 'plano') return tTipo === 'plano' || tTipo === 'pm' || tTi === 'pm'
+            if (tf === 'mi') return tTipo === 'mi' || tTi === 'mi'
+            if (tf === 'stp' || tf === 'pr') return tTipo === 'stp' || tTi === 'stp' || tTi === 'pr'
+            if (tf === 'ins' || tf === 'inspecao') return tTipo === 'inspecao' || tTipo === 'ins' || tTi === 'ins'
+            if (tf === 'lub' || tf === 'lubrificacao') return tTipo === 'lubrificacao' || tTipo === 'lub' || tTi === 'lub'
+            if (tf === 'cal' || tf === 'calibracao') return tTipo === 'calibracao' || tTipo === 'cal' || tTi === 'cal'
+            if (tf === 'out' || tf === 'outro') return tTipo === 'outro' || tTipo === 'out' || tTi === 'out'
+            return tTipo === tf || tTi === tf
+          })
+          if (!matchesAnyTi) return false
+        }
 
         const aArea = ((t as any).area || (t.assetId ? assetAreaMap.get(t.assetId) : '') || '').trim().toLowerCase()
         const aTag = ((t as any).tag || (t.assetId ? assetTagMap.get(t.assetId) : '') || '').trim().toLowerCase()
 
         // Filtro de Área no topo
         if (af) {
-          if (aArea !== af && !aArea.includes(af)) return false
+          if (aArea !== af && !aArea.startsWith(af)) return false
         }
 
         // Filtro de TAG no topo
         if (tf) {
-          if (aTag !== tf && !aTag.includes(tf)) return false
+          if (aTag !== tf && !aTag.startsWith(tf)) return false
         }
 
         // Filtros por coluna na tabela
@@ -527,30 +572,46 @@ export default function TasksClient({
           if (!idStr.includes(colF.id.trim().toLowerCase())) return false
         }
         if (colF.data) {
-          const dStr = (t.plannedStartDate || t.createdAt || '').toLowerCase()
+          const dStr = (t.createdAt || t.plannedStartDate || '').toLowerCase()
           if (!dStr.includes(colF.data.trim().toLowerCase())) return false
         }
         if (colF.area) {
           const cAf = colF.area.trim().toLowerCase()
-          if (cAf && aArea !== cAf && !aArea.includes(cAf)) return false
+          if (cAf && aArea !== cAf && !aArea.startsWith(cAf)) return false
         }
         if (colF.tag) {
           const cTf = colF.tag.trim().toLowerCase()
-          if (cTf && aTag !== cTf && !aTag.includes(cTf)) return false
+          if (cTf && aTag !== cTf && !aTag.startsWith(cTf)) return false
         }
         if (colF.ti) {
           const tiFilter = colF.ti.trim().toLowerCase()
           const tTipo = String(t.tipo || '').toLowerCase()
+          const tTi = String((t as any).ti || (t as any).tipoText || '').toLowerCase()
           let matches = false
-          if (tTipo === tiFilter) matches = true
-          else if ((tiFilter === 'mc' || tiFilter === 'curativa') && (tTipo === 'curativa' || tTipo === 'mc')) matches = true
-          else if ((tiFilter === 'mp' || tiFilter === 'preventiva') && (tTipo === 'preventiva' || tTipo === 'mp')) matches = true
-          else if ((tiFilter === 'pm' || tiFilter === 'pi' || tiFilter === 'plano') && (tTipo === 'pi' || tTipo === 'pm' || tTipo === 'preventiva')) matches = true
-          else if ((tiFilter === 'ins' || tiFilter === 'inspecao') && (tTipo === 'inspecao' || tTipo === 'ins')) matches = true
-          else if ((tiFilter === 'lub' || tiFilter === 'lubrificacao') && (tTipo === 'lubrificacao' || tTipo === 'lub')) matches = true
-          else if ((tiFilter === 'cal' || tiFilter === 'calibracao') && (tTipo === 'calibracao' || tTipo === 'cal')) matches = true
-          else if ((tiFilter === 'out' || tiFilter === 'outro') && (tTipo === 'outro' || tTipo === 'out')) matches = true
-          else if (tTipo.includes(tiFilter)) matches = true
+
+          if (tiFilter === 'pi') {
+            matches = tTipo === 'pi' || tTi === 'pi'
+          } else if (tiFilter === 'mc' || tiFilter === 'curativa') {
+            matches = tTipo === 'curativa' || tTipo === 'mc' || tTi === 'mc'
+          } else if (tiFilter === 'mp' || tiFilter === 'preventiva') {
+            matches = tTipo === 'preventiva' || tTipo === 'mp' || tTi === 'mp'
+          } else if (tiFilter === 'pm' || tiFilter === 'plano') {
+            matches = tTipo === 'plano' || tTipo === 'pm' || tTi === 'pm'
+          } else if (tiFilter === 'mi') {
+            matches = tTipo === 'mi' || tTi === 'mi'
+          } else if (tiFilter === 'stp' || tiFilter === 'pr') {
+            matches = tTipo === 'stp' || tTi === 'stp' || tTi === 'pr'
+          } else if (tiFilter === 'ins' || tiFilter === 'inspecao') {
+            matches = tTipo === 'inspecao' || tTipo === 'ins' || tTi === 'ins'
+          } else if (tiFilter === 'lub' || tiFilter === 'lubrificacao') {
+            matches = tTipo === 'lubrificacao' || tTipo === 'lub' || tTi === 'lub'
+          } else if (tiFilter === 'cal' || tiFilter === 'calibracao') {
+            matches = tTipo === 'calibracao' || tTipo === 'cal' || tTi === 'cal'
+          } else if (tiFilter === 'out' || tiFilter === 'outro') {
+            matches = tTipo === 'outro' || tTipo === 'out' || tTi === 'out'
+          } else {
+            matches = tTipo === tiFilter || tTi === tiFilter
+          }
 
           if (!matches) return false
         }
@@ -597,7 +658,7 @@ export default function TasksClient({
         return true
       })
       .map(({ task }) => task)
-  }, [searchIndex, filter, areaFilter, tagFilter, search, colF, assetAreaMap, assetTagMap, users, userName])
+  }, [searchIndex, filter, selectedStatuses, selectedTis, areaFilter, tagFilter, search, colF, assetAreaMap, assetTagMap, users, userName, excelDateFilter, excelInicioFilter, excelFimFilter])
 
   // Ordenação por coluna (tarefa 15)
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Task>(
@@ -626,44 +687,151 @@ export default function TasksClient({
 
   return (
     <div className="w-full max-w-[1500px] mx-auto animate-fade-in-up">
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-outline/60 gap-2">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-2xl font-extrabold text-industrial-blue tracking-tight truncate">
-            {isManager ? dict.tasks.managerTasks : dict.tasks.myTasks}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-industrial-blue dark:text-slate-100 tracking-tight flex items-center gap-2">
+            <span>{isManager ? dict.tasks.managerTasks : dict.tasks.myTasks}</span>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+              {shown.length} / {tasks.length}
+            </span>
           </h1>
-          <p className="text-xs sm:text-sm font-medium text-industrial-blue-light mt-1">
-            A mostrar {shown.length} / {tasks.length} OT(s)
+          <p className="text-xs sm:text-sm font-medium text-industrial-blue-light dark:text-slate-400 mt-1">
+            Ordens de Trabalho ativas e pendentes da equipa
           </p>
         </div>
-        <button onClick={openCreate} className="shrink-0 h-9 sm:h-11 px-3 sm:px-5 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+        <button onClick={openCreate} className="shrink-0 h-10 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
           <Plus size={16} className="stroke-[2.5] shrink-0" />
-          <span className="hidden sm:inline">{dict.tasks.newTask}</span>
+          <span>{dict.tasks.newTask}</span>
         </button>
       </div>
 
       {/* Filtros por estado, pesquisa e tamanho de página */}
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div className="flex gap-2 flex-wrap items-center">
+      {/* Filtros por Estado (Multi-Seleção) */}
+      <div className="space-y-3 mb-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Estados:</span>
+          
+          {/* Botão Principal: Todas as OTs (Ativas + Histórico) */}
           <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
-              filter === 'all' ? 'bg-industrial-blue text-white' : 'bg-white border border-outline text-industrial-blue-light hover:bg-slate-50 hover:text-industrial-blue'
+            type="button"
+            onClick={() => {
+              setFilter('all')
+              setSelectedStatuses(['pending', 'in_progress', 'done', 'cancelled'])
+            }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer ${
+              selectedStatuses.length === 4
+                ? 'bg-industrial-blue text-white ring-2 ring-industrial-blue/30 font-black'
+                : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            Todas as OTs
+            📋 Todas as OTs ({tasks.length})
           </button>
-          {statuses.map((s) => (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${
-                filter === s ? 'bg-industrial-blue text-white' : 'bg-white border border-outline text-industrial-blue-light hover:bg-slate-50 hover:text-industrial-blue'
-              }`}
-            >
-              {STATUS_LABELS[s]}
-            </button>
-          ))}
+
+          {/* Botão Atalho: Ativas (Pendente + Em Curso) */}
+          <button
+            type="button"
+            onClick={() => {
+              setFilter('all')
+              setSelectedStatuses(['pending', 'in_progress'])
+            }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
+              selectedStatuses.includes('pending') && selectedStatuses.includes('in_progress') && !selectedStatuses.includes('done') && !selectedStatuses.includes('cancelled')
+                ? 'bg-amber-600 text-white ring-2 ring-amber-600/30'
+                : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            <span>⚡ Só Ativas (Pendente + Em Curso)</span>
+          </button>
+
+          {/* Botões individuais de Estado com Toggle */}
+          {statuses.map((s) => {
+            const isActive = selectedStatuses.includes(s)
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setFilter('all')
+                  if (isActive) {
+                    if (selectedStatuses.length > 1) {
+                      setSelectedStatuses(selectedStatuses.filter((x) => x !== s))
+                    }
+                  } else {
+                    setSelectedStatuses([...selectedStatuses, s])
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
+                  isActive
+                    ? s === 'done'
+                      ? 'bg-emerald-600 text-white ring-2 ring-emerald-600/30'
+                      : s === 'pending'
+                      ? 'bg-slate-700 text-white ring-2 ring-slate-700/30'
+                      : s === 'in_progress'
+                      ? 'bg-amber-600 text-white ring-2 ring-amber-600/30'
+                      : 'bg-red-600 text-white'
+                    : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-white' : 'bg-slate-400'}`} />
+                <span>{s === 'done' ? 'Concluídas (Histórico)' : STATUS_LABELS[s]}</span>
+              </button>
+            )
+          })}
         </div>
+
+        {/* Filtros por Tipo de Intervenção (TI — Multi-Seleção) */}
+        <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-slate-200/60 dark:border-slate-800">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Filtro TI:</span>
+          
+          <button
+            type="button"
+            onClick={() => setSelectedTis([])}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+              selectedTis.length === 0
+                ? 'bg-slate-800 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+            }`}
+          >
+            Todos os TIs
+          </button>
+
+          {[
+            { id: 'PI', label: 'PI - Pedido Intervenção', color: 'bg-red-600 text-white border-red-600' },
+            { id: 'MC', label: 'MC - Curativa', color: 'bg-amber-600 text-white border-amber-600' },
+            { id: 'MP', label: 'MP - Preventiva', color: 'bg-purple-600 text-white border-purple-600' },
+            { id: 'PM', label: 'PM - Plano', color: 'bg-blue-600 text-white border-blue-600' },
+            { id: 'STP', label: 'STP - Set-up / Preparação', color: 'bg-lime-600 text-white border-lime-600' },
+            { id: 'MI', label: 'MI - Investimento', color: 'bg-indigo-600 text-white border-indigo-600' },
+            { id: 'INS', label: 'INS - Inspeção', color: 'bg-teal-600 text-white border-teal-600' },
+            { id: 'LUB', label: 'LUB - Lubrificação', color: 'bg-cyan-600 text-white border-cyan-600' },
+            { id: 'CAL', label: 'CAL - Calibração', color: 'bg-emerald-600 text-white border-emerald-600' },
+            { id: 'OUT', label: 'OUT - Outro', color: 'bg-slate-600 text-white border-slate-600' },
+          ].map((item) => {
+            const isSelected = selectedTis.includes(item.id)
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  if (isSelected) {
+                    setSelectedTis(selectedTis.filter((x) => x !== item.id))
+                  } else {
+                    setSelectedTis([...selectedTis, item.id])
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all cursor-pointer ${
+                  isSelected
+                    ? `${item.color} shadow-sm ring-1 ring-offset-1`
+                    : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                {isSelected ? `✓ ${item.id}` : item.id}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Seletor de Filtro por Área */}
@@ -735,7 +903,7 @@ export default function TasksClient({
               {/* Linha de Filtro por Coluna */}
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
                 <td className="p-1"><input value={colF.id} onChange={(e) => setCol('id', e.target.value)} placeholder="000..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
-                <td className="p-1"><input value={colF.data} onChange={(e) => setCol('data', e.target.value)} placeholder="Data..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
+                <td className="p-1 relative"><ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} /></td>
                 <td className="p-1">
                   <select
                     value={colF.area}
@@ -792,8 +960,8 @@ export default function TasksClient({
                     ))}
                   </select>
                 </td>
-                <td className="p-1" />
-                <td className="p-1" />
+                <td className="p-1 relative"><ExcelColumnDateFilter values={excelInicioFilter} onChange={setExcelInicioFilter} /></td>
+                <td className="p-1 relative"><ExcelColumnDateFilter values={excelFimFilter} onChange={setExcelFimFilter} /></td>
                 <td className="p-1"><input value={colF.obs} onChange={(e) => setCol('obs', e.target.value)} placeholder="Obs..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
                 <td className="p-1" />
                 <td className="p-1" />
@@ -828,7 +996,7 @@ export default function TasksClient({
                         <span className="bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200">{formattedId}</span>
                       </td>
                       <td className="px-3 py-2.5 font-mono font-semibold text-slate-800 whitespace-nowrap">
-                        {t.plannedStartDate ? formatDate(t.plannedStartDate) : formatDate(t.createdAt)}
+                        {formatDate(t.createdAt || t.plannedStartDate)}
                       </td>
                       <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
                         {(t as any).area || (asset as any)?.area || '—'}
@@ -954,227 +1122,20 @@ export default function TasksClient({
         }}
       />
 
-      {/* Modal editar OT existente */}
-      {showForm && editing && (
-        <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-4 sm:pt-8 overflow-y-auto">
-          <div className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={closeModal} />
-          <div className="card relative w-full max-w-lg p-6 shadow-2xl my-auto sm:my-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100">{dict.tasks.modalEdit}</h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"><X className="h-5 w-5" /></button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <input type="hidden" name="id" value={editing.id} />
-              <input type="hidden" name="maintenancePlanId" value={maintenancePlanId} />
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Título *</label>
-                <input name="title" value={title} onChange={(e) => setTitle(e.target.value)} className="input" required placeholder="Ex.: Lubrificação mensal" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Tipo de OT *</label>
-                  <select name="tipo" value={tipo} onChange={(e) => setTipo(e.target.value as TipoTarefa)} className="input">
-                    {tipos.map((t) => <option key={t} value={t}>{TIPO_LABELS[t]}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Criticidade *</label>
-                  <select name="criticidade" value={criticidade} onChange={(e) => setCriticidade(e.target.value as TaskCriticidade)} className="input">
-                    {criticidades.map((c) => <option key={c} value={c}>{CRITICIDADE_LABELS[c]}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <SearchableAssetSelect
-                  value={assetId}
-                  onChange={(val) => { setAssetId(val); setMaintenancePlanId('') }}
-                  assets={assets}
-                  required
-                />
-                {(() => {
-                  const selAsset = assets.find((a) => a.id === assetId)
-                  if (!selAsset) return null
-                  return (
-                    <>
-                      <input type="hidden" name="tag" value={selAsset.tag ?? ''} />
-                      <input type="hidden" name="area" value={selAsset.area ?? ''} />
-                      <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[11px] font-semibold text-industrial-blue bg-blue-50 dark:bg-slate-800/80 p-2 rounded-lg border border-blue-100 dark:border-slate-700">
-                        <span>📍 Área: <strong className="text-slate-900 dark:text-slate-100">{selAsset.area || '—'}</strong></span>
-                        <span>•</span>
-                        <span>🏷️ TAG: <strong className="text-slate-900 dark:text-slate-100">{selAsset.tag || '—'}</strong></span>
-                      </div>
-                    </>
-                  )
-                })()}
-              </div>
-
-              <div className="space-y-3">
-                <label className="block text-xs font-bold text-gray-700 dark:text-slate-300">
-                  Técnico(s) Atribuído(s) ({selectedTechIds.length})
-                </label>
-
-                {/* JANELA 1: TÉCNICOS INTERNOS ATIVOS */}
-                <div>
-                  <div className="text-[11px] font-bold text-orange-700 dark:text-orange-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <span>🟧</span> Técnicos Internos Ativos
-                  </div>
-                  <div className="max-h-32 overflow-y-auto border border-orange-200 dark:border-slate-700 rounded-lg p-2 bg-orange-50/30 dark:bg-slate-900/50">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                      {users
-                        .filter((u: any) => u.active !== false && isInternalUser(u))
-                        .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
-                        .map((u) => {
-                          const checked = selectedTechIds.includes(u.id) || (u.abbreviation ? selectedTechIds.includes(u.abbreviation) : false)
-                          return (
-                            <label key={u.id} className="flex items-center gap-2 text-xs text-gray-700 dark:text-slate-200 cursor-pointer hover:bg-orange-100/50 dark:hover:bg-slate-800 p-1 rounded transition-colors">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedTechIds((prev) => [...prev, u.id])
-                                  } else {
-                                    setSelectedTechIds((prev) => prev.filter((id) => id !== u.id && id !== u.abbreviation))
-                                  }
-                                }}
-                                className="rounded accent-orange-600 h-3.5 w-3.5"
-                              />
-                              <span className="truncate">{(u as any).abbreviation ? `[${(u as any).abbreviation}] ` : ''}{u.name}</span>
-                            </label>
-                          )
-                        })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* JANELA 2: EMPRESAS EXTERNAS / PRESTADORES */}
-                <div>
-                  <div className="text-[11px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <span>🟦</span> Empresas Externas / Prestadores
-                  </div>
-                  <div className="max-h-32 overflow-y-auto border border-blue-200 dark:border-slate-700 rounded-lg p-2 bg-blue-50/30 dark:bg-slate-900/50">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                      {users
-                        .filter((u: any) => u.active !== false && !isInternalUser(u))
-                        .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
-                        .map((u) => {
-                          const checked = selectedTechIds.includes(u.id) || (u.abbreviation ? selectedTechIds.includes(u.abbreviation) : false)
-                          const compName = (u as any).externalCompanyName || (u as any).company || 'Empresa Externa'
-                          const abbrText = (u as any).abbreviation ? `[${(u as any).abbreviation}] ` : ''
-                          const labelText = u.name.toLowerCase().includes(compName.toLowerCase()) ? `${abbrText}${u.name}` : `${abbrText}${u.name} (${compName})`
-                          return (
-                            <label key={u.id} className="flex items-center gap-2 text-xs text-gray-700 dark:text-slate-200 cursor-pointer hover:bg-blue-100/50 dark:hover:bg-slate-800 p-1 rounded transition-colors">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedTechIds((prev) => [...prev, u.id])
-                                  } else {
-                                    setSelectedTechIds((prev) => prev.filter((id) => id !== u.id && id !== u.abbreviation))
-                                  }
-                                }}
-                                className="rounded accent-blue-600 h-3.5 w-3.5"
-                              />
-                              <span className="truncate" title={labelText}>{labelText}</span>
-                            </label>
-                          )
-                        })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <input type="hidden" name="assignedToIds" value={JSON.stringify(selectedTechIds)} />
-              <input
-                type="hidden"
-                name="assignedTo"
-                value={selectedTechIds
-                  .map((id) => {
-                    const u = users.find((usr) => usr.id === id || usr.abbreviation === id)
-                    return u ? (u.abbreviation || u.name) : id
-                  })
-                  .join(', ')}
-              />
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data Planeada de Início</label>
-                  <input type="datetime-local" name="plannedStartDate" defaultValue={editing?.plannedStartDate ?? ''} className="input" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Prazo / Conclusão</label>
-                  <input type="date" name="dueDate" defaultValue={editing?.dueDate ?? ''} className="input" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Descrição da Intervenção</label>
-                <textarea name="description" defaultValue={editing?.description ?? ''} className="input" rows={2} />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Observações Adicionais</label>
-                <textarea name="observacoes" defaultValue={editing?.observacoes ?? ''} className="input" rows={2} placeholder="Instruções específicas ou notas sobre a intervenção..." />
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Estado</label>
-                  <select name="status" defaultValue={editing?.status ?? 'pending'} className="input">
-                    {statuses.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Regras de Segurança</span>
-                  <a href="/dashboard/safety-rules" target="_blank" className="text-[11px] font-bold text-safety-orange hover:underline">
-                    Gerir Itens de Segurança ↗
-                  </a>
-                </div>
-                <DynamicList
-                  label=""
-                  icon={ShieldAlert}
-                  items={safetyRules}
-                  onChange={setSafetyRules}
-                  placeholder="Ex.: Usar EPI, desligar máquina antes…"
-                  addLabel="Adicionar regra"
-                  suggestions={PREDEFINED_SAFETY_RULES}
-                />
-              </div>
-
-              <TaskMaterialsPicker
-                items={materialsRequired}
-                onChange={setMaterialsRequired}
-                stockRefs={stockRefs}
-                stockLoading={stockLoading}
-              />
-
-              {isManager && (
-                <TaskDocPickerManager
-                  selectedFRs={requiredFRs}
-                  selectedITs={requiredITs}
-                  onChangeFRs={setRequiredFRs}
-                  onChangeITs={setRequiredITs}
-                />
-              )}
-
-              {error && <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">{error}</div>}
-
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={closeModal} className="btn-secondary flex-1">{dict.common.cancel}</button>
-                <button type="submit" disabled={busy} className="btn-primary flex-1">{busy ? dict.common.loading : dict.common.save}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal unificado para Criar ou Editar OT com registo de auditoria ERP */}
+      <CreateTaskModal
+        isOpen={showForm}
+        editingTask={editing}
+        onClose={closeModal}
+        assets={assets}
+        users={users}
+        stockRefs={stockRefs}
+        isManager={isManager}
+        onSuccess={() => {
+          closeModal()
+          router.refresh()
+        }}
+      />
     </div>
   )
 }

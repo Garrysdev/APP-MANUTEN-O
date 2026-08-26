@@ -3,6 +3,8 @@ import { Activity, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listAssets, listTasks } from '@/lib/firebase/data'
+import { planHas } from '@/lib/plans'
+import type { PlanName } from '@/types/models'
 import ReliabilityClient from './ReliabilityClient'
 
 export const dynamic = 'force-dynamic'
@@ -11,6 +13,9 @@ export default async function ReliabilityPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
   if (profile.role !== 'manager') redirect('/dashboard/tasks')
+
+  const plan = (profile.company?.plan ?? 'free') as PlanName
+  if (!planHas(plan, 'reliability')) redirect('/dashboard/billing?feature=reliability')
 
   const [assets, tasks] = await Promise.all([
     listAssets(profile.companyId),

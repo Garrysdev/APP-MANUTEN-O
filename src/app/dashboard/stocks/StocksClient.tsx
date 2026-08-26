@@ -321,17 +321,20 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 gap-4">
         <div>
-          <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-100 truncate">
-            {dict.stocks.title} ({items.length})
+          <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+            <span>{dict.stocks.title}</span>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+              {sortedItems.length} / {items.length}
+            </span>
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Cadastro de Inventário & Sobresselentes UR</p>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">Cadastro de Inventário & Sobresselentes UR</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           <button
             onClick={() => setShowBulkAssignModal(true)}
-            className="btn-secondary flex items-center gap-1.5 shrink-0 text-xs font-bold text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-900 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+            className="btn-secondary flex items-center gap-1.5 shrink-0 text-xs font-bold text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-900 hover:bg-purple-50 dark:hover:bg-purple-950/40 px-3 py-2"
             title="Atribuir artigos de stock a múltiplos equipamentos filtrando por Área e/ou TAG"
           >
             <Layers className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" />
@@ -339,10 +342,10 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
           </button>
           <button
             onClick={openCreate}
-            className="btn-primary flex items-center gap-1.5 shrink-0"
+            className="btn-primary flex items-center gap-1.5 shrink-0 text-xs font-bold px-3 py-2"
           >
             <Plus className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">{dict.stocks.newItem}</span>
+            <span>{dict.stocks.newItem}</span>
           </button>
         </div>
       </div>
