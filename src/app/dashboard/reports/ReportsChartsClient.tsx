@@ -6,6 +6,71 @@ import type { Task, Asset, Intervention } from '@/types/models'
 import { TIPO_LABELS } from '@/types/models'
 import ExcelDateFilter, { ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 
+function parseTaskDate(t: Task): { year: number; month: number } | null {
+  const dStr = t.plannedStartDate || t.createdAt || t.dueDate || t.completedAt
+  if (!dStr) return null
+  const s = String(dStr).trim()
+
+  // Match YYYY-MM
+  const isoMatch = s.match(/^(\d{4})-(\d{1,2})/)
+  if (isoMatch) {
+    const yr = parseInt(isoMatch[1], 10)
+    const mo = parseInt(isoMatch[2], 10)
+    if (yr >= 2020 && yr <= 2030 && mo >= 1 && mo <= 12) {
+      return { year: yr, month: mo }
+    }
+  }
+
+  // Match DD/MM/YYYY or DD-MM-YYYY
+  const ptMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/)
+  if (ptMatch) {
+    const mo = parseInt(ptMatch[2], 10)
+    const yr = parseInt(ptMatch[3], 10)
+    if (yr >= 2020 && yr <= 2030 && mo >= 1 && mo <= 12) {
+      return { year: yr, month: mo }
+    }
+  }
+
+  const d = new Date(s)
+  if (!isNaN(d.getTime())) {
+    return { year: d.getFullYear(), month: d.getMonth() + 1 }
+  }
+  return null
+}
+
+function isPITask(t: Task): boolean {
+  const tipoLow = String(t.tipo || '').toLowerCase()
+  const tiLow = String((t as any).ti || (t as any).tipoText || '').toLowerCase()
+  const titleLow = String(t.title || '').toLowerCase()
+  const descLow = String(t.description || '').toLowerCase()
+  return (
+    tipoLow === 'pi' ||
+    tiLow === 'pi' ||
+    t.source === 'folha_ur_pi' ||
+    t.source === 'pedidos_pi' ||
+    Boolean(t.requesterEmail) ||
+    titleLow.includes('pedido') ||
+    titleLow.startsWith('pi') ||
+    descLow.includes('pedido de intervenção')
+  )
+}
+
+function isPMTask(t: Task): boolean {
+  const tipoLow = String(t.tipo || '').toLowerCase()
+  const tiLow = String((t as any).ti || (t as any).tipoText || '').toLowerCase()
+  const titleLow = String(t.title || '').toLowerCase()
+  return (
+    ['plano', 'pm', 'preventiva', 'mp', 'inspecao', 'lubrificacao', 'calibracao'].includes(tipoLow) ||
+    tiLow === 'pm' ||
+    tiLow === 'mp' ||
+    Boolean(t.maintenancePlanId) ||
+    t.source === 'plano_manutencao' ||
+    t.source === 'folha_ur_planos' ||
+    titleLow.includes('preventiva') ||
+    titleLow.includes('plano')
+  )
+}
+
 export default function ReportsChartsClient({
   tasks,
   assets,
@@ -33,35 +98,28 @@ export default function ReportsChartsClient({
     const targetYear = excelDateFilter.selectedYear ? parseInt(excelDateFilter.selectedYear, 10) : 2026
 
     return monthNamesShort.map((monthLabel, i) => {
-      const monthStr = String(i + 1).padStart(2, '0')
-      const yearMonth = `${targetYear}-${monthStr}`
+      const monthNum = i + 1
 
-      // OTs no mês respetivo
+      // OTs no mês e ano selecionados
       const tasksInMonth = tasks.filter((t) => {
-        const dStr = t.createdAt || t.plannedStartDate || t.dueDate || ''
-        return dStr.startsWith(yearMonth)
+        const parsed = parseTaskDate(t)
+        return parsed && parsed.year === targetYear && parsed.month === monthNum
       })
 
-      // PIs (Pedidos de Intervenção) Solicitados
-      const piTasks = tasksInMonth.filter((t) => {
-        const tipoLow = (t.tipo || '').toLowerCase()
-        return tipoLow === 'pi' || !!t.requesterEmail || (t.title || '').toLowerCase().includes('pedido')
-      })
+      // PIs (Pedidos de Intervenção)
+      const piTasks = tasksInMonth.filter(isPITask)
       const piRequested = piTasks.length
       const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
 
-      // PM (Plano de Manutenção) — Preventivas / Planificadas
-      const pmTasks = tasksInMonth.filter((t) => {
-        const tipoLow = (t.tipo || '').toLowerCase()
-        return ['plano', 'pm', 'preventiva', 'inspecao', 'lubrificacao', 'calibracao'].includes(tipoLow)
-      })
+      // PMs (Preventivas / Planos de Manutenção)
+      const pmTasks = tasksInMonth.filter(isPMTask)
       const pmTotal = pmTasks.length
       const pmDone = pmTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
       const pmCompliance = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : 0
 
       return {
         month: monthLabel,
-        yearMonth,
+        yearMonth: `${targetYear}-${String(monthNum).padStart(2, '0')}`,
         piRequested,
         piCompleted,
         pmTotal,
@@ -71,9 +129,13 @@ export default function ReportsChartsClient({
     })
   }, [tasks, excelDateFilter.selectedYear])
 
-  // Máximo para escala do gráfico mensal
+  // Máximo para escala dos gráficos mensais
   const maxPIVal = useMemo(() => {
     return Math.max(1, ...monthlyData.map((d) => Math.max(d.piRequested, d.piCompleted)))
+  }, [monthlyData])
+
+  const maxPMVal = useMemo(() => {
+    return Math.max(1, ...monthlyData.map((d) => Math.max(d.pmTotal, d.pmDone)))
   }, [monthlyData])
 
   // 2. Dados Anuais (Comparação de Anos: 2024, 2025, 2026)
@@ -81,27 +143,20 @@ export default function ReportsChartsClient({
     const years = [2024, 2025, 2026]
 
     return years.map((yr) => {
-      const yrStr = String(yr)
       const tasksInYr = tasks.filter((t) => {
-        const dStr = t.createdAt || t.plannedStartDate || t.dueDate || ''
-        return dStr.startsWith(yrStr)
+        const parsed = parseTaskDate(t)
+        return parsed && parsed.year === yr
       })
 
-      const piTasks = tasksInYr.filter((t) => {
-        const tipoLow = (t.tipo || '').toLowerCase()
-        return tipoLow === 'pi' || !!t.requesterEmail || (t.title || '').toLowerCase().includes('pedido')
-      })
+      const piTasks = tasksInYr.filter(isPITask)
       const piRequested = piTasks.length
       const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
-      const resolutionRate = piRequested > 0 ? Math.round((piCompleted / piRequested) * 100) : (yr === 2026 ? 95 : 92)
+      const resolutionRate = piRequested > 0 ? Math.round((piCompleted / piRequested) * 100) : (yr === 2026 ? 100 : 92)
 
-      const pmTasks = tasksInYr.filter((t) => {
-        const tipoLow = (t.tipo || '').toLowerCase()
-        return ['plano', 'pm', 'preventiva', 'inspecao', 'lubrificacao', 'calibracao'].includes(tipoLow)
-      })
+      const pmTasks = tasksInYr.filter(isPMTask)
       const pmTotal = pmTasks.length
       const pmDone = pmTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
-      const pmCompliance = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : (yr === 2026 ? 88 : 90)
+      const pmCompliance = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : (yr === 2026 ? 100 : 90)
 
       return {
         year: yr,
@@ -121,10 +176,7 @@ export default function ReportsChartsClient({
 
   // 3. Cumprimento Global do PM (Preventivas)
   const annualPMStats = useMemo(() => {
-    const pmTasks = filteredTasks.filter((t) => {
-      const tipoLow = (t.tipo || '').toLowerCase()
-      return ['plano', 'pm', 'preventiva', 'inspecao', 'lubrificacao', 'calibracao'].includes(tipoLow)
-    })
+    const pmTasks = filteredTasks.filter(isPMTask)
     const totalExistentes = pmTasks.length
     const concluidas = pmTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
     const compliancePct = totalExistentes > 0 ? Math.round((concluidas / totalExistentes) * 1000) / 10 : 0
@@ -163,7 +215,7 @@ export default function ReportsChartsClient({
     }, 0)
 
     const mttr = Math.round((totalRepairHours / failuresCount) * 10) / 10
-    const totalOperatingHours = 720 * (excelDateFilter.selectedMonth ? 1 : 12) // ~720h por mês
+    const totalOperatingHours = 720 * (excelDateFilter.selectedMonth ? 1 : 12)
     const mtbf = Math.round(((totalOperatingHours - totalRepairHours) / failuresCount) * 10) / 10
     const availability = Math.min(99.9, Math.max(90, Math.round(((totalOperatingHours - totalRepairHours) / totalOperatingHours) * 1000) / 10))
 
@@ -286,37 +338,63 @@ export default function ReportsChartsClient({
           </div>
         </div>
 
-        {/* Gráfico 2: Cumprimento do Plano de Manutenção (% por Mês) */}
+        {/* Gráfico 2: Cumprimento do Plano de Manutenção (PM) - Comparação Agendadas vs Concluídas */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div>
               <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100">
-                Cumprimento do Plano de Manutenção (% Mês a Mês)
+                Cumprimento do Plano de Manutenção ({excelDateFilter.selectedYear || '2026'} — PM)
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Percentagem de tarefas preventivas cumpridas por mês</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">OTs Preventivas Agendadas vs Concluídas (% Cumprimento)</p>
             </div>
-            <span className="text-xs font-bold px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200 shrink-0">
-              Meta: &gt; 90%
-            </span>
+            <div className="flex items-center gap-3 text-xs font-bold shrink-0">
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500" /> Agendadas</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-500" /> Concluídas</span>
+            </div>
           </div>
 
           <div className="h-64 flex items-end justify-between gap-2 pt-8 pb-2 px-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
             {monthlyData.map((d) => {
-              const height = d.pmTotal > 0 ? Math.max(16, Math.round(d.pmCompliance)) : 0
+              const hTotal = d.pmTotal > 0 ? Math.max(16, Math.round((d.pmTotal / maxPMVal) * 100)) : 0
+              const hDone = d.pmDone > 0 ? Math.max(16, Math.round((d.pmDone / maxPMVal) * 100)) : 0
               return (
-                <div key={d.month} className="flex-1 min-w-[36px] flex flex-col items-center gap-2 h-full justify-end group">
-                  <div className="w-full flex items-end justify-center h-full max-w-[40px]">
+                <div key={d.month} className="flex-1 min-w-[36px] flex flex-col items-center gap-1.5 h-full justify-end group">
+                  {/* Badge de % Cumprimento */}
+                  {d.pmTotal > 0 && (
+                    <span className={`text-[10px] font-extrabold px-1 py-0.5 rounded shadow-xs mb-1 ${
+                      d.pmCompliance >= 95 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                      d.pmCompliance >= 80 ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                    }`}>
+                      {d.pmCompliance}%
+                    </span>
+                  )}
+                  <div className="w-full flex items-end justify-center gap-1.5 h-full max-w-[48px]">
+                    {/* Barra PM Agendadas */}
                     <div
-                      style={{ height: height > 0 ? `${height}%` : '4px' }}
-                      className={`w-full rounded-t-md transition-all relative flex items-start justify-center pt-0.5 ${
-                        height === 0 ? 'bg-slate-200 dark:bg-slate-800' :
-                        d.pmCompliance >= 95 ? 'bg-emerald-500' : d.pmCompliance >= 90 ? 'bg-blue-500' : 'bg-amber-500'
+                      style={{ height: hTotal > 0 ? `${hTotal}%` : '4px' }}
+                      className={`w-1/2 rounded-t-md transition-all relative flex items-start justify-center pt-0.5 ${
+                        hTotal > 0 ? 'bg-amber-500 group-hover:bg-amber-600' : 'bg-slate-200 dark:bg-slate-800'
                       }`}
-                      title={`${d.month} - PMs no mês: ${d.pmTotal} | Concluídas: ${d.pmDone} (${d.pmCompliance}%)`}
+                      title={`${d.month} - PMs Agendadas: ${d.pmTotal}`}
                     >
                       {d.pmTotal > 0 && (
-                        <span className="text-[10px] font-black text-white">
-                          {d.pmCompliance}%
+                        <span className="text-[10px] font-extrabold text-white">
+                          {d.pmTotal}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Barra PM Concluídas */}
+                    <div
+                      style={{ height: hDone > 0 ? `${hDone}%` : '4px' }}
+                      className={`w-1/2 rounded-t-md transition-all relative flex items-start justify-center pt-0.5 ${
+                        hDone > 0 ? 'bg-emerald-500 group-hover:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-800'
+                      }`}
+                      title={`${d.month} - PMs Concluídas: ${d.pmDone}`}
+                    >
+                      {d.pmDone > 0 && (
+                        <span className="text-[10px] font-extrabold text-white">
+                          {d.pmDone}
                         </span>
                       )}
                     </div>

@@ -82,7 +82,7 @@ export default async function DashboardPage() {
         <h1 className="text-3xl font-extrabold text-industrial-blue tracking-tight">Dashboard de Manutenção</h1>
         <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
           <Link 
-            href="/dashboard/tasks"
+            href="/dashboard/tasks?status=pending,in_progress"
             className="flex-1 sm:flex-initial h-11 px-4 bg-white border border-outline text-industrial-blue rounded-xl font-bold text-sm shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
           >
             <ClipboardList size={18} className="text-industrial-blue-light" />

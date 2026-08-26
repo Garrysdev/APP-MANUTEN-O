@@ -229,17 +229,24 @@ export default function TasksClient({
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [selectedStatuses, setSelectedStatuses] = useState<TaskStatus[]>(() => {
-    const paramStatus = searchParams.get('status')
-    if (paramStatus) {
-      const list = paramStatus.split(',').map((s) => s.trim()) as TaskStatus[]
-      const valid = list.filter((s) => ['pending', 'in_progress', 'done', 'cancelled'].includes(s))
-      if (valid.length > 0) return valid
+    const pStatus = searchParams.get('status')
+    if (pStatus) {
+      const list = pStatus.split(',').map((s) => s.trim() as TaskStatus).filter(Boolean)
+      if (list.length > 0) return list
     }
-    return ['pending', 'in_progress', 'done', 'cancelled'] // Padrão: Mostrar TODAS as OTs (Ativas + Histórico)
+    return ['pending', 'in_progress'] // DEFAULT: Pendente + Em Curso
   })
-  const [selectedTis, setSelectedTis] = useState<string[]>([])
-  const [filter, setFilter] = useState<'all' | 'open' | TaskStatus>('all')
+  const [selectedTIs, setSelectedTIs] = useState<string[]>([])
+  const [showTIPopover, setShowTIPopover] = useState(false)
   const [statusPending, startStatusTransition] = useTransition()
+
+  useEffect(() => {
+    const pStatus = searchParams.get('status')
+    if (pStatus) {
+      const list = pStatus.split(',').map((s) => s.trim() as TaskStatus).filter(Boolean)
+      if (list.length > 0) setSelectedStatuses(list)
+    }
+  }, [searchParams])
 
   const [safetyRules, setSafetyRules] = useState<string[]>([''])
   const [materialsRequired, setMaterialsRequired] = useState<string[]>([''])
@@ -510,7 +517,7 @@ export default function TasksClient({
     })
   }, [tasks, assets, users])
 
-  useEffect(() => { setCurrentPage(1) }, [search, filter, selectedStatuses, selectedTis, areaFilter, tagFilter, colF, pageSize])
+  useEffect(() => { setCurrentPage(1) }, [search, selectedStatuses, selectedTIs, areaFilter, tagFilter, colF, pageSize])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -523,34 +530,9 @@ export default function TasksClient({
         if (!filterByExcelDate(t.createdAt || t.plannedStartDate, excelInicioFilter)) return false
         if (!filterByExcelDate(t.dueDate || t.completedAt, excelFimFilter)) return false
 
-        // Filtro Multi-Seleção de Estados
+        // Filtro de Estado Multi-seleção
         if (selectedStatuses.length > 0 && selectedStatuses.length < 4) {
           if (!selectedStatuses.includes(t.status)) return false
-        } else if (filter === 'open' && (t.status === 'done' || t.status === 'cancelled')) {
-          return false
-        } else if (filter !== 'open' && filter !== 'all' && t.status !== filter) {
-          return false
-        }
-
-        // Filtro Multi-Seleção de TIs (Tipos de Intervenção)
-        if (selectedTis.length > 0) {
-          const tTipo = String(t.tipo || '').toLowerCase()
-          const tTi = String((t as any).ti || (t as any).tipoText || '').toLowerCase()
-          const matchesAnyTi = selectedTis.some((tiFilter) => {
-            const tf = tiFilter.toLowerCase()
-            if (tf === 'pi') return tTipo === 'pi' || tTi === 'pi'
-            if (tf === 'mc' || tf === 'curativa') return tTipo === 'curativa' || tTipo === 'mc' || tTi === 'mc'
-            if (tf === 'mp' || tf === 'preventiva') return tTipo === 'preventiva' || tTipo === 'mp' || tTi === 'mp'
-            if (tf === 'pm' || tf === 'plano') return tTipo === 'plano' || tTipo === 'pm' || tTi === 'pm'
-            if (tf === 'mi') return tTipo === 'mi' || tTi === 'mi'
-            if (tf === 'stp' || tf === 'pr') return tTipo === 'stp' || tTi === 'stp' || tTi === 'pr'
-            if (tf === 'ins' || tf === 'inspecao') return tTipo === 'inspecao' || tTipo === 'ins' || tTi === 'ins'
-            if (tf === 'lub' || tf === 'lubrificacao') return tTipo === 'lubrificacao' || tTipo === 'lub' || tTi === 'lub'
-            if (tf === 'cal' || tf === 'calibracao') return tTipo === 'calibracao' || tTipo === 'cal' || tTi === 'cal'
-            if (tf === 'out' || tf === 'outro') return tTipo === 'outro' || tTipo === 'out' || tTi === 'out'
-            return tTipo === tf || tTi === tf
-          })
-          if (!matchesAnyTi) return false
         }
 
         const aArea = ((t as any).area || (t.assetId ? assetAreaMap.get(t.assetId) : '') || '').trim().toLowerCase()
@@ -583,36 +565,42 @@ export default function TasksClient({
           const cTf = colF.tag.trim().toLowerCase()
           if (cTf && aTag !== cTf && !aTag.startsWith(cTf)) return false
         }
-        if (colF.ti) {
+
+        // Filtro Multi-Seleção de TI (Tipo de Intervenção)
+        if (selectedTIs.length > 0) {
+          const tTipo = String(t.tipo || '').toLowerCase()
+          const tTi = String((t as any).ti || (t as any).tipoText || '').toLowerCase()
+          const matchesAny = selectedTIs.some((tiCode) => {
+            const tiFilter = tiCode.toLowerCase().trim()
+            if (tiFilter === 'pi') return tTipo === 'pi' || tTi === 'pi'
+            if (tiFilter === 'mc' || tiFilter === 'curativa') return tTipo === 'curativa' || tTipo === 'mc' || tTi === 'mc'
+            if (tiFilter === 'mp' || tiFilter === 'preventiva') return tTipo === 'preventiva' || tTipo === 'mp' || tTi === 'mp'
+            if (tiFilter === 'pm' || tiFilter === 'plano') return tTipo === 'plano' || tTipo === 'pm' || tTi === 'pm'
+            if (tiFilter === 'mi') return tTipo === 'mi' || tTi === 'mi'
+            if (tiFilter === 'stp' || tiFilter === 'pr') return tTipo === 'stp' || tTi === 'stp' || tTi === 'pr'
+            if (tiFilter === 'ins' || tiFilter === 'inspecao') return tTipo === 'inspecao' || tTipo === 'ins' || tTi === 'ins'
+            if (tiFilter === 'lub' || tiFilter === 'lubrificacao') return tTipo === 'lubrificacao' || tTipo === 'lub' || tTi === 'lub'
+            if (tiFilter === 'cal' || tiFilter === 'calibracao') return tTipo === 'calibracao' || tTipo === 'cal' || tTi === 'cal'
+            if (tiFilter === 'out' || tiFilter === 'outro') return tTipo === 'outro' || tTipo === 'out' || tTi === 'out'
+            return tTipo === tiFilter || tTi === tiFilter
+          })
+          if (!matchesAny) return false
+        } else if (colF.ti) {
           const tiFilter = colF.ti.trim().toLowerCase()
           const tTipo = String(t.tipo || '').toLowerCase()
           const tTi = String((t as any).ti || (t as any).tipoText || '').toLowerCase()
           let matches = false
-
-          if (tiFilter === 'pi') {
-            matches = tTipo === 'pi' || tTi === 'pi'
-          } else if (tiFilter === 'mc' || tiFilter === 'curativa') {
-            matches = tTipo === 'curativa' || tTipo === 'mc' || tTi === 'mc'
-          } else if (tiFilter === 'mp' || tiFilter === 'preventiva') {
-            matches = tTipo === 'preventiva' || tTipo === 'mp' || tTi === 'mp'
-          } else if (tiFilter === 'pm' || tiFilter === 'plano') {
-            matches = tTipo === 'plano' || tTipo === 'pm' || tTi === 'pm'
-          } else if (tiFilter === 'mi') {
-            matches = tTipo === 'mi' || tTi === 'mi'
-          } else if (tiFilter === 'stp' || tiFilter === 'pr') {
-            matches = tTipo === 'stp' || tTi === 'stp' || tTi === 'pr'
-          } else if (tiFilter === 'ins' || tiFilter === 'inspecao') {
-            matches = tTipo === 'inspecao' || tTipo === 'ins' || tTi === 'ins'
-          } else if (tiFilter === 'lub' || tiFilter === 'lubrificacao') {
-            matches = tTipo === 'lubrificacao' || tTipo === 'lub' || tTi === 'lub'
-          } else if (tiFilter === 'cal' || tiFilter === 'calibracao') {
-            matches = tTipo === 'calibracao' || tTipo === 'cal' || tTi === 'cal'
-          } else if (tiFilter === 'out' || tiFilter === 'outro') {
-            matches = tTipo === 'outro' || tTipo === 'out' || tTi === 'out'
-          } else {
-            matches = tTipo === tiFilter || tTi === tiFilter
-          }
-
+          if (tiFilter === 'pi') matches = tTipo === 'pi' || tTi === 'pi'
+          else if (tiFilter === 'mc' || tiFilter === 'curativa') matches = tTipo === 'curativa' || tTipo === 'mc' || tTi === 'mc'
+          else if (tiFilter === 'mp' || tiFilter === 'preventiva') matches = tTipo === 'preventiva' || tTipo === 'mp' || tTi === 'mp'
+          else if (tiFilter === 'pm' || tiFilter === 'plano') matches = tTipo === 'plano' || tTipo === 'pm' || tTi === 'pm'
+          else if (tiFilter === 'mi') matches = tTipo === 'mi' || tTi === 'mi'
+          else if (tiFilter === 'stp' || tiFilter === 'pr') matches = tTipo === 'stp' || tTi === 'stp' || tTi === 'pr'
+          else if (tiFilter === 'ins' || tiFilter === 'inspecao') matches = tTipo === 'inspecao' || tTipo === 'ins' || tTi === 'ins'
+          else if (tiFilter === 'lub' || tiFilter === 'lubrificacao') matches = tTipo === 'lubrificacao' || tTipo === 'lub' || tTi === 'lub'
+          else if (tiFilter === 'cal' || tiFilter === 'calibracao') matches = tTipo === 'calibracao' || tTipo === 'cal' || tTi === 'cal'
+          else if (tiFilter === 'out' || tiFilter === 'outro') matches = tTipo === 'outro' || tTipo === 'out' || tTi === 'out'
+          else matches = tTipo === tiFilter || tTi === tiFilter
           if (!matches) return false
         }
         if (colF.avaria) {
@@ -658,7 +646,7 @@ export default function TasksClient({
         return true
       })
       .map(({ task }) => task)
-  }, [searchIndex, filter, selectedStatuses, selectedTis, areaFilter, tagFilter, search, colF, assetAreaMap, assetTagMap, users, userName, excelDateFilter, excelInicioFilter, excelFimFilter])
+  }, [searchIndex, selectedStatuses, selectedTIs, areaFilter, tagFilter, search, colF, assetAreaMap, assetTagMap, users, userName, excelDateFilter, excelInicioFilter, excelFimFilter])
 
   // Ordenação por coluna (tarefa 15)
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Task>(
@@ -707,131 +695,66 @@ export default function TasksClient({
 
       {/* Filtros por estado, pesquisa e tamanho de página */}
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-      {/* Filtros por Estado (Multi-Seleção) */}
-      <div className="space-y-3 mb-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Estados:</span>
-          
-          {/* Botão Principal: Todas as OTs (Ativas + Histórico) */}
+        <div className="flex gap-2 flex-wrap items-center">
           <button
-            type="button"
-            onClick={() => {
-              setFilter('all')
-              setSelectedStatuses(['pending', 'in_progress', 'done', 'cancelled'])
-            }}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer ${
-              selectedStatuses.length === 4
-                ? 'bg-industrial-blue text-white ring-2 ring-industrial-blue/30 font-black'
-                : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
+            onClick={() => setSelectedStatuses(['pending', 'in_progress'])}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
+              selectedStatuses.length === 2 && selectedStatuses.includes('pending') && selectedStatuses.includes('in_progress')
+                ? 'bg-industrial-blue text-white shadow-industrial-blue/20'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            📋 Todas as OTs ({tasks.length})
+            <span>⚡ Ativas (Pendente + Em Curso)</span>
           </button>
 
-          {/* Botão Atalho: Ativas (Pendente + Em Curso) */}
           <button
-            type="button"
-            onClick={() => {
-              setFilter('all')
-              setSelectedStatuses(['pending', 'in_progress'])
-            }}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
-              selectedStatuses.includes('pending') && selectedStatuses.includes('in_progress') && !selectedStatuses.includes('done') && !selectedStatuses.includes('cancelled')
-                ? 'bg-amber-600 text-white ring-2 ring-amber-600/30'
-                : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
+            onClick={() => setSelectedStatuses(['done', 'cancelled'])}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
+              selectedStatuses.length === 2 && selectedStatuses.includes('done') && selectedStatuses.includes('cancelled')
+                ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-slate-900/20'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            <span>⚡ Só Ativas (Pendente + Em Curso)</span>
+            <span>📜 Histórico (Concluídas + Canceladas)</span>
           </button>
 
-          {/* Botões individuais de Estado com Toggle */}
+          <button
+            onClick={() => setSelectedStatuses(['pending', 'in_progress', 'done', 'cancelled'])}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
+              selectedStatuses.length >= 4
+                ? 'bg-industrial-blue text-white shadow-industrial-blue/20'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            <span>📋 Todas as OTs</span>
+          </button>
+
+          <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 mx-1 hidden sm:block" />
+
           {statuses.map((s) => {
-            const isActive = selectedStatuses.includes(s)
+            const isSel = selectedStatuses.includes(s)
             return (
               <button
                 key={s}
-                type="button"
                 onClick={() => {
-                  setFilter('all')
-                  if (isActive) {
-                    if (selectedStatuses.length > 1) {
-                      setSelectedStatuses(selectedStatuses.filter((x) => x !== s))
-                    }
+                  if (isSel) {
+                    if (selectedStatuses.length > 1) setSelectedStatuses(selectedStatuses.filter((st) => st !== s))
                   } else {
                     setSelectedStatuses([...selectedStatuses, s])
                   }
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
-                  isActive
-                    ? s === 'done'
-                      ? 'bg-emerald-600 text-white ring-2 ring-emerald-600/30'
-                      : s === 'pending'
-                      ? 'bg-slate-700 text-white ring-2 ring-slate-700/30'
-                      : s === 'in_progress'
-                      ? 'bg-amber-600 text-white ring-2 ring-amber-600/30'
-                      : 'bg-red-600 text-white'
-                    : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                  isSel
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-white' : 'bg-slate-400'}`} />
-                <span>{s === 'done' ? 'Concluídas (Histórico)' : STATUS_LABELS[s]}</span>
+                <span>{isSel ? '✓' : '+'}</span>
+                <span>{STATUS_LABELS[s]}</span>
               </button>
             )
           })}
         </div>
-
-        {/* Filtros por Tipo de Intervenção (TI — Multi-Seleção) */}
-        <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-slate-200/60 dark:border-slate-800">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Filtro TI:</span>
-          
-          <button
-            type="button"
-            onClick={() => setSelectedTis([])}
-            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
-              selectedTis.length === 0
-                ? 'bg-slate-800 text-white'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-            }`}
-          >
-            Todos os TIs
-          </button>
-
-          {[
-            { id: 'PI', label: 'PI - Pedido Intervenção', color: 'bg-red-600 text-white border-red-600' },
-            { id: 'MC', label: 'MC - Curativa', color: 'bg-amber-600 text-white border-amber-600' },
-            { id: 'MP', label: 'MP - Preventiva', color: 'bg-purple-600 text-white border-purple-600' },
-            { id: 'PM', label: 'PM - Plano', color: 'bg-blue-600 text-white border-blue-600' },
-            { id: 'STP', label: 'STP - Set-up / Preparação', color: 'bg-lime-600 text-white border-lime-600' },
-            { id: 'MI', label: 'MI - Investimento', color: 'bg-indigo-600 text-white border-indigo-600' },
-            { id: 'INS', label: 'INS - Inspeção', color: 'bg-teal-600 text-white border-teal-600' },
-            { id: 'LUB', label: 'LUB - Lubrificação', color: 'bg-cyan-600 text-white border-cyan-600' },
-            { id: 'CAL', label: 'CAL - Calibração', color: 'bg-emerald-600 text-white border-emerald-600' },
-            { id: 'OUT', label: 'OUT - Outro', color: 'bg-slate-600 text-white border-slate-600' },
-          ].map((item) => {
-            const isSelected = selectedTis.includes(item.id)
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  if (isSelected) {
-                    setSelectedTis(selectedTis.filter((x) => x !== item.id))
-                  } else {
-                    setSelectedTis([...selectedTis, item.id])
-                  }
-                }}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all cursor-pointer ${
-                  isSelected
-                    ? `${item.color} shadow-sm ring-1 ring-offset-1`
-                    : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                {isSelected ? `✓ ${item.id}` : item.id}
-              </button>
-            )
-          })}
-        </div>
-      </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Seletor de Filtro por Área */}
@@ -928,24 +851,87 @@ export default function TasksClient({
                     ))}
                   </select>
                 </td>
-                <td className="p-1">
-                  <select
-                    value={colF.ti}
-                    onChange={(e) => setCol('ti', e.target.value)}
-                    className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded"
+                <td className="p-1 relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowTIPopover(!showTIPopover)}
+                    className={`input !text-[11px] !py-0.5 !px-1.5 w-full font-bold rounded flex items-center justify-between gap-1 cursor-pointer ${
+                      selectedTIs.length > 0
+                        ? 'bg-industrial-blue text-white border-industrial-blue'
+                        : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'
+                    }`}
                   >
-                    <option value="">TI (Todos)</option>
-                    <option value="MC">MC - Curativa</option>
-                    <option value="MP">MP - Preventiva</option>
-                    <option value="PM">PM - Plano</option>
-                    <option value="PI">PI - Pedido Intervenção</option>
-                    <option value="MI">MI - Investimento</option>
-                    <option value="PR">PR - Projeto</option>
-                    <option value="INS">INS - Inspeção</option>
-                    <option value="LUB">LUB - Lubrificação</option>
-                    <option value="CAL">CAL - Calibração</option>
-                    <option value="OUT">OUT - Outro</option>
-                  </select>
+                    <span className="truncate">
+                      {selectedTIs.length === 0
+                        ? 'TI (Todos)'
+                        : `TI (${selectedTIs.length})`}
+                    </span>
+                    <span className="text-[10px]">▼</span>
+                  </button>
+
+                  {showTIPopover && (
+                    <div className="absolute top-full left-0 z-50 mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-2 space-y-1 text-xs">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-slate-800 px-1">
+                        <span className="font-extrabold text-[11px] text-slate-700 dark:text-slate-300 uppercase">Filtrar TIs</span>
+                        {selectedTIs.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTIs([])}
+                            className="text-[10px] text-red-500 font-bold hover:underline"
+                          >
+                            Limpar ({selectedTIs.length})
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="max-h-48 overflow-y-auto space-y-1 py-1 custom-scrollbar">
+                        {[
+                          { code: 'PI', label: 'PI - Pedido Intervenção' },
+                          { code: 'MC', label: 'MC - Curativa' },
+                          { code: 'MP', label: 'MP - Preventiva' },
+                          { code: 'PM', label: 'PM - Plano' },
+                          { code: 'MI', label: 'MI - Investimento' },
+                          { code: 'STP', label: 'STP / PR - Projeto' },
+                          { code: 'INS', label: 'INS - Inspeção' },
+                          { code: 'LUB', label: 'LUB - Lubrificação' },
+                          { code: 'CAL', label: 'CAL - Calibração' },
+                          { code: 'OUT', label: 'OUT - Outro' },
+                        ].map(({ code, label }) => {
+                          const isChecked = selectedTIs.includes(code)
+                          return (
+                            <label
+                              key={code}
+                              className="flex items-center gap-2 px-1.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded cursor-pointer text-[11px] font-semibold text-slate-800 dark:text-slate-200"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedTIs([...selectedTIs, code])
+                                  } else {
+                                    setSelectedTIs(selectedTIs.filter((c) => c !== code))
+                                  }
+                                }}
+                                className="rounded text-industrial-blue focus:ring-industrial-blue h-3.5 w-3.5"
+                              />
+                              <span>{label}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+
+                      <div className="pt-1 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setShowTIPopover(false)}
+                          className="px-2 py-0.5 bg-industrial-blue text-white rounded text-[10px] font-bold"
+                        >
+                          Fechar
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </td>
                 <td className="p-1"><input value={colF.avaria} onChange={(e) => setCol('avaria', e.target.value)} placeholder="Avaria..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
                 <td className="p-1">
