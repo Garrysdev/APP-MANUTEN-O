@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect, useTransition, useId, useMemo } from 'react'
+import { useState, useEffect, useTransition, useId, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import ExcelJS from 'exceljs'
 import {
   Plus, Pencil, Trash2, ClipboardList, X, Play, CheckCircle2,
   ShieldAlert, Package, CalendarClock, Building2, Scale, Eye,
+  FileSpreadsheet, Printer, Upload,
 } from 'lucide-react'
 import { format3DigitId } from '../history/HistoryClient'
 import {
@@ -34,8 +36,9 @@ import {
   loadPlanTaskRefsAction, loadStockRefsAction, type StockMaterialRef,
 } from './actions'
 import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
-import { createMaintenancePlanAction } from '../maintenance-plan/actions'
+import { createMaintenancePlanAction, importMaintenancePlansAction } from '../maintenance-plan/actions'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
+import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 
 const PERIODICIDADE_OPTIONS: Periodicidade[] = ['semanal', 'mensal', 'trimestral', 'bianual', 'anual', 'bienal', 'trianual', 'horas', 'pontual']
 
@@ -234,10 +237,12 @@ export default function TasksClient({
       const list = pStatus.split(',').map((s) => s.trim() as TaskStatus).filter(Boolean)
       if (list.length > 0) return list
     }
-    return ['pending', 'in_progress'] // DEFAULT: Pendente + Em Curso
+    return [] // DEFAULT: Mostrar todas as OTs por omissão
   })
   const [selectedTIs, setSelectedTIs] = useState<string[]>([])
-  const [showTIPopover, setShowTIPopover] = useState(false)
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedTechs, setSelectedTechs] = useState<string[]>([])
   const [statusPending, startStatusTransition] = useTransition()
 
   useEffect(() => {
@@ -458,23 +463,28 @@ export default function TasksClient({
 
   const uniqueTags = useMemo(() => {
     const set = new Set<string>()
-    const af = areaFilter.trim().toLowerCase()
+    const activeAreas = selectedAreas.length > 0
+      ? selectedAreas.map((a) => a.trim().toLowerCase())
+      : (areaFilter.trim() ? [areaFilter.trim().toLowerCase()] : [])
+
     assets.forEach((a) => {
       const aArea = (a.area || '').trim().toLowerCase()
       const aTag = (a.tag || '').trim()
-      if (!af || aArea === af || aArea.startsWith(af) || aTag.toLowerCase().startsWith(af)) {
+      if (activeAreas.length === 0 || activeAreas.some((af) => aArea === af)) {
         if (aTag) set.add(aTag)
       }
     })
+
     tasks.forEach((t: any) => {
       const tArea = ((t as any).area || assetAreaMap.get(t.assetId) || '').trim().toLowerCase()
       const tag = (t as any).tag || assetTagMap.get(t.assetId)
-      if (!af || tArea === af || tArea.startsWith(af) || (tag && tag.toLowerCase().startsWith(af))) {
+      if (activeAreas.length === 0 || activeAreas.some((af) => tArea === af)) {
         if (tag && tag.trim() && tag !== '—') set.add(tag.trim())
       }
     })
+
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-  }, [assets, tasks, areaFilter, assetAreaMap, assetTagMap])
+  }, [assets, tasks, selectedAreas, areaFilter, assetAreaMap, assetTagMap])
 
   const uniqueTechnicians = useMemo(() => {
     const map = new Map<string, string>()
@@ -517,7 +527,7 @@ export default function TasksClient({
     })
   }, [tasks, assets, users])
 
-  useEffect(() => { setCurrentPage(1) }, [search, selectedStatuses, selectedTIs, areaFilter, tagFilter, colF, pageSize])
+  useEffect(() => { setCurrentPage(1) }, [search, selectedStatuses, selectedTIs, selectedAreas, selectedTags, selectedTechs, areaFilter, tagFilter, colF, pageSize])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -538,14 +548,26 @@ export default function TasksClient({
         const aArea = ((t as any).area || (t.assetId ? assetAreaMap.get(t.assetId) : '') || '').trim().toLowerCase()
         const aTag = ((t as any).tag || (t.assetId ? assetTagMap.get(t.assetId) : '') || '').trim().toLowerCase()
 
-        // Filtro de Área no topo
-        if (af) {
-          if (aArea !== af && !aArea.startsWith(af)) return false
+        // Filtro Multi-Seleção de Área
+        if (selectedAreas.length > 0) {
+          const isMatch = selectedAreas.some((areaCode) => {
+            const cAf = areaCode.trim().toLowerCase()
+            return aArea === cAf
+          })
+          if (!isMatch) return false
+        } else if (af) {
+          if (aArea !== af) return false
         }
 
-        // Filtro de TAG no topo
-        if (tf) {
-          if (aTag !== tf && !aTag.startsWith(tf)) return false
+        // Filtro Multi-Seleção de TAG
+        if (selectedTags.length > 0) {
+          const isMatch = selectedTags.some((tagCode) => {
+            const cTf = tagCode.trim().toLowerCase()
+            return aTag === cTf
+          })
+          if (!isMatch) return false
+        } else if (tf) {
+          if (aTag !== tf) return false
         }
 
         // Filtros por coluna na tabela
@@ -557,13 +579,13 @@ export default function TasksClient({
           const dStr = (t.createdAt || t.plannedStartDate || '').toLowerCase()
           if (!dStr.includes(colF.data.trim().toLowerCase())) return false
         }
-        if (colF.area) {
+        if (colF.area && selectedAreas.length === 0) {
           const cAf = colF.area.trim().toLowerCase()
-          if (cAf && aArea !== cAf && !aArea.startsWith(cAf)) return false
+          if (cAf && aArea !== cAf) return false
         }
-        if (colF.tag) {
+        if (colF.tag && selectedTags.length === 0) {
           const cTf = colF.tag.trim().toLowerCase()
-          if (cTf && aTag !== cTf && !aTag.startsWith(cTf)) return false
+          if (cTf && aTag !== cTf) return false
         }
 
         // Filtro Multi-Seleção de TI (Tipo de Intervenção)
@@ -607,7 +629,35 @@ export default function TasksClient({
           const avStr = String(t.title || '').toLowerCase()
           if (!avStr.includes(colF.avaria.trim().toLowerCase())) return false
         }
-        if (colF.tecnico) {
+        // Filtro Multi-Seleção de Técnico
+        if (selectedTechs.length > 0) {
+          const assignedId = String(t.assignedTo || '').toLowerCase()
+          const assignedText = String((t as any).assignedToText || '').toLowerCase()
+          const displayUser = String(userName(t.assignedTo) || '').toLowerCase()
+          const assignedIds = (t.assignedToIds || []).map((x) => String(x).toLowerCase())
+
+          const matchesTech = selectedTechs.some((tecFilterRaw) => {
+            const tecFilter = tecFilterRaw.trim().toLowerCase()
+            if (assignedId === tecFilter || assignedText === tecFilter || displayUser.includes(tecFilter) || assignedIds.includes(tecFilter)) {
+              return true
+            }
+            const userObj = users.find(u => 
+              u.id.toLowerCase() === tecFilter || 
+              (u.abbreviation && u.abbreviation.toLowerCase() === tecFilter) || 
+              u.name.toLowerCase() === tecFilter
+            )
+            if (userObj) {
+              if (assignedIds.includes(userObj.id.toLowerCase()) || (userObj.abbreviation && assignedIds.includes(userObj.abbreviation.toLowerCase()))) {
+                return true
+              }
+              if (assignedId === userObj.id.toLowerCase() || (userObj.abbreviation && assignedId === userObj.abbreviation.toLowerCase()) || displayUser.includes(userObj.name.toLowerCase())) {
+                return true
+              }
+            }
+            return false
+          })
+          if (!matchesTech) return false
+        } else if (colF.tecnico) {
           const tecFilter = colF.tecnico.trim().toLowerCase()
           const assignedId = String(t.assignedTo || '').toLowerCase()
           const assignedText = String((t as any).assignedToText || '').toLowerCase()
@@ -646,18 +696,39 @@ export default function TasksClient({
         return true
       })
       .map(({ task }) => task)
-  }, [searchIndex, selectedStatuses, selectedTIs, areaFilter, tagFilter, search, colF, assetAreaMap, assetTagMap, users, userName, excelDateFilter, excelInicioFilter, excelFimFilter])
+  }, [searchIndex, selectedStatuses, selectedTIs, selectedAreas, selectedTags, selectedTechs, areaFilter, tagFilter, search, colF, assetAreaMap, assetTagMap, users, userName, excelDateFilter, excelInicioFilter, excelFimFilter])
 
-  // Ordenação por coluna (tarefa 15)
+  // Helper para converter qualquer data PT (DD-MM-YYYY) ou ISO (YYYY-MM-DD) em carimbo de data/hora comparável
+  const parseDateToTs = (dStr?: string | null) => {
+    if (!dStr) return 0
+    const s = String(dStr).trim()
+    const ptMatch = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
+    if (ptMatch) {
+      return new Date(parseInt(ptMatch[3], 10), parseInt(ptMatch[2], 10) - 1, parseInt(ptMatch[1], 10)).getTime()
+    }
+    const isoMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
+    if (isoMatch) {
+      return new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10)).getTime()
+    }
+    const d = new Date(s)
+    return isNaN(d.getTime()) ? 0 : d.getTime()
+  }
+
+  // Ordenação por coluna
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Task>(
     filtered,
     {
-      title: (t) => t.title?.toLowerCase(),
-      tipo: (t) => TIPO_LABELS[t.tipo] ?? t.tipo,
-      asset: (t) => assetName(t.assetId),
-      assignee: (t) => userName(t.assignedTo),
-      status: (t) => STATUS_LABELS[t.status],
-      dueDate: (t) => t.dueDate ?? null,
+      id: (t) => String((t as any).otNumber || t.id).toLowerCase(),
+      data: (t) => parseDateToTs(t.createdAt || t.plannedStartDate || (t as any).completedAt),
+      area: (t) => String((t as any).area || (t.assetId ? assetAreaMap.get(t.assetId) : '') || '').toLowerCase(),
+      tag: (t) => String((t as any).tag || (t.assetId ? assetTagMap.get(t.assetId) : '') || '').toLowerCase(),
+      ti: (t) => String(t.tipo || (t as any).ti || '').toLowerCase(),
+      title: (t) => String(t.title || '').toLowerCase(),
+      assignee: (t) => String(userName(t.assignedTo) || '').toLowerCase(),
+      inicio: (t) => parseDateToTs(t.plannedStartDate || t.createdAt),
+      fim: (t) => parseDateToTs(t.dueDate || t.completedAt),
+      obs: (t) => String(t.observacoes || (t as any).causa || '').toLowerCase(),
+      status: (t) => STATUS_LABELS[t.status] || t.status,
     },
     null,
   )
@@ -673,6 +744,101 @@ export default function TasksClient({
   const criticidades: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
   const tipos: TipoTarefa[] = ['pi', 'curativa', 'mi', 'plano', 'stp', 'preventiva', 'mp', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 
+  const importInputRef = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
+
+  async function handleExportXLS() {
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Ordens de Trabalho', { views: [{ showGridLines: true }] })
+
+    sheet.mergeCells('A1:K1')
+    const titleCell = sheet.getCell('A1')
+    titleCell.value = 'ORDENS DE TRABALHO (FR-MAN-09 / PL-MAN-01)'
+    titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFFFF' } }
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B4F72' } }
+    titleCell.alignment = { vertical: 'middle', horizontal: 'center' }
+    sheet.getRow(1).height = 32
+
+    const headers = ['ID OT', 'DATA', 'ÁREA', 'TAG / EQUIPAMENTO', 'TI', 'AVARIA / DESCRIÇÃO', 'TÉCNICO', 'INÍCIO', 'FIM', 'CAUSA / OBS', 'ESTADO']
+    const headerRow = sheet.getRow(3)
+    headerRow.values = headers
+    headerRow.height = 26
+    headerRow.eachCell((cell) => {
+      cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E86C1' } }
+      cell.alignment = { vertical: 'middle', horizontal: 'center' }
+    })
+
+    shown.forEach((t) => {
+      const area = (t as any).area || (t.assetId ? assetAreaMap.get(t.assetId) : '') || '—'
+      const tag = (t as any).tag || (t.assetId ? assetTagMap.get(t.assetId) : '') || '—'
+      const ti = (t.tipo || (t as any).ti || 'MC').toUpperCase()
+      const tec = userName(t.assignedTo) || (t as any).assignedToText || '—'
+      const dt = t.createdAt ? formatDate(t.createdAt) : '—'
+      const inDate = t.plannedStartDate ? formatDate(t.plannedStartDate) : '—'
+      const fmDate = t.dueDate || t.completedAt ? formatDate(t.dueDate || t.completedAt) : '—'
+      const statusLabel = STATUS_LABELS[t.status] || t.status
+
+      const row = sheet.addRow([
+        (t as any).otNumber || t.id,
+        dt,
+        area,
+        tag,
+        ti,
+        t.title,
+        tec,
+        inDate,
+        fmDate,
+        t.observacoes || (t as any).causa || '—',
+        statusLabel,
+      ])
+      row.height = 20
+    })
+
+    sheet.columns = [
+      { width: 14 },
+      { width: 14 },
+      { width: 14 },
+      { width: 22 },
+      { width: 10 },
+      { width: 38 },
+      { width: 20 },
+      { width: 14 },
+      { width: 14 },
+      { width: 30 },
+      { width: 16 },
+    ]
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = window.URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `Ordens_de_Trabalho_${new Date().toISOString().slice(0, 10)}.xlsx`
+    anchor.click()
+    window.URL.revokeObjectURL(url)
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setImporting(true)
+    const fd = new FormData()
+    fd.set('file', file)
+    const result = await importMaintenancePlansAction(fd)
+    setImporting(false)
+    if (result.error) alert(result.error)
+    else {
+      alert(`Importação concluída com sucesso! (${result.created ?? 0} registos importados/atualizados)`)
+      router.refresh()
+    }
+  }
+
+  function handlePrint() {
+    window.print()
+  }
+
   return (
     <div className="w-full max-w-[1500px] mx-auto animate-fade-in-up">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 gap-4">
@@ -687,10 +853,42 @@ export default function TasksClient({
             Ordens de Trabalho ativas e pendentes da equipa
           </p>
         </div>
-        <button onClick={openCreate} className="shrink-0 h-10 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
-          <Plus size={16} className="stroke-[2.5] shrink-0" />
-          <span>{dict.tasks.newTask}</span>
-        </button>
+
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <button
+            onClick={handleExportXLS}
+            className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Exportar lista de OTs filtradas para ficheiro Excel (.xlsx)"
+          >
+            <FileSpreadsheet className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Exportar Excel</span>
+          </button>
+
+          <button
+            onClick={handlePrint}
+            className="px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Imprimir / Exportar lista de OTs para PDF"
+          >
+            <Printer className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Imprimir (PDF)</span>
+          </button>
+
+          <button
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+            className="px-3 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Importar ficheiro Excel de OTs ou Plano de Manutenção (FR-MAN-09 / PL-MAN-01)"
+          >
+            <Upload className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{importing ? 'A importar...' : 'Importar'}</span>
+          </button>
+          <input ref={importInputRef} type="file" accept=".xls,.xlsx,.xlsb" onChange={handleImportFile} className="hidden" />
+
+          <button onClick={openCreate} className="h-10 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+            <Plus size={16} className="stroke-[2.5] shrink-0" />
+            <span>{dict.tasks.newTask}</span>
+          </button>
+        </div>
       </div>
 
       {/* Filtros por estado, pesquisa e tamanho de página */}
@@ -756,44 +954,45 @@ export default function TasksClient({
           })}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Seletor de Filtro por Área */}
-          <select
-            value={areaFilter}
-            onChange={(e) => { setAreaFilter(e.target.value); setTagFilter('') }}
-            className="input text-xs py-1.5 px-2.5 w-36 font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
-          >
-            <option value="">-- Área: Todas --</option>
-            {uniqueAreas.map((area) => (
-              <option key={area} value={area}>Área: {area}</option>
-            ))}
-          </select>
+        <div className="flex items-center gap-2.5 flex-nowrap overflow-x-auto py-1 w-full sm:w-auto">
+          {/* Seletor Multi-Seleção de Área */}
+          <div className="shrink-0 min-w-[180px] max-w-[240px]">
+            <MultiSelectPopoverFilter
+              label="Área"
+              options={uniqueAreas.map((area) => ({ value: area, label: `Área: ${area}` }))}
+              selectedValues={selectedAreas}
+              onChange={setSelectedAreas}
+              placeholder="-- Área: Todas --"
+              width="w-64"
+            />
+          </div>
 
-          {/* Seletor de Filtro por TAG */}
-          <select
-            value={tagFilter}
-            onChange={(e) => setTagFilter(e.target.value)}
-            className="input text-xs py-1.5 px-2.5 w-36 font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
-          >
-            <option value="">-- TAG: Todas --</option>
-            {uniqueTags.map((tag) => (
-              <option key={tag} value={tag}>TAG: {tag}</option>
-            ))}
-          </select>
+          {/* Seletor Multi-Seleção de TAG */}
+          <div className="shrink-0 min-w-[180px] max-w-[240px]">
+            <MultiSelectPopoverFilter
+              label="TAG"
+              options={uniqueTags.map((tag) => ({ value: tag, label: `TAG: ${tag}` }))}
+              selectedValues={selectedTags}
+              onChange={setSelectedTags}
+              placeholder="-- TAG: Todas --"
+              width="w-64"
+            />
+          </div>
 
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Pesquisar OT..."
-            className="input text-xs py-1.5 px-3 w-40 sm:w-48"
+            className="input !text-xs !py-1.5 !px-3 w-40 sm:w-48 shrink-0 font-medium rounded-xl"
           />
-          <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
+
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium shrink-0">
             <span>Por página:</span>
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
-              className="input text-xs py-1 px-2 w-auto"
+              className="select !text-xs !py-1 !px-2 font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg shadow-xs"
             >
               <option value={20}>20</option>
               <option value={50}>50</option>
@@ -805,158 +1004,89 @@ export default function TasksClient({
         </div>
       </div>
 
-      <div className="card overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800">
-        <div className="overflow-x-auto custom-scrollbar">
+      <div className="card shadow-lg border border-slate-200 dark:border-slate-800">
+        <div className="overflow-x-auto custom-scrollbar min-h-[450px]">
           <table className="w-full text-xs min-w-[940px] table-fixed">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
-                <SortableTh label="ID" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1.5 py-2" />
-                <SortableTh label="DATA" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[75px] px-1.5 py-2" />
-                <SortableTh label="ÁREA" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1.5 py-2" />
-                <SortableTh label="EQUIPAMENTO / TAG" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[110px] px-1.5 py-2" />
-                <SortableTh label="TI" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[50px] px-1.5 py-2" />
-                <SortableTh label="AVARIA / DESCRIÇÃO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[160px] px-1.5 py-2" />
-                <SortableTh label="TÉCNICOS" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[100px] px-1.5 py-2" />
-                <SortableTh label="INÍCIO" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[75px] px-1.5 py-2" />
-                <SortableTh label="FIM" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[75px] px-1.5 py-2" />
-                <SortableTh label="CAUSA / OBS" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[115px] px-1.5 py-2" />
-                <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[80px] px-1.5 py-2" />
-                <th className="w-[90px] px-1.5 py-2 text-right font-mono text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">AÇÕES</th>
+                <SortableTh label="ID" sortableKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1.5 py-2" />
+                <SortableTh label="DATA" sortableKey="data" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-1.5 py-2" />
+                <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[70px] px-1.5 py-2" />
+                <SortableTh label="EQUIPAMENTO / TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[125px] px-1.5 py-2" />
+                <SortableTh label="TI" sortableKey="ti" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[65px] px-1.5 py-2" />
+                <SortableTh label="AVARIA / DESCRIÇÃO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[150px] px-1.5 py-2" />
+                <SortableTh label="TÉCNICOS" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[110px] px-1.5 py-2" />
+                <SortableTh label="INÍCIO" sortableKey="inicio" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-1.5 py-2" />
+                <SortableTh label="FIM" sortableKey="fim" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-1.5 py-2" />
+                <SortableTh label="CAUSA / OBS" sortableKey="obs" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[110px] px-1.5 py-2" />
+                <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-1.5 py-2" />
               </tr>
               {/* Linha de Filtro por Coluna */}
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
-                <td className="p-1"><input value={colF.id} onChange={(e) => setCol('id', e.target.value)} placeholder="000..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
+                <td className="p-1 relative"><input value={colF.id} onChange={(e) => setCol('id', e.target.value)} placeholder="000..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
                 <td className="p-1 relative"><ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} /></td>
-                <td className="p-1">
-                  <select
-                    value={colF.area}
-                    onChange={(e) => setCol('area', e.target.value)}
-                    className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded"
-                  >
-                    <option value="">Área (Todas)</option>
-                    {uniqueAreas.map((a) => (
-                      <option key={a} value={a}>{a}</option>
-                    ))}
-                  </select>
-                </td>
-                <td className="p-1">
-                  <select
-                    value={colF.tag}
-                    onChange={(e) => setCol('tag', e.target.value)}
-                    className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded"
-                  >
-                    <option value="">TAG (Todas)</option>
-                    {uniqueTags.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
+                <td className="p-1 relative">
+                  <MultiSelectPopoverFilter
+                    label="Área"
+                    options={uniqueAreas.map((a) => ({ value: a, label: a }))}
+                    selectedValues={selectedAreas}
+                    onChange={setSelectedAreas}
+                    placeholder="Área (Todas)"
+                    width="w-56"
+                  />
                 </td>
                 <td className="p-1 relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowTIPopover(!showTIPopover)}
-                    className={`input !text-[11px] !py-0.5 !px-1.5 w-full font-bold rounded flex items-center justify-between gap-1 cursor-pointer ${
-                      selectedTIs.length > 0
-                        ? 'bg-industrial-blue text-white border-industrial-blue'
-                        : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'
-                    }`}
-                  >
-                    <span className="truncate">
-                      {selectedTIs.length === 0
-                        ? 'TI (Todos)'
-                        : `TI (${selectedTIs.length})`}
-                    </span>
-                    <span className="text-[10px]">▼</span>
-                  </button>
-
-                  {showTIPopover && (
-                    <div className="absolute top-full left-0 z-50 mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-2 space-y-1 text-xs">
-                      <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-slate-800 px-1">
-                        <span className="font-extrabold text-[11px] text-slate-700 dark:text-slate-300 uppercase">Filtrar TIs</span>
-                        {selectedTIs.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedTIs([])}
-                            className="text-[10px] text-red-500 font-bold hover:underline"
-                          >
-                            Limpar ({selectedTIs.length})
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="max-h-48 overflow-y-auto space-y-1 py-1 custom-scrollbar">
-                        {[
-                          { code: 'PI', label: 'PI - Pedido Intervenção' },
-                          { code: 'MC', label: 'MC - Curativa' },
-                          { code: 'MP', label: 'MP - Preventiva' },
-                          { code: 'PM', label: 'PM - Plano' },
-                          { code: 'MI', label: 'MI - Investimento' },
-                          { code: 'STP', label: 'STP / PR - Projeto' },
-                          { code: 'INS', label: 'INS - Inspeção' },
-                          { code: 'LUB', label: 'LUB - Lubrificação' },
-                          { code: 'CAL', label: 'CAL - Calibração' },
-                          { code: 'OUT', label: 'OUT - Outro' },
-                        ].map(({ code, label }) => {
-                          const isChecked = selectedTIs.includes(code)
-                          return (
-                            <label
-                              key={code}
-                              className="flex items-center gap-2 px-1.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded cursor-pointer text-[11px] font-semibold text-slate-800 dark:text-slate-200"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedTIs([...selectedTIs, code])
-                                  } else {
-                                    setSelectedTIs(selectedTIs.filter((c) => c !== code))
-                                  }
-                                }}
-                                className="rounded text-industrial-blue focus:ring-industrial-blue h-3.5 w-3.5"
-                              />
-                              <span>{label}</span>
-                            </label>
-                          )
-                        })}
-                      </div>
-
-                      <div className="pt-1 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => setShowTIPopover(false)}
-                          className="px-2 py-0.5 bg-industrial-blue text-white rounded text-[10px] font-bold"
-                        >
-                          Fechar
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <MultiSelectPopoverFilter
+                    label="TAG"
+                    options={uniqueTags.map((t) => ({ value: t, label: t }))}
+                    selectedValues={selectedTags}
+                    onChange={setSelectedTags}
+                    placeholder="TAG (Todas)"
+                    width="w-64"
+                  />
                 </td>
-                <td className="p-1"><input value={colF.avaria} onChange={(e) => setCol('avaria', e.target.value)} placeholder="Avaria..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
-                <td className="p-1">
-                  <select
-                    value={colF.tecnico}
-                    onChange={(e) => setCol('tecnico', e.target.value)}
-                    className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded"
-                  >
-                    <option value="">Técnico (Todos)</option>
-                    {uniqueTechnicians.map(([val, label]) => (
-                      <option key={val} value={val}>{label}</option>
-                    ))}
-                  </select>
+                <td className="p-1 relative">
+                  <MultiSelectPopoverFilter
+                    label="TI"
+                    options={[
+                      { value: 'PI', label: 'PI - Pedido Intervenção' },
+                      { value: 'MC', label: 'MC - Curativa' },
+                      { value: 'MP', label: 'MP - Preventiva' },
+                      { value: 'PM', label: 'PM - Plano' },
+                      { value: 'MI', label: 'MI - Investimento' },
+                      { value: 'STP', label: 'STP / PR - Projeto' },
+                      { value: 'INS', label: 'INS - Inspeção' },
+                      { value: 'LUB', label: 'LUB - Lubrificação' },
+                      { value: 'CAL', label: 'CAL - Calibração' },
+                      { value: 'OUT', label: 'OUT - Outro' },
+                    ]}
+                    selectedValues={selectedTIs}
+                    onChange={setSelectedTIs}
+                    placeholder="TI (Todos)"
+                    width="w-56"
+                  />
+                </td>
+                <td className="p-1 relative"><input value={colF.avaria} onChange={(e) => setCol('avaria', e.target.value)} placeholder="Avaria..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
+                <td className="p-1 relative">
+                  <MultiSelectPopoverFilter
+                    label="Técnico"
+                    options={uniqueTechnicians.map(([val, label]) => ({ value: val, label }))}
+                    selectedValues={selectedTechs}
+                    onChange={setSelectedTechs}
+                    placeholder="Técnico (Todos)"
+                    width="w-56"
+                  />
                 </td>
                 <td className="p-1 relative"><ExcelColumnDateFilter values={excelInicioFilter} onChange={setExcelInicioFilter} /></td>
                 <td className="p-1 relative"><ExcelColumnDateFilter values={excelFimFilter} onChange={setExcelFimFilter} /></td>
-                <td className="p-1"><input value={colF.obs} onChange={(e) => setCol('obs', e.target.value)} placeholder="Obs..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
-                <td className="p-1" />
-                <td className="p-1" />
+                <td className="p-1 relative"><input value={colF.obs} onChange={(e) => setCol('obs', e.target.value)} placeholder="Obs..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
+                <td className="p-1 relative" />
               </tr>
             </thead>
             <tbody>
               {currentShown.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={11} className="px-5 py-12 text-center text-slate-400">
                     <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />
                     <p className="text-sm font-medium">{dict.tasks.empty}</p>
                     <button
@@ -977,9 +1107,14 @@ export default function TasksClient({
                   const asset = assets.find((a) => a.id === t.assetId)
                   const formattedId = format3DigitId(t.id, idx)
                   return (
-                    <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors group">
+                    <tr
+                      key={t.id}
+                      onClick={() => router.push(`/dashboard/tasks/${t.id}`)}
+                      className="border-b border-slate-100 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group"
+                      title="Clique para abrir e ver/editar a OT"
+                    >
                       <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
-                        <span className="bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200">{formattedId}</span>
+                        <span className="bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200 group-hover:border-blue-400 group-hover:bg-blue-100/80 transition-colors">{formattedId}</span>
                       </td>
                       <td className="px-3 py-2.5 font-mono font-semibold text-slate-800 whitespace-nowrap">
                         {formatDate(t.createdAt || t.plannedStartDate)}
@@ -994,9 +1129,9 @@ export default function TasksClient({
                         <TipoBadge tipo={t.tipo} codeOnly={true} />
                       </td>
                       <td className="px-3 py-2.5 text-slate-900 font-semibold max-w-[280px]">
-                        <Link href={`/dashboard/tasks/${t.id}`} className="hover:text-safety-orange transition-colors underline-offset-2 hover:underline">
+                        <span className="group-hover:text-industrial-blue group-hover:underline transition-colors">
                           {t.title}
-                        </Link>
+                        </span>
                       </td>
                       <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">
                         {(() => {
@@ -1043,23 +1178,6 @@ export default function TasksClient({
                         <span className={`badge-${t.status}`}>
                           {STATUS_LABELS[t.status]}
                         </span>
-                      </td>
-                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          <Link href={`/dashboard/tasks/${t.id}`} className="p-1 text-slate-500 hover:text-blue-600 rounded" title="Ver Detalhes">
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                          {isManager && (
-                            <>
-                              <button onClick={() => setEditing(t)} className="p-1 text-slate-500 hover:text-blue-600 rounded" title="Editar">
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button onClick={() => handleDelete(t)} className="p-1 text-slate-500 hover:text-red-600 rounded" title="Eliminar">
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
                       </td>
                     </tr>
                   )

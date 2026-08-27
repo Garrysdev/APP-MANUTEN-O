@@ -27,27 +27,14 @@ export default async function TasksPage() {
   )
 
   const isRGAdmin = profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
-  const isTechnician = profile.role === 'technician' && !isRGAdmin
-
-  const pId = (profile.id || '').toLowerCase()
-  const pAbbr = (profile.abbreviation || '').toLowerCase()
-  const pName = (profile.name || '').toLowerCase()
-
-  const tasks = isTechnician
-    ? normalTasks.filter((t) => {
-        const area = (t.area || '').trim()
-        const isArea80 = area === '80' || area.includes('80')
-        const isNotDone = t.status !== 'done'
-        return isArea80 && isNotDone
-      })
-    : normalTasks
+  const tasks = normalTasks
 
   const activeTasks = tasks.filter((t) => t.status !== 'done')
 
   return (
     <Suspense fallback={<div className="p-6 text-slate-500 font-medium">A carregar Gestão de OTs...</div>}>
       <TasksClient
-        tasks={activeTasks}
+        tasks={tasks}
         assets={assets}
         users={users.map((u) => ({
           id: u.id,

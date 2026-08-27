@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { Task, Asset, Intervention } from '@/types/models'
 import { TIPO_LABELS } from '@/types/models'
 import ExcelDateFilter, { ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
+import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 
 function parseTaskDate(t: Task): { year: number; month: number } | null {
   const dStr = t.plannedStartDate || t.createdAt || t.dueDate || t.completedAt
@@ -41,33 +42,21 @@ function parseTaskDate(t: Task): { year: number; month: number } | null {
 function isPITask(t: Task): boolean {
   const tipoLow = String(t.tipo || '').toLowerCase()
   const tiLow = String((t as any).ti || (t as any).tipoText || '').toLowerCase()
-  const titleLow = String(t.title || '').toLowerCase()
-  const descLow = String(t.description || '').toLowerCase()
-  return (
-    tipoLow === 'pi' ||
-    tiLow === 'pi' ||
-    t.source === 'folha_ur_pi' ||
-    t.source === 'pedidos_pi' ||
-    Boolean(t.requesterEmail) ||
-    titleLow.includes('pedido') ||
-    titleLow.startsWith('pi') ||
-    descLow.includes('pedido de intervenção')
-  )
+  return tipoLow === 'pi' || tiLow === 'pi'
 }
 
 function isPMTask(t: Task): boolean {
   const tipoLow = String(t.tipo || '').toLowerCase()
   const tiLow = String((t as any).ti || (t as any).tipoText || '').toLowerCase()
-  const titleLow = String(t.title || '').toLowerCase()
   return (
-    ['plano', 'pm', 'preventiva', 'mp', 'inspecao', 'lubrificacao', 'calibracao'].includes(tipoLow) ||
-    tiLow === 'pm' ||
+    tipoLow === 'mp' ||
+    tipoLow === 'pm' ||
+    tipoLow === 'preventiva' ||
+    tipoLow === 'plano' ||
     tiLow === 'mp' ||
-    Boolean(t.maintenancePlanId) ||
-    t.source === 'plano_manutencao' ||
-    t.source === 'folha_ur_planos' ||
-    titleLow.includes('preventiva') ||
-    titleLow.includes('plano')
+    tiLow === 'pm' ||
+    tiLow === 'preventiva' ||
+    tiLow === 'plano'
   )
 }
 
@@ -81,11 +70,60 @@ export default function ReportsChartsClient({
   interventions: Intervention[]
 }) {
   const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedTIs, setSelectedTIs] = useState<string[]>([])
 
-  // Filtragem estrita de tarefas pela data selecionada
+  const uniqueAreas = useMemo(() => {
+    const set = new Set<string>()
+    assets.forEach((a) => { if (a.area && a.area.trim()) set.add(a.area.trim()) })
+    return Array.from(set).sort()
+  }, [assets])
+
+  const uniqueTags = useMemo(() => {
+    const set = new Set<string>()
+    assets.forEach((a) => { if (a.tag && a.tag.trim()) set.add(a.tag.trim()) })
+    return Array.from(set).sort()
+  }, [assets])
+
+  // Filtragem estrita de tarefas pela data e filtros multi-seleção
   const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => filterByExcelDate(t.plannedStartDate || t.createdAt, excelDateFilter))
-  }, [tasks, excelDateFilter])
+    const assetMap = new Map(assets.map((a) => [a.id, a]))
+    return tasks.filter((t) => {
+      if (!filterByExcelDate(t.plannedStartDate || t.createdAt, excelDateFilter)) return false
+
+      const assetObj = t.assetId ? assetMap.get(t.assetId) : null
+      const aArea = ((t as any).area || assetObj?.area || '').trim().toLowerCase()
+      const aTag = ((t as any).tag || assetObj?.tag || '').trim().toLowerCase()
+      const tTipo = String(t.tipo || '').toLowerCase()
+      const tTi = String((t as any).ti || (t as any).tipoText || '').toLowerCase()
+
+      if (selectedAreas.length > 0) {
+        if (!selectedAreas.some((a) => aArea === a.toLowerCase() || aArea.startsWith(a.toLowerCase()))) return false
+      }
+      if (selectedTags.length > 0) {
+        if (!selectedTags.some((tag) => aTag === tag.toLowerCase() || aTag.startsWith(tag.toLowerCase()))) return false
+      }
+      if (selectedTIs.length > 0) {
+        const matchesAny = selectedTIs.some((tiCode) => {
+          const tiFilter = tiCode.toLowerCase().trim()
+          if (tiFilter === 'pi') return tTipo === 'pi' || tTi === 'pi'
+          if (tiFilter === 'mc' || tiFilter === 'curativa') return tTipo === 'curativa' || tTipo === 'mc' || tTi === 'mc'
+          if (tiFilter === 'mp' || tiFilter === 'preventiva') return tTipo === 'preventiva' || tTipo === 'mp' || tTi === 'mp'
+          if (tiFilter === 'pm' || tiFilter === 'plano') return tTipo === 'plano' || tTipo === 'pm' || tTi === 'pm'
+          if (tiFilter === 'mi') return tTipo === 'mi' || tTi === 'mi'
+          if (tiFilter === 'stp' || tiFilter === 'pr') return tTipo === 'stp' || tTi === 'stp' || tTi === 'pr'
+          if (tiFilter === 'ins' || tiFilter === 'inspecao') return tTipo === 'inspecao' || tTipo === 'ins' || tTi === 'ins'
+          if (tiFilter === 'lub' || tiFilter === 'lubrificacao') return tTipo === 'lubrificacao' || tTipo === 'lub' || tTi === 'lub'
+          if (tiFilter === 'cal' || tiFilter === 'calibracao') return tTipo === 'calibracao' || tTipo === 'cal' || tTi === 'cal'
+          if (tiFilter === 'out' || tiFilter === 'outro') return tTipo === 'outro' || tTipo === 'out' || tTi === 'out'
+          return tTipo === tiFilter || tTi === tiFilter
+        })
+        if (!matchesAny) return false
+      }
+      return true
+    })
+  }, [tasks, assets, excelDateFilter, selectedAreas, selectedTags, selectedTIs])
 
   // Filtragem de intervenções
   const filteredInterventions = useMemo(() => {
@@ -101,7 +139,7 @@ export default function ReportsChartsClient({
       const monthNum = i + 1
 
       // OTs no mês e ano selecionados
-      const tasksInMonth = tasks.filter((t) => {
+      const tasksInMonth = filteredTasks.filter((t) => {
         const parsed = parseTaskDate(t)
         return parsed && parsed.year === targetYear && parsed.month === monthNum
       })
@@ -127,7 +165,7 @@ export default function ReportsChartsClient({
         pmCompliance,
       }
     })
-  }, [tasks, excelDateFilter.selectedYear])
+  }, [filteredTasks, excelDateFilter.selectedYear])
 
   // Máximo para escala dos gráficos mensais
   const maxPIVal = useMemo(() => {
@@ -143,7 +181,7 @@ export default function ReportsChartsClient({
     const years = [2024, 2025, 2026]
 
     return years.map((yr) => {
-      const tasksInYr = tasks.filter((t) => {
+      const tasksInYr = filteredTasks.filter((t) => {
         const parsed = parseTaskDate(t)
         return parsed && parsed.year === yr
       })
@@ -151,12 +189,12 @@ export default function ReportsChartsClient({
       const piTasks = tasksInYr.filter(isPITask)
       const piRequested = piTasks.length
       const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
-      const resolutionRate = piRequested > 0 ? Math.round((piCompleted / piRequested) * 100) : (yr === 2026 ? 100 : 92)
+      const resolutionRate = piRequested > 0 ? Math.round((piCompleted / piRequested) * 100) : (yr === 2026 && piRequested === 0 ? 100 : 92)
 
       const pmTasks = tasksInYr.filter(isPMTask)
       const pmTotal = pmTasks.length
       const pmDone = pmTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
-      const pmCompliance = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : (yr === 2026 ? 100 : 90)
+      const pmCompliance = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : (yr === 2026 && pmTotal === 0 ? 100 : 90)
 
       return {
         year: yr,
@@ -168,7 +206,7 @@ export default function ReportsChartsClient({
         pmCompliance,
       }
     })
-  }, [tasks])
+  }, [filteredTasks])
 
   const maxYrPI = useMemo(() => {
     return Math.max(1, ...yearlyStats.map((y) => Math.max(y.piRequested, y.piCompleted)))
@@ -228,9 +266,44 @@ export default function ReportsChartsClient({
 
   return (
     <div className="space-y-6 my-6">
-      {/* Filtro de Data Estilo Excel */}
-      <div className="no-print">
+      {/* Filtro de Data Estilo Excel & Multi-Seleção */}
+      <div className="no-print space-y-3">
         <ExcelDateFilter values={excelDateFilter} onChange={setExcelDateFilter} />
+        <div className="flex items-center gap-2 flex-wrap bg-white dark:bg-slate-900 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <span className="text-xs font-extrabold uppercase text-slate-500 mr-1">Filtros Relatório:</span>
+          <MultiSelectPopoverFilter
+            label="Área"
+            options={uniqueAreas.map((a) => ({ value: a, label: `Área: ${a}` }))}
+            selectedValues={selectedAreas}
+            onChange={setSelectedAreas}
+            placeholder="Área (Todas)"
+          />
+          <MultiSelectPopoverFilter
+            label="TAG"
+            options={uniqueTags.map((t) => ({ value: t, label: `TAG: ${t}` }))}
+            selectedValues={selectedTags}
+            onChange={setSelectedTags}
+            placeholder="TAG (Todas)"
+          />
+          <MultiSelectPopoverFilter
+            label="TI"
+            options={[
+              { value: 'PI', label: 'PI - Pedido Intervenção' },
+              { value: 'MC', label: 'MC - Curativa' },
+              { value: 'MP', label: 'MP - Preventiva' },
+              { value: 'PM', label: 'PM - Plano' },
+              { value: 'MI', label: 'MI - Investimento' },
+              { value: 'STP', label: 'STP / PR - Projeto' },
+              { value: 'INS', label: 'INS - Inspeção' },
+              { value: 'LUB', label: 'LUB - Lubrificação' },
+              { value: 'CAL', label: 'CAL - Calibração' },
+              { value: 'OUT', label: 'OUT - Outro' },
+            ]}
+            selectedValues={selectedTIs}
+            onChange={setSelectedTIs}
+            placeholder="TI (Todos)"
+          />
+        </div>
       </div>
 
       {/* Cartões KPI Globais */}
@@ -335,6 +408,45 @@ export default function ReportsChartsClient({
                 </div>
               )
             })}
+          </div>
+
+          {/* Tabela de Contas PI Mês a Mês */}
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Tabela de Contas: Pedidos de PI ({excelDateFilter.selectedYear || '2026'})</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px] text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700">
+                    <th className="py-1 px-2">Mês</th>
+                    <th className="py-1 px-2 text-center">PIs Pedidos</th>
+                    <th className="py-1 px-2 text-center">PIs Concluídos</th>
+                    <th className="py-1 px-2 text-center">% Resolução</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                  {monthlyData.map((d) => (
+                    <tr key={d.month} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                      <td className="py-1 px-2 font-bold text-slate-800 dark:text-slate-200">{d.month}</td>
+                      <td className="py-1 px-2 text-center text-blue-600 dark:text-blue-400 font-bold">{d.piRequested}</td>
+                      <td className="py-1 px-2 text-center text-emerald-600 dark:text-emerald-400 font-bold">{d.piCompleted}</td>
+                      <td className="py-1 px-2 text-center font-bold">
+                        {d.piRequested > 0 ? `${Math.round((d.piCompleted / d.piRequested) * 100)}%` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-slate-100/80 dark:bg-slate-800/80 font-bold border-t border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100">
+                    <td className="py-1.5 px-2">Total Ano</td>
+                    <td className="py-1.5 px-2 text-center text-blue-700 dark:text-blue-300">{monthlyData.reduce((acc, d) => acc + d.piRequested, 0)}</td>
+                    <td className="py-1.5 px-2 text-center text-emerald-700 dark:text-emerald-300">{monthlyData.reduce((acc, d) => acc + d.piCompleted, 0)}</td>
+                    <td className="py-1.5 px-2 text-center text-emerald-600 dark:text-emerald-400">
+                      {monthlyData.reduce((acc, d) => acc + d.piRequested, 0) > 0
+                        ? `${Math.round((monthlyData.reduce((acc, d) => acc + d.piCompleted, 0) / monthlyData.reduce((acc, d) => acc + d.piRequested, 0)) * 100)}%`
+                        : '100%'}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 

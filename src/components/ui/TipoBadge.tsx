@@ -13,8 +13,8 @@ export function getTipoBadgeClass(tipo: TipoTarefa | string): string {
     // MC - Amarelo torrado
     return 'bg-amber-600 text-white border border-amber-700 font-extrabold shadow-sm'
   }
-  if (t === 'mi' || t === 'investimento') {
-    // MI (Manutenção Curativa / Interna) - Verde escuro
+  if (t === 'mi' || t === 'investimento' || t === 'melhoria') {
+    // MI (Investimento / Melhoria) - Verde escuro
     return 'bg-emerald-900 text-white border border-emerald-950 font-bold shadow-sm'
   }
   if (t === 'plano' || t === 'pm') {
@@ -54,7 +54,7 @@ export function TipoBadge({ tipo, codeOnly = false }: { tipo: TipoTarefa | strin
   const code = (
     t === 'projeto' || t === 'projetos' || t === 'projecto' || t === 'projectos' || t === 'pr' ? 'PR' :
     t === 'curativa' || t === 'mc' ? 'MC' :
-    t === 'mi' ? 'MI' :
+    t === 'mi' || t === 'melhoria' || t === 'investimento' ? 'MI' :
     t === 'preventiva' || t === 'mp' ? 'MP' :
     t === 'plano' || t === 'pm' ? 'PM' :
     t === 'pi' ? 'PI' :

@@ -239,6 +239,7 @@ export interface MaintenancePlan {
   updatedAt: string
   lastGeneratedAt?: string | null
   // ── Campos do Plano de Manutenção (PLMAN01) ──
+  code?: string | null // Código da tarefa de plano (ex.: 101 Y1 A1)
   periodicidade?: Periodicidade | null // periodicidade normalizada
   periodicidadeLabel?: string | null // rótulo original do Excel, ex.: "BIANUAL-STP"
   executor?: Executor | null // interno / externo (-STP)

@@ -14,6 +14,7 @@ import { useTableSort, SortableTh } from '@/lib/useTableSort'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
+import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 
 import jsQR from 'jsqr'
 
@@ -37,7 +38,10 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
   const [colAreaFilter, setColAreaFilter] = useState('')
   const [colTagFilter, setColTagFilter] = useState('')
   const [colNameFilter, setColNameFilter] = useState('')
-  const [estadoFilter, setEstadoFilter] = useState<'all' | 'active' | 'inactive'>('active')
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedNames, setSelectedNames] = useState<string[]>([])
+  const [estadoFilter, setEstadoFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [selectedAssets, setSelectedAssets] = useState<Set<string>>(new Set())
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
@@ -441,16 +445,26 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
     return assets.filter((a) => {
       if (estadoFilter === 'active' && a.active === false) return false
       if (estadoFilter === 'inactive' && a.active !== false) return false
-      if (areaQ && !(a.area || '').toLowerCase().includes(areaQ)) return false
-      if (tagQ && !(a.tag || '').toLowerCase().includes(tagQ)) return false
-      if (nameQ && !(a.name || '').toLowerCase().includes(nameQ)) return false
+
+      if (selectedAreas.length > 0) {
+        if (!selectedAreas.some((ar) => (a.area || '').trim().toLowerCase() === ar.trim().toLowerCase())) return false
+      } else if (areaQ && !(a.area || '').toLowerCase().includes(areaQ)) return false
+
+      if (selectedTags.length > 0) {
+        if (!selectedTags.some((tg) => (a.tag || '').trim().toLowerCase() === tg.trim().toLowerCase())) return false
+      } else if (tagQ && !(a.tag || '').toLowerCase().includes(tagQ)) return false
+
+      if (selectedNames.length > 0) {
+        if (!selectedNames.some((nm) => (a.name || '').trim().toLowerCase() === nm.trim().toLowerCase())) return false
+      } else if (nameQ && !(a.name || '').toLowerCase().includes(nameQ)) return false
+
       if (q) {
         const haystack = `${a.name || ''} ${a.location || ''} ${a.type || ''} ${a.area || ''} ${a.tag || ''} ${a.manufacturer || ''} ${(a.tags || []).join(' ')}`.toLowerCase()
         if (!haystack.includes(q)) return false
       }
       return true
     })
-  }, [assets, search, estadoFilter, colAreaFilter, colTagFilter, colNameFilter])
+  }, [assets, search, estadoFilter, colAreaFilter, colTagFilter, colNameFilter, selectedAreas, selectedTags, selectedNames])
 
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Asset>(
     filtered,
@@ -663,46 +677,36 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 <SortableTh label={dict.assets.colTag} sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
                 <SortableTh label={dict.assets.colName} sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
                 <SortableTh label={dict.common.status} sortableKey="active" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
-                <th className="px-3 py-3 text-right text-xs font-bold text-slate-700 uppercase tracking-wide">{dict.common.actions}</th>
               </tr>
               {/* Linha de Filtro por Colunas em Equipamentos */}
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
                 <td className="p-1" />
                 <td className="p-1">
-                  <select
-                    value={colAreaFilter}
-                    onChange={(e) => setColAreaFilter(e.target.value)}
-                    className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded"
-                  >
-                    <option value="">Área (Todas)</option>
-                    {uniqueAreas.map((a) => (
-                      <option key={String(a)} value={String(a)}>{String(a)}</option>
-                    ))}
-                  </select>
+                  <MultiSelectPopoverFilter
+                    label="Área"
+                    options={uniqueAreas.map((a) => ({ value: String(a), label: String(a) }))}
+                    selectedValues={selectedAreas}
+                    onChange={setSelectedAreas}
+                    placeholder="Área (Todas)"
+                  />
                 </td>
                 <td className="p-1">
-                  <select
-                    value={colTagFilter}
-                    onChange={(e) => setColTagFilter(e.target.value)}
-                    className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded"
-                  >
-                    <option value="">TAG (Todas)</option>
-                    {uniqueTags.map((t) => (
-                      <option key={String(t)} value={String(t)}>{String(t)}</option>
-                    ))}
-                  </select>
+                  <MultiSelectPopoverFilter
+                    label="TAG"
+                    options={uniqueTags.map((t) => ({ value: String(t), label: String(t) }))}
+                    selectedValues={selectedTags}
+                    onChange={setSelectedTags}
+                    placeholder="TAG (Todas)"
+                  />
                 </td>
                 <td className="p-1">
-                  <select
-                    value={colNameFilter}
-                    onChange={(e) => setColNameFilter(e.target.value)}
-                    className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded"
-                  >
-                    <option value="">Nome (Todos)</option>
-                    {uniqueNames.map((n) => (
-                      <option key={String(n)} value={String(n)}>{String(n)}</option>
-                    ))}
-                  </select>
+                  <MultiSelectPopoverFilter
+                    label="Nome"
+                    options={uniqueNames.map((n) => ({ value: String(n), label: String(n) }))}
+                    selectedValues={selectedNames}
+                    onChange={setSelectedNames}
+                    placeholder="Nome (Todos)"
+                  />
                 </td>
                 <td className="p-1">
                   <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value as any)} className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded">
@@ -711,13 +715,12 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                     <option value="inactive">Inativo</option>
                   </select>
                 </td>
-                <td className="p-1" />
               </tr>
             </thead>
             <tbody>
               {currentShown.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={5} className="px-5 py-12 text-center text-slate-400">
                     <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
                     <p className="text-sm font-medium">{temFiltro ? dict.assets.emptyFilter : dict.assets.empty}</p>
                     {temFiltro && (
@@ -735,9 +738,9 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 currentShown.map((a) => (
                   <tr
                     key={a.id}
-                    onClick={() => router.push(`/dashboard/assets/${a.id}`)}
+                    onClick={() => openEdit(a)}
                     className="border-b border-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition-colors cursor-pointer"
-                    title={`Clique para abrir Histórico de OTs e detalhes de ${a.name}`}
+                    title={`Clique para editar / visualizar ${a.name}`}
                   >
                     <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedAssets.has(a.id)} onChange={() => toggleSelection(a.id)} className="rounded border-slate-300 bg-white" />
@@ -770,36 +773,6 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                       <span className={a.active ? 'badge-done' : 'badge-cancelled'}>
                         {a.active ? dict.assets.lblActive : dict.assets.lblInactive}
                       </span>
-                    </td>
-                    <td className="px-3 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => router.push(`/dashboard/assets/${a.id}`)}
-                        className="text-slate-600 dark:text-slate-400 hover:text-industrial-blue dark:hover:text-blue-400 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
-                        title="Ver Histórico de OTs e Ficha Técnica"
-                      >
-                        <History className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => openEdit(a)}
-                        className="text-slate-600 dark:text-slate-400 hover:text-blue-700 dark:hover:text-blue-300 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
-                        title="Editar Equipamento"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setPrintQRAsset(a)}
-                        className="text-slate-600 dark:text-slate-400 hover:text-purple-700 dark:hover:text-purple-300 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
-                        title="Imprimir QR Code / Etiqueta"
-                      >
-                        <QrCode className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(a)}
-                        className="text-slate-600 dark:text-slate-400 hover:text-red-700 dark:hover:text-red-400 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
                     </td>
                   </tr>
                 ))

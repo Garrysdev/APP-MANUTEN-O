@@ -15,8 +15,8 @@ function serialize<T>(doc: DocumentSnapshot): T {
 
 export const DEMO_COMPANY_ID = 'rjHNaSUbLm4qTMyKP0oX'
 export function isDemoCompany(companyId: string): boolean {
-  if (!companyId) return true
-  return companyId === DEMO_COMPANY_ID || companyId === 'demo' || companyId.includes('rjHNaSUbLm4qTMyKP0oX')
+  if (!companyId) return false
+  return companyId === 'demo' || companyId === 'demo_company'
 }
 
 // ── LOCAL FALLBACK LOADERS (Quando o Firebase Firestore atinge a quota diária) ──
@@ -242,26 +242,10 @@ export const listAssets = cache(async function(companyId: string, limitCount = 2
       .limit(limitCount)
       .get()
     const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
-    if (!isDemoCompany(companyId)) {
-      if (dbDocs.length > 0) {
-        return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      }
-      return getFallbackAssets()
+    if (dbDocs.length > 0) {
+      return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     }
-    const fallbacks = getFallbackAssets()
-    if (dbDocs.length === 0) return fallbacks
-
-    const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
-    const tagMap = new Map(dbDocs.filter(d => d.tag).map((d) => [d.tag!.toLowerCase().trim(), d]))
-
-    const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
-    const mergedFallbacks = fallbacks.map((f) => {
-      if (dbMap.has(f.id)) return dbMap.get(f.id)!
-      if (f.tag && tagMap.has(f.tag.toLowerCase().trim())) return tagMap.get(f.tag.toLowerCase().trim())!
-      return f
-    })
-
-    return [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    return getFallbackAssets()
   } catch (err) {
     console.error('[listAssets] Error:', err)
   }
@@ -282,26 +266,10 @@ export const listAssetRefs = cache(async function(companyId: string): Promise<{ 
       tag: (d.data().tag as string) ?? null,
       area: (d.data().area as string) ?? null,
     }))
-    if (!isDemoCompany(companyId)) {
-      if (dbDocs.length > 0) {
-        return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
-      }
-      return getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))
+    if (dbDocs.length > 0) {
+      return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
     }
-    const fallbacks = getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))
-    if (dbDocs.length === 0) return fallbacks
-
-    const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
-    const tagMap = new Map(dbDocs.filter(d => d.tag).map((d) => [d.tag!.toLowerCase().trim(), d]))
-
-    const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
-    const mergedFallbacks = fallbacks.map((f) => {
-      if (dbMap.has(f.id)) return dbMap.get(f.id)!
-      if (f.tag && tagMap.has(f.tag.toLowerCase().trim())) return tagMap.get(f.tag.toLowerCase().trim())!
-      return f
-    })
-
-    return [...customDocs, ...mergedFallbacks].sort((a, b) => a.name.localeCompare(b.name))
+    return getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))
   } catch (err) {
     console.error('[listAssetRefs] Error:', err)
   }
@@ -1145,23 +1113,30 @@ export const listMaintenancePlans = cache(async function(companyId: string): Pro
       .collection('maintenance_plans')
       .where('companyId', '==', companyId)
       .get()
-    const dbDocs = snap.docs.map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
-    if (!isDemoCompany(companyId)) {
-      return dbDocs.filter((p) => !p.deleted).sort((a, b) => a.title.localeCompare(b.title))
+    const dbDocs = snap.docs
+      .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
+      .filter((p) => !p.deleted)
+
+    if (dbDocs.length > 0) {
+      const seen = new Set<string>()
+      const uniquePlans: MaintenancePlan[] = []
+
+      for (const p of dbDocs) {
+        const key = (p.code || `${p.area || ''}_${p.tag || ''}_${p.title}`).toLowerCase().trim()
+        if (!seen.has(key)) {
+          seen.add(key)
+          uniquePlans.push(p)
+        }
+      }
+      return uniquePlans.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
     }
+
     const fallbacks = getFallbackPlans()
-
-    const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
-    const mergedFallbacks = fallbacks
-      .map((f) => dbMap.get(f.id) || f)
-      .filter((p) => !(p as any).deleted)
-
-    const customDocs = dbDocs.filter((d) => !(d as any).deleted && !fallbacks.some((f) => f.id === d.id))
-    return [...customDocs, ...mergedFallbacks]
+    return fallbacks.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
   } catch (err) {
     console.error('[listMaintenancePlans] Error:', err)
   }
-  return isDemoCompany(companyId) ? getFallbackPlans() : []
+  return getFallbackPlans()
 })
 
 export const getMaintenancePlan = cache(async function(companyId: string, id: string): Promise<MaintenancePlan | null> {
@@ -1182,6 +1157,50 @@ export async function createMaintenancePlan(
   data: Omit<MaintenancePlan, 'id' | 'companyId' | 'createdBy' | 'createdAt' | 'updatedAt' | 'lastGeneratedAt'>
 ): Promise<string> {
   const now = new Date().toISOString()
+  
+  const codeToMatch = (data.code || '').trim()
+  let existingDocId: string | null = null
+
+  if (codeToMatch) {
+    const snapCode = await adminDb()
+      .collection('maintenance_plans')
+      .where('companyId', '==', companyId)
+      .where('code', '==', codeToMatch)
+      .limit(1)
+      .get()
+      .catch(() => null)
+    if (snapCode && !snapCode.empty) {
+      existingDocId = snapCode.docs[0].id
+    }
+  }
+
+  if (!existingDocId && data.title) {
+    const snapTitle = await adminDb()
+      .collection('maintenance_plans')
+      .where('companyId', '==', companyId)
+      .where('title', '==', data.title.trim())
+      .limit(10)
+      .get()
+      .catch(() => null)
+
+    if (snapTitle && !snapTitle.empty) {
+      const match = snapTitle.docs.find((d) => {
+        const dData = d.data()
+        return String(dData.area || '').trim() === String(data.area || '').trim() &&
+               String(dData.tag || '').trim() === String(data.tag || '').trim()
+      })
+      if (match) existingDocId = match.id
+    }
+  }
+
+  if (existingDocId) {
+    await adminDb().collection('maintenance_plans').doc(existingDocId).set(
+      { ...data, updatedAt: now },
+      { merge: true }
+    )
+    return existingDocId
+  }
+
   const ref = await adminDb()
     .collection('maintenance_plans')
     .add({ ...data, companyId, createdBy, createdAt: now, updatedAt: now, lastGeneratedAt: null })

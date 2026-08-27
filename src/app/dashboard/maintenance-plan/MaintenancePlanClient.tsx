@@ -31,6 +31,7 @@ import { useLanguage } from '@/components/providers/LanguageProvider'
 import { TipoBadge } from '@/components/ui/TipoBadge'
 import { PREDEFINED_SAFETY_RULES } from '../tasks/TasksClient'
 import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
+import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 
 export function isPlanGanttActive(p: MaintenancePlan): boolean {
   if (p.includeInGantt !== undefined && p.includeInGantt !== null) {
@@ -412,18 +413,42 @@ export default function MaintenancePlanClient({
 
   const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
 
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedTipos, setSelectedTipos] = useState<string[]>([])
+  const [selectedPeriods, setSelectedPeriods] = useState<string[]>([])
+  const [selectedCrits, setSelectedCrits] = useState<string[]>([])
+
   const filtered = useMemo(() => {
     return plans.filter((p) => {
       const planDate = p.nextDueDate || p.calendarStartDate || p.createdAt
       if (!filterByExcelDate(planDate, excelDateFilter)) return false
-      if (colF.area && norm(p.area) !== norm(colF.area)) return false
-      if (colF.tag && norm(getPlanTag(p)) !== norm(colF.tag)) return false
+      
+      // Filtros Multi-Seleção
+      if (selectedAreas.length > 0) {
+        if (!selectedAreas.some((a) => norm(p.area) === norm(a))) return false
+      } else if (colF.area && norm(p.area) !== norm(colF.area)) return false
+
+      if (selectedTags.length > 0) {
+        if (!selectedTags.some((t) => norm(getPlanTag(p)) === norm(t))) return false
+      } else if (colF.tag && norm(getPlanTag(p)) !== norm(colF.tag)) return false
+
+      if (selectedTipos.length > 0) {
+        if (!selectedTipos.some((tp) => (p.tipo || '').toLowerCase() === tp.toLowerCase())) return false
+      } else if (colF.tipo && (p.tipo || '').toLowerCase() !== colF.tipo.toLowerCase()) return false
+
+      if (selectedPeriods.length > 0) {
+        if (!selectedPeriods.some((pr) => (p.periodicidade || '').toLowerCase() === pr.toLowerCase())) return false
+      } else if (colF.period && !inc(periodLabel(p), colF.period)) return false
+
+      if (selectedCrits.length > 0) {
+        if (!selectedCrits.includes(p.criticidade)) return false
+      } else if (colF.crit && p.criticidade !== colF.crit) return false
+
       if (!inc(p.system, colF.system)) return false
       if (!inc(assetName(p.assetId), colF.asset)) return false
       if (!inc(p.title, colF.title)) return false
       if (!inc(p.description, colF.description)) return false
-      if (!inc(periodLabel(p), colF.period)) return false
-      if (colF.crit && p.criticidade !== colF.crit) return false
       if (colF.executor && (p.executor ?? 'interno') !== colF.executor) return false
       if (colF.estado === 'ativo' && !p.active) return false
       if (colF.estado === 'inativo' && p.active) return false
@@ -439,7 +464,7 @@ export default function MaintenancePlanClient({
 
       return true
     })
-  }, [plans, colF, fLegal, fCalendar, fGantt, assetMap, assetTagMap, excelDateFilter])
+  }, [plans, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, fCalendar, fGantt, assetMap, assetTagMap, excelDateFilter])
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
@@ -665,38 +690,26 @@ export default function MaintenancePlanClient({
                 <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[45px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[50px] px-1 py-1.5 whitespace-nowrap text-left" />
-                <th className="w-[75px] px-1 py-1.5 text-center font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wide">AÇÕES</th>
               </tr>
               {/* Linha de filtros por coluna (estilo Excel) */}
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="px-0.5 py-0.5">
-                  <select
-                    value={colF.area}
-                    onChange={(e) => {
-                      setCol('area', e.target.value)
-                      setCol('tag', '')
-                    }}
-                    className={colFilterCls}
-                    title="Filtrar por Área"
-                  >
-                    <option value="">Todas ({uniqueAreas.length})</option>
-                    {uniqueAreas.map((a) => (
-                      <option key={a} value={a}>{a}</option>
-                    ))}
-                  </select>
+                  <MultiSelectPopoverFilter
+                    label="Área"
+                    options={uniqueAreas.map((a) => ({ value: a, label: a }))}
+                    selectedValues={selectedAreas}
+                    onChange={setSelectedAreas}
+                    placeholder="Área (Todas)"
+                  />
                 </th>
                 <th className="px-0.5 py-0.5">
-                  <select
-                    value={colF.tag}
-                    onChange={(e) => setCol('tag', e.target.value)}
-                    className={colFilterCls}
-                    title="Filtrar por TAG"
-                  >
-                    <option value="">Todas ({availableTags.length})</option>
-                    {availableTags.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
+                  <MultiSelectPopoverFilter
+                    label="TAG"
+                    options={availableTags.map((t) => ({ value: t, label: t }))}
+                    selectedValues={selectedTags}
+                    onChange={setSelectedTags}
+                    placeholder="TAG (Todas)"
+                  />
                 </th>
                 <th className="px-0.5 py-0.5">
                   <input value={colF.system} onChange={(e) => setCol('system', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
@@ -708,28 +721,31 @@ export default function MaintenancePlanClient({
                   <input value={colF.title} onChange={(e) => setCol('title', e.target.value)} placeholder="filtrar…" className={colFilterCls} />
                 </th>
                 <th className="px-0.5 py-0.5">
-                  <select value={colF.tipo} onChange={(e) => setCol('tipo', e.target.value)} className={colFilterCls} title="Filtrar tipo">
-                    <option value="">Todos</option>
-                    {Object.entries(TIPO_LABELS).map(([k, label]) => (
-                      <option key={k} value={k}>{label}</option>
-                    ))}
-                  </select>
+                  <MultiSelectPopoverFilter
+                    label="Tipo"
+                    options={Object.entries(TIPO_LABELS).map(([k, label]) => ({ value: k, label }))}
+                    selectedValues={selectedTipos}
+                    onChange={setSelectedTipos}
+                    placeholder="Tipo (Todos)"
+                  />
                 </th>
                 <th className="px-0.5 py-0.5">
-                  <select value={colF.period} onChange={(e) => setCol('period', e.target.value)} className={colFilterCls} title="Filtrar periodicidade">
-                    <option value="">Todas</option>
-                    {Object.entries(PERIODICIDADE_LABELS).map(([k, label]) => (
-                      <option key={k} value={k}>{label}</option>
-                    ))}
-                  </select>
+                  <MultiSelectPopoverFilter
+                    label="Periodicidade"
+                    options={Object.entries(PERIODICIDADE_LABELS).map(([k, label]) => ({ value: k, label }))}
+                    selectedValues={selectedPeriods}
+                    onChange={setSelectedPeriods}
+                    placeholder="Todas"
+                  />
                 </th>
                 <th className="px-0.5 py-0.5">
-                  <select value={colF.crit} onChange={(e) => setCol('crit', e.target.value)} className={colFilterCls} title="Filtrar criticidade">
-                    <option value="">Todas</option>
-                    {Object.entries(CRITICIDADE_LABELS).map(([k, label]) => (
-                      <option key={k} value={k}>{label}</option>
-                    ))}
-                  </select>
+                  <MultiSelectPopoverFilter
+                    label="Criticidade"
+                    options={Object.entries(CRITICIDADE_LABELS).map(([k, label]) => ({ value: k, label }))}
+                    selectedValues={selectedCrits}
+                    onChange={setSelectedCrits}
+                    placeholder="Todas"
+                  />
                 </th>
                 <th className="px-0.5 py-0.5">
                   <select value={colF.executor} onChange={(e) => setCol('executor', e.target.value)} className={colFilterCls} title="Filtrar executor">
@@ -745,15 +761,19 @@ export default function MaintenancePlanClient({
                     <option value="inativo">Inativo</option>
                   </select>
                 </th>
-                <th className="px-0.5 py-0.5" />
               </tr>
             </thead>
             <tbody>
               {currentShown.map((p) => (
-                <tr key={p.id} className={`border-b border-slate-100 hover:bg-slate-50/80 transition-colors ${!p.active ? 'opacity-50' : ''}`}>
+                <tr
+                  key={p.id}
+                  onClick={() => openEdit(p)}
+                  className={`border-b border-slate-100 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group ${!p.active ? 'opacity-50' : ''}`}
+                  title="Clique para abrir e editar este Plano de Manutenção"
+                >
                   <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">{p.area || '—'}</td>
                   <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">
-                    <span className="bg-slate-100 px-1 py-0.5 rounded border border-slate-200">{getPlanTag(p) || '—'}</span>
+                    <span className="bg-slate-100 px-1 py-0.5 rounded border border-slate-200 group-hover:border-blue-400 group-hover:bg-blue-100/80 transition-colors">{getPlanTag(p) || '—'}</span>
                   </td>
                   <td className="px-1 py-1.5 text-slate-800 font-semibold whitespace-nowrap">{p.system || '—'}</td>
                   <td className="px-1 py-1.5 text-slate-900 font-bold max-w-[110px]">
@@ -761,7 +781,7 @@ export default function MaintenancePlanClient({
                   </td>
                   <td className="px-1 py-1.5 font-bold text-slate-900 max-w-[140px]">
                     <div className="flex items-center gap-1">
-                      <span className="line-clamp-2" title={p.title}>{p.title}</span>
+                      <span className="line-clamp-2 group-hover:text-industrial-blue group-hover:underline transition-colors" title={p.title}>{p.title}</span>
                       {p.legal && (
                         <span title="Inspeção legal/obrigatória" className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[9px] text-red-800 font-bold border border-red-300 shrink-0">
                           <Scale className="h-2.5 w-2.5" /> Legal
@@ -776,11 +796,12 @@ export default function MaintenancePlanClient({
                         {(() => {
                           const isCalActive = Boolean(p.showInCalendar || (p.calendarDates && p.calendarDates.length > 0) || p.active !== false)
                           return (
-                            <label className="inline-flex items-center gap-0.5 cursor-pointer select-none font-bold">
+                            <label className="inline-flex items-center gap-0.5 cursor-pointer select-none font-bold" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
                                 checked={isCalActive}
                                 onChange={async (e) => {
+                                  e.stopPropagation()
                                   if (!e.target.checked) {
                                     await togglePlanCalendarAction(p.id, false)
                                     router.refresh()
@@ -796,11 +817,12 @@ export default function MaintenancePlanClient({
                             </label>
                           )
                         })()}
-                        <label className="inline-flex items-center gap-0.5 cursor-pointer select-none font-bold" title="Incluir tarefa no Gráfico de Gantt da página de Projetos">
+                        <label className="inline-flex items-center gap-0.5 cursor-pointer select-none font-bold" title="Incluir tarefa no Gráfico de Gantt da página de Projetos" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={isPlanGanttActive(p)}
                             onChange={async (e) => {
+                              e.stopPropagation()
                               await togglePlanGanttAction(p.id, e.target.checked)
                               router.refresh()
                             }}
@@ -839,19 +861,6 @@ export default function MaintenancePlanClient({
                     <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold ${p.active ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-slate-100 text-slate-600 border border-slate-300'}`}>
                       {p.active ? 'Ativo' : 'Inat.'}
                     </span>
-                  </td>
-                  <td className="px-1 py-1.5 text-center whitespace-nowrap">
-                    <div className="flex items-center justify-center gap-0.5">
-                      <button onClick={() => handleToggleActive(p)} disabled={isPending} className={`p-0.5 rounded ${p.active ? 'text-green-600 hover:text-slate-400' : 'text-slate-400 hover:text-green-600'}`} title={p.active ? 'Desativar' : 'Ativar'}>
-                        {p.active ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
-                      </button>
-                      <button onClick={() => openEdit(p)} className="p-0.5 text-slate-500 hover:text-blue-600 rounded" title="Editar">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => handleDelete(p)} className="p-0.5 text-slate-500 hover:text-red-600 rounded" title="Eliminar">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
                   </td>
                 </tr>
               ))}

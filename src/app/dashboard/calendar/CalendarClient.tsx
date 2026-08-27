@@ -11,6 +11,7 @@ import Avatar from '@/components/ui/Avatar'
 import MaterialsSelector from '@/components/ui/MaterialsSelector'
 import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
 import { getTipoBadgeClass } from '@/components/ui/TipoBadge'
+import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 
 type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
 type UserRef = Ref & { avatarUrl?: string | null; active?: boolean }
@@ -280,6 +281,12 @@ export default function CalendarClient({
   const [month, setMonth] = useState(today.getMonth())
   // Week view state
   const [weekStart, setWeekStart] = useState(() => getWeekStart(today))
+  // Filter states
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedTechs, setSelectedTechs] = useState<string[]>([])
+  const [selectedTIs, setSelectedTIs] = useState<string[]>([])
+
   // Shared
   const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -519,13 +526,70 @@ export default function CalendarClient({
     }
   }
 
+  const assetMap = React.useMemo(() => new Map(assets.map((a) => [a.id, a])), [assets])
+
+  const uniqueAreas = React.useMemo(() => {
+    const set = new Set<string>()
+    assets.forEach((a) => { if (a.area && a.area.trim()) set.add(a.area.trim()) })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  }, [assets])
+
+  const uniqueTags = React.useMemo(() => {
+    const set = new Set<string>()
+    assets.forEach((a) => { if (a.tag && a.tag.trim()) set.add(a.tag.trim()) })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  }, [assets])
+
+  const uniqueTechnicians = React.useMemo(() => {
+    return users.map((u) => ({ value: u.id, label: (u as any).abbreviation ? `${(u as any).abbreviation} - ${u.name}` : u.name }))
+  }, [users])
+
+  const filteredTaskList = React.useMemo(() => {
+    return taskList.filter((t) => {
+      const assetObj = t.assetId ? assetMap.get(t.assetId) : null
+      const aArea = ((t as any).area || assetObj?.area || '').trim().toLowerCase()
+      const aTag = ((t as any).tag || assetObj?.tag || '').trim().toLowerCase()
+      const tTipo = String(t.tipo || '').toLowerCase()
+      const tTi = String((t as any).ti || (t as any).tipoText || '').toLowerCase()
+      const assignedId = String(t.assignedTo || '').toLowerCase()
+
+      if (selectedAreas.length > 0) {
+        if (!selectedAreas.some((a) => aArea === a.toLowerCase() || aArea.startsWith(a.toLowerCase()))) return false
+      }
+      if (selectedTags.length > 0) {
+        if (!selectedTags.some((tag) => aTag === tag.toLowerCase() || aTag.startsWith(tag.toLowerCase()))) return false
+      }
+      if (selectedTechs.length > 0) {
+        if (!selectedTechs.some((u) => assignedId.includes(u.toLowerCase()))) return false
+      }
+      if (selectedTIs.length > 0) {
+        const matchesAny = selectedTIs.some((tiCode) => {
+          const tiFilter = tiCode.toLowerCase().trim()
+          if (tiFilter === 'pi') return tTipo === 'pi' || tTi === 'pi'
+          if (tiFilter === 'mc' || tiFilter === 'curativa') return tTipo === 'curativa' || tTipo === 'mc' || tTi === 'mc'
+          if (tiFilter === 'mp' || tiFilter === 'preventiva') return tTipo === 'preventiva' || tTipo === 'mp' || tTi === 'mp'
+          if (tiFilter === 'pm' || tiFilter === 'plano') return tTipo === 'plano' || tTipo === 'pm' || tTi === 'pm'
+          if (tiFilter === 'mi') return tTipo === 'mi' || tTi === 'mi'
+          if (tiFilter === 'stp' || tiFilter === 'pr') return tTipo === 'stp' || tTi === 'stp' || tTi === 'pr'
+          if (tiFilter === 'ins' || tiFilter === 'inspecao') return tTipo === 'inspecao' || tTipo === 'ins' || tTi === 'ins'
+          if (tiFilter === 'lub' || tiFilter === 'lubrificacao') return tTipo === 'lubrificacao' || tTipo === 'lub' || tTi === 'lub'
+          if (tiFilter === 'cal' || tiFilter === 'calibracao') return tTipo === 'calibracao' || tTipo === 'cal' || tTi === 'cal'
+          if (tiFilter === 'out' || tiFilter === 'outro') return tTipo === 'outro' || tTipo === 'out' || tTi === 'out'
+          return tTipo === tiFilter || tTi === tiFilter
+        })
+        if (!matchesAny) return false
+      }
+      return true
+    })
+  }, [taskList, assetMap, selectedAreas, selectedTags, selectedTechs, selectedTIs])
+
   // Event maps
   const monthStart = new Date(year, month, 1)
   const monthEnd = new Date(year, month + 1, 0, 23, 59, 59)
   const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6); weekEnd.setHours(23, 59, 59)
   const eventMap = viewMode === 'month'
-    ? buildEventMap(taskList, planList, monthStart, monthEnd)
-    : buildEventMap(taskList, planList, weekStart, weekEnd)
+    ? buildEventMap(filteredTaskList, planList, monthStart, monthEnd)
+    : buildEventMap(filteredTaskList, planList, weekStart, weekEnd)
 
   const todayStr = toYMD(today)
   const activeSelectedDate = selectedDate || todayStr
@@ -696,6 +760,50 @@ export default function CalendarClient({
             <span className="whitespace-nowrap">Nova OT</span>
           </button>
         </div>
+      </div>
+
+      {/* Barra de Filtros Multi-Seleção */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800">
+        <span className="text-xs font-extrabold uppercase text-slate-500 mr-1">Filtros:</span>
+        <MultiSelectPopoverFilter
+          label="Área"
+          options={uniqueAreas.map((a) => ({ value: a, label: `Área: ${a}` }))}
+          selectedValues={selectedAreas}
+          onChange={setSelectedAreas}
+          placeholder="Área (Todas)"
+        />
+        <MultiSelectPopoverFilter
+          label="TAG"
+          options={uniqueTags.map((t) => ({ value: t, label: `TAG: ${t}` }))}
+          selectedValues={selectedTags}
+          onChange={setSelectedTags}
+          placeholder="TAG (Todas)"
+        />
+        <MultiSelectPopoverFilter
+          label="Técnico"
+          options={uniqueTechnicians}
+          selectedValues={selectedTechs}
+          onChange={setSelectedTechs}
+          placeholder="Técnico (Todos)"
+        />
+        <MultiSelectPopoverFilter
+          label="TI"
+          options={[
+            { value: 'PI', label: 'PI - Pedido Intervenção' },
+            { value: 'MC', label: 'MC - Curativa' },
+            { value: 'MP', label: 'MP - Preventiva' },
+            { value: 'PM', label: 'PM - Plano' },
+            { value: 'MI', label: 'MI - Investimento' },
+            { value: 'STP', label: 'STP / PR - Projeto' },
+            { value: 'INS', label: 'INS - Inspeção' },
+            { value: 'LUB', label: 'LUB - Lubrificação' },
+            { value: 'CAL', label: 'CAL - Calibração' },
+            { value: 'OUT', label: 'OUT - Outro' },
+          ]}
+          selectedValues={selectedTIs}
+          onChange={setSelectedTIs}
+          placeholder="TI (Todos)"
+        />
       </div>
 
       {/* Legend & Drag Info */}
