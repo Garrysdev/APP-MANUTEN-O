@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useId } from 'react'
 import Image from 'next/image'
 import {
-  X, ShieldAlert, Camera, Images, Plus, Trash2, MapPin, Tag, Wrench, Mail, ArrowLeft
+  X, ShieldAlert, Camera, Images, Plus, Trash2, MapPin, Tag, Wrench, Mail, ArrowLeft, FolderKanban
 } from 'lucide-react'
 import type { Task, TaskCriticidade, TipoTarefa, User, Asset, Periodicidade } from '@/types/models'
 import { TIPO_LABELS, CRITICIDADE_LABELS, STATUS_LABELS } from '@/types/models'
@@ -140,6 +140,10 @@ export interface CreateTaskModalProps {
   stockRefs?: StockMaterialRef[]
   isManager?: boolean
   onSuccess?: (newTask?: Task) => void
+  createAction?: (prevState: any, formData: FormData) => Promise<any>
+  updateAction?: (prevState: any, formData: FormData) => Promise<any>
+  availableTasksForDependencies?: Task[]
+  showDependencies?: boolean
 }
 
 export default function CreateTaskModal({
@@ -152,6 +156,10 @@ export default function CreateTaskModal({
   stockRefs = [],
   isManager = true,
   onSuccess,
+  createAction,
+  updateAction,
+  availableTasksForDependencies,
+  showDependencies = false,
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState('')
   const [tipo, setTipo] = useState<TipoTarefa>('preventiva')
@@ -167,6 +175,7 @@ export default function CreateTaskModal({
   const [materialsRequired, setMaterialsRequired] = useState<string[]>([])
   const [requiredFRs, setRequiredFRs] = useState<string[]>([])
   const [requiredITs, setRequiredITs] = useState<string[]>([])
+  const [dependsOn, setDependsOn] = useState<string[]>([])
   const [addToPmModal, setAddToPmModal] = useState(false)
   const [periodicidadeModal, setPeriodicidadeModal] = useState<string>('mensal')
 
@@ -190,7 +199,14 @@ export default function CreateTaskModal({
           ? editingTask.assignedToIds
           : (editingTask.assignedTo ? [editingTask.assignedTo] : [])
         setSelectedTechIds(techIds)
-        setPlannedStartDate(editingTask.plannedStartDate ? editingTask.plannedStartDate.slice(0, 16) : '')
+        let formattedStart = ''
+        if (editingTask.plannedStartDate) {
+          formattedStart = editingTask.plannedStartDate.slice(0, 16)
+          if (!formattedStart.includes('T') && formattedStart.length === 10) {
+            formattedStart = `${formattedStart}T09:00`
+          }
+        }
+        setPlannedStartDate(formattedStart)
         setDueDate(editingTask.dueDate ? editingTask.dueDate.slice(0, 10) : '')
         setDescription(editingTask.description || '')
         setObservacoes(editingTask.observacoes || editingTask.observations || '')
@@ -199,10 +215,12 @@ export default function CreateTaskModal({
         setMaterialsRequired(editingTask.materialsRequired?.length ? editingTask.materialsRequired : [])
         setRequiredFRs(editingTask.requiredFRs || [])
         setRequiredITs(editingTask.requiredITs || [])
+        setDependsOn(Array.isArray(editingTask.dependsOn) ? (editingTask.dependsOn as string[]) : [])
         setRequesterEmail(editingTask.requesterEmail || '')
         setPhotoPreview(editingTask.photoUrl || (editingTask.photoUrls && editingTask.photoUrls[0]) || null)
       } else {
         if (initialAssetId) setAssetId(initialAssetId)
+        setDependsOn([])
       }
     } else {
       // Reset form on close
@@ -221,6 +239,7 @@ export default function CreateTaskModal({
       setMaterialsRequired([])
       setRequiredFRs([])
       setRequiredITs([])
+      setDependsOn([])
       setPhotoFile(null)
       setPhotoPreview(null)
       setAddToPmModal(false)
@@ -273,6 +292,7 @@ export default function CreateTaskModal({
       formData.set('materialsRequired', JSON.stringify(materialsRequired.filter(Boolean)))
       formData.set('requiredFRs', JSON.stringify(requiredFRs.filter(Boolean)))
       formData.set('requiredITs', JSON.stringify(requiredITs.filter(Boolean)))
+      formData.set('dependsOn', JSON.stringify(dependsOn.filter(Boolean)))
       formData.set('assignedToIds', JSON.stringify(selectedTechIds))
       formData.set('addToMaintenancePlan', addToPmModal ? 'true' : 'false')
       formData.set('periodicidade', periodicidadeModal)
@@ -287,9 +307,11 @@ export default function CreateTaskModal({
         formData.set('id', editingTask.id)
       }
 
-      const result = editingTask
-        ? await updateTaskAction({}, formData)
-        : await createTaskAction({}, formData)
+      const submitAction = editingTask
+        ? (updateAction || updateTaskAction)
+        : (createAction || createTaskAction)
+
+      const result = await submitAction({}, formData)
 
       setBusy(false)
 
@@ -326,6 +348,7 @@ export default function CreateTaskModal({
           materialsRequired: materialsRequired.filter(Boolean).length ? materialsRequired.filter(Boolean) : null,
           requiredFRs: requiredFRs.filter(Boolean).length ? requiredFRs.filter(Boolean) : null,
           requiredITs: requiredITs.filter(Boolean).length ? requiredITs.filter(Boolean) : null,
+          dependsOn: dependsOn.length ? dependsOn : null,
           photoUrl: photoPreview,
         }
 
@@ -561,6 +584,76 @@ export default function CreateTaskModal({
               />
             </div>
           </div>
+
+          {/* Seletor de Dependências Finish-to-Start (Visível quando showDependencies ou há tarefas disponíveis) */}
+          {(showDependencies || (availableTasksForDependencies && availableTasksForDependencies.length > 0)) && (
+            <div className="space-y-2 bg-indigo-50/60 dark:bg-indigo-950/20 p-3.5 rounded-xl border border-indigo-200 dark:border-indigo-800/50">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-indigo-950 dark:text-indigo-300 flex items-center gap-1.5">
+                  <FolderKanban className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  Depende de (só pode começar depois destas terminarem)
+                </label>
+                {dependsOn.length > 0 && (
+                  <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/60 px-2 py-0.5 rounded-full">
+                    {dependsOn.length} selecionada{dependsOn.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-indigo-800/80 dark:text-indigo-400">
+                Selecione as tarefas antecessoras (Finish-to-Start). Ao reagendar a antecessora, esta OT desloca-se automaticamente.
+              </p>
+
+              <div className="max-h-36 overflow-y-auto border border-indigo-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-900 space-y-1">
+                {availableTasksForDependencies
+                  ?.filter((t) => t.id !== editingTask?.id)
+                  .map((t) => {
+                    const isSelected = dependsOn.includes(t.id)
+                    const createsCycle = Boolean(editingTask?.id && t.dependsOn && Array.isArray(t.dependsOn) && t.dependsOn.includes(editingTask.id))
+                    const tag = (t as any).tag || ''
+                    const label = tag ? `[${tag}] ${t.title}` : t.title
+
+                    return (
+                      <label
+                        key={t.id}
+                        className={`flex items-center gap-2 text-xs p-1.5 rounded transition-colors ${
+                          createsCycle
+                            ? 'opacity-40 cursor-not-allowed text-slate-400 bg-slate-50 dark:bg-slate-800'
+                            : isSelected
+                            ? 'bg-indigo-100/80 dark:bg-indigo-900/40 text-indigo-950 dark:text-indigo-100 cursor-pointer font-semibold'
+                            : 'hover:bg-indigo-50/60 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer'
+                        }`}
+                        title={createsCycle ? 'Dependência circular não permitida (esta tarefa já depende da atual)' : label}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={createsCycle}
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setDependsOn((prev) => [...prev, t.id])
+                            } else {
+                              setDependsOn((prev) => prev.filter((id) => id !== t.id))
+                            }
+                          }}
+                          className="rounded accent-indigo-600 h-3.5 w-3.5 shrink-0"
+                        />
+                        <span className="truncate flex-1 font-mono text-[11px]">{label}</span>
+                        {t.dueDate && (
+                          <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                            (Fim: {t.dueDate.slice(0, 10)})
+                          </span>
+                        )}
+                      </label>
+                    )
+                  })}
+                {(!availableTasksForDependencies || availableTasksForDependencies.filter((t) => t.id !== editingTask?.id).length === 0) && (
+                  <div className="text-xs text-slate-400 text-center py-2">
+                    Sem outras tarefas disponíveis para dependência.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Descrição da Intervenção</label>

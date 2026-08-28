@@ -161,6 +161,8 @@ export interface Task {
   closureNotes?: string | null // Relatório de fecho (o que foi feito)
   sendClosureEmail?: boolean | null // Indicação se foi notificado por email
   source?: string | null // Origem da tarefa (ex: folha_ur_historico)
+  isProject?: boolean | null // Tarefa de projeto (Gantt)
+  dependsOn?: string[] | null // IDs de tarefas antecessoras (Finish-to-Start)
   createdBy: string
   createdByName?: string | null // Nome do utilizador que criou/abriu a OT
   createdByAbbr?: string | null // Abreviatura do utilizador que criou a OT

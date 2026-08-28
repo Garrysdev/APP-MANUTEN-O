@@ -111,6 +111,7 @@ function parseTask(formData: FormData) {
     requiredFRs: parseStringArray('requiredFRs'),
     requiredITs: parseStringArray('requiredITs'),
     maintenancePlanId,
+    dependsOn: parseStringArray('dependsOn'),
   }
 }
 

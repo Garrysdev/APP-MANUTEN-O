@@ -39,7 +39,17 @@ export default async function ProjectsPage() {
     <ProjectsClient
       tasks={tasks}
       assets={assets}
-      users={users.map((u) => ({ id: u.id, name: u.name, abbreviation: u.abbreviation || u.name, avatarUrl: u.avatarUrl }))}
+      users={users.map((u) => ({
+        id: u.id,
+        name: u.name,
+        abbreviation: u.abbreviation || u.name,
+        avatarUrl: u.avatarUrl,
+        active: u.active,
+        role: u.role,
+        isExternal: u.isExternal,
+        externalCompanyId: u.externalCompanyId,
+        externalCompanyName: u.externalCompanyName,
+      }))}
       plans={plans}
       role={profile.role}
       userId={profile.id}
