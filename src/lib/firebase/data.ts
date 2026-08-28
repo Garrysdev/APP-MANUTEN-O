@@ -1,6 +1,7 @@
 // Acesso a dados (servidor) via Admin SDK. Todas as queries são scoped por companyId.
 import 'server-only'
 import { cache } from 'react'
+import { unstable_cache, revalidateTag } from 'next/cache'
 import fs from 'fs'
 import path from 'path'
 import type { DocumentSnapshot } from 'firebase-admin/firestore'
@@ -16,7 +17,7 @@ function serialize<T>(doc: DocumentSnapshot): T {
 export const DEMO_COMPANY_ID = 'rjHNaSUbLm4qTMyKP0oX'
 export function isDemoCompany(companyId: string): boolean {
   if (!companyId) return false
-  return companyId === 'demo' || companyId === 'demo_company'
+  return companyId === DEMO_COMPANY_ID || companyId === 'demo' || companyId === 'demo_company'
 }
 
 // ── LOCAL FALLBACK LOADERS (Quando o Firebase Firestore atinge a quota diária) ──
@@ -149,18 +150,25 @@ function getFallbackUsers(): User[] {
   return cachedFallbackUsers
 }
 
+const listExternalCompaniesCached = unstable_cache(
+  async (companyId: string): Promise<ExternalCompany[]> => {
+    try {
+      const snap = await adminDb()
+        .collection('external_companies')
+        .where('companyId', '==', companyId)
+        .get()
+      const docs = snap.docs.map((d) => serialize<ExternalCompany>(d))
+      if (docs.length > 0 || !isDemoCompany(companyId)) return docs
+    } catch (err) {
+      console.error('[listExternalCompanies] Error:', err)
+    }
+    return isDemoCompany(companyId) ? getFallbackExternalCompanies() : []
+  },
+  ['external-companies'],
+  { revalidate: 60, tags: ['external-companies'] }
+)
 export const listExternalCompanies = cache(async function(companyId: string): Promise<ExternalCompany[]> {
-  try {
-    const snap = await adminDb()
-      .collection('external_companies')
-      .where('companyId', '==', companyId)
-      .get()
-    const docs = snap.docs.map((d) => serialize<ExternalCompany>(d))
-    if (docs.length > 0 || !isDemoCompany(companyId)) return docs
-  } catch (err) {
-    console.error('[listExternalCompanies] Error:', err)
-  }
-  return isDemoCompany(companyId) ? getFallbackExternalCompanies() : []
+  return listExternalCompaniesCached(companyId)
 })
 
 function getFallbackExternalCompanies(): ExternalCompany[] {
@@ -234,46 +242,60 @@ function getFallbackExternalCompanies(): ExternalCompany[] {
 }
 
 // ── ASSETS ──────────────────────────────────────────────────────────────────
-export const listAssets = cache(async function(companyId: string, limitCount = 2000): Promise<Asset[]> {
-  try {
-    const snap = await adminDb()
-      .collection('assets')
-      .where('companyId', '==', companyId)
-      .limit(limitCount)
-      .get()
-    const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
-    if (dbDocs.length > 0) {
-      return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+const listAssetsCached = unstable_cache(
+  async (companyId: string, limitCount: number): Promise<Asset[]> => {
+    try {
+      const snap = await adminDb()
+        .collection('assets')
+        .where('companyId', '==', companyId)
+        .limit(limitCount)
+        .get()
+      const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
+      if (dbDocs.length > 0) {
+        return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      }
+      return isDemoCompany(companyId) ? getFallbackAssets() : []
+    } catch (err) {
+      console.error('[listAssets] Error:', err)
     }
-    return getFallbackAssets()
-  } catch (err) {
-    console.error('[listAssets] Error:', err)
-  }
-  return getFallbackAssets()
+    return isDemoCompany(companyId) ? getFallbackAssets() : []
+  },
+  ['assets'],
+  { revalidate: 45, tags: ['assets'] }
+)
+export const listAssets = cache(async function(companyId: string, limitCount = 2000): Promise<Asset[]> {
+  return listAssetsCached(companyId, limitCount)
 })
 
 /** Versão LEVE: id + name + tag (para dropdowns e mapa id→nome/tag). */
-export const listAssetRefs = cache(async function(companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> {
-  try {
-    const snap = await adminDb()
-      .collection('assets')
-      .where('companyId', '==', companyId)
-      .select('name', 'tag', 'area')
-      .get()
-    const dbDocs = snap.docs.map((d) => ({
-      id: d.id,
-      name: (d.data().name as string) ?? '',
-      tag: (d.data().tag as string) ?? null,
-      area: (d.data().area as string) ?? null,
-    }))
-    if (dbDocs.length > 0) {
-      return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
+const listAssetRefsCached = unstable_cache(
+  async (companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> => {
+    try {
+      const snap = await adminDb()
+        .collection('assets')
+        .where('companyId', '==', companyId)
+        .select('name', 'tag', 'area')
+        .get()
+      const dbDocs = snap.docs.map((d) => ({
+        id: d.id,
+        name: (d.data().name as string) ?? '',
+        tag: (d.data().tag as string) ?? null,
+        area: (d.data().area as string) ?? null,
+      }))
+      if (dbDocs.length > 0) {
+        return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
+      }
+      return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
+    } catch (err) {
+      console.error('[listAssetRefs] Error:', err)
     }
-    return getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))
-  } catch (err) {
-    console.error('[listAssetRefs] Error:', err)
-  }
-  return getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))
+    return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
+  },
+  ['asset-refs'],
+  { revalidate: 45, tags: ['assets'] }
+)
+export const listAssetRefs = cache(async function(companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> {
+  return listAssetRefsCached(companyId)
 })
 
 /** Refs LEVES de planos para o modal de criação de tarefas (só os campos usados, ativos com equipamento). */
@@ -374,6 +396,7 @@ export async function createAsset(
   const ref = await adminDb()
     .collection('assets')
     .add({ ...data, companyId, createdAt: new Date().toISOString() })
+  revalidateTag('assets')
   return ref.id
 }
 
@@ -386,6 +409,7 @@ export async function updateAsset(
   const doc = await ref.get()
   if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Ativo não encontrado')
   await ref.update(data)
+  revalidateTag('assets')
 }
 
 export async function deleteAsset(companyId: string, id: string): Promise<void> {
@@ -393,31 +417,39 @@ export async function deleteAsset(companyId: string, id: string): Promise<void> 
   const doc = await ref.get()
   if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Ativo não encontrado')
   await ref.delete()
+  revalidateTag('assets')
 }
 
 // ── TASKS ───────────────────────────────────────────────────────────────────
-export const listTasks = cache(async function(companyId: string, limitCount = 2000): Promise<Task[]> {
-  try {
-    const snap = await adminDb()
-      .collection('tasks')
-      .where('companyId', '==', companyId)
-      .limit(limitCount)
-      .get()
-    const dbDocs = snap.docs.map((d) => serialize<Task>(d))
-    if (!isDemoCompany(companyId)) {
-      return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-    }
-    const fallbacks = getFallbackTasks()
-    if (dbDocs.length === 0) return fallbacks
+const listTasksCached = unstable_cache(
+  async (companyId: string, limitCount: number): Promise<Task[]> => {
+    try {
+      const snap = await adminDb()
+        .collection('tasks')
+        .where('companyId', '==', companyId)
+        .limit(limitCount)
+        .get()
+      const dbDocs = snap.docs.map((d) => serialize<Task>(d))
+      if (!isDemoCompany(companyId)) {
+        return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      }
+      const fallbacks = getFallbackTasks()
+      if (dbDocs.length === 0) return fallbacks
 
-    const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
-    const mergedFallbacks = fallbacks.map((f) => dbMap.get(f.id) || f)
-    const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
-    return [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-  } catch (err) {
-    console.error('[listTasks] Error:', err)
-  }
-  return isDemoCompany(companyId) ? getFallbackTasks() : []
+      const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
+      const mergedFallbacks = fallbacks.map((f) => dbMap.get(f.id) || f)
+      const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
+      return [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    } catch (err) {
+      console.error('[listTasks] Error:', err)
+    }
+    return isDemoCompany(companyId) ? getFallbackTasks() : []
+  },
+  ['tasks'],
+  { revalidate: 30, tags: ['tasks'] }
+)
+export const listTasks = cache(async function(companyId: string, limitCount = 2000): Promise<Task[]> {
+  return listTasksCached(companyId, limitCount)
 })
 
 export const listTasksByAsset = cache(async function(companyId: string, assetId: string, providedAssetTag?: string | null): Promise<Task[]> {
@@ -560,6 +592,7 @@ export async function createTask(
     cachedFallbackTasks.unshift(newTaskObj)
   }
 
+  revalidateTag('tasks')
   return generatedId
 }
 
@@ -608,6 +641,7 @@ export async function updateTask(
       }
     }
   }
+  revalidateTag('tasks')
 }
 
 export async function deleteTask(companyId: string, id: string): Promise<void> {
@@ -615,6 +649,7 @@ export async function deleteTask(companyId: string, id: string): Promise<void> {
   const doc = await ref.get()
   if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Tarefa não encontrada')
   await ref.delete()
+  revalidateTag('tasks')
 }
 
 export async function deleteTasksByMaintenancePlan(companyId: string, planId: string): Promise<void> {
@@ -628,53 +663,61 @@ export async function deleteTasksByMaintenancePlan(companyId: string, planId: st
     const batch = adminDb().batch()
     snap.docs.forEach((doc) => batch.delete(doc.ref))
     await batch.commit()
+    revalidateTag('tasks')
   } catch (err) {
     console.error('[deleteTasksByMaintenancePlan] Error:', err)
   }
 }
 
 // ── USERS (para atribuição de tarefas) ────────────────────────────────────────
-export const listUsers = cache(async function(companyId: string): Promise<User[]> {
-  try {
-    const snap = await adminDb()
-      .collection('users')
-      .where('companyId', '==', companyId)
-      .get()
-    const dbDocs = snap.docs.map((d) => serialize<User>(d))
-
-    let deletedIds = new Set<string>()
-    let deletedEmails = new Set<string>()
-    let deletedAbbrs = new Set<string>()
+const listUsersCached = unstable_cache(
+  async (companyId: string): Promise<User[]> => {
     try {
-      const delSnap = await adminDb().collection('deleted_users').get()
-      delSnap.docs.forEach((d) => {
-        deletedIds.add(d.id)
-        const data = d.data()
-        if (data?.email) deletedEmails.add(String(data.email).toLowerCase())
-        if (data?.abbreviation) deletedAbbrs.add(String(data.abbreviation).toUpperCase())
-      })
-    } catch { /* ignore */ }
+      const snap = await adminDb()
+        .collection('users')
+        .where('companyId', '==', companyId)
+        .get()
+      const dbDocs = snap.docs.map((d) => serialize<User>(d))
 
-    const isDeleted = (u: { id: string; email?: string | null; abbreviation?: string | null; active?: boolean }) => {
-      if (u.active === false) return true
-      if (deletedIds.has(u.id)) return true
-      if (u.email && deletedEmails.has(u.email.toLowerCase())) return true
-      if (u.abbreviation && deletedAbbrs.has(u.abbreviation.toUpperCase())) return true
-      return false
+      let deletedIds = new Set<string>()
+      let deletedEmails = new Set<string>()
+      let deletedAbbrs = new Set<string>()
+      try {
+        const delSnap = await adminDb().collection('deleted_users').get()
+        delSnap.docs.forEach((d) => {
+          deletedIds.add(d.id)
+          const data = d.data()
+          if (data?.email) deletedEmails.add(String(data.email).toLowerCase())
+          if (data?.abbreviation) deletedAbbrs.add(String(data.abbreviation).toUpperCase())
+        })
+      } catch { /* ignore */ }
+
+      const isDeleted = (u: { id: string; email?: string | null; abbreviation?: string | null; active?: boolean }) => {
+        if (u.active === false) return true
+        if (deletedIds.has(u.id)) return true
+        if (u.email && deletedEmails.has(u.email.toLowerCase())) return true
+        if (u.abbreviation && deletedAbbrs.has(u.abbreviation.toUpperCase())) return true
+        return false
+      }
+
+      const validDbDocs = dbDocs.filter((d) => !isDeleted(d))
+
+      if (validDbDocs.length > 0 || !isDemoCompany(companyId)) {
+        return validDbDocs
+      }
+
+      const fallbacks = getFallbackUsers().filter((f) => !isDeleted(f))
+      return fallbacks
+    } catch (err) {
+      console.error('[listUsers] Error:', err)
     }
-
-    const validDbDocs = dbDocs.filter((d) => !isDeleted(d))
-
-    if (validDbDocs.length > 0 || !isDemoCompany(companyId)) {
-      return validDbDocs
-    }
-
-    const fallbacks = getFallbackUsers().filter((f) => !isDeleted(f))
-    return fallbacks
-  } catch (err) {
-    console.error('[listUsers] Error:', err)
-  }
-  return isDemoCompany(companyId) ? getFallbackUsers().filter((f) => f.active !== false) : []
+    return isDemoCompany(companyId) ? getFallbackUsers().filter((f) => f.active !== false) : []
+  },
+  ['users'],
+  { revalidate: 60, tags: ['users'] }
+)
+export const listUsers = cache(async function(companyId: string): Promise<User[]> {
+  return listUsersCached(companyId)
 })
 
 // ── REGISTO (cria empresa + gestor) ───────────────────────────────────────────
@@ -875,6 +918,7 @@ export async function createUserFromInvite(
     active: true,
     createdAt: new Date().toISOString(),
   })
+  revalidateTag('users')
 }
 
 export async function deactivateUser(companyId: string, userId: string): Promise<void> {
@@ -884,6 +928,7 @@ export async function deactivateUser(companyId: string, userId: string): Promise
     await adminAuth().updateUser(userId, { disabled: true })
     await adminAuth().revokeRefreshTokens(userId)
   } catch { /* ignore auth error for fallback users */ }
+  revalidateTag('users')
 }
 
 export async function checkUserHasHistory(companyId: string, userId: string): Promise<boolean> {
@@ -955,11 +1000,13 @@ export async function deleteUserPermanent(companyId: string, userId: string): Pr
     abbreviation: abbr ? String(abbr).toUpperCase() : null,
     deletedAt: new Date().toISOString(),
   }, { merge: true })
+  revalidateTag('users')
 }
 
 export async function updateUserRate(companyId: string, userId: string, hourlyRate: number): Promise<void> {
   const ref = adminDb().collection('users').doc(userId)
   await ref.set({ hourlyRate, companyId }, { merge: true })
+  revalidateTag('users')
 }
 
 export const getCompanyName = cache(async function(companyId: string): Promise<string | null> {
@@ -1027,6 +1074,7 @@ export async function createUserDirect(
     mustChangePassword: true,
     createdAt: new Date().toISOString(),
   })
+  revalidateTag('users')
   return authUser.uid
 }
 
@@ -1068,6 +1116,7 @@ export async function updateUserProfile(
   if (data.hourlyRate !== undefined) update.hourlyRate = data.hourlyRate
 
   await adminDb().collection('users').doc(userId).set(update, { merge: true })
+  revalidateTag('users')
 }
 
 export const countActiveUsers = cache(async function(companyId: string): Promise<number> {
@@ -1107,36 +1156,44 @@ export const listInterventionsByTechnician = cache(async function(
 
 // ── MAINTENANCE PLANS ─────────────────────────────────────────────────────────
 
-export const listMaintenancePlans = cache(async function(companyId: string): Promise<MaintenancePlan[]> {
-  try {
-    const snap = await adminDb()
-      .collection('maintenance_plans')
-      .where('companyId', '==', companyId)
-      .get()
-    const dbDocs = snap.docs
-      .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
-      .filter((p) => !p.deleted)
+const listMaintenancePlansCached = unstable_cache(
+  async (companyId: string): Promise<MaintenancePlan[]> => {
+    try {
+      const snap = await adminDb()
+        .collection('maintenance_plans')
+        .where('companyId', '==', companyId)
+        .get()
+      const dbDocs = snap.docs
+        .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
+        .filter((p) => !p.deleted)
 
-    if (dbDocs.length > 0) {
-      const seen = new Set<string>()
-      const uniquePlans: MaintenancePlan[] = []
+      if (dbDocs.length > 0) {
+        const seen = new Set<string>()
+        const uniquePlans: MaintenancePlan[] = []
 
-      for (const p of dbDocs) {
-        const key = (p.code || `${p.area || ''}_${p.tag || ''}_${p.title}`).toLowerCase().trim()
-        if (!seen.has(key)) {
-          seen.add(key)
-          uniquePlans.push(p)
+        for (const p of dbDocs) {
+          const key = (p.code || `${p.area || ''}_${p.tag || ''}_${p.title}`).toLowerCase().trim()
+          if (!seen.has(key)) {
+            seen.add(key)
+            uniquePlans.push(p)
+          }
         }
+        return uniquePlans.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
       }
-      return uniquePlans.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
-    }
 
-    const fallbacks = getFallbackPlans()
-    return fallbacks.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
-  } catch (err) {
-    console.error('[listMaintenancePlans] Error:', err)
-  }
-  return getFallbackPlans()
+      return isDemoCompany(companyId)
+        ? getFallbackPlans().sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
+        : []
+    } catch (err) {
+      console.error('[listMaintenancePlans] Error:', err)
+    }
+    return isDemoCompany(companyId) ? getFallbackPlans() : []
+  },
+  ['maintenance-plans'],
+  { revalidate: 45, tags: ['plans'] }
+)
+export const listMaintenancePlans = cache(async function(companyId: string): Promise<MaintenancePlan[]> {
+  return listMaintenancePlansCached(companyId)
 })
 
 export const getMaintenancePlan = cache(async function(companyId: string, id: string): Promise<MaintenancePlan | null> {
@@ -1198,12 +1255,14 @@ export async function createMaintenancePlan(
       { ...data, updatedAt: now },
       { merge: true }
     )
+    revalidateTag('plans')
     return existingDocId
   }
 
   const ref = await adminDb()
     .collection('maintenance_plans')
     .add({ ...data, companyId, createdBy, createdAt: now, updatedAt: now, lastGeneratedAt: null })
+  revalidateTag('plans')
   return ref.id
 }
 
@@ -1223,6 +1282,7 @@ export async function updateMaintenancePlan(
     const baseObj = fallback ? { ...fallback, ...data, companyId, updatedAt: now } : { ...data, companyId, createdAt: now, updatedAt: now }
     await ref.set(baseObj, { merge: true })
   }
+  revalidateTag('plans')
 }
 
 export async function deleteMaintenancePlan(companyId: string, id: string): Promise<void> {
@@ -1235,6 +1295,7 @@ export async function deleteMaintenancePlan(companyId: string, id: string): Prom
   } else {
     await ref.set({ id, companyId, deleted: true, updatedAt: now })
   }
+  revalidateTag('plans')
 }
 
 export const getUsersByCompany = cache(async function(companyId: string): Promise<User[]> {
@@ -1548,21 +1609,28 @@ export async function deleteSafetyRule(companyId: string, id: string): Promise<v
 let cachedNotifications: AppNotification[] = []
 let cachedInternalMessages: InternalMessage[] = []
 
+const listNotificationsCached = unstable_cache(
+  async (companyId: string, userId: string): Promise<AppNotification[]> => {
+    try {
+      const snap = await adminDb()
+        .collection('notifications')
+        .where('companyId', '==', companyId)
+        .where('userId', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .get()
+      const docs = snap.docs.map((d) => serialize<AppNotification>(d))
+      if (docs.length > 0) return docs
+    } catch (err) {
+      console.error('[listNotifications] Error:', err)
+    }
+    return cachedNotifications.filter((n) => n.companyId === companyId && n.userId === userId)
+  },
+  ['notifications'],
+  { revalidate: 15, tags: ['notifications'] }
+)
 export const listNotifications = cache(async function(companyId: string, userId: string): Promise<AppNotification[]> {
-  try {
-    const snap = await adminDb()
-      .collection('notifications')
-      .where('companyId', '==', companyId)
-      .where('userId', '==', userId)
-      .orderBy('createdAt', 'desc')
-      .limit(50)
-      .get()
-    const docs = snap.docs.map((d) => serialize<AppNotification>(d))
-    if (docs.length > 0) return docs
-  } catch (err) {
-    console.error('[listNotifications] Error:', err)
-  }
-  return cachedNotifications.filter((n) => n.companyId === companyId && n.userId === userId)
+  return listNotificationsCached(companyId, userId)
 })
 
 export async function createNotification(
@@ -1584,6 +1652,7 @@ export async function createNotification(
     console.error('[createNotification] Error:', err)
   }
   cachedNotifications.unshift(notif)
+  revalidateTag('notifications')
   return notif.id
 }
 
@@ -1595,6 +1664,7 @@ export async function markNotificationRead(companyId: string, id: string): Promi
   }
   const item = cachedNotifications.find((n) => n.id === id)
   if (item) item.read = true
+  revalidateTag('notifications')
 }
 
 export async function markAllNotificationsRead(companyId: string, userId: string): Promise<void> {
@@ -1614,6 +1684,7 @@ export async function markAllNotificationsRead(companyId: string, userId: string
   cachedNotifications.forEach((n) => {
     if (n.companyId === companyId && n.userId === userId) n.read = true
   })
+  revalidateTag('notifications')
 }
 
 export const listInternalMessages = cache(async function(companyId: string, userId?: string): Promise<InternalMessage[]> {
