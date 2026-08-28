@@ -7,7 +7,7 @@ import {
   CalendarClock, Building2, Scale, ClipboardList, Upload, Download, ChevronLeft, ChevronRight, FileSpreadsheet
 } from 'lucide-react'
 import type {
-  MaintenancePlan, TaskCriticidade, TipoTarefa, Periodicidade, PlanName
+  MaintenancePlan, TaskCriticidade, TipoTarefa, Periodicidade, PlanName, Task
 } from '@/types/models'
 import {
   CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS,
@@ -25,10 +25,12 @@ import {
   togglePlanCalendarAction,
   togglePlanGanttAction,
 } from './actions'
+import { updateTaskStatusAction } from '../tasks/actions'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { TipoBadge } from '@/components/ui/TipoBadge'
+import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import { PREDEFINED_SAFETY_RULES } from '../tasks/TasksClient'
 import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
@@ -84,6 +86,15 @@ function downloadCSV(content: string, filename: string) {
 }
 
 type Ref = { id: string; name: string; tag?: string | null }
+type UserRef = Ref & {
+  avatarUrl?: string | null
+  active?: boolean
+  abbreviation?: string | null
+  role?: string | null
+  isExternal?: boolean
+  externalCompanyId?: string | null
+  externalCompanyName?: string | null
+}
 
 const CRITICIDADE_DOT: Record<TaskCriticidade, string> = {
   vermelho: 'bg-red-500',
@@ -106,11 +117,13 @@ export default function MaintenancePlanClient({
   plans,
   assets,
   users,
+  tasks,
   plan,
 }: {
   plans: MaintenancePlan[]
   assets: Ref[]
-  users: Ref[]
+  users: UserRef[]
+  tasks: Task[]
   plan: PlanName
 }) {
   const router = useRouter()
@@ -189,6 +202,39 @@ export default function MaintenancePlanClient({
     setEditing(null)
     setError('')
     setSafetyRules([''])
+  }
+
+  // Se o plano já tem OTs geradas no calendário, clicar na linha deve abrir a mesma
+  // janela de edição das OT (com as datas e a opção de concluir), não o editor do
+  // plano-modelo. Só cai no editor de plano quando ainda não há nenhuma OT associada.
+  const [viewingTask, setViewingTask] = useState<Task | null>(null)
+  function findPlanTask(p: MaintenancePlan): Task | null {
+    const linkedTasks = tasks.filter((t) => t.maintenancePlanId === p.id)
+    if (linkedTasks.length === 0) return null
+    const pending = linkedTasks
+      .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
+      .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
+    const mostRecent = linkedTasks.slice().sort((a, b) => (b.dueDate || '').localeCompare(a.dueDate || ''))[0]
+    return pending[0] || mostRecent
+  }
+  function openPlanRow(p: MaintenancePlan) {
+    const t = findPlanTask(p)
+    if (t) setViewingTask(t)
+    else openEdit(p)
+  }
+
+  // Concluir diretamente na tabela, sem abrir a ficha completa — para OTs de PM
+  // rotineiras que não têm nada a acrescentar (sem observações, materiais, etc.).
+  const [concludingTaskId, setConcludingTaskId] = useState<string | null>(null)
+  async function handleQuickConclude(taskId: string) {
+    setConcludingTaskId(taskId)
+    const res = await updateTaskStatusAction(taskId, 'done')
+    setConcludingTaskId(null)
+    if (res?.error) {
+      alert(res.error)
+    } else {
+      router.refresh()
+    }
   }
   function addRule() { setSafetyRules((r) => [...r, '']) }
   function removeRule(i: number) { setSafetyRules((r) => r.filter((_, idx) => idx !== i)) }
@@ -502,6 +548,20 @@ export default function MaintenancePlanClient({
       {lockedFeature && (
         <UpgradeModal feature={lockedFeature} isTeaser={true} onClose={() => setLockedFeature(null)} />
       )}
+      {/* Editar a OT gerada por este Plano de Manutenção — mesma janela usada nas OTs,
+          já com as datas do calendário e a opção de a concluir. */}
+      <CreateTaskModal
+        isOpen={!!viewingTask}
+        editingTask={viewingTask}
+        onClose={() => setViewingTask(null)}
+        assets={assets}
+        users={users}
+        isManager={true}
+        onSuccess={() => {
+          setViewingTask(null)
+          router.refresh()
+        }}
+      />
       <div className="flex items-center justify-between mb-4 gap-2">
         <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 shrink-0">
           {shown.length} / {plans.length}
@@ -690,6 +750,7 @@ export default function MaintenancePlanClient({
                 <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[45px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[50px] px-1 py-1.5 whitespace-nowrap text-left" />
+                <th className="w-[75px] px-1 py-1.5 whitespace-nowrap text-left">CONCLUIR</th>
               </tr>
               {/* Linha de filtros por coluna (estilo Excel) */}
               <tr className="border-b border-slate-200 bg-slate-50">
@@ -761,15 +822,16 @@ export default function MaintenancePlanClient({
                     <option value="inativo">Inativo</option>
                   </select>
                 </th>
+                <th className="px-0.5 py-0.5" />
               </tr>
             </thead>
             <tbody>
               {currentShown.map((p) => (
                 <tr
                   key={p.id}
-                  onClick={() => openEdit(p)}
+                  onClick={() => openPlanRow(p)}
                   className={`border-b border-slate-100 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group ${!p.active ? 'opacity-50' : ''}`}
-                  title="Clique para abrir e editar este Plano de Manutenção"
+                  title={tasks.some((t) => t.maintenancePlanId === p.id) ? 'Clique para abrir a OT desta ocorrência no calendário' : 'Clique para abrir e editar este Plano de Manutenção'}
                 >
                   <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">{p.area || '—'}</td>
                   <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">
@@ -861,6 +923,34 @@ export default function MaintenancePlanClient({
                     <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold ${p.active ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-slate-100 text-slate-600 border border-slate-300'}`}>
                       {p.active ? 'Ativo' : 'Inat.'}
                     </span>
+                  </td>
+                  <td className="px-1 py-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const t = findPlanTask(p)
+                      if (!t) return <span className="text-slate-300">—</span>
+                      if (t.status === 'done') {
+                        return (
+                          <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400 font-bold text-[9px]">
+                            <CheckCircle2 className="h-3 w-3" /> Concluída
+                          </span>
+                        )
+                      }
+                      if (t.status === 'cancelled') {
+                        return <span className="text-slate-400 text-[9px] font-semibold">Cancelada</span>
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => handleQuickConclude(t.id)}
+                          disabled={concludingTaskId === t.id}
+                          title="Marcar esta OT como concluída sem abrir a ficha completa"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 font-bold text-[9px] transition-colors disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          {concludingTaskId === t.id ? 'A concluir…' : 'Concluir'}
+                        </button>
+                      )
+                    })()}
                   </td>
                 </tr>
               ))}

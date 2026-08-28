@@ -34,7 +34,17 @@ export default async function CalendarPage() {
         tasks={tasks}
         plans={plans}
         assets={assets.map((a) => ({ id: a.id, name: a.name, tag: a.tag, area: a.area }))}
-        users={users.map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl, active: u.active }))}
+        users={users.map((u) => ({
+          id: u.id,
+          name: u.name,
+          avatarUrl: u.avatarUrl,
+          active: u.active,
+          abbreviation: u.abbreviation,
+          role: u.role,
+          isExternal: (u as any).isExternal,
+          externalCompanyId: (u as any).externalCompanyId,
+          externalCompanyName: (u as any).externalCompanyName,
+        }))}
         role={profile.role}
         userId={profile.id}
       />

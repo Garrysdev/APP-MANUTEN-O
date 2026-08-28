@@ -2,19 +2,28 @@
 
 import React, { useState, useTransition, useId } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Wrench, ClipboardList, ShieldAlert, X, Plus, Minus, Package, RefreshCw, Copy, Check, ExternalLink, Share2, Calendar as CalendarIcon, GripVertical, Printer, CheckSquare, Square, Pencil, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wrench, ClipboardList, ShieldAlert, X, Plus, Minus, Package, RefreshCw, Copy, Check, ExternalLink, Share2, Calendar as CalendarIcon, GripVertical, Printer, CheckSquare, Square, Pencil } from 'lucide-react'
 import type { Task, MaintenancePlan, TaskCriticidade, TipoTarefa, TaskStatus, RecurrenceType, UserRole } from '@/types/models'
-import { CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS, STATUS_LABELS } from '@/types/models'
+import { CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS } from '@/types/models'
 import { createTaskFromPlanAction, rescheduleCalendarItemAction } from './actions'
-import { createTaskAction, updateTaskAction, deleteTaskAction, updateTaskStatusAction } from '@/app/dashboard/tasks/actions'
+import { createTaskAction, updateTaskStatusAction } from '@/app/dashboard/tasks/actions'
 import Avatar from '@/components/ui/Avatar'
 import MaterialsSelector from '@/components/ui/MaterialsSelector'
 import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
 import { getTipoBadgeClass } from '@/components/ui/TipoBadge'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
+import CreateTaskModal from '@/components/modals/CreateTaskModal'
 
 type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
-type UserRef = Ref & { avatarUrl?: string | null; active?: boolean }
+type UserRef = Ref & {
+  avatarUrl?: string | null
+  active?: boolean
+  abbreviation?: string | null
+  role?: string | null
+  isExternal?: boolean
+  externalCompanyId?: string | null
+  externalCompanyName?: string | null
+}
 type ViewMode = 'month' | 'week' | 'day'
 
 interface CalendarEvent {
@@ -163,6 +172,26 @@ function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end
   })
 
   return map
+}
+
+function eventTag(ev: CalendarEvent): string {
+  return ((ev.type === 'task' ? ev.task?.tag : ev.plan?.tag) || '').trim()
+}
+function eventDescription(ev: CalendarEvent): string {
+  return ((ev.type === 'task' ? ev.task?.description : ev.plan?.description) || '').trim()
+}
+/** Texto do chip no calendário: começa sempre pela TAG do equipamento, quando existe. */
+function eventDisplayLabel(ev: CalendarEvent): string {
+  const tag = eventTag(ev)
+  return tag ? `${tag} — ${ev.label}` : ev.label
+}
+/** Tooltip ao passar o rato: TAG + Descrição do trabalho. */
+function eventTooltip(ev: CalendarEvent): string {
+  const tag = eventTag(ev)
+  const desc = eventDescription(ev)
+  if (tag && desc) return `${tag} — ${desc}`
+  if (tag) return `${tag} — ${ev.label}`
+  return desc || ev.label
 }
 
 function resolveEventType(ev: CalendarEvent): string {
@@ -316,43 +345,22 @@ export default function CalendarClient({
   const [ntBusy, startNtTransition] = useTransition()
   const [ntError, setNtError] = useState('')
 
-  // Edit existing task modal from calendar
+  // Edit existing task modal from calendar (reutiliza o mesmo CreateTaskModal das OTs)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
-  const [etTitle, setEtTitle] = useState('')
-  const [etTipo, setEtTipo] = useState<TipoTarefa>('preventiva')
-  const [etCriticidade, setEtCriticidade] = useState<TaskCriticidade>('verde')
-  const [etStatus, setEtStatus] = useState<TaskStatus>('pending')
-  const [etAssetId, setEtAssetId] = useState('')
-  const [etAssignedTo, setEtAssignedTo] = useState('')
-  const [etDueDate, setEtDueDate] = useState('')
-  const [etPlannedStartDate, setEtPlannedStartDate] = useState('')
-  const [etDescription, setEtDescription] = useState('')
-  const [etObservacoes, setEtObservacoes] = useState('')
-  const [etSafetyRules, setEtSafetyRules] = useState<string[]>([''])
-  const [etBusy, startEtTransition] = useTransition()
-  const [etError, setEtError] = useState('')
 
   function openEditTask(task: Task) {
     setEditingTask(task)
-    setEtTitle(task.title || '')
-    setEtTipo(task.tipo || 'preventiva')
-    setEtCriticidade(task.criticidade || 'verde')
-    setEtStatus(task.status || 'pending')
-    setEtAssetId(task.assetId || '')
-    setEtAssignedTo(task.assignedTo || '')
-    setEtDueDate(task.dueDate || '')
-    setEtPlannedStartDate(task.plannedStartDate || '')
-    setEtDescription(task.description || '')
-    setEtObservacoes(task.observacoes || '')
-    setEtSafetyRules(task.safetyRules && task.safetyRules.length > 0 ? task.safetyRules : [''])
-    setEtError('')
   }
 
   function openPlanAsOT(plan: MaintenancePlan, targetDate?: string) {
     const dateStr = targetDate || plan.calendarStartDate || toYMD(new Date())
-    const existingTask = taskList.find(
+    const planTasks = taskList.filter(
       (t) => t.maintenancePlanId === plan.id || (t.title && t.title.toLowerCase().includes(plan.title.toLowerCase()))
     )
+    // Se houver várias ocorrências agendadas (uma por data), abre exatamente a que
+    // corresponde à data clicada no calendário — não sempre a primeira encontrada.
+    const existingTask = (targetDate && planTasks.find((t) => (t.dueDate || '').slice(0, 10) === targetDate))
+      || planTasks[0]
     if (existingTask) {
       openEditTask(existingTask)
     } else {
@@ -882,7 +890,7 @@ export default function CalendarClient({
                                 openPlanAsOT(ev.plan, dateStr)
                               }
                             }}
-                            title={`Arraste para alterar a data ou clique para ver: ${ev.label}`}
+                            title={`Arraste para alterar a data ou clique para ver: ${eventTooltip(ev)}`}
                             className={`text-[11px] font-medium rounded-md px-1.5 py-1 truncate transition-all hover:scale-[1.02] active:scale-95 shadow-sm border cursor-grab active:cursor-grabbing flex items-center justify-between gap-1 ${
                               isTaskDone ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border-emerald-300 line-through opacity-85' : getTipoBadgeClass(resolveEventType(ev))
                             }`}
@@ -902,7 +910,7 @@ export default function CalendarClient({
                                   title={role === 'manager' ? (isTaskDone ? 'Marcar como pendente' : 'Encerrar OT no calendário') : 'Apenas gestores podem encerrar OTs'}
                                 />
                               )}
-                              <span className="truncate">{ev.label}</span>
+                              <span className="truncate">{eventDisplayLabel(ev)}</span>
                             </div>
                             <GripVertical className="h-3 w-3 text-slate-400 opacity-60 shrink-0 inline" />
                           </div>
@@ -975,7 +983,7 @@ export default function CalendarClient({
                             e.stopPropagation()
                             if (ev.type === 'task' && ev.task) openEditTask(ev.task)
                           }}
-                          title={`Arraste para alterar a data: ${ev.label}`}
+                          title={`Arraste para alterar a data: ${eventTooltip(ev)}`}
                           className={`text-[10px] rounded px-1 py-0.5 leading-tight cursor-grab active:cursor-grabbing flex items-center justify-between gap-1 ${
                             isTaskDone ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 line-through opacity-85' : getTipoBadgeClass(resolveEventType(ev))
                           }`}
@@ -995,7 +1003,7 @@ export default function CalendarClient({
                                 title={role === 'manager' ? (isTaskDone ? 'Marcar como pendente' : 'Encerrar OT no calendário') : 'Apenas gestores podem encerrar OTs'}
                               />
                             )}
-                            <span className="truncate">{ev.label}</span>
+                            <span className="truncate">{eventDisplayLabel(ev)}</span>
                           </div>
                           <GripVertical className="h-2.5 w-2.5 text-slate-400 opacity-60 shrink-0 inline" />
                         </div>
@@ -1056,7 +1064,7 @@ export default function CalendarClient({
                             if (ev.type === 'task' && ev.task) openEditTask(ev.task)
                             else if (ev.type === 'plan' && ev.plan) openPlanAsOT(ev.plan, activeSelectedDate)
                           }}
-                          title={`Arraste para alterar a data: ${ev.label}`}
+                          title={`Arraste para alterar a data: ${eventTooltip(ev)}`}
                           className={`text-xs font-bold px-2.5 py-1 rounded-lg border shadow-sm cursor-grab active:cursor-grabbing flex items-center gap-1.5 ${
                             isTaskDone ? 'bg-emerald-100 text-emerald-900 border-emerald-300 line-through opacity-85' : getTipoBadgeClass(resolveEventType(ev))
                           }`}
@@ -1076,7 +1084,7 @@ export default function CalendarClient({
                               title={role === 'manager' ? (isTaskDone ? 'Marcar como pendente' : 'Encerrar OT no calendário') : 'Apenas gestores podem encerrar OTs'}
                             />
                           )}
-                          <span>{ev.label}</span>
+                          <span>{eventDisplayLabel(ev)}</span>
                         </div>
                       )
                     })}
@@ -1142,8 +1150,8 @@ export default function CalendarClient({
                           <Wrench className="h-4 w-4 text-amber-500 flex-shrink-0" />
                         )}
                         <div>
-                          <p className={`text-sm font-bold text-gray-800 dark:text-slate-200 ${isTaskDone ? 'line-through opacity-70 text-emerald-900 dark:text-emerald-300' : ''}`}>
-                            {ev.label}
+                          <p className={`text-sm font-bold text-gray-800 dark:text-slate-200 ${isTaskDone ? 'line-through opacity-70 text-emerald-900 dark:text-emerald-300' : ''}`} title={eventTooltip(ev)}>
+                            {eventDisplayLabel(ev)}
                             {isTaskDone && (
                               <span className="ml-2 text-[10px] font-extrabold text-emerald-800 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded border border-emerald-300">Concluída</span>
                             )}
@@ -1198,226 +1206,20 @@ export default function CalendarClient({
         </div>
       )}
 
-      {/* Modal de Edição de OT diretamente no Calendário */}
-      {editingTask && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="absolute inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm" onClick={() => setEditingTask(null)} />
-          <div className="card relative w-full max-w-lg p-6 shadow-2xl max-h-[92vh] overflow-y-auto z-10 border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Pencil className="h-5 w-5 text-safety-orange" />
-                <h2 className="text-lg font-extrabold text-slate-900 dark:text-slate-100">
-                  {editingTask.id.startsWith('plan_') || editingTask.tipo === 'plano' || editingTask.title.startsWith('[PM]')
-                    ? 'Editar OT - Plano de Manutenção'
-                    : `Editar Ordem de Trabalho #${editingTask.id}`}
-                </h2>
-              </div>
-              <button onClick={() => setEditingTask(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {etError && (
-              <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 font-medium">
-                {etError}
-              </div>
-            )}
-
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault()
-                setEtError('')
-                const fd = new FormData(e.currentTarget)
-                fd.set('id', editingTask.id)
-                const cleanRules = etSafetyRules.filter((r) => r.trim())
-                fd.set('safetyRules', JSON.stringify(cleanRules.length ? cleanRules : []))
-
-                setTaskList((prev) => {
-                  const exists = prev.some((t) => t.id === editingTask.id)
-                  const updatedObj: Task = {
-                    ...editingTask,
-                    title: etTitle,
-                    tipo: etTipo,
-                    criticidade: etCriticidade,
-                    status: etStatus,
-                    assetId: etAssetId,
-                    assignedTo: etAssignedTo,
-                    dueDate: etDueDate,
-                    plannedStartDate: etPlannedStartDate,
-                    description: etDescription,
-                    observacoes: etObservacoes,
-                    safetyRules: cleanRules,
-                  }
-                  if (exists) {
-                    return prev.map((t) => (t.id === editingTask.id ? updatedObj : t))
-                  }
-                  return [updatedObj, ...prev]
-                })
-
-                startEtTransition(async () => {
-                  const res = await updateTaskAction({}, fd)
-                  if (res.error) {
-                    setEtError(res.error)
-                  } else {
-                    setEditingTask(null)
-                    router.refresh()
-                  }
-                })
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Título / Descrição Breve *</label>
-                <input
-                  name="title"
-                  value={etTitle}
-                  onChange={(e) => setEtTitle(e.target.value)}
-                  className="input font-semibold text-sm"
-                  required
-                />
-              </div>
-
-              {/* Equipamento (Área -> TAG em cascata) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Equipamento (Área / TAG / Designação)</label>
-                <SearchableAssetSelect
-                  value={etAssetId}
-                  onChange={(val) => setEtAssetId(val)}
-                  assets={assets}
-                  name="assetId"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tipo</label>
-                  <select
-                    name="tipo"
-                    value={etTipo}
-                    onChange={(e) => setEtTipo(e.target.value as TipoTarefa)}
-                    className="input text-xs"
-                  >
-                    {Object.entries(TIPO_LABELS).map(([k, label]) => (
-                      <option key={k} value={k}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Criticidade</label>
-                  <select
-                    name="criticidade"
-                    value={etCriticidade}
-                    onChange={(e) => setEtCriticidade(e.target.value as TaskCriticidade)}
-                    className="input text-xs"
-                  >
-                    {Object.entries(CRITICIDADE_LABELS).map(([k, label]) => (
-                      <option key={k} value={k}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Estado</label>
-                  <select
-                    name="status"
-                    value={etStatus}
-                    onChange={(e) => setEtStatus(e.target.value as TaskStatus)}
-                    className="input text-xs font-bold"
-                  >
-                    {Object.entries(STATUS_LABELS).map(([k, label]) => (
-                      <option key={k} value={k}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Técnico Atribuído</label>
-                  <select
-                    name="assignedTo"
-                    value={etAssignedTo}
-                    onChange={(e) => setEtAssignedTo(e.target.value)}
-                    className="input text-xs"
-                  >
-                    <option value="">-- Não Atribuído --</option>
-                    {users
-                      .filter((u) => u.active !== false)
-                      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-                      .map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {(u as any).abbreviation ? `[${(u as any).abbreviation}] ${u.name}` : u.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Prazo / Data Limite</label>
-                  <input
-                    type="date"
-                    name="dueDate"
-                    value={etDueDate}
-                    onChange={(e) => setEtDueDate(e.target.value)}
-                    className="input text-xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Descrição Detalhada do Trabalho</label>
-                <textarea
-                  name="description"
-                  value={etDescription}
-                  onChange={(e) => setEtDescription(e.target.value)}
-                  rows={2}
-                  className="input text-xs"
-                  placeholder="Instruções ou tarefas a realizar..."
-                />
-              </div>
-
-              {/* Botões do Modal */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
-                {role === 'manager' && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!confirm(`Tem a certeza que deseja eliminar esta OT?`)) return
-                      startEtTransition(async () => {
-                        const res = await deleteTaskAction(editingTask.id)
-                        if (res.error) alert(res.error)
-                        else {
-                          setEditingTask(null)
-                          router.refresh()
-                        }
-                      })
-                    }}
-                    disabled={etBusy}
-                    className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-xl flex items-center gap-1 transition-all"
-                  >
-                    <Trash2 size={14} /> <span>Eliminar</span>
-                  </button>
-                )}
-
-                <div className="flex items-center gap-2 ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => setEditingTask(null)}
-                    className="btn-secondary text-xs px-4 py-1.5"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={etBusy}
-                    className="btn-primary text-xs px-5 py-1.5 font-bold"
-                  >
-                    {etBusy ? 'A guardar...' : 'Guardar Alterações'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal de Edição de OT diretamente no Calendário — o mesmo componente usado nas OTs,
+          para que uma OT de PM já agendada mostre as datas do calendário e a opção de concluir. */}
+      <CreateTaskModal
+        isOpen={!!editingTask}
+        editingTask={editingTask}
+        onClose={() => setEditingTask(null)}
+        assets={assets}
+        users={users}
+        isManager={role === 'manager'}
+        onSuccess={() => {
+          setEditingTask(null)
+          router.refresh()
+        }}
+      />
 
       {/* New task modal */}
       {newTaskOpen && selectedDate && (
