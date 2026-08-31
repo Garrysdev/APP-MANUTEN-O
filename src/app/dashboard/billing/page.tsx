@@ -27,7 +27,7 @@ const ALL_PLANS = [
     name: 'Starter',
     price: '19€/mês',
     desc: 'Para pequenas oficinas e PMEs industriais',
-    features: ['Até 5 técnicos', 'Até 100 OTs/mês', 'Gestão de Equipamentos', 'Gestão de Stocks básica', '10 Relatórios mensais'],
+    features: ['Até 5 técnicos', 'Até 100 OTs/mês', 'Controlo de Projetos (Gantt)', 'Calendário de Manutenção', '10 Relatórios mensais'],
     tier: 1,
   },
   {
@@ -35,7 +35,7 @@ const ALL_PLANS = [
     name: 'Pro',
     price: '49€/mês',
     desc: 'Para fábricas e operações em crescimento',
-    features: ['Até 15 técnicos', 'Até 500 OTs/mês', 'Planos de Manutenção Preventiva', 'KPIs de Fiabilidade (MTTR/MTBF)', 'Relatórios PDF & Excel Ilimitados', 'Peças & Itens de Segurança'],
+    features: ['Até 15 técnicos', 'Até 500 OTs/mês', 'Planos de Manutenção Preventiva', 'KPIs de Fiabilidade (MTTR/MTBF)', 'Relatórios PDF & Excel Ilimitados'],
     tier: 2,
   },
   {
@@ -43,7 +43,7 @@ const ALL_PLANS = [
     name: 'Business',
     price: '119€/mês',
     desc: 'Para plantas industriais multi-unidade',
-    features: ['Técnicos Ilimitados', 'Intervenções Ilimitadas', 'Consultor IA (com RAG & ficheiros)', 'Gestão Financeira & Projetos', 'Suporte Prioritário 24/7'],
+    features: ['Técnicos Ilimitados', 'Intervenções Ilimitadas', 'Consultor IA (com RAG & ficheiros)', 'Gestão Financeira', 'Suporte Prioritário 24/7'],
     tier: 3,
   },
   {
@@ -57,16 +57,17 @@ const ALL_PLANS = [
 ]
 
 const FEATURE_NAMES: Record<string, { label: string; minPlan: string }> = {
+  assets: { label: 'Gestão de Equipamentos', minPlan: 'Free' },
+  stocks: { label: 'Gestão de Inventário & Stocks', minPlan: 'Free' },
   history: { label: 'Histórico de Intervenções', minPlan: 'Pro' },
   reports: { label: 'Relatórios Avançados', minPlan: 'Starter' },
   'maintenance-plan': { label: 'Plano de Manutenção', minPlan: 'Pro' },
   calendar: { label: 'Calendário de Manutenção', minPlan: 'Starter' },
-  stocks: { label: 'Gestão de Stocks', minPlan: 'Starter' },
   finance: { label: 'Gestão Financeira', minPlan: 'Business' },
   aiConsultant: { label: 'Consultor IA & RAG', minPlan: 'Business' },
   reliability: { label: 'Fiabilidade & KPIs (MTTR/MTBF)', minPlan: 'Pro' },
   compliance: { label: 'Compliance ISO & Auditorias', minPlan: 'Enterprise' },
-  projects: { label: 'Gestão de Projetos (Gantt)', minPlan: 'Pro' },
+  projects: { label: 'Gestão de Projetos (Gantt)', minPlan: 'Starter' },
 }
 
 export default async function BillingPage({

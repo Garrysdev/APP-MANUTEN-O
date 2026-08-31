@@ -25,18 +25,18 @@ export const LIMITS: Record<PlanName, PlanLimits> = {
 }
 
 export const TEASER_LIMITS: Record<FeatureKey, number> = {
-  assets: 3,
+  assets: 9999,
   history: 0,
   users: 2,
   reports: 0,
   'maintenance-plan': 1,
   calendar: 0,
-  stocks: 1,
+  stocks: 9999,
   finance: 0,
   aiConsultant: 0,
   reliability: 0,
   compliance: 0,
-  projects: 2,
+  projects: 9999,
 }
 
 export const PLAN_LABELS: Record<PlanName, string> = {
