@@ -50,7 +50,7 @@ function isTaskAssignedToUser(t: any, profile: any): boolean {
     if (pId && assignedIds.includes(pId)) return true
     if (pAbbr && assignedIds.includes(pAbbr)) return true
     if (derivedAbbr && assignedIds.includes(derivedAbbr)) return true
-    if (pName && assignedIds.some((id) => id === pName || id.includes(pName) || pName.includes(id))) return true
+    if (pName && assignedIds.some((id: string) => id === pName || id.includes(pName) || pName.includes(id))) return true
   }
 
   if (t.createdBy && pId && String(t.createdBy).toLowerCase().trim() === pId) {
