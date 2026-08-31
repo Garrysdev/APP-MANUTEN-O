@@ -912,7 +912,7 @@ export default function CreateTaskModal({
               {editingTask.auditTrail && editingTask.auditTrail.length > 0 && (
                 <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                   <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Linha do Tempo de Auditoria:</span>
-                  {editingTask.auditTrail.map((entry, i) => (
+                  {editingTask.auditTrail.map((entry: any, i: number) => (
                     <div key={i} className="text-[11px] p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-0.5 shadow-xs">
                       <div className="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200">
                         <span>{entry.action}</span>

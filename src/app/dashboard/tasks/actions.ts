@@ -38,7 +38,7 @@ export async function loadSafetyRulesAction(): Promise<string[]> {
   const profile = await getCurrentProfile()
   if (!profile) return []
   const rules = await listSafetyRules(profile.companyId)
-  return rules.map((r) => r.name || (r as any).title).filter(Boolean)
+  return rules.map((r: any) => r.name || r.title || r.rule || r.text).filter(Boolean)
 }
 
 /** Carrega os planos (leves) só quando o utilizador abre o modal de criação — evita pesá-los em cada visita. */
@@ -95,6 +95,7 @@ function parseTask(formData: FormData) {
 
   const executor = String(formData.get('executor') ?? 'interno').trim() || null
   const legal = formData.get('legal') === 'true' || formData.get('legal') === 'on'
+  const requesterEmail = String(formData.get('requesterEmail') ?? '').trim() || null
 
   return {
     title,

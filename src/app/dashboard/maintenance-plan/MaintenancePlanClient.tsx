@@ -1012,8 +1012,8 @@ export default function MaintenancePlanClient({
           titleText={editing ? "Editar OT no Plano" : "Novo Plano de Manutenção"}
           assets={assets}
           users={users}
-          stockRefs={stockRefs}
-          isManager={profile?.role === 'manager'}
+          stockRefs={[]}
+          isManager={true}
           createAction={createMaintenancePlanAction}
           updateAction={updateMaintenancePlanAction}
           onSuccess={() => {
