@@ -239,10 +239,11 @@ function GanttChartView({
           dayObj.setDate(dayObj.getDate() + d)
           const dayLetters = ['D', '2ª', '3ª', '4ª', '5ª', '6ª', 'S']
           const dayLetter = dayLetters[dayObj.getDay()]
+          const dayNum = dayObj.getDate()
           const isWeekend = dayObj.getDay() === 0 || dayObj.getDay() === 6
           const dStr = dayObj.toISOString().slice(0, 10)
           sub.push({
-            label: dayLetter,
+            label: `${dayLetter} ${dayNum}`,
             dateStr: dStr,
             endDateStr: dStr,
             isWeekend,
@@ -256,6 +257,16 @@ function GanttChartView({
       return { topHeaders: top, subHeaders: sub, gridStartMs: startMs, gridTotalMs: totalMs }
     }
   }, [timeScale, minTime, maxTime])
+
+  const minGridWidth = useMemo(() => {
+    if (timeScale === 'week') {
+      return Math.max(1200, 380 + subHeaders.length * 42)
+    }
+    if (timeScale === 'month') {
+      return Math.max(1200, 380 + subHeaders.length * 85)
+    }
+    return Math.max(1200, 380 + subHeaders.length * 60)
+  }, [timeScale, subHeaders.length])
 
   const ROW_HEIGHT = 40
 
@@ -360,7 +371,7 @@ function GanttChartView({
           </div>
         </div>
         <div className="overflow-x-auto custom-scrollbar">
-          <div className="min-w-[1100px]">
+          <div style={{ minWidth: `${minGridWidth}px` }}>
             <div className="grid grid-cols-[380px_1fr] border-b border-slate-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-800/90 text-xs font-bold text-slate-700 dark:text-slate-200">
               <div className="grid grid-cols-[80px_90px_40px_60px_60px_50px] border-r border-slate-200 dark:border-slate-700 p-2 items-center text-[10px] uppercase tracking-wider font-mono">
                 <span className="truncate cursor-pointer hover:text-safety-orange flex items-center gap-0.5" title="Ordenar por Área" onClick={() => toggleSort?.('area')}>
