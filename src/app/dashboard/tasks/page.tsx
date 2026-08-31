@@ -112,7 +112,7 @@ export default async function TasksPage() {
           externalCompanyName: (u as any).externalCompanyName,
         }))}
         externalCompanies={externalCompanies}
-        role={isRGAdmin ? 'manager' : profile.role}
+        role={isManagerOrAdmin ? 'manager' : profile.role}
         userId={profile.id}
       />
     </Suspense>
