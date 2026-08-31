@@ -5,7 +5,7 @@ import { getCurrentProfile } from '@/lib/firebase/session'
 import {
   createTask, updateTask, deleteTask, getTask,
   listPlanTaskRefs, type PlanTaskRef,
-  listStockItems, listAssetRefs,
+  listStockItems, listAssetRefs, listSafetyRules,
   calculateTaskCost,
 } from '@/lib/firebase/data'
 import type { TaskCriticidade, TipoTarefa, TaskStatus } from '@/types/models'
@@ -19,7 +19,7 @@ export type StockMaterialRef = {
   assetIds?: string[] | null
 }
 
-/** Materiais para o picker "Materiais a utilizar" — carregado sob demanda ao abrir o modal (tarefa 09). */
+/** Materiais para o picker "Materiais a utilizar" — carregado sob demanda ao abrir o modal. */
 export async function loadStockRefsAction(): Promise<StockMaterialRef[]> {
   const profile = await getCurrentProfile()
   if (!profile) return []
@@ -31,6 +31,14 @@ export async function loadStockRefsAction(): Promise<StockMaterialRef[]> {
     assetId: s.assetId ?? null,
     assetIds: s.assetIds ?? null,
   }))
+}
+
+/** Regras de segurança dinâmicas — carregadas da página/tabela Itens de Segurança. */
+export async function loadSafetyRulesAction(): Promise<string[]> {
+  const profile = await getCurrentProfile()
+  if (!profile) return []
+  const rules = await listSafetyRules(profile.companyId)
+  return rules.map((r) => r.name || (r as any).title).filter(Boolean)
 }
 
 /** Carrega os planos (leves) só quando o utilizador abre o modal de criação — evita pesá-los em cada visita. */
@@ -85,7 +93,8 @@ function parseTask(formData: FormData) {
   const periodicidade = String(formData.get('periodicidade') ?? 'mensal').trim() || null
   const addToMaintenancePlan = formData.get('addToMaintenancePlan') === 'true' || formData.get('addToMaintenancePlan') === 'on'
 
-  const requesterEmail = String(formData.get('requesterEmail') ?? '').trim() || null
+  const executor = String(formData.get('executor') ?? 'interno').trim() || null
+  const legal = formData.get('legal') === 'true' || formData.get('legal') === 'on'
 
   return {
     title,
@@ -95,6 +104,8 @@ function parseTask(formData: FormData) {
     area,
     photoUrl,
     periodicidade,
+    executor,
+    legal,
     addToMaintenancePlan,
     requesterEmail,
     assignedTo: String(formData.get('assignedTo') ?? '').trim() || null,

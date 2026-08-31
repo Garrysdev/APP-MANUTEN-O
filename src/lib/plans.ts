@@ -9,11 +9,11 @@ export interface PlanLimits {
 }
 
 const GATES: Record<PlanName, Record<FeatureKey, boolean>> = {
-  free:       { assets: false, history: false, users: false, reports: false, 'maintenance-plan': false, calendar: false, stocks: false, finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false },
-  starter:    { assets: true,  history: false, users: false, reports: true,  'maintenance-plan': false, calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false },
-  pro:        { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: true,  compliance: false, projects: true },
-  business:   { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: false, projects: true },
-  enterprise: { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: true,  projects: true },
+  free:       { assets: true,  history: false, users: false, reports: false, 'maintenance-plan': false, calendar: false, stocks: true,  finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false },
+  starter:    { assets: true,  history: false, users: false, reports: true,  'maintenance-plan': false, calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: false, compliance: false, projects: true  },
+  pro:        { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: true,  compliance: false, projects: true  },
+  business:   { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: false, projects: true  },
+  enterprise: { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: true,  projects: true  },
 }
 
 export const LIMITS: Record<PlanName, PlanLimits> = {

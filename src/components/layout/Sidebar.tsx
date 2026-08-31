@@ -47,6 +47,9 @@ const managerNavGroups: NavGroup[] = [
     items: [
       { href: '/dashboard',                    key: 'dashboard',       icon: LayoutDashboard },
       { href: '/dashboard/tasks',              key: 'tasks',           icon: ClipboardList },
+      { href: '/dashboard/assets',             key: 'assets',          icon: Package,        feature: 'assets' },
+      { href: '/dashboard/safety-rules',       key: 'safetyRules',     icon: ShieldCheck },
+      { href: '/dashboard/stocks',             key: 'stocks',          icon: Boxes,          feature: 'stocks' },
       { href: '/dashboard/messages',           key: 'messages',        icon: MessageSquare },
       { href: '/dashboard/users',              key: 'users',           icon: Users,          feature: 'users' },
     ]
@@ -54,9 +57,7 @@ const managerNavGroups: NavGroup[] = [
   {
     groupName: 'Módulos Starter',
     items: [
-      { href: '/dashboard/assets',             key: 'assets',          icon: Package,        feature: 'assets' },
-      { href: '/dashboard/safety-rules',       key: 'safetyRules',     icon: ShieldCheck,    feature: 'compliance' },
-      { href: '/dashboard/stocks',             key: 'stocks',          icon: Boxes,          feature: 'stocks' },
+      { href: '/dashboard/projects',           key: 'projects',        icon: FolderKanban,   feature: 'projects' },
       { href: '/dashboard/calendar',           key: 'calendar',        icon: Calendar,       feature: 'calendar' },
       { href: '/dashboard/maintenance-plan',   key: 'maintenancePlan', icon: Wrench,         feature: 'maintenance-plan' },
     ]
@@ -64,7 +65,6 @@ const managerNavGroups: NavGroup[] = [
   {
     groupName: 'Módulos Pro',
     items: [
-      { href: '/dashboard/projects',           key: 'projects',        icon: FolderKanban,   feature: 'projects' },
       { href: '/dashboard/reports',            key: 'reports',         icon: FileBarChart,   feature: 'reports' },
       { href: '/dashboard/reliability',        key: 'reliability',     icon: Activity,       feature: 'reliability' },
     ]

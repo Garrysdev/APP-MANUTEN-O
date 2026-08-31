@@ -13,7 +13,7 @@ import { formatDate, formatDateTime } from '@/lib/utils'
 import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
 import MaterialsSelector from '@/components/ui/MaterialsSelector'
 import { TaskDocPickerManager } from '@/components/ui/TaskDocRequirements'
-import { createTaskAction, updateTaskAction, type StockMaterialRef } from '@/app/dashboard/tasks/actions'
+import { createTaskAction, updateTaskAction, loadSafetyRulesAction, type StockMaterialRef } from '@/app/dashboard/tasks/actions'
 
 export const PREDEFINED_SAFETY_RULES = [
   'EPI: Capacete',
@@ -133,7 +133,8 @@ function DynamicList({
 export interface CreateTaskModalProps {
   isOpen: boolean
   onClose: () => void
-  editingTask?: Task | null
+  titleText?: string
+  editingTask?: Task | any | null
   initialAssetId?: string | null
   assets: any[]
   users: any[]
@@ -149,6 +150,7 @@ export interface CreateTaskModalProps {
 export default function CreateTaskModal({
   isOpen,
   onClose,
+  titleText,
   editingTask = null,
   initialAssetId = '',
   assets,
@@ -171,7 +173,10 @@ export default function CreateTaskModal({
   const [description, setDescription] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [status, setStatus] = useState<'pending' | 'in_progress' | 'done' | 'cancelled'>('pending')
+  const [executor, setExecutor] = useState<string>('interno')
+  const [legal, setLegal] = useState<boolean>(false)
   const [safetyRules, setSafetyRules] = useState<string[]>([])
+  const [dynamicSafetyRules, setDynamicSafetyRules] = useState<string[]>(PREDEFINED_SAFETY_RULES)
   const [materialsRequired, setMaterialsRequired] = useState<string[]>([])
   const [requiredFRs, setRequiredFRs] = useState<string[]>([])
   const [requiredITs, setRequiredITs] = useState<string[]>([])
@@ -190,6 +195,13 @@ export default function CreateTaskModal({
 
   useEffect(() => {
     if (isOpen) {
+      loadSafetyRulesAction().then((rules) => {
+        if (rules && rules.length > 0) {
+          const combined = Array.from(new Set([...rules, ...PREDEFINED_SAFETY_RULES]))
+          setDynamicSafetyRules(combined)
+        }
+      }).catch(() => {})
+
       if (editingTask) {
         setTitle(editingTask.title || '')
         setTipo(editingTask.tipo || 'preventiva')
@@ -211,6 +223,8 @@ export default function CreateTaskModal({
         setDescription(editingTask.description || '')
         setObservacoes(editingTask.observacoes || editingTask.observations || '')
         setStatus(editingTask.status || 'pending')
+        setExecutor(editingTask.executor || 'interno')
+        setLegal(Boolean(editingTask.legal || editingTask.inspecaoLegal))
         setSafetyRules(editingTask.safetyRules?.length ? editingTask.safetyRules : [])
         setMaterialsRequired(editingTask.materialsRequired?.length ? editingTask.materialsRequired : [])
         setRequiredFRs(editingTask.requiredFRs || [])
@@ -218,6 +232,7 @@ export default function CreateTaskModal({
         setDependsOn(Array.isArray(editingTask.dependsOn) ? (editingTask.dependsOn as string[]) : [])
         setRequesterEmail(editingTask.requesterEmail || '')
         setPhotoPreview(editingTask.photoUrl || (editingTask.photoUrls && editingTask.photoUrls[0]) || null)
+        setPeriodicidadeModal(editingTask.periodicidade || 'mensal')
       } else {
         if (initialAssetId) setAssetId(initialAssetId)
         setDependsOn([])
@@ -235,6 +250,8 @@ export default function CreateTaskModal({
       setObservacoes('')
       setRequesterEmail('')
       setStatus('pending')
+      setExecutor('interno')
+      setLegal(false)
       setSafetyRules([])
       setMaterialsRequired([])
       setRequiredFRs([])
@@ -376,7 +393,7 @@ export default function CreateTaskModal({
           </button>
           <div>
             <h1 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <span>Nova Ordem de Trabalho</span>
+              <span>{titleText || (editingTask ? 'Editar OT' : 'Nova Ordem de Trabalho')}</span>
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
               Ficha completa de registo de OT
@@ -444,6 +461,56 @@ export default function CreateTaskModal({
               </select>
             </div>
           </div>
+
+          {/* Periodicidade & Executor */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Periodicidade</label>
+              <select
+                name="periodicidade"
+                value={periodicidadeModal}
+                onChange={(e) => setPeriodicidadeModal(e.target.value)}
+                className="input"
+              >
+                <option value="pontual">Pontual / Uma vez</option>
+                <option value="semanal">Semanal</option>
+                <option value="quinzenal">Quinzenal</option>
+                <option value="mensal">Mensal</option>
+                <option value="bimensal">Bimensal</option>
+                <option value="trimestral">Trimestral</option>
+                <option value="quadrimestral">Quadrimestral</option>
+                <option value="semestral">Semestral</option>
+                <option value="anual">Anual</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Executor</label>
+              <select
+                name="executor"
+                value={executor}
+                onChange={(e) => setExecutor(e.target.value)}
+                className="input"
+              >
+                <option value="interno">Interno (RG / Equipa Própria)</option>
+                <option value="externo">Prestador Externo</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Inspeção Legal / Obrigatória */}
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none bg-slate-100/70 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <input
+              type="checkbox"
+              name="legal"
+              checked={legal}
+              onChange={(e) => setLegal(e.target.checked)}
+              className="rounded accent-red-600 h-4 w-4"
+            />
+            <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+              ⚖️ Inspeção legal / obrigatória (Regulamentação Oficial)
+            </span>
+          </label>
 
           {/* Email do Requerente / Solicitante (PI) */}
           <div className="bg-sky-50/60 dark:bg-sky-950/20 p-3.5 rounded-xl border border-sky-200 dark:border-sky-800/50 space-y-1.5">

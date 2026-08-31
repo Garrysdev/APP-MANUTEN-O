@@ -1003,118 +1003,24 @@ export default function MaintenancePlanClient({
         )}
       </div>
 
-      {/* Modal criar/editar */}
+      {/* Modal criar/editar com ficha completa e campos unificados */}
       {creating && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={closeModal} />
-          <div className="card relative w-full max-w-xl p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100">{editing ? dict.maintenancePlan.modalEdit : dict.maintenancePlan.modalNew}</h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"><X className="h-5 w-5" /></button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Título *</label>
-                <input name="title" defaultValue={editing?.title ?? ''} className="input" required />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Descrição</label>
-                <textarea name="description" defaultValue={editing?.description ?? ''} className="input" rows={2} />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Criticidade</label>
-                  <select name="criticidade" defaultValue={editing?.criticidade ?? 'verde'} className="input">
-                    {CRITICIDADE_OPTIONS.map((c) => <option key={c} value={c}>{CRITICIDADE_LABELS[c]}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Tipo</label>
-                  <select name="tipo" defaultValue={editing?.tipo ?? 'preventiva'} className="input">
-                    {TIPO_OPTIONS.map((t) => <option key={t} value={t}>{TIPO_LABELS[t]}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Periodicidade</label>
-                  <select name="periodicidade" defaultValue={editing?.periodicidade ?? 'mensal'} className="input">
-                    {PERIODICIDADE_OPTIONS.map((p) => <option key={p} value={p}>{PERIODICIDADE_LABELS[p]}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Executor</label>
-                  <select name="executor" defaultValue={editing?.executor ?? 'interno'} className="input">
-                    <option value="interno">{EXECUTOR_LABELS.interno}</option>
-                    <option value="externo">{EXECUTOR_LABELS.externo}</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Equipamento</label>
-                  <select name="assetId" defaultValue={editing?.assetId ?? ''} className="input">
-                    <option value="">— nenhum —</option>
-                    {assets.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Responsável</label>
-                  <select name="assignedTo" defaultValue={editing?.assignedTo ?? ''} className="input">
-                    <option value="">— nenhum —</option>
-                    {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 cursor-pointer select-none">
-                <input type="checkbox" name="legal" defaultChecked={editing?.legal ?? false} className="rounded border-gray-300 dark:border-slate-700 dark:bg-slate-800" />
-                <Scale className="h-4 w-4 text-red-500" /> Inspeção legal / obrigatória
-              </label>
-
-              {/* Regras de segurança */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
-                  <ShieldAlert className="h-4 w-4 text-amber-500" /> Regras de segurança
-                </label>
-                <div className="space-y-2">
-                  {safetyRules.map((rule, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input 
-                        value={rule} 
-                        onChange={(e) => updateRule(i, e.target.value)} 
-                        className="input flex-1 text-sm" 
-                        placeholder={`Regra ${i + 1} (ex: usar EPI, desligar equipamento…)`} 
-                        list={datalistId}
-                      />
-                      {safetyRules.length > 1 && (
-                        <button type="button" onClick={() => removeRule(i)} className="text-gray-400 hover:text-red-600 p-1"><Trash2 className="h-4 w-4" /></button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <datalist id={datalistId}>
-                  {PREDEFINED_SAFETY_RULES.map(s => <option key={s} value={s} />)}
-                </datalist>
-                <button type="button" onClick={addRule} className="mt-2 text-sm text-[#2E86C1] hover:underline flex items-center gap-1">
-                  <Plus className="h-3.5 w-3.5" /> Adicionar regra
-                </button>
-              </div>
-
-              {error && <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 px-3 py-2.5 text-sm text-red-700 dark:text-red-400">{error}</div>}
-
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={closeModal} className="btn-secondary flex-1">{dict.common.cancel}</button>
-                <button type="submit" disabled={busy} className="btn-primary flex-1">{busy ? dict.common.loading : dict.common.save}</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <CreateTaskModal
+          isOpen={creating}
+          onClose={closeModal}
+          editingTask={editing}
+          titleText={editing ? "Editar OT no Plano" : "Novo Plano de Manutenção"}
+          assets={assets}
+          users={users}
+          stockRefs={stockRefs}
+          isManager={profile?.role === 'manager'}
+          createAction={createMaintenancePlanAction}
+          updateAction={updateMaintenancePlanAction}
+          onSuccess={() => {
+            closeModal()
+            router.refresh()
+          }}
+        />
       )}
 
       {/* Modal Perguntar Datas do Calendário */}
