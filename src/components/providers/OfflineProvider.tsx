@@ -39,6 +39,16 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
         navigator.serviceWorker.getRegistrations().then((registrations) => {
           for (const registration of registrations) {
             registration.update()
+            registration.onupdatefound = () => {
+              const installingWorker = registration.installing
+              if (installingWorker) {
+                installingWorker.onstatechange = () => {
+                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    window.location.reload()
+                  }
+                }
+              }
+            }
           }
         })
       }

@@ -242,60 +242,46 @@ function getFallbackExternalCompanies(): ExternalCompany[] {
 }
 
 // ── ASSETS ──────────────────────────────────────────────────────────────────
-const listAssetsCached = unstable_cache(
-  async (companyId: string, limitCount: number): Promise<Asset[]> => {
-    try {
-      const snap = await adminDb()
-        .collection('assets')
-        .where('companyId', '==', companyId)
-        .limit(limitCount)
-        .get()
-      const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
-      if (dbDocs.length > 0) {
-        return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      }
-      return isDemoCompany(companyId) ? getFallbackAssets() : []
-    } catch (err) {
-      console.error('[listAssets] Error:', err)
+export const listAssets = cache(async function(companyId: string, limitCount = 2000): Promise<Asset[]> {
+  try {
+    const snap = await adminDb()
+      .collection('assets')
+      .where('companyId', '==', companyId)
+      .limit(limitCount)
+      .get()
+    const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
+    if (dbDocs.length > 0) {
+      return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     }
     return isDemoCompany(companyId) ? getFallbackAssets() : []
-  },
-  ['assets'],
-  { revalidate: 45, tags: ['assets'] }
-)
-export const listAssets = cache(async function(companyId: string, limitCount = 2000): Promise<Asset[]> {
-  return listAssetsCached(companyId, limitCount)
+  } catch (err) {
+    console.error('[listAssets] Error:', err)
+  }
+  return isDemoCompany(companyId) ? getFallbackAssets() : []
 })
 
 /** Versão LEVE: id + name + tag (para dropdowns e mapa id→nome/tag). */
-const listAssetRefsCached = unstable_cache(
-  async (companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> => {
-    try {
-      const snap = await adminDb()
-        .collection('assets')
-        .where('companyId', '==', companyId)
-        .select('name', 'tag', 'area')
-        .get()
-      const dbDocs = snap.docs.map((d) => ({
-        id: d.id,
-        name: (d.data().name as string) ?? '',
-        tag: (d.data().tag as string) ?? null,
-        area: (d.data().area as string) ?? null,
-      }))
-      if (dbDocs.length > 0) {
-        return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
-      }
-      return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
-    } catch (err) {
-      console.error('[listAssetRefs] Error:', err)
+export const listAssetRefs = cache(async function(companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> {
+  try {
+    const snap = await adminDb()
+      .collection('assets')
+      .where('companyId', '==', companyId)
+      .select('name', 'tag', 'area')
+      .get()
+    const dbDocs = snap.docs.map((d) => ({
+      id: d.id,
+      name: (d.data().name as string) ?? '',
+      tag: (d.data().tag as string) ?? null,
+      area: (d.data().area as string) ?? null,
+    }))
+    if (dbDocs.length > 0) {
+      return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
     }
     return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
-  },
-  ['asset-refs'],
-  { revalidate: 45, tags: ['assets'] }
-)
-export const listAssetRefs = cache(async function(companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> {
-  return listAssetRefsCached(companyId)
+  } catch (err) {
+    console.error('[listAssetRefs] Error:', err)
+  }
+  return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
 })
 
 /** Refs LEVES de planos para o modal de criação de tarefas (só os campos usados, ativos com equipamento). */
@@ -421,35 +407,28 @@ export async function deleteAsset(companyId: string, id: string): Promise<void> 
 }
 
 // ── TASKS ───────────────────────────────────────────────────────────────────
-const listTasksCached = unstable_cache(
-  async (companyId: string, limitCount: number): Promise<Task[]> => {
-    try {
-      const snap = await adminDb()
-        .collection('tasks')
-        .where('companyId', '==', companyId)
-        .limit(limitCount)
-        .get()
-      const dbDocs = snap.docs.map((d) => serialize<Task>(d))
-      if (!isDemoCompany(companyId)) {
-        return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      }
-      const fallbacks = getFallbackTasks()
-      if (dbDocs.length === 0) return fallbacks
-
-      const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
-      const mergedFallbacks = fallbacks.map((f) => dbMap.get(f.id) || f)
-      const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
-      return [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-    } catch (err) {
-      console.error('[listTasks] Error:', err)
-    }
-    return isDemoCompany(companyId) ? getFallbackTasks() : []
-  },
-  ['tasks'],
-  { revalidate: 30, tags: ['tasks'] }
-)
 export const listTasks = cache(async function(companyId: string, limitCount = 2000): Promise<Task[]> {
-  return listTasksCached(companyId, limitCount)
+  try {
+    const snap = await adminDb()
+      .collection('tasks')
+      .where('companyId', '==', companyId)
+      .limit(limitCount)
+      .get()
+    const dbDocs = snap.docs.map((d) => serialize<Task>(d))
+    if (!isDemoCompany(companyId)) {
+      return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    }
+    const fallbacks = getFallbackTasks()
+    if (dbDocs.length === 0) return fallbacks
+
+    const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
+    const mergedFallbacks = fallbacks.map((f) => dbMap.get(f.id) || f)
+    const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
+    return [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+  } catch (err) {
+    console.error('[listTasks] Error:', err)
+  }
+  return isDemoCompany(companyId) ? getFallbackTasks() : []
 })
 
 export const listTasksByAsset = cache(async function(companyId: string, assetId: string, providedAssetTag?: string | null): Promise<Task[]> {
@@ -1156,44 +1135,37 @@ export const listInterventionsByTechnician = cache(async function(
 
 // ── MAINTENANCE PLANS ─────────────────────────────────────────────────────────
 
-const listMaintenancePlansCached = unstable_cache(
-  async (companyId: string): Promise<MaintenancePlan[]> => {
-    try {
-      const snap = await adminDb()
-        .collection('maintenance_plans')
-        .where('companyId', '==', companyId)
-        .get()
-      const dbDocs = snap.docs
-        .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
-        .filter((p) => !p.deleted)
-
-      if (dbDocs.length > 0) {
-        const seen = new Set<string>()
-        const uniquePlans: MaintenancePlan[] = []
-
-        for (const p of dbDocs) {
-          const key = (p.code || `${p.area || ''}_${p.tag || ''}_${p.title}`).toLowerCase().trim()
-          if (!seen.has(key)) {
-            seen.add(key)
-            uniquePlans.push(p)
-          }
-        }
-        return uniquePlans.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
-      }
-
-      return isDemoCompany(companyId)
-        ? getFallbackPlans().sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
-        : []
-    } catch (err) {
-      console.error('[listMaintenancePlans] Error:', err)
-    }
-    return isDemoCompany(companyId) ? getFallbackPlans() : []
-  },
-  ['maintenance-plans'],
-  { revalidate: 45, tags: ['plans'] }
-)
 export const listMaintenancePlans = cache(async function(companyId: string): Promise<MaintenancePlan[]> {
-  return listMaintenancePlansCached(companyId)
+  try {
+    const snap = await adminDb()
+      .collection('maintenance_plans')
+      .where('companyId', '==', companyId)
+      .get()
+    const dbDocs = snap.docs
+      .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
+      .filter((p) => !p.deleted)
+
+    if (dbDocs.length > 0) {
+      const seen = new Set<string>()
+      const uniquePlans: MaintenancePlan[] = []
+
+      for (const p of dbDocs) {
+        const key = (p.code || `${p.area || ''}_${p.tag || ''}_${p.title}`).toLowerCase().trim()
+        if (!seen.has(key)) {
+          seen.add(key)
+          uniquePlans.push(p)
+        }
+      }
+      return uniquePlans.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
+    }
+
+    return isDemoCompany(companyId)
+      ? getFallbackPlans().sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
+      : []
+  } catch (err) {
+    console.error('[listMaintenancePlans] Error:', err)
+  }
+  return isDemoCompany(companyId) ? getFallbackPlans() : []
 })
 
 export const getMaintenancePlan = cache(async function(companyId: string, id: string): Promise<MaintenancePlan | null> {
