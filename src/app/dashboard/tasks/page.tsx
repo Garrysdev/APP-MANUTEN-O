@@ -81,11 +81,12 @@ export default async function TasksPage() {
       !(t.description || '').toLowerCase().includes('projeto')
   )
 
+  const roleStr = String(profile.role || '').toLowerCase().trim()
   const isManagerOrAdmin =
-    profile.role === 'manager' ||
-    profile.role === 'admin' ||
-    profile.role === 'gestor' ||
-    profile.role === 'administrador' ||
+    roleStr === 'manager' ||
+    roleStr === 'admin' ||
+    roleStr === 'gestor' ||
+    roleStr === 'administrador' ||
     profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
 
   const tasks = !isManagerOrAdmin
