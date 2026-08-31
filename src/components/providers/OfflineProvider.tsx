@@ -35,20 +35,31 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       setIsOnline(navigator.onLine)
 
+      // Purga automática de cache do Service Worker a cada novo deploy
+      if ('caches' in window) {
+        const CURRENT_VERSION = 'v2026_08_31_v4'
+        const lastVersion = localStorage.getItem('app_build_version')
+        if (lastVersion !== CURRENT_VERSION) {
+          localStorage.setItem('app_build_version', CURRENT_VERSION)
+          caches.keys().then((keys) => {
+            keys.forEach((key) => caches.delete(key))
+          })
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then((registrations) => {
+              for (const registration of registrations) {
+                registration.unregister()
+              }
+            })
+          }
+          window.location.reload()
+          return
+        }
+      }
+
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then((registrations) => {
           for (const registration of registrations) {
             registration.update()
-            registration.onupdatefound = () => {
-              const installingWorker = registration.installing
-              if (installingWorker) {
-                installingWorker.onstatechange = () => {
-                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    window.location.reload()
-                  }
-                }
-              }
-            }
           }
         })
       }
