@@ -76,9 +76,7 @@ export default async function TasksPage() {
   const normalTasks = allTasks.filter(
     (t) =>
       (t as any).source !== 'folha_projetos' &&
-      !(t as any).isProject &&
-      !(t.description || '').toLowerCase().includes('projecto') &&
-      !(t.description || '').toLowerCase().includes('projeto')
+      !(t as any).isProject
   )
 
   const roleStr = String(profile.role || '').toLowerCase().trim()
