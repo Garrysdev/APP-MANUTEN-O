@@ -15,14 +15,11 @@ function isTaskAssignedToUser(t: any, profile: any): boolean {
 
   let derivedAbbr = pAbbr
   if (!derivedAbbr && pName) {
-    const parenMatch = pName.match(/\(([^)]+)\)/)
-    if (parenMatch) {
-      derivedAbbr = parenMatch[1].toLowerCase().trim()
-    } else {
-      const parts = pName.split(' ').filter(Boolean)
-      if (parts.length >= 2) {
-        derivedAbbr = (parts[0][0] + parts[parts.length - 1][0]).toLowerCase()
-      }
+    const parts = pName.split(' ').filter(Boolean)
+    if (parts.length >= 2) {
+      derivedAbbr = (parts[0][0] + parts[parts.length - 1][0]).toLowerCase()
+    } else if (parts.length === 1 && parts[0].length >= 2) {
+      derivedAbbr = parts[0].slice(0, 2).toLowerCase()
     }
   }
 
@@ -34,9 +31,9 @@ function isTaskAssignedToUser(t: any, profile: any): boolean {
 
   if (assignedTo) {
     if (pId && assignedTo === pId) return true
-    if (pAbbr && assignedTo === pAbbr) return true
-    if (derivedAbbr && assignedTo === derivedAbbr) return true
-    if (pName && (assignedTo === pName || pName.includes(assignedTo))) return true
+    if (pAbbr && (assignedTo === pAbbr || assignedTo.includes(pAbbr))) return true
+    if (derivedAbbr && (assignedTo === derivedAbbr || assignedTo.includes(derivedAbbr))) return true
+    if (pName && (assignedTo === pName || pName.includes(assignedTo) || assignedTo.includes(pName))) return true
   }
 
   if (assignedToText) {
@@ -53,8 +50,12 @@ function isTaskAssignedToUser(t: any, profile: any): boolean {
     if (pName && assignedIds.some((id: string) => id === pName || id.includes(pName) || pName.includes(id))) return true
   }
 
-  if (t.createdBy && pId && String(t.createdBy).toLowerCase().trim() === pId) {
-    return true
+  if (t.createdBy) {
+    const createdByStr = String(t.createdBy).toLowerCase().trim()
+    if (pId && createdByStr === pId) return true
+    if (pAbbr && createdByStr === pAbbr) return true
+    if (derivedAbbr && createdByStr === derivedAbbr) return true
+    if (pName && createdByStr.includes(pName)) return true
   }
 
   return false
@@ -80,10 +81,14 @@ export default async function TasksPage() {
       !(t.description || '').toLowerCase().includes('projeto')
   )
 
-  const isRGAdmin = profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
-  const isTechnician = profile.role === 'technician' && !isRGAdmin
+  const isManagerOrAdmin =
+    profile.role === 'manager' ||
+    profile.role === 'admin' ||
+    profile.role === 'gestor' ||
+    profile.role === 'administrador' ||
+    profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
 
-  const tasks = isTechnician
+  const tasks = !isManagerOrAdmin
     ? normalTasks.filter((t) => isTaskAssignedToUser(t, profile))
     : normalTasks
 
