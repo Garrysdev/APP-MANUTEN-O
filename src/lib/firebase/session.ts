@@ -98,7 +98,12 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
 
     return user
   } catch (err: any) {
-    console.error('[getCurrentProfile] Firestore query error:', err?.message || err)
+    const isQuotaErr = String(err?.message || err).includes('Quota exceeded') || String(err?.message || err).includes('RESOURCE_EXHAUSTED')
+    if (isQuotaErr) {
+      console.warn('[getCurrentProfile] Quota do Firestore atingida. A usar perfil de sessão local.')
+    } else {
+      console.error('[getCurrentProfile] Firestore query error:', err?.message || err)
+    }
     const targetCompanyId = isRGAdmin ? DEMO_COMPANY_ID : ((session as any).companyId || DEMO_COMPANY_ID)
     const fallbackRole = isRGAdmin ? 'manager' : 'technician'
     return {

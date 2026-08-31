@@ -425,8 +425,14 @@ export const listTasks = cache(async function(companyId: string, limitCount = 20
     const mergedFallbacks = fallbacks.map((f) => dbMap.get(f.id) || f)
     const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
     return [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-  } catch (err) {
-    console.error('[listTasks] Error:', err)
+  } catch (err: any) {
+    const isQuotaErr = String(err?.message || err).includes('Quota exceeded') || String(err?.message || err).includes('RESOURCE_EXHAUSTED')
+    if (isQuotaErr) {
+      console.warn('[listTasks] Quota do Firestore atingida. A usar dados de reserva.')
+    } else {
+      console.error('[listTasks] Error:', err)
+    }
+    return getFallbackTasks()
   }
   return isDemoCompany(companyId) ? getFallbackTasks() : []
 })
@@ -1593,8 +1599,13 @@ const listNotificationsCached = unstable_cache(
         .get()
       const docs = snap.docs.map((d) => serialize<AppNotification>(d))
       if (docs.length > 0) return docs
-    } catch (err) {
-      console.error('[listNotifications] Error:', err)
+    } catch (err: any) {
+      const isQuotaErr = String(err?.message || err).includes('Quota exceeded') || String(err?.message || err).includes('RESOURCE_EXHAUSTED')
+      if (isQuotaErr) {
+        console.warn('[listNotifications] Quota do Firestore atingida. A usar notificações locais.')
+      } else {
+        console.error('[listNotifications] Error:', err)
+      }
     }
     return cachedNotifications.filter((n) => n.companyId === companyId && n.userId === userId)
   },
