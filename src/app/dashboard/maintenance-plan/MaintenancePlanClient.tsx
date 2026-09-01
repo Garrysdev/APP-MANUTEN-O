@@ -141,9 +141,8 @@ export default function MaintenancePlanClient({
   const [lockedFeature, setLockedFeature] = useState<FeatureKey | null>(null)
   const datalistId = useId()
 
-  // Filtros por coluna (estilo Excel)
   // Filtros por coluna (estilo Excel - alinhados com a folha PM)
-  const emptyCol = { area: '', tag: '', system: '', asset: '', title: '', description: '', tipo: '', period: '', crit: '', executor: '', estado: '' }
+  const emptyCol = { area: '', tag: '', system: '', asset: '', title: '', description: '', tipo: '', period: '', crit: '', executor: '', estado: '', tarefa: '' }
   const [colF, setColF] = useState(emptyCol)
   const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
   const [fLegal, setFLegal] = useState(false)
@@ -209,7 +208,16 @@ export default function MaintenancePlanClient({
   // plano-modelo. Só cai no editor de plano quando ainda não há nenhuma OT associada.
   const [viewingTask, setViewingTask] = useState<Task | null>(null)
   function findPlanTask(p: MaintenancePlan): Task | null {
-    const linkedTasks = tasks.filter((t) => t.maintenancePlanId === p.id)
+    const linkedTasks = tasks.filter((t) => {
+      if (t.maintenancePlanId && (t.maintenancePlanId === p.id || t.maintenancePlanId === (p as any).code)) return true
+      if (t.tag && p.tag && t.tag.trim().toLowerCase() === p.tag.trim().toLowerCase()) {
+        const tTitle = (t.title || '').trim().toLowerCase()
+        const pTitle = (p.title || '').trim().toLowerCase()
+        const pAcao = (p.description || '').trim().toLowerCase()
+        if (tTitle === pTitle || (pAcao && tTitle.includes(pAcao)) || (pTitle && tTitle.includes(pTitle))) return true
+      }
+      return false
+    })
     if (linkedTasks.length === 0) return null
     const pending = linkedTasks
       .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
@@ -500,6 +508,13 @@ export default function MaintenancePlanClient({
       if (colF.estado === 'inativo' && p.active) return false
       if (fLegal && !p.legal) return false
 
+      if (colF.tarefa) {
+        const t = findPlanTask(p)
+        if (colF.tarefa === 'concluida' && (!t || t.status !== 'done')) return false
+        if (colF.tarefa === 'pendente' && (!t || (t.status !== 'pending' && t.status !== 'open'))) return false
+        if (colF.tarefa === 'em_curso' && (!t || t.status !== 'in_progress')) return false
+      }
+
       const isCal = Boolean(p.showInCalendar || (p.calendarDates && p.calendarDates.length > 0) || p.active !== false)
       if (fCalendar === 'yes' && !isCal) return false
       if (fCalendar === 'no' && isCal) return false
@@ -510,7 +525,7 @@ export default function MaintenancePlanClient({
 
       return true
     })
-  }, [plans, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, fCalendar, fGantt, assetMap, assetTagMap, excelDateFilter])
+  }, [plans, tasks, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, fCalendar, fGantt, assetMap, assetTagMap, excelDateFilter])
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
@@ -750,7 +765,7 @@ export default function MaintenancePlanClient({
                 <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[45px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[50px] px-1 py-1.5 whitespace-nowrap text-left" />
-                <th className="w-[75px] px-1 py-1.5 whitespace-nowrap text-left">CONCLUIR</th>
+                <th className="w-[85px] px-1 py-1.5 whitespace-nowrap text-left">TAREFA</th>
               </tr>
               {/* Linha de filtros por coluna (estilo Excel) */}
               <tr className="border-b border-slate-200 bg-slate-50">
@@ -822,7 +837,14 @@ export default function MaintenancePlanClient({
                     <option value="inativo">Inativo</option>
                   </select>
                 </th>
-                <th className="px-0.5 py-0.5" />
+                <th className="px-0.5 py-0.5">
+                  <select value={colF.tarefa} onChange={(e) => setCol('tarefa', e.target.value)} className={colFilterCls} title="Filtrar estado da tarefa">
+                    <option value="">Todas</option>
+                    <option value="concluida">Concluída</option>
+                    <option value="pendente">Pendente</option>
+                    <option value="em_curso">Em curso</option>
+                  </select>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -927,11 +949,18 @@ export default function MaintenancePlanClient({
                   <td className="px-1 py-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     {(() => {
                       const t = findPlanTask(p)
-                      if (!t) return <span className="text-slate-300">—</span>
+                      if (!t) return <span className="text-slate-400 text-[10px] font-medium">—</span>
                       if (t.status === 'done') {
                         return (
-                          <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400 font-bold text-[9px]">
+                          <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400 font-bold text-[9px] bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
                             <CheckCircle2 className="h-3 w-3" /> Concluída
+                          </span>
+                        )
+                      }
+                      if (t.status === 'in_progress') {
+                        return (
+                          <span className="inline-flex items-center gap-0.5 text-blue-700 dark:text-blue-400 font-bold text-[9px] bg-blue-50 px-1 py-0.5 rounded border border-blue-200">
+                            ⏳ Em curso
                           </span>
                         )
                       }

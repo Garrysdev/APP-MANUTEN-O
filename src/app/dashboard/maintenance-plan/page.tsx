@@ -44,7 +44,7 @@ export default async function MaintenancePlanPage() {
           externalCompanyId: (u as any).externalCompanyId,
           externalCompanyName: (u as any).externalCompanyName,
         }))}
-        tasks={tasks.filter((t) => Boolean(t.maintenancePlanId))}
+        tasks={tasks}
         plan={plan}
       />
     </div>
