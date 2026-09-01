@@ -511,7 +511,7 @@ export default function MaintenancePlanClient({
       if (colF.tarefa) {
         const t = findPlanTask(p)
         if (colF.tarefa === 'concluida' && (!t || t.status !== 'done')) return false
-        if (colF.tarefa === 'pendente' && (!t || (t.status !== 'pending' && t.status !== 'open'))) return false
+        if (colF.tarefa === 'pendente' && (!t || t.status !== 'pending')) return false
         if (colF.tarefa === 'em_curso' && (!t || t.status !== 'in_progress')) return false
       }
 
