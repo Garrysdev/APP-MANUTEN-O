@@ -48,8 +48,8 @@ const managerNavGroups: NavGroup[] = [
       { href: '/dashboard',                    key: 'dashboard',       icon: LayoutDashboard },
       { href: '/dashboard/tasks',              key: 'tasks',           icon: ClipboardList },
       { href: '/dashboard/assets',             key: 'assets',          icon: Package,        feature: 'assets' },
-      { href: '/dashboard/safety-rules',       key: 'safetyRules',     icon: ShieldCheck },
       { href: '/dashboard/stocks',             key: 'stocks',          icon: Boxes,          feature: 'stocks' },
+      { href: '/dashboard/safety-rules',       key: 'safetyRules',     icon: ShieldCheck },
       { href: '/dashboard/messages',           key: 'messages',        icon: MessageSquare },
       { href: '/dashboard/users',              key: 'users',           icon: Users,          feature: 'users' },
     ]
