@@ -18,7 +18,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "calibracao"
+    "tipo": "pm"
   },
   {
     "area": "20",
@@ -103,7 +103,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "30",
@@ -209,7 +209,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "30",
@@ -241,7 +241,7 @@
     "months": "AGO",
     "criticidade": "vermelho",
     "id": "plan_ur_14",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "31",
@@ -436,7 +436,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_24",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "50",
@@ -752,7 +752,7 @@
     "criticidade": "amarelo",
     "assignedTo": "tech_RG",
     "id": "plan_ur_43",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "80",
@@ -786,7 +786,7 @@
     "criticidade": "amarelo",
     "assignedTo": "tech_RG",
     "id": "plan_ur_45",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "80",
@@ -803,7 +803,7 @@
     "criticidade": "vermelho",
     "assignedTo": "tech_RG",
     "id": "plan_ur_46",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "80",
@@ -820,7 +820,7 @@
     "criticidade": "vermelho",
     "assignedTo": "tech_RG",
     "id": "plan_ur_47",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "80",
@@ -854,7 +854,7 @@
     "criticidade": "vermelho",
     "assignedTo": "tech_RG",
     "id": "plan_ur_49",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "80",
@@ -871,7 +871,7 @@
     "criticidade": "vermelho",
     "assignedTo": "tech_RG",
     "id": "plan_ur_50",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "80",
@@ -888,7 +888,7 @@
     "criticidade": "vermelho",
     "assignedTo": "tech_RG",
     "id": "plan_ur_51",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "80",
@@ -922,7 +922,7 @@
     "criticidade": "amarelo",
     "assignedTo": "tech_RG",
     "id": "plan_ur_53",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "80",
@@ -956,7 +956,7 @@
     "criticidade": "amarelo",
     "assignedTo": "tech_RG",
     "id": "plan_ur_55",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "80",
@@ -1046,7 +1046,7 @@
     "criticidade": "vermelho",
     "assignedTo": "tech_RG",
     "id": "plan_ur_60",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "80",
@@ -1063,7 +1063,7 @@
     "criticidade": "vermelho",
     "assignedTo": "tech_RG",
     "id": "plan_ur_61",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1100,7 +1100,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1121,7 +1121,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1190,7 +1190,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1323,7 +1323,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1360,7 +1360,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1381,7 +1381,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1418,7 +1418,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1439,7 +1439,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1460,7 +1460,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1476,7 +1476,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_84",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1529,7 +1529,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "90",
@@ -1566,7 +1566,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "92",
@@ -1651,7 +1651,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "92",
@@ -1725,7 +1725,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "92",
@@ -1799,7 +1799,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "92",
@@ -1921,7 +1921,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "100",
@@ -1942,7 +1942,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "100",
@@ -1963,7 +1963,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "100",
@@ -1984,7 +1984,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "100",
@@ -2005,7 +2005,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "100",
@@ -2021,7 +2021,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_114",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "100",
@@ -2069,7 +2069,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_117",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "101",
@@ -2085,7 +2085,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_118",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "101",
@@ -2101,7 +2101,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_119",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "101",
@@ -2117,7 +2117,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_120",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "101",
@@ -2165,7 +2165,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_123",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "102",
@@ -2202,7 +2202,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2223,7 +2223,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2276,7 +2276,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2297,7 +2297,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2318,7 +2318,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2339,7 +2339,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2376,7 +2376,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2397,7 +2397,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2450,7 +2450,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2471,7 +2471,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2556,7 +2556,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2577,7 +2577,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2614,7 +2614,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2635,7 +2635,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2656,7 +2656,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2677,7 +2677,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "110",
@@ -2714,7 +2714,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_152",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120",
@@ -2730,7 +2730,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_153",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120",
@@ -2746,7 +2746,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_154",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120",
@@ -2762,7 +2762,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_155",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120",
@@ -2778,7 +2778,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_156",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120",
@@ -2810,7 +2810,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_158",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130",
@@ -2826,7 +2826,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_159",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130",
@@ -2906,7 +2906,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_164",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130",
@@ -2922,7 +2922,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_165",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130",
@@ -2996,7 +2996,7 @@
     "months": "AGO, DEZ",
     "criticidade": "amarelo",
     "id": "plan_ur_169",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "136",
@@ -3044,7 +3044,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_172",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "136",
@@ -3076,7 +3076,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_174",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -3108,7 +3108,7 @@
     "months": "AGO, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_176",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -3124,7 +3124,7 @@
     "months": "AGO, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_177",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -3140,7 +3140,7 @@
     "months": "AGO, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_178",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -3156,7 +3156,7 @@
     "months": "AGO, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_179",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -3172,7 +3172,7 @@
     "months": "AGO, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_180",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -3641,7 +3641,7 @@
     "months": "AGO, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_209",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -3678,7 +3678,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -3699,7 +3699,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -3923,7 +3923,7 @@
     "months": "AGO, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_226",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -3939,7 +3939,7 @@
     "months": "AGO, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_227",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -3955,7 +3955,7 @@
     "months": "AGO, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_228",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "140",
@@ -4435,7 +4435,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_258",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4451,7 +4451,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_259",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4467,7 +4467,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_260",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4483,7 +4483,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_261",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4499,7 +4499,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_262",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4515,7 +4515,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_263",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4531,7 +4531,7 @@
     "months": "AGO, DEZ",
     "criticidade": "amarelo",
     "id": "plan_ur_264",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4563,7 +4563,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_266",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4579,7 +4579,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_267",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4595,7 +4595,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_268",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4611,7 +4611,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_269",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4627,7 +4627,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_270",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4643,7 +4643,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_271",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120A",
@@ -4659,7 +4659,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_272",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4675,7 +4675,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_273",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4691,7 +4691,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_274",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4707,7 +4707,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_275",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4755,7 +4755,7 @@
     "months": "AGO, DEZ",
     "criticidade": "amarelo",
     "id": "plan_ur_278",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4776,7 +4776,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4797,7 +4797,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4818,7 +4818,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4834,7 +4834,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_282",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4850,7 +4850,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_283",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4866,7 +4866,7 @@
     "months": "ABR, AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_284",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4882,7 +4882,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_285",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4903,7 +4903,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4924,7 +4924,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4945,7 +4945,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4961,7 +4961,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_289",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4977,7 +4977,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_290",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -4993,7 +4993,7 @@
     "months": "ABR, AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_291",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5009,7 +5009,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_292",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5030,7 +5030,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5051,7 +5051,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5072,7 +5072,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5088,7 +5088,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_296",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5104,7 +5104,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_297",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5120,7 +5120,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_298",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5136,7 +5136,7 @@
     "months": "ABR, AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_299",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5152,7 +5152,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_300",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5216,7 +5216,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_304",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5280,7 +5280,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_308",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5301,7 +5301,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5322,7 +5322,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5343,7 +5343,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5359,7 +5359,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_312",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5375,7 +5375,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_313",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5391,7 +5391,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_314",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5407,7 +5407,7 @@
     "months": "ABR, AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_315",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5423,7 +5423,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_316",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5487,7 +5487,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_320",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5551,7 +5551,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_324",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5572,7 +5572,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5593,7 +5593,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5614,7 +5614,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5630,7 +5630,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_328",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5646,7 +5646,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_329",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5662,7 +5662,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_330",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5678,7 +5678,7 @@
     "months": "ABR, AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_331",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5694,7 +5694,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_332",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5758,7 +5758,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_336",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5822,7 +5822,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_340",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5843,7 +5843,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5864,7 +5864,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5885,7 +5885,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5901,7 +5901,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_344",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5917,7 +5917,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_345",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5933,7 +5933,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_346",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5949,7 +5949,7 @@
     "months": "ABR, AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_347",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -5965,7 +5965,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_348",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -6029,7 +6029,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_352",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "120B",
@@ -6093,7 +6093,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_356",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6114,7 +6114,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6135,7 +6135,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6156,7 +6156,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6177,7 +6177,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6198,7 +6198,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6219,7 +6219,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6240,7 +6240,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6261,7 +6261,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6277,7 +6277,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_365",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6293,7 +6293,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_366",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6309,7 +6309,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_367",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6325,7 +6325,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_368",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6341,7 +6341,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_369",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6362,7 +6362,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6399,7 +6399,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6420,7 +6420,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6441,7 +6441,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6457,7 +6457,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_375",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6473,7 +6473,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_376",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6494,7 +6494,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6515,7 +6515,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6536,7 +6536,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6557,7 +6557,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6578,7 +6578,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6599,7 +6599,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6620,7 +6620,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6641,7 +6641,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6657,7 +6657,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_385",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6673,7 +6673,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_386",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6689,7 +6689,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_387",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6705,7 +6705,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_388",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6721,7 +6721,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_389",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6742,7 +6742,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6779,7 +6779,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6800,7 +6800,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6821,7 +6821,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6837,7 +6837,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_395",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6853,7 +6853,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_396",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6874,7 +6874,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6895,7 +6895,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6916,7 +6916,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6937,7 +6937,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6958,7 +6958,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -6979,7 +6979,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7000,7 +7000,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7021,7 +7021,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7037,7 +7037,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_405",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7053,7 +7053,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_406",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7069,7 +7069,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_407",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7085,7 +7085,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_408",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7101,7 +7101,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_409",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7122,7 +7122,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7159,7 +7159,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7180,7 +7180,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7196,7 +7196,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_414",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7212,7 +7212,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_415",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7228,7 +7228,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_416",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7249,7 +7249,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7270,7 +7270,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7291,7 +7291,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7312,7 +7312,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7333,7 +7333,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7354,7 +7354,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7375,7 +7375,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7396,7 +7396,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7412,7 +7412,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_425",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7428,7 +7428,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_426",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7444,7 +7444,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_427",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7460,7 +7460,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_428",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7476,7 +7476,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_429",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7497,7 +7497,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7534,7 +7534,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7555,7 +7555,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7576,7 +7576,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7592,7 +7592,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_435",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7608,7 +7608,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_436",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7624,7 +7624,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_437",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7645,7 +7645,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7666,7 +7666,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7687,7 +7687,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7708,7 +7708,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7729,7 +7729,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7750,7 +7750,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7771,7 +7771,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7792,7 +7792,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7808,7 +7808,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_446",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7824,7 +7824,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_447",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7840,7 +7840,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_448",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7856,7 +7856,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_449",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7872,7 +7872,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_450",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7888,7 +7888,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_451",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7909,7 +7909,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7946,7 +7946,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7967,7 +7967,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -7988,7 +7988,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8004,7 +8004,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_457",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8020,7 +8020,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_458",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8036,7 +8036,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_459",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8057,7 +8057,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8078,7 +8078,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8099,7 +8099,7 @@
       "2026-08-12"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8120,7 +8120,7 @@
       "2026-08-13"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8141,7 +8141,7 @@
       "2026-08-14"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8162,7 +8162,7 @@
       "2026-08-03"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8183,7 +8183,7 @@
       "2026-08-04"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8204,7 +8204,7 @@
       "2026-08-05"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8220,7 +8220,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_468",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8236,7 +8236,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_469",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8252,7 +8252,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_470",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8268,7 +8268,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_471",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8284,7 +8284,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_472",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8305,7 +8305,7 @@
       "2026-08-06"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8342,7 +8342,7 @@
       "2026-08-07"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8363,7 +8363,7 @@
       "2026-08-10"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8384,7 +8384,7 @@
       "2026-08-11"
     ],
     "showInCalendar": true,
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8400,7 +8400,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_478",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8416,7 +8416,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_479",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8432,7 +8432,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_480",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8448,7 +8448,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_481",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8464,7 +8464,7 @@
     "months": "AGO, DEZ",
     "criticidade": "amarelo",
     "id": "plan_ur_482",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8480,7 +8480,7 @@
     "months": "AGO, DEZ",
     "criticidade": "amarelo",
     "id": "plan_ur_483",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8496,7 +8496,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_484",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8512,7 +8512,7 @@
     "months": "AGO, DEZ",
     "criticidade": "amarelo",
     "id": "plan_ur_485",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "121B",
@@ -8528,7 +8528,7 @@
     "months": "AGO, DEZ",
     "criticidade": "amarelo",
     "id": "plan_ur_486",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8544,7 +8544,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_487",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8560,7 +8560,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_488",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8576,7 +8576,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_489",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8592,7 +8592,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_490",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8608,7 +8608,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_491",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8624,7 +8624,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_492",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8688,7 +8688,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_496",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8704,7 +8704,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_497",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8720,7 +8720,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_498",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8736,7 +8736,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_499",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8752,7 +8752,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_500",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122A",
@@ -8768,7 +8768,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_501",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122B",
@@ -8800,7 +8800,7 @@
     "months": "AGO",
     "criticidade": "amarelo",
     "id": "plan_ur_503",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122B",
@@ -8832,7 +8832,7 @@
     "months": "AGO",
     "criticidade": "amarelo",
     "id": "plan_ur_505",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "122B",
@@ -9168,7 +9168,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_526",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9200,7 +9200,7 @@
     "months": "ABR, AGO, DEZ",
     "criticidade": "amarelo",
     "id": "plan_ur_528",
-    "tipo": "stp"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9216,7 +9216,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_529",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9232,7 +9232,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_530",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9328,7 +9328,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_536",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9360,7 +9360,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_538",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9471,7 +9471,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "verde",
     "id": "plan_ur_544",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9487,7 +9487,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_545",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9503,7 +9503,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_546",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9519,7 +9519,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_547",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9535,7 +9535,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_548",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9551,7 +9551,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_549",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9567,7 +9567,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_550",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9583,7 +9583,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_551",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9599,7 +9599,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_552",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9615,7 +9615,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_553",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9631,7 +9631,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_554",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9647,7 +9647,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_555",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9663,7 +9663,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_556",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9679,7 +9679,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_557",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9695,7 +9695,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_558",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9711,7 +9711,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_559",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9743,7 +9743,7 @@
     "months": "AGO, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_561",
-    "tipo": "inspecao"
+    "tipo": "pm"
   },
   {
     "area": "130EST",
@@ -9828,7 +9828,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_566",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130INK",
@@ -9844,7 +9844,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_567",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130INK",
@@ -9860,7 +9860,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_568",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130INK",
@@ -9972,7 +9972,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_575",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130INK",
@@ -9988,7 +9988,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_576",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130INK",
@@ -10004,7 +10004,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_577",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130INK",
@@ -10116,7 +10116,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_584",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130INK",
@@ -10148,7 +10148,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "amarelo",
     "id": "plan_ur_586",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130INK",
@@ -10260,7 +10260,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_593",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130INK",
@@ -10276,7 +10276,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "amarelo",
     "id": "plan_ur_594",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130INK",
@@ -10388,7 +10388,7 @@
     "months": "MAR, JUN, SET, DEZ",
     "criticidade": "vermelho",
     "id": "plan_ur_601",
-    "tipo": "lubrificacao"
+    "tipo": "pm"
   },
   {
     "area": "130INK",

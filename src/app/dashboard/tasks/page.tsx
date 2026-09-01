@@ -12,50 +12,26 @@ function isTaskAssignedToUser(t: any, profile: any): boolean {
   const pId = String(profile.id || '').toLowerCase().trim()
   const pAbbr = String(profile.abbreviation || '').toLowerCase().trim()
   const pName = String(profile.name || '').toLowerCase().trim()
+  const pEmail = String(profile.email || '').toLowerCase().trim()
 
-  let derivedAbbr = pAbbr
-  if (!derivedAbbr && pName) {
-    const parts = pName.split(' ').filter(Boolean)
-    if (parts.length >= 2) {
-      derivedAbbr = (parts[0][0] + parts[parts.length - 1][0]).toLowerCase()
-    } else if (parts.length === 1 && parts[0].length >= 2) {
-      derivedAbbr = parts[0].slice(0, 2).toLowerCase()
-    }
+  // 1. Verificação direta por ID na lista de técnicos atribuídos
+  if (t.assignedTo && String(t.assignedTo).toLowerCase().trim() === pId) return true
+  if (Array.isArray(t.assignedToIds) && t.assignedToIds.some((id: string) => String(id).toLowerCase().trim() === pId)) return true
+
+  // 2. Análise por tokens do texto de atribuição (ex: "MS+CB", "LM+MS", "MS", "Marco Silva")
+  const textToScan = `${t.assignedToText || ''} ${t.assignedTo || ''}`.trim()
+  if (textToScan) {
+    const tokens = textToScan.split(/[\+,\/&|;\s]+/).map((s) => s.toLowerCase().trim()).filter(Boolean)
+    if (pAbbr && tokens.includes(pAbbr)) return true
+    if (pId && tokens.includes(pId)) return true
+    if (pEmail && tokens.includes(pEmail)) return true
+    if (pName && textToScan.toLowerCase().includes(pName)) return true
   }
 
-  const assignedTo = String(t.assignedTo || '').toLowerCase().trim()
-  const assignedToText = String((t as any).assignedToText || '').toLowerCase().trim()
-  const assignedIds = Array.isArray(t.assignedToIds)
-    ? t.assignedToIds.map((x: any) => String(x || '').toLowerCase().trim())
-    : []
-
-  if (assignedTo) {
-    if (pId && assignedTo === pId) return true
-    if (pAbbr && (assignedTo === pAbbr || assignedTo.includes(pAbbr))) return true
-    if (derivedAbbr && (assignedTo === derivedAbbr || assignedTo.includes(derivedAbbr))) return true
-    if (pName && (assignedTo === pName || pName.includes(assignedTo) || assignedTo.includes(pName))) return true
-  }
-
-  if (assignedToText) {
-    if (pId && assignedToText.includes(pId)) return true
-    if (pAbbr && assignedToText.includes(pAbbr)) return true
-    if (derivedAbbr && assignedToText.includes(derivedAbbr)) return true
-    if (pName && assignedToText.includes(pName)) return true
-  }
-
-  if (assignedIds.length > 0) {
-    if (pId && assignedIds.includes(pId)) return true
-    if (pAbbr && assignedIds.includes(pAbbr)) return true
-    if (derivedAbbr && assignedIds.includes(derivedAbbr)) return true
-    if (pName && assignedIds.some((id: string) => id === pName || id.includes(pName) || pName.includes(id))) return true
-  }
-
-  if (t.createdBy) {
-    const createdByStr = String(t.createdBy).toLowerCase().trim()
-    if (pId && createdByStr === pId) return true
-    if (pAbbr && createdByStr === pAbbr) return true
-    if (derivedAbbr && createdByStr === derivedAbbr) return true
-    if (pName && createdByStr.includes(pName)) return true
+  // 3. Tarefas criadas explicitamente por este utilizador (nunca 'system')
+  if (t.createdBy && t.createdBy !== 'system' && t.createdBy !== 'eu') {
+    const c = String(t.createdBy).toLowerCase().trim()
+    if (c === pId || (pEmail && c === pEmail)) return true
   }
 
   return false

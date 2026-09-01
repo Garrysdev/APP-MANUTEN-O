@@ -435,15 +435,16 @@ export default function CreateTaskModal({
                 onChange={(e) => setTipo(e.target.value as TipoTarefa)}
                 className="input"
               >
-                <option value="pi">PI (Pedido de Intervenção)</option>
+                <option value="pm">PM (Plano de Manutenção)</option>
                 <option value="curativa">MC (Manutenção Curativa)</option>
-                <option value="mi">MI (Manutenção Curativa / Interna)</option>
-                <option value="plano">PM (Plano de Manutenção)</option>
+                <option value="preventiva">MP (Manutenção Preventiva / Preditiva)</option>
+                <option value="pi">PI (Pedido de Intervenção)</option>
+                <option value="mi">MI (Melhoria / Investimento)</option>
                 <option value="stp">STP (STOP-PARAGEM)</option>
-                <option value="preventiva">MP (Manutenção Preditiva)</option>
                 <option value="inspecao">INS (Inspeção)</option>
                 <option value="lubrificacao">LUB (Lubrificação)</option>
                 <option value="calibracao">CAL (Calibração)</option>
+                <option value="projeto">PR (Projeto)</option>
                 <option value="outro">OUT (Outro)</option>
               </select>
             </div>
