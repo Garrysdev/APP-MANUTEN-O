@@ -159,39 +159,6 @@ function computePIYearlyData(allTasks: Task[]) {
   return Object.values(yearsMap)
 }
 
-// 4. Taxa de Resolução de Pedidos de PI por Ano (% de Resolução Anual)
-function computePIResolutionRateYearlyData(allTasks: Task[]) {
-  const piTasks = getPITasks(allTasks)
-  const years = getAvailableYears(allTasks)
-  const yearsMap: Record<string, { year: string; pedidas: number; concluidas: number; percent: number }> = {}
-
-  years.forEach((y) => {
-    yearsMap[String(y)] = { year: String(y), pedidas: 0, concluidas: 0, percent: 0 }
-  })
-
-  piTasks.forEach((t) => {
-    const createdIso = toNormalizedIsoDate(t.createdAt || t.plannedStartDate)
-    if (createdIso) {
-      const yr = createdIso.slice(0, 4)
-      if (yearsMap[yr]) yearsMap[yr].pedidas++
-    }
-
-    if (t.status === 'done') {
-      const completedIso = toNormalizedIsoDate(t.completedAt || t.updatedAt || t.createdAt)
-      if (completedIso) {
-        const yr = completedIso.slice(0, 4)
-        if (yearsMap[yr]) yearsMap[yr].concluidas++
-      }
-    }
-  })
-
-  Object.values(yearsMap).forEach((item) => {
-    item.percent = item.pedidas > 0 ? Math.round((item.concluidas / item.pedidas) * 100) : 0
-  })
-
-  return Object.values(yearsMap)
-}
-
 export default function DashboardTablesClient({
   normalTasks = [],
   allTasks = [],
@@ -207,7 +174,6 @@ export default function DashboardTablesClient({
   const piCurrentYearData = useMemo(() => computePICurrentYearData(taskSource), [taskSource])
   const planYearlyData = useMemo(() => computePlanYearlyData(taskSource), [taskSource])
   const piYearlyData = useMemo(() => computePIYearlyData(taskSource), [taskSource])
-  const piResolutionData = useMemo(() => computePIResolutionRateYearlyData(taskSource), [taskSource])
 
   return (
     <div className="flex flex-col gap-8 w-full">
@@ -262,7 +228,7 @@ export default function DashboardTablesClient({
           </div>
         </div>
 
-        {/* Gráfico 2: Cumprimento do Plano de Manutenção por Ano (mantido como estava) */}
+        {/* Gráfico 2: Cumprimento do Plano de Manutenção por Ano */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -310,7 +276,7 @@ export default function DashboardTablesClient({
         </div>
       </div>
 
-      {/* ── LINHA 2: COMPARAÇÃO DOS ANOS (EXCLUSIVA PARA PEDIDOS DE PI) ──────────── */}
+      {/* ── LINHA 2: COMPARAÇÃO DOS ANOS (VOLUME ANUAL DE PEDIDOS DE PI) ──────────── */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
           <CalendarDays className="text-industrial-blue h-5 w-5" />
@@ -319,7 +285,7 @@ export default function DashboardTablesClient({
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+        <div className="w-full">
           {/* Gráfico 3: Comparação de Volume de Pedidos de PI por Ano */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -349,55 +315,7 @@ export default function DashboardTablesClient({
               </ResponsiveContainer>
             </div>
           </div>
-
-          {/* Gráfico 4: Taxa de Resolução de Pedidos de PI por Ano */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="text-indigo-600 h-5 w-5" />
-                <div>
-                  <h3 className="text-base font-bold text-gray-900 dark:text-slate-100">
-                    Taxa de Resolução de PI por Ano (% Eficiência)
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">
-                    Percentagem de Pedidos de PI resolvidos anualmente
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={piResolutionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                  <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <Tooltip
-                    content={({ active, payload, label }: any) => {
-                      if (active && payload && payload.length) {
-                        const item = payload[0]?.payload
-                        return (
-                          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-lg shadow-xl text-xs font-semibold space-y-1">
-                            <p className="font-extrabold text-slate-800 dark:text-slate-100 mb-1">Ano {label}</p>
-                            <p className="text-blue-600 dark:text-blue-400">PIs Pedidas: {item?.pedidas ?? 0}</p>
-                            <p className="text-emerald-600 dark:text-emerald-400">PIs Concluídas: {item?.concluidas ?? 0}</p>
-                            <p className="text-indigo-600 dark:text-indigo-400 font-extrabold pt-1 border-t border-slate-100 dark:border-slate-800">
-                              Taxa de Resolução: {item?.percent ?? 0}%
-                            </p>
-                          </div>
-                        )
-                      }
-                      return null
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '11px' }} />
-                  <Bar dataKey="pedidas" name="Pedidas" fill="#6366F1" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="concluidas" name="Concluídas" fill="#10B981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
         </div>
       </div>
-    </div>
   )
 }

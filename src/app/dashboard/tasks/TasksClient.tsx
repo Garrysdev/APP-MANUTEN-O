@@ -370,6 +370,12 @@ export default function TasksClient({
     setError('')
   }
 
+  function openEdit(t: Task) {
+    setEditing(t)
+    setCreating(false)
+    setError('')
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setBusy(true)

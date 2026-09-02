@@ -27,7 +27,7 @@ import {
   generateAnnualPMScheduleAction,
 } from './actions'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
-import { updateTaskStatusAction } from '../tasks/actions'
+import { updateTaskStatusAction, updateTaskAction } from '../tasks/actions'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
