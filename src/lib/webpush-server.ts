@@ -19,17 +19,25 @@ function ensureVapid(): boolean {
 }
 
 export async function sendWebPush(subscription: any, payload: { title: string; message: string; url?: string }) {
-  if (!subscription) return false
+  if (!subscription || !subscription.endpoint) {
+    console.warn('[WebPush] Subscrição inválida ou sem endpoint.')
+    return false
+  }
   if (!ensureVapid()) {
-    console.warn('Web push não configurado: faltam as chaves VAPID.')
+    console.warn('[WebPush] Não configurado: faltam as chaves VAPID no ambiente do servidor (NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY).')
     return false
   }
 
   try {
-    await webpush.sendNotification(subscription, JSON.stringify(payload))
+    const res = await webpush.sendNotification(subscription, JSON.stringify(payload))
+    console.log(`[WebPush] Notificação push enviada com sucesso (status ${res.statusCode}) para ${subscription.endpoint.slice(0, 45)}...`)
     return true
-  } catch (error) {
-    console.error('Falha ao enviar web push:', error)
+  } catch (error: any) {
+    if (error?.statusCode === 410 || error?.statusCode === 404) {
+      console.warn(`[WebPush] Subscrição push expirada/revogada no browser cliente (status ${error.statusCode}).`)
+    } else {
+      console.error('[WebPush] Erro ao enviar notificação push:', error?.message || error)
+    }
     return false
   }
 }

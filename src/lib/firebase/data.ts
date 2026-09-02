@@ -7,6 +7,7 @@ import path from 'path'
 import type { DocumentSnapshot } from 'firebase-admin/firestore'
 import { adminDb, adminAuth } from './admin'
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
+import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
 import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage } from '@/types/models'
 
@@ -1667,6 +1668,26 @@ export async function createNotification(
   }
   cachedNotifications.unshift(notif)
   revalidateTag('notifications')
+
+  // Disparar notificação Push se o utilizador tiver subscrição ativa
+  if (data.userId) {
+    try {
+      const userDoc = await adminDb().collection('users').doc(data.userId).get().catch(() => null)
+      const uData = userDoc?.data()
+      if (uData?.pushSubscription && (uData.pushSubscription as any).endpoint) {
+        await sendWebPush(uData.pushSubscription, {
+          title: data.title,
+          message: data.body,
+          url: data.link || '/dashboard',
+        }).catch((pushErr) => {
+          console.error('[createNotification sendWebPush] Push delivery error:', pushErr)
+        })
+      }
+    } catch (pushErr) {
+      console.error('[createNotification sendWebPush] Error:', pushErr)
+    }
+  }
+
   return notif.id
 }
 

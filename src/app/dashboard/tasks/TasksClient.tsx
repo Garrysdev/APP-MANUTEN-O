@@ -39,6 +39,7 @@ import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_
 import { createMaintenancePlanAction, importMaintenancePlansAction } from '../maintenance-plan/actions'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
+import { matchesTechFilter } from '@/lib/task-assignment'
 
 const PERIODICIDADE_OPTIONS: Periodicidade[] = ['semanal', 'mensal', 'trimestral', 'bianual', 'anual', 'bienal', 'trianual', 'horas', 'pontual']
 
@@ -631,60 +632,10 @@ export default function TasksClient({
         }
         // Filtro Multi-Seleção de Técnico
         if (selectedTechs.length > 0) {
-          const assignedId = String(t.assignedTo || '').toLowerCase()
-          const assignedText = String((t as any).assignedToText || '').toLowerCase()
-          const displayUser = String(userName(t.assignedTo) || '').toLowerCase()
-          const assignedIds = (t.assignedToIds || []).map((x) => String(x).toLowerCase())
-
-          const matchesTech = selectedTechs.some((tecFilterRaw) => {
-            const tecFilter = tecFilterRaw.trim().toLowerCase()
-            if (assignedId === tecFilter || assignedText === tecFilter || displayUser.includes(tecFilter) || assignedIds.includes(tecFilter)) {
-              return true
-            }
-            const userObj = users.find(u => 
-              u.id.toLowerCase() === tecFilter || 
-              (u.abbreviation && u.abbreviation.toLowerCase() === tecFilter) || 
-              u.name.toLowerCase() === tecFilter
-            )
-            if (userObj) {
-              if (assignedIds.includes(userObj.id.toLowerCase()) || (userObj.abbreviation && assignedIds.includes(userObj.abbreviation.toLowerCase()))) {
-                return true
-              }
-              if (assignedId === userObj.id.toLowerCase() || (userObj.abbreviation && assignedId === userObj.abbreviation.toLowerCase()) || displayUser.includes(userObj.name.toLowerCase())) {
-                return true
-              }
-            }
-            return false
-          })
-          if (!matchesTech) return false
+          const isMatch = selectedTechs.some((tecFilterRaw) => matchesTechFilter(t, tecFilterRaw, users))
+          if (!isMatch) return false
         } else if (colF.tecnico) {
-          const tecFilter = colF.tecnico.trim().toLowerCase()
-          const assignedId = String(t.assignedTo || '').toLowerCase()
-          const assignedText = String((t as any).assignedToText || '').toLowerCase()
-          const displayUser = String(userName(t.assignedTo) || '').toLowerCase()
-          const assignedIds = (t.assignedToIds || []).map((x) => String(x).toLowerCase())
-
-          const userObj = users.find(u => 
-            u.id.toLowerCase() === tecFilter || 
-            (u.abbreviation && u.abbreviation.toLowerCase() === tecFilter) || 
-            u.name.toLowerCase() === tecFilter ||
-            u.name.toLowerCase().includes(tecFilter)
-          )
-
-          let isMatch = false
-          if (assignedId.includes(tecFilter) || assignedText.includes(tecFilter) || displayUser.includes(tecFilter) || assignedIds.some((id) => id.includes(tecFilter))) {
-            isMatch = true
-          } else if (userObj && (assignedIds.includes(userObj.id.toLowerCase()) || (userObj.abbreviation && assignedIds.includes(userObj.abbreviation.toLowerCase())))) {
-            isMatch = true
-          } else if (userObj) {
-            if (
-              assignedId === userObj.id.toLowerCase() ||
-              (userObj.abbreviation && assignedId === userObj.abbreviation.toLowerCase()) ||
-              displayUser.includes(userObj.name.toLowerCase())
-            ) {
-              isMatch = true
-            }
-          }
+          const isMatch = matchesTechFilter(t, colF.tecnico, users)
           if (!isMatch) return false
         }
         if (colF.obs) {

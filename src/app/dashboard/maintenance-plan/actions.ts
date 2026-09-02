@@ -8,14 +8,71 @@ import {
   updateMaintenancePlan,
   deleteMaintenancePlan,
   getMaintenancePlan,
+  listMaintenancePlans,
   createTask,
   deleteTasksByMaintenancePlan,
   listAssets,
 } from '@/lib/firebase/data'
+import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 import type { TaskCriticidade, TipoTarefa, Periodicidade, Executor } from '@/types/models'
 import { periodicidadeToRecurrence, CRITICIDADE_LABELS, PERIODICIDADE_LABELS } from '@/types/models'
 
 export type PlanFormState = { error?: string; ok?: boolean; id?: string }
+
+export async function generateAnnualPMScheduleAction(
+  targetYear = 2026,
+  planIds?: string[]
+): Promise<{ ok?: boolean; error?: string; totalPlans?: number; totalTasksCreated?: number }> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+
+  try {
+    const plans = await listMaintenancePlans(profile.companyId)
+    const activePlans = plans.filter((p) => p.active !== false && (!planIds || planIds.includes(p.id)))
+
+    let totalTasksCreated = 0
+    for (const plan of activePlans) {
+      const dates = calculatePlanAnnualDates(plan, targetYear)
+      if (dates.length === 0) continue
+
+      await updateMaintenancePlan(profile.companyId, plan.id, {
+        showInCalendar: true,
+        calendarStartDate: dates[0],
+        calendarDates: dates,
+      })
+
+      // Eliminar tarefas agendadas anteriores deste plano
+      await deleteTasksByMaintenancePlan(profile.companyId, plan.id)
+
+      for (const d of dates) {
+        await createTask(profile.companyId, profile.id, {
+          title: `[PM] ${plan.title}`,
+          description: plan.description,
+          assetId: plan.assetId,
+          assignedTo: plan.assignedTo,
+          criticidade: plan.criticidade,
+          tipo: plan.tipo || 'preventiva',
+          status: 'pending',
+          dueDate: d,
+          plannedStartDate: d,
+          safetyRules: plan.safetyRules,
+          maintenancePlanId: plan.id,
+        })
+        totalTasksCreated++
+      }
+    }
+
+    revalidatePath('/dashboard/maintenance-plan')
+    revalidatePath('/dashboard/calendar')
+    revalidatePath('/dashboard/tasks')
+    revalidatePath('/dashboard/projects')
+    revalidatePath('/dashboard')
+    return { ok: true, totalPlans: activePlans.length, totalTasksCreated }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao gerar agendamento anual de PMs.' }
+  }
+}
 
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
 const TIPOS: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'pi', 'stp', 'mi', 'mp', 'inspecao', 'lubrificacao', 'calibracao', 'outro']

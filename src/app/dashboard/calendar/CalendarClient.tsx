@@ -13,6 +13,7 @@ import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
 import { getTipoBadgeClass } from '@/components/ui/TipoBadge'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
+import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 
 type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
 type UserRef = Ref & {
@@ -87,32 +88,8 @@ function getWeekStart(date: Date): Date {
   return d
 }
 
-function getPlanTargetDates(plan: MaintenancePlan): string[] {
-  if (plan.calendarDates && plan.calendarDates.length > 0) {
-    return plan.calendarDates
-  }
-  if (plan.calendarStartDate) {
-    return [plan.calendarStartDate]
-  }
-  if (plan.nextDueDate) {
-    return [plan.nextDueDate]
-  }
-
-  const pLow = String(plan.periodicidade || '').toLowerCase()
-  const pLabelLow = String(plan.periodicidadeLabel || '').toLowerCase()
-  const titleLow = String(plan.title || '').toLowerCase()
-  const descLow = String(plan.description || '').toLowerCase()
-  const combo = `${pLow} ${pLabelLow} ${titleLow} ${descLow}`
-
-  if (combo.includes('bianual') || combo.includes('2x/ano') || combo.includes('2x ano')) {
-    return ['2026-08-08', '2026-12-21']
-  }
-
-  if (combo.includes('anual') || combo.includes('1x/ano')) {
-    return ['2026-08-08']
-  }
-
-  return []
+function getPlanTargetDates(plan: MaintenancePlan, targetYear = 2026): string[] {
+  return calculatePlanAnnualDates(plan, targetYear)
 }
 
 function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end: Date): Map<string, CalendarEvent[]> {
@@ -130,7 +107,7 @@ function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end
     } else {
       const linkedPlan = task.maintenancePlanId ? plans.find((p) => p.id === task.maintenancePlanId) : null
       if (linkedPlan) {
-        dates = getPlanTargetDates(linkedPlan)
+        dates = getPlanTargetDates(linkedPlan, start.getFullYear())
       }
     }
 
@@ -156,7 +133,7 @@ function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end
       return
     }
 
-    const targetDates = getPlanTargetDates(plan)
+    const targetDates = getPlanTargetDates(plan, start.getFullYear())
     if (targetDates.length > 0) {
       targetDates.forEach((d) => {
         const dd = new Date(d + 'T12:00:00')

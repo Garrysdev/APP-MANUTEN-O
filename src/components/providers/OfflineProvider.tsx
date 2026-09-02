@@ -37,7 +37,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
 
       // Purga automática de cache do Service Worker a cada novo deploy
       if ('caches' in window) {
-        const CURRENT_VERSION = 'v2026_08_31_v4'
+        const CURRENT_VERSION = 'v2026_09_02_v1'
         const lastVersion = localStorage.getItem('app_build_version')
         if (lastVersion !== CURRENT_VERSION) {
           localStorage.setItem('app_build_version', CURRENT_VERSION)

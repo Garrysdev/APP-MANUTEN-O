@@ -2,40 +2,10 @@ import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listTasks, listAssetRefs, listUsers, listExternalCompanies } from '@/lib/firebase/data'
+import { isTaskAssignedToUser } from '@/lib/task-assignment'
 import TasksClient from './TasksClient'
 
 export const dynamic = 'force-dynamic'
-
-function isTaskAssignedToUser(t: any, profile: any): boolean {
-  if (!t || !profile) return false
-
-  const pId = String(profile.id || '').toLowerCase().trim()
-  const pAbbr = String(profile.abbreviation || '').toLowerCase().trim()
-  const pName = String(profile.name || '').toLowerCase().trim()
-  const pEmail = String(profile.email || '').toLowerCase().trim()
-
-  // 1. Verificação direta por ID na lista de técnicos atribuídos
-  if (t.assignedTo && String(t.assignedTo).toLowerCase().trim() === pId) return true
-  if (Array.isArray(t.assignedToIds) && t.assignedToIds.some((id: string) => String(id).toLowerCase().trim() === pId)) return true
-
-  // 2. Análise por tokens do texto de atribuição (ex: "MS+CB", "LM+MS", "MS", "Marco Silva")
-  const textToScan = `${t.assignedToText || ''} ${t.assignedTo || ''}`.trim()
-  if (textToScan) {
-    const tokens = textToScan.split(/[\+,\/&|;\s]+/).map((s) => s.toLowerCase().trim()).filter(Boolean)
-    if (pAbbr && tokens.includes(pAbbr)) return true
-    if (pId && tokens.includes(pId)) return true
-    if (pEmail && tokens.includes(pEmail)) return true
-    if (pName && textToScan.toLowerCase().includes(pName)) return true
-  }
-
-  // 3. Tarefas criadas explicitamente por este utilizador (nunca 'system')
-  if (t.createdBy && t.createdBy !== 'system' && t.createdBy !== 'eu') {
-    const c = String(t.createdBy).toLowerCase().trim()
-    if (c === pId || (pEmail && c === pEmail)) return true
-  }
-
-  return false
-}
 
 export default async function TasksPage() {
   const profile = await getCurrentProfile()

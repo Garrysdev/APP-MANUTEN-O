@@ -7,8 +7,8 @@ self.addEventListener('push', function (event) {
     const title = data.title || 'RG Maintenance'
     const options = {
       body: data.message,
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/icon-192x192.png',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
       vibrate: [200, 100, 200],
       data: data.url || '/',
     }

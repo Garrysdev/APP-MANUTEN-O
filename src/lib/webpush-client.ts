@@ -38,25 +38,30 @@ export async function subscribeToPushNotifications(_userId: string) {
       registration = await navigator.serviceWorker.register('/sw.js')
     }
 
-    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa45x-b99D6489-09'
-
-    let subscriptionPayload: any = null
-    if ('PushManager' in window && registration && registration.pushManager) {
-      try {
-        const sub = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidKey),
-        })
-        subscriptionPayload = JSON.parse(JSON.stringify(sub))
-      } catch (pushErr) {
-        console.warn('PushManager.subscribe falhou, guardando permissão concedida:', pushErr)
-        subscriptionPayload = { granted: true, updatedAt: new Date().toISOString() }
-      }
-    } else {
-      subscriptionPayload = { granted: true, updatedAt: new Date().toISOString() }
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+    if (!vapidKey || vapidKey.length < 20) {
+      throw new Error('Chave VAPID pública não configurada no ambiente (NEXT_PUBLIC_VAPID_PUBLIC_KEY).')
     }
 
-    // Guardar subscrição via Server Action (evita erro "Missing or insufficient permissions" do client SDK)
+    if (!('PushManager' in window) || !registration || !registration.pushManager) {
+      throw new Error('O suporte a Notificações Push não está ativo neste browser. No iOS (iPhone), adiciona o RG Maintenance ao ecrã principal.')
+    }
+
+    // Obter ou criar subscrição real
+    let sub = await registration.pushManager.getSubscription()
+    if (!sub) {
+      sub = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      })
+    }
+
+    const subscriptionPayload = JSON.parse(JSON.stringify(sub))
+    if (!subscriptionPayload?.endpoint) {
+      throw new Error('Endpoint de notificação push não foi gerado pelo dispositivo.')
+    }
+
+    // Guardar subscrição real via Server Action
     const result = await updatePushSubscriptionAction(subscriptionPayload)
     if (result.error) {
       throw new Error(result.error)

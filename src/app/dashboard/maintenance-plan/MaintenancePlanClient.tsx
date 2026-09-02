@@ -24,7 +24,9 @@ import {
   importMaintenancePlansAction,
   togglePlanCalendarAction,
   togglePlanGanttAction,
+  generateAnnualPMScheduleAction,
 } from './actions'
+import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 import { updateTaskStatusAction } from '../tasks/actions'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
@@ -254,6 +256,35 @@ export default function MaintenancePlanClient({
   const [customCalendarDates, setCustomCalendarDates] = useState<string[]>([])
   const [savingCalendar, setSavingCalendar] = useState(false)
 
+  // Modal Gerador Anual de PMs
+  const [showAnnualGeneratorModal, setShowAnnualGeneratorModal] = useState(false)
+  const [generatorYear, setGeneratorYear] = useState<number>(2026)
+  const [generatingPMs, setGeneratingPMs] = useState(false)
+  const [generatorResult, setGeneratorResult] = useState<{ totalPlans: number; totalTasksCreated: number } | null>(null)
+  const [generatorError, setGeneratorError] = useState<string | null>(null)
+
+  async function handleRunAnnualGenerator() {
+    setGeneratingPMs(true)
+    setGeneratorError(null)
+    setGeneratorResult(null)
+    try {
+      const res = await generateAnnualPMScheduleAction(generatorYear)
+      if (res.error) {
+        setGeneratorError(res.error)
+      } else {
+        setGeneratorResult({
+          totalPlans: res.totalPlans || 0,
+          totalTasksCreated: res.totalTasksCreated || 0,
+        })
+        router.refresh()
+      }
+    } catch (err) {
+      setGeneratorError(err instanceof Error ? err.message : 'Erro ao gerar agendamento anual.')
+    } finally {
+      setGeneratingPMs(false)
+    }
+  }
+
   function openCalendarModal(p: MaintenancePlan) {
     setCalendarModalPlan(p)
     const initialStart = p.calendarStartDate || new Date().toISOString().slice(0, 10)
@@ -262,35 +293,8 @@ export default function MaintenancePlanClient({
     if (p.calendarDates && p.calendarDates.length > 0) {
       setCustomCalendarDates(p.calendarDates)
     } else {
-      const period = p.periodicidade || 'mensal'
-      let count = 12
-      if (period === 'semanal') count = 12
-      else if (period === 'mensal') count = 12
-      else if (period === 'trimestral') count = 4
-      else if (period === 'bianual') count = 2
-      else if (period === 'anual') count = 1
-      else if (period === 'bienal') count = 1
-      else if (period === 'trianual') count = 1
-      else if (period === 'pontual') count = 1
-      else count = 2
-
-      const initialDates: string[] = []
-      const start = new Date(initialStart)
-      for (let i = 0; i < count; i++) {
-        const d = new Date(start)
-        if (period === 'semanal') d.setDate(d.getDate() + i * 7)
-        else if (period === 'mensal') d.setMonth(d.getMonth() + i)
-        else if (period === 'trimestral') d.setMonth(d.getMonth() + i * 3)
-        else if (period === 'bianual') d.setMonth(d.getMonth() + i * 6)
-        else if (period === 'anual') d.setFullYear(d.getFullYear() + i)
-        else if (period === 'bienal') d.setFullYear(d.getFullYear() + i * 2)
-        else if (period === 'trianual') d.setFullYear(d.getFullYear() + i * 3)
-        else if (period === 'horas') d.setMonth(d.getMonth() + i)
-        else if (period === 'pontual') { if (i > 0) break }
-        
-        initialDates.push(d.toISOString().slice(0, 10))
-      }
-      setCustomCalendarDates(initialDates)
+      const initialDates = calculatePlanAnnualDates(p, new Date().getFullYear())
+      setCustomCalendarDates(initialDates.length > 0 ? initialDates : [initialStart])
     }
   }
 
@@ -622,6 +626,18 @@ export default function MaintenancePlanClient({
             <span className="hidden sm:inline">{importing ? dict.common.importing : dict.common.import}</span>
           </button>
           <input ref={importInputRef} type="file" accept=".xls,.xlsx" onChange={handleImportFile} className="hidden" />
+          <button
+            onClick={() => {
+              setGeneratorResult(null)
+              setGeneratorError(null)
+              setShowAnnualGeneratorModal(true)
+            }}
+            className="px-3 py-1.5 bg-[#1B4F72] hover:bg-[#154360] text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Gerar agendamento anual automático de PMs no Calendário"
+          >
+            <CalendarClock className="h-4 w-4 shrink-0 text-safety-orange" />
+            <span>Gerador Anual PMs</span>
+          </button>
           <button onClick={openCreate} className="btn-primary flex items-center gap-1.5">
             <Plus className="h-4 w-4 shrink-0" />
             <span>Criar Tarefa</span>
@@ -1131,6 +1147,99 @@ export default function MaintenancePlanClient({
               </button>
               <button type="button" onClick={handleConfirmCalendarSchedule} disabled={savingCalendar} className="btn-primary flex-1">
                 {savingCalendar ? 'A guardar…' : 'Confirmar & Agendar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Gerador Anual de PMs */}
+      {showAnnualGeneratorModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !generatingPMs && setShowAnnualGeneratorModal(false)} />
+          <div className="card relative w-full max-w-lg p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between border-b border-gray-200 dark:border-slate-800 pb-3">
+              <div>
+                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-orange-100 text-orange-900 mb-1">
+                  Automação de Manutenção Preventiva
+                </span>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                  <CalendarClock className="h-5 w-5 text-safety-orange" />
+                  Gerador Anual de PMs no Calendário
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                  Gera automaticamente as ocorrências e OTs preventivas para o ano selecionado com base nas periodicidades dos planos.
+                </p>
+              </div>
+              <button
+                onClick={() => !generatingPMs && setShowAnnualGeneratorModal(false)}
+                disabled={generatingPMs}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                <p className="font-bold text-slate-800 dark:text-slate-200">Regras do Calendário Anual:</p>
+                <ul className="space-y-1 text-slate-600 dark:text-slate-300 list-disc pl-4">
+                  <li><span className="font-semibold text-slate-800 dark:text-slate-200">Anual / Anual-STP / Bienal / Trianual / 5 Anos:</span> Agosto (Paragem Verão)</li>
+                  <li><span className="font-semibold text-slate-800 dark:text-slate-200">Semestral / Bianual:</span> Agosto e Dezembro (Paragens STP)</li>
+                  <li><span className="font-semibold text-slate-800 dark:text-slate-200">Trimestral:</span> Março, Junho, Setembro e Dezembro (15/mês)</li>
+                  <li><span className="font-semibold text-slate-800 dark:text-slate-200">Mensal:</span> Todos os 12 meses (1x/mês a dia 15)</li>
+                  <li><span className="font-semibold text-slate-800 dark:text-slate-200">Semanal:</span> Todas as segundas-feiras do ano (52 semanas)</li>
+                </ul>
+              </div>
+
+              <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-950/40 p-3 rounded-xl border border-blue-200 dark:border-blue-900">
+                <label className="font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">Ano Alvo:</label>
+                <input
+                  type="number"
+                  min={2025}
+                  max={2035}
+                  value={generatorYear}
+                  onChange={(e) => setGeneratorYear(Number(e.target.value) || 2026)}
+                  className="input font-mono font-bold text-sm w-28 py-1"
+                />
+                <span className="text-slate-600 dark:text-slate-400">
+                  Total de planos ativos: <strong className="text-slate-900 dark:text-slate-100">{plans.filter((p) => p.active !== false).length}</strong>
+                </span>
+              </div>
+
+              {generatorError && (
+                <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-red-700 font-bold">
+                  {generatorError}
+                </div>
+              )}
+
+              {generatorResult && (
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-emerald-800 font-bold space-y-1">
+                  <p className="flex items-center gap-1.5 text-sm text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4" /> Agendamento concluído com sucesso!
+                  </p>
+                  <p className="text-xs font-medium text-emerald-600">
+                    {generatorResult.totalPlans} planos processados · {generatorResult.totalTasksCreated} ocorrências/OTs agendadas no calendário para o ano {generatorYear}.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-3 border-t border-gray-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowAnnualGeneratorModal(false)}
+                disabled={generatingPMs}
+                className="btn-secondary flex-1"
+              >
+                Fechar
+              </button>
+              <button
+                type="button"
+                onClick={handleRunAnnualGenerator}
+                disabled={generatingPMs}
+                className="btn-primary flex-1 !bg-safety-orange hover:!bg-safety-orange/90"
+              >
+                {generatingPMs ? 'A Gerar OTs...' : 'Gerar Agendamento'}
               </button>
             </div>
           </div>
