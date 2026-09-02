@@ -139,8 +139,9 @@ export interface Task {
   tipo: TipoTarefa
   status: TaskStatus
   dueDate?: string | null // ISO date
-  plannedStartDate?: string | null // ISO date/datetime: Data planeada de início
-  completedAt?: string | null // ISO date/datetime: Data de conclusão
+  plannedStartDate?: string | null // ISO date/datetime: Data Planeada
+  startedAt?: string | null // ISO date/datetime: Data de Início real (quando o trabalho arrancou de facto)
+  completedAt?: string | null // ISO date/datetime: Data de Fim real (Data de conclusão)
   tag?: string | null // TAG do equipamento
   area?: string | null // Área da OT
   tipoText?: string | null // TI text (ex: MC, MI, PI, PM, STP, PR)

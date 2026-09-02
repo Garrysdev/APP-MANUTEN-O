@@ -170,6 +170,8 @@ export default function CreateTaskModal({
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([])
   const [plannedStartDate, setPlannedStartDate] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [startedAt, setStartedAt] = useState('')
+  const [completedAt, setCompletedAt] = useState('')
   const [description, setDescription] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [status, setStatus] = useState<'pending' | 'in_progress' | 'done' | 'cancelled'>('pending')
@@ -220,6 +222,8 @@ export default function CreateTaskModal({
         }
         setPlannedStartDate(formattedStart)
         setDueDate(editingTask.dueDate ? editingTask.dueDate.slice(0, 10) : '')
+        setStartedAt(editingTask.startedAt ? editingTask.startedAt.slice(0, 16) : '')
+        setCompletedAt(editingTask.completedAt ? editingTask.completedAt.slice(0, 16) : '')
         setDescription(editingTask.description || '')
         setObservacoes(editingTask.observacoes || editingTask.observations || '')
         setStatus(editingTask.status || 'pending')
@@ -246,6 +250,8 @@ export default function CreateTaskModal({
       setSelectedTechIds([])
       setPlannedStartDate('')
       setDueDate('')
+      setStartedAt('')
+      setCompletedAt('')
       setDescription('')
       setObservacoes('')
       setRequesterEmail('')
@@ -360,6 +366,8 @@ export default function CreateTaskModal({
           assignedToIds: selectedTechIds,
           dueDate: dueDate || null,
           plannedStartDate: plannedStartDate || null,
+          startedAt: startedAt || null,
+          completedAt: completedAt || null,
           observacoes: observacoes || null,
           safetyRules: safetyRules.filter(Boolean).length ? safetyRules.filter(Boolean) : null,
           materialsRequired: materialsRequired.filter(Boolean).length ? materialsRequired.filter(Boolean) : null,
@@ -626,7 +634,7 @@ export default function CreateTaskModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data Planeada de Início</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data Planeada</label>
               <input
                 type="datetime-local"
                 name="plannedStartDate"
@@ -636,7 +644,7 @@ export default function CreateTaskModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Prazo / Conclusão</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Prazo</label>
               <input
                 type="date"
                 name="dueDate"
@@ -648,6 +656,29 @@ export default function CreateTaskModal({
                     setStatus('pending')
                   }
                 }}
+                className="input"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data de Início (real)</label>
+              <input
+                type="datetime-local"
+                name="startedAt"
+                value={startedAt}
+                onChange={(e) => setStartedAt(e.target.value)}
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data de Fim (real)</label>
+              <input
+                type="datetime-local"
+                name="completedAt"
+                value={completedAt}
+                onChange={(e) => setCompletedAt(e.target.value)}
                 className="input"
               />
             </div>

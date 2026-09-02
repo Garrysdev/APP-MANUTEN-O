@@ -84,7 +84,8 @@ function parseProjectTask(formData: FormData) {
     status,
     dueDate,
     plannedStartDate,
-    completedAt: status === 'done' ? (dueDate || new Date().toISOString()) : null,
+    startedAt: String(formData.get('startedAt') ?? '').trim() || (status === 'in_progress' || status === 'done' ? new Date().toISOString() : null),
+    completedAt: String(formData.get('completedAt') ?? '').trim() || (status === 'done' ? (dueDate || new Date().toISOString()) : null),
     observacoes: String(formData.get('observacoes') ?? '').trim() || null,
     safetyRules: parseStringArray('safetyRules'),
     materialsRequired: parseStringArray('materialsRequired'),
@@ -181,8 +182,8 @@ export async function updateProjectTaskStatusAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
 
+  const task = await getTask(profile.companyId, taskId)
   if (profile.role === 'technician') {
-    const task = await getTask(profile.companyId, taskId)
     if (!task) return { error: 'Tarefa não encontrada.' }
     if (task.assignedTo !== profile.id && task.createdBy !== profile.id) return { error: 'Sem permissão.' }
     const allowed: Partial<Record<TaskStatus, TaskStatus>> = {
@@ -195,7 +196,11 @@ export async function updateProjectTaskStatusAction(
   }
 
   try {
-    await updateTask(profile.companyId, taskId, { status: newStatus })
+    const now = new Date().toISOString()
+    const extra: { startedAt?: string; completedAt?: string } = {}
+    if ((newStatus === 'in_progress' || newStatus === 'done') && !task?.startedAt) extra.startedAt = now
+    if (newStatus === 'done' && !task?.completedAt) extra.completedAt = now
+    await updateTask(profile.companyId, taskId, { status: newStatus, ...extra })
     if (newStatus === 'done') {
       await calculateTaskCost(profile.companyId, taskId)
     }
