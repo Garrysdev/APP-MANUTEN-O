@@ -13,7 +13,7 @@ const TEST_ACCOUNTS = [
   { label: 'Pro',        email: 'pro@teste.rg',        password: 'Teste123!', role: 'Gestor' },
   { label: 'Business',   email: 'business@teste.rg',   password: 'Teste123!', role: 'Gestor' },
   { label: 'Enterprise', email: 'enterprise@teste.rg', password: 'Teste123!', role: 'Gestor' },
-  { label: 'Técnico (Marco Silva)', email: 'tecnico@teste.rg', password: 'Teste123!', role: 'Técnico' },
+  { label: 'Técnico (RG - RuiG)', email: 'tecnico@teste.rg', password: 'Teste123!', role: 'Técnico' },
 ]
 
 export default function LoginPage() {
