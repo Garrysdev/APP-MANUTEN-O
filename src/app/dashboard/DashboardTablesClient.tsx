@@ -315,7 +315,7 @@ export default function DashboardTablesClient({
               </ResponsiveContainer>
             </div>
           </div>
-        </div>
       </div>
+    </div>
   )
 }
