@@ -209,16 +209,24 @@ export default function MaintenancePlanClient({
   // janela de edição das OT (com as datas e a opção de concluir), não o editor do
   // plano-modelo. Só cai no editor de plano quando ainda não há nenhuma OT associada.
   const [viewingTask, setViewingTask] = useState<Task | null>(null)
-  function findPlanTask(p: MaintenancePlan): Task | null {
+
+  // Seletor de ano da tabela do PM — permite ver as OT geradas em anos anteriores
+  // e futuros, não só o ano corrente.
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+
+  function findPlanTask(p: MaintenancePlan, year: number = selectedYear): Task | null {
     const linkedTasks = tasks.filter((t) => {
-      if (t.maintenancePlanId && (t.maintenancePlanId === p.id || t.maintenancePlanId === (p as any).code)) return true
-      if (t.tag && p.tag && t.tag.trim().toLowerCase() === p.tag.trim().toLowerCase()) {
-        const tTitle = (t.title || '').trim().toLowerCase()
-        const pTitle = (p.title || '').trim().toLowerCase()
-        const pAcao = (p.description || '').trim().toLowerCase()
-        if (tTitle === pTitle || (pAcao && tTitle.includes(pAcao)) || (pTitle && tTitle.includes(pTitle))) return true
-      }
-      return false
+      const matches =
+        (t.maintenancePlanId && (t.maintenancePlanId === p.id || t.maintenancePlanId === (p as any).code)) ||
+        (t.tag && p.tag && t.tag.trim().toLowerCase() === p.tag.trim().toLowerCase() && (() => {
+          const tTitle = (t.title || '').trim().toLowerCase()
+          const pTitle = (p.title || '').trim().toLowerCase()
+          const pAcao = (p.description || '').trim().toLowerCase()
+          return tTitle === pTitle || (pAcao && tTitle.includes(pAcao)) || (pTitle && tTitle.includes(pTitle))
+        })())
+      if (!matches) return false
+      const d = t.dueDate || t.plannedStartDate || t.completedAt
+      return d ? new Date(d).getFullYear() === year : false
     })
     if (linkedTasks.length === 0) return null
     const pending = linkedTasks
@@ -529,7 +537,7 @@ export default function MaintenancePlanClient({
 
       return true
     })
-  }, [plans, tasks, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, fCalendar, fGantt, assetMap, assetTagMap, excelDateFilter])
+  }, [plans, tasks, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, fCalendar, fGantt, assetMap, assetTagMap, excelDateFilter, selectedYear])
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
@@ -626,6 +634,34 @@ export default function MaintenancePlanClient({
             <span className="hidden sm:inline">{importing ? dict.common.importing : dict.common.import}</span>
           </button>
           <input ref={importInputRef} type="file" accept=".xls,.xlsx" onChange={handleImportFile} className="hidden" />
+          <div className="flex items-center gap-0.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl px-1 py-1" title="Ver as OT do PM geradas noutro ano (anteriores ou posteriores)">
+            <button
+              type="button"
+              onClick={() => setSelectedYear((y) => y - 1)}
+              className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 cursor-pointer"
+              aria-label="Ano anterior"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <span className="text-xs font-bold text-gray-700 dark:text-slate-200 px-1.5 min-w-[3.5rem] text-center">{selectedYear}</span>
+            <button
+              type="button"
+              onClick={() => setSelectedYear((y) => y + 1)}
+              className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 cursor-pointer"
+              aria-label="Ano seguinte"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+            {selectedYear !== new Date().getFullYear() && (
+              <button
+                type="button"
+                onClick={() => setSelectedYear(new Date().getFullYear())}
+                className="ml-1 text-[9px] font-bold text-[#2E86C1] hover:underline cursor-pointer pr-1"
+              >
+                hoje
+              </button>
+            )}
+          </div>
           <button
             onClick={() => {
               setGeneratorResult(null)
