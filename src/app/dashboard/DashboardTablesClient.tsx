@@ -75,63 +75,59 @@ function getAvailableYears(allTasks: Task[]): number[] {
   return Array.from(yearsSet).sort((a, b) => a - b)
 }
 
-// 1. Pedidos de PI no Ano Corrente (Mês a Mês do Ano Corrente: Jan a Dez)
+// 1. Pedidos de PI no Ano Corrente (Mês a Mês) — cada PI conta no mês em que foi
+// pedida e é classificada pelo seu estado ATUAL (concluída vs por concluir). Assim as
+// duas barras somam sempre o total de PIs desse mês, em vez de contarem em meses
+// diferentes conforme a data de conclusão.
 function computePICurrentYearData(allTasks: Task[]) {
   const piTasks = getPITasks(allTasks)
   const currentYear = new Date().getFullYear()
   const monthLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-  const monthsMap: Record<string, { month: string; pedidas: number; concluidas: number }> = {}
+  const monthsMap: Record<string, { month: string; concluidas: number; naoConcluidas: number; total: number }> = {}
 
   for (let m = 0; m < 12; m++) {
     const key = `${currentYear}-${String(m + 1).padStart(2, '0')}`
-    monthsMap[key] = { month: monthLabels[m], pedidas: 0, concluidas: 0 }
+    monthsMap[key] = { month: monthLabels[m], concluidas: 0, naoConcluidas: 0, total: 0 }
   }
 
   piTasks.forEach((t) => {
     const createdIso = toNormalizedIsoDate(t.createdAt || t.plannedStartDate)
-    if (createdIso && createdIso.startsWith(String(currentYear))) {
-      const key = createdIso.slice(0, 7)
-      if (monthsMap[key]) monthsMap[key].pedidas++
-    }
+    if (!createdIso || !createdIso.startsWith(String(currentYear))) return
+    const bucket = monthsMap[createdIso.slice(0, 7)]
+    if (!bucket) return
 
-    if (t.status === 'done') {
-      const completedIso = toNormalizedIsoDate(t.completedAt || t.updatedAt || t.createdAt)
-      if (completedIso && completedIso.startsWith(String(currentYear))) {
-        const key = completedIso.slice(0, 7)
-        if (monthsMap[key]) monthsMap[key].concluidas++
-      }
-    }
+    bucket.total++
+    if (t.status === 'done') bucket.concluidas++
+    else bucket.naoConcluidas++
   })
 
   return Object.values(monthsMap)
 }
 
-// 2. Cumprimento do Plano de Manutenção por Ano (Exatamente como estava originalmente)
+// 2. Cumprimento do Plano de Manutenção por Ano — de todas as OT de PM existentes
+// nesse ano, a percentagem que está no estado Concluída.
 function computePlanYearlyData(allTasks: Task[]) {
   const planTasks = getPlanTasks(allTasks)
   const years = getAvailableYears(allTasks)
-  const yearsMap: Record<string, { year: string; agendadas: number; concluidas: number; percent: number }> = {}
+  const yearsMap: Record<string, { year: string; total: number; concluidas: number; percent: number }> = {}
 
   years.forEach((y) => {
-    yearsMap[String(y)] = { year: String(y), agendadas: 0, concluidas: 0, percent: 0 }
+    yearsMap[String(y)] = { year: String(y), total: 0, concluidas: 0, percent: 0 }
   })
 
   planTasks.forEach((t) => {
     const isoDate = toNormalizedIsoDate(t.plannedStartDate || t.dueDate || t.createdAt)
-    if (isoDate) {
-      const yr = isoDate.slice(0, 4)
-      if (yearsMap[yr]) {
-        yearsMap[yr].agendadas++
-        if (t.status === 'done') {
-          yearsMap[yr].concluidas++
-        }
-      }
-    }
+    if (!isoDate) return
+    const bucket = yearsMap[isoDate.slice(0, 4)]
+    if (!bucket) return
+
+    bucket.total++
+    if (t.status === 'done') bucket.concluidas++
   })
 
   Object.values(yearsMap).forEach((item) => {
-    item.percent = item.agendadas > 0 ? Math.round((item.concluidas / item.agendadas) * 100) : 0
+    item.percent = item.total > 0 ? Math.round((item.concluidas / item.total) * 100) : 0
   })
 
   return Object.values(yearsMap)
@@ -241,10 +237,29 @@ export default function DashboardTablesClient({
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
+                <Tooltip
+                  content={({ active, payload, label }: any) => {
+                    if (active && payload && payload.length) {
+                      const item = payload[0]?.payload
+                      const total = item?.total ?? 0
+                      const pct = total > 0 ? Math.round(((item?.concluidas ?? 0) / total) * 100) : 0
+                      return (
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-lg shadow-xl text-xs font-semibold space-y-1">
+                          <p className="font-extrabold text-slate-800 dark:text-slate-100 mb-1">{label}</p>
+                          <p className="text-emerald-600 dark:text-emerald-400">Concluídas: {item?.concluidas ?? 0}</p>
+                          <p className="text-amber-600 dark:text-amber-400">Por concluir: {item?.naoConcluidas ?? 0}</p>
+                          <p className="text-blue-600 dark:text-blue-400 font-extrabold pt-1 border-t border-slate-100 dark:border-slate-800">
+                            Total: {total} · {pct}% concluídas
+                          </p>
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
+                />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Bar dataKey="pedidas" name="PIs Pedidas" fill="#2E86C1" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="concluidas" name="PIs Concluídas" fill="#10B981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="concluidas" name="Concluídas" stackId="pi" fill="#10B981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="naoConcluidas" name="Por concluir" stackId="pi" fill="#F59E0B" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -260,7 +275,7 @@ export default function DashboardTablesClient({
                   Cumprimento do Plano de Manutenção (% por Ano)
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-slate-400">
-                  Agendado vs Concluído e Taxa de Cumprimento anuais
+                  % das OT de PM do ano que estão concluídas
                 </p>
               </div>
             </div>
@@ -270,7 +285,7 @@ export default function DashboardTablesClient({
               <BarChart data={planYearlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} tick={{ fontSize: 11 }} />
                 <Tooltip
                   content={({ active, payload, label }: any) => {
                     if (active && payload && payload.length) {
@@ -278,10 +293,11 @@ export default function DashboardTablesClient({
                       return (
                         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-lg shadow-xl text-xs font-semibold space-y-1">
                           <p className="font-extrabold text-slate-800 dark:text-slate-100 mb-1">Ano {label}</p>
-                          <p className="text-amber-600 dark:text-amber-400">Agendadas: {item?.agendadas ?? 0}</p>
-                          <p className="text-emerald-600 dark:text-emerald-400">Concluídas: {item?.concluidas ?? 0}</p>
-                          <p className="text-blue-600 dark:text-blue-400 font-extrabold pt-1 border-t border-slate-100 dark:border-slate-800">
-                            Taxa de Cumprimento: {item?.percent ?? 0}%
+                          <p className="text-emerald-600 dark:text-emerald-400 font-extrabold">
+                            Cumprimento: {item?.percent ?? 0}%
+                          </p>
+                          <p className="text-slate-600 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+                            {item?.concluidas ?? 0} concluídas de {item?.total ?? 0} OT de PM
                           </p>
                         </div>
                       )
@@ -290,8 +306,7 @@ export default function DashboardTablesClient({
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Bar dataKey="agendadas" name="Agendadas" fill="#F59E0B" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="concluidas" name="Concluídas" fill="#10B981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="percent" name="% Concluídas" fill="#10B981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

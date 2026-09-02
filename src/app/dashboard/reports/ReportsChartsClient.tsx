@@ -291,7 +291,7 @@ export default function ReportsChartsClient({
               { value: 'PI', label: 'PI - Pedido Intervenção' },
               { value: 'MC', label: 'MC - Curativa' },
               { value: 'MP', label: 'MP - Preventiva' },
-              { value: 'PM', label: 'PM - Plano' },
+              { value: 'PM', label: 'PM - Plano Manutenção' },
               { value: 'MI', label: 'MI - Investimento' },
               { value: 'STP', label: 'STP / PR - Projeto' },
               { value: 'INS', label: 'INS - Inspeção' },

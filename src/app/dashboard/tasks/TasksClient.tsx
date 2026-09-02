@@ -955,7 +955,77 @@ export default function TasksClient({
         </div>
       </div>
 
-      <div className="card shadow-lg border border-slate-200 dark:border-slate-800">
+      {/* Vista em cartões — telemóvel e tablet (a tabela completa fica só para ecrãs md+) */}
+      <div className="md:hidden space-y-2.5">
+        {currentShown.length === 0 ? (
+          <div className="card px-5 py-12 text-center text-slate-400 border border-slate-200 dark:border-slate-800">
+            <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />
+            <p className="text-sm font-medium">{dict.tasks.empty}</p>
+            <button
+              type="button"
+              onClick={() => { setAreaFilter(''); setTagFilter(''); setColF(emptyCol) }}
+              className="mt-3 text-xs font-bold text-[#2E86C1] hover:underline inline-flex items-center gap-1 cursor-pointer"
+            >
+              <X size={14} /> Limpar Todos os Filtros
+            </button>
+          </div>
+        ) : (
+          currentShown.map((t, idx) => {
+            const asset = assets.find((a) => a.id === t.assetId)
+            const formattedId = format3DigitId(t.id, idx)
+            const tag = (asset as any)?.tag || asset?.name || (t as any).tag || '—'
+            const area = (t as any).area || (asset as any)?.area || '—'
+            const ids = (t.assignedToIds && t.assignedToIds.length > 0)
+              ? t.assignedToIds
+              : (t.assignedTo ? [t.assignedTo] : [])
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => router.push(`/dashboard/tasks/${t.id}`)}
+                className="card w-full text-left border border-slate-200 dark:border-slate-800 p-3.5 space-y-2 active:bg-blue-50/70 dark:active:bg-slate-800/80 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 shrink-0">{formattedId}</span>
+                    <TipoBadge tipo={t.tipo} codeOnly={true} />
+                    <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400 truncate">{tag} · {area}</span>
+                  </div>
+                  <span className={`badge-${t.status} shrink-0`}>{STATUS_LABELS[t.status]}</span>
+                </div>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-2">{t.title}</p>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 dark:text-slate-400">
+                  <div className="flex flex-wrap gap-1">
+                    {ids.length === 0 ? (
+                      <span className="text-slate-400">Sem técnico</span>
+                    ) : (
+                      ids.map((idOrAbbr) => {
+                        const u = users.find((usr) => usr.id === idOrAbbr || usr.abbreviation === idOrAbbr)
+                        const label = u ? (u.abbreviation || u.name) : (userName(idOrAbbr) !== '—' ? userName(idOrAbbr) : idOrAbbr)
+                        const isExt = u?.isExternal
+                        return (
+                          <span
+                            key={idOrAbbr}
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${isExt ? 'bg-blue-100 text-blue-900 border border-blue-300' : 'bg-orange-100 text-orange-900 border border-orange-300'}`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${isExt ? 'bg-blue-600' : 'bg-orange-600'} shrink-0`} />
+                            {label}
+                          </span>
+                        )
+                      })
+                    )}
+                  </div>
+                  <span className="font-mono whitespace-nowrap">
+                    {t.plannedStartDate ? formatDate(t.plannedStartDate) : '—'} → {t.completedAt ? formatDate(t.completedAt) : '—'}
+                  </span>
+                </div>
+              </button>
+            )
+          })
+        )}
+      </div>
+
+      <div className="hidden md:block card shadow-lg border border-slate-200 dark:border-slate-800">
         <div className="overflow-x-auto custom-scrollbar min-h-[450px]">
           <table className="w-full text-xs min-w-[940px] table-fixed">
             <thead>
@@ -1003,7 +1073,7 @@ export default function TasksClient({
                       { value: 'PI', label: 'PI - Pedido Intervenção' },
                       { value: 'MC', label: 'MC - Curativa' },
                       { value: 'MP', label: 'MP - Preventiva' },
-                      { value: 'PM', label: 'PM - Plano' },
+                      { value: 'PM', label: 'PM - Plano Manutenção' },
                       { value: 'MI', label: 'MI - Investimento' },
                       { value: 'STP', label: 'STP / PR - Projeto' },
                       { value: 'INS', label: 'INS - Inspeção' },

@@ -665,7 +665,65 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
         </div>
       )}
 
-      <div className="card overflow-hidden">
+      {/* Vista em cartões — telemóvel e tablet (a tabela completa fica só para ecrãs md+) */}
+      <div className="md:hidden space-y-2.5">
+        {currentShown.length === 0 ? (
+          <div className="card px-5 py-12 text-center text-slate-400">
+            <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
+            <p className="text-sm font-medium">{temFiltro ? dict.assets.emptyFilter : dict.assets.empty}</p>
+            {temFiltro && (
+              <button
+                type="button"
+                onClick={limparFiltros}
+                className="mt-3 text-xs font-bold text-[#2E86C1] hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                <X size={14} /> Limpar Todos os Filtros
+              </button>
+            )}
+          </div>
+        ) : (
+          currentShown.map((a) => (
+            <div
+              key={a.id}
+              onClick={() => openEdit(a)}
+              className="card flex items-center gap-3 p-3.5 active:bg-slate-100/80 dark:active:bg-slate-800/60 transition-colors cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={selectedAssets.has(a.id)}
+                onChange={() => toggleSelection(a.id)}
+                onClick={(e) => e.stopPropagation()}
+                className="rounded border-slate-300 bg-white h-4 w-4 shrink-0"
+              />
+              {a.photoUrl ? (
+                <div className="relative w-11 h-11 rounded-lg overflow-hidden border border-slate-300 shrink-0">
+                  <Image src={a.photoUrl} alt={a.name} fill className="object-cover" sizes="44px" />
+                </div>
+              ) : (
+                <div className="w-11 h-11 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                  <Package className="h-5 w-5 text-slate-500" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{a.name}</p>
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {a.tag && (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100">
+                      <Tag className="h-2.5 w-2.5" />{a.tag}
+                    </span>
+                  )}
+                  <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400">{a.area ?? '—'}</span>
+                </div>
+              </div>
+              <span className={`${a.active ? 'badge-done' : 'badge-cancelled'} shrink-0`}>
+                {a.active ? dict.assets.lblActive : dict.assets.lblInactive}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="hidden md:block card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs min-w-[600px] md:min-w-0">
             <thead>
@@ -780,9 +838,11 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
             </tbody>
           </table>
         </div>
+      </div>
 
-        {shown.length > 0 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50 rounded-b-xl">
+      {shown.length > 0 && (
+        <div className="card mt-2.5 md:mt-0 md:rounded-t-none md:border-t-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3 bg-gray-50/50 dark:bg-slate-900/50 rounded-xl">
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
               <span>{dict.common.rowsPerPage}</span>
               <select 
@@ -824,8 +884,8 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">

@@ -797,7 +797,85 @@ export default function MaintenancePlanClient({
         <span className="text-xs font-semibold text-slate-700 ml-auto">Filtra por coluna na linha abaixo dos títulos (estilo Excel).</span>
       </div>
 
-      <div className="card overflow-x-auto shadow-lg border border-slate-200 dark:border-slate-800">
+      {/* Vista em cartões — telemóvel e tablet (a tabela completa fica só para ecrãs md+) */}
+      <div className="md:hidden space-y-2.5">
+        {currentShown.length === 0 ? (
+          <div className="card px-5 py-12 text-center text-slate-400 border border-slate-200 dark:border-slate-800">
+            <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />
+            <p className="text-sm">{dict.maintenancePlan.empty}</p>
+          </div>
+        ) : (
+          currentShown.map((p) => {
+            const t = findPlanTask(p)
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => openPlanRow(p)}
+                className={`card w-full text-left border border-slate-200 dark:border-slate-800 p-3.5 space-y-2 active:bg-blue-50/70 dark:active:bg-slate-800/80 transition-colors cursor-pointer ${!p.active ? 'opacity-50' : ''}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <TipoBadge tipo={p.tipo || 'plano'} codeOnly={true} />
+                    <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 truncate">{getPlanTag(p) || '—'}</span>
+                    <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400 truncate">{p.area || '—'}</span>
+                  </div>
+                  <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold shrink-0 ${p.active ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-slate-100 text-slate-600 border border-slate-300'}`}>
+                    {p.active ? 'Ativo' : 'Inat.'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-2 flex-1">{p.title}</p>
+                  {p.legal && (
+                    <span title="Inspeção legal/obrigatória" className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[9px] text-red-800 font-bold border border-red-300 shrink-0">
+                      <Scale className="h-2.5 w-2.5" /> Legal
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{assetName(p.assetId)}</p>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
+                      <CalendarClock className="h-3 w-3 text-slate-500 shrink-0" /> {periodLabel(p)}
+                    </span>
+                    {p.executor === 'externo' && (
+                      <span className="inline-flex items-center gap-0.5 font-bold text-amber-800 bg-amber-50 px-1 py-0.5 rounded border border-amber-200"><Building2 className="h-3 w-3" /> Ext.</span>
+                    )}
+                  </div>
+                  <span onClick={(e) => e.stopPropagation()}>
+                    {!t ? (
+                      <span className="text-slate-400 text-[10px] font-medium">—</span>
+                    ) : t.status === 'done' ? (
+                      <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400 font-bold text-[9px] bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
+                        <CheckCircle2 className="h-3 w-3" /> Concluída
+                      </span>
+                    ) : t.status === 'in_progress' ? (
+                      <span className="inline-flex items-center gap-0.5 text-blue-700 dark:text-blue-400 font-bold text-[9px] bg-blue-50 px-1 py-0.5 rounded border border-blue-200">
+                        ⏳ Em curso
+                      </span>
+                    ) : t.status === 'cancelled' ? (
+                      <span className="text-slate-400 text-[9px] font-semibold">Cancelada</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleQuickConclude(t.id)}
+                        disabled={concludingTaskId === t.id}
+                        title="Marcar esta OT como concluída sem abrir a ficha completa"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 font-bold text-[9px] transition-colors disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        {concludingTaskId === t.id ? 'A concluir…' : 'Concluir'}
+                      </button>
+                    )}
+                  </span>
+                </div>
+              </button>
+            )
+          })
+        )}
+      </div>
+
+      <div className="hidden md:block card overflow-x-auto shadow-lg border border-slate-200 dark:border-slate-800">
         {shown.length === 0 ? (
           <div className="px-5 py-12 text-center text-slate-400">
             <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />

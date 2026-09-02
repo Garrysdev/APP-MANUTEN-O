@@ -132,19 +132,21 @@ function getFallbackTasks(): Task[] {
 let cachedFallbackUsers: User[] | null = null
 function getFallbackUsers(): User[] {
   if (cachedFallbackUsers) return cachedFallbackUsers
+  // IDs reais da equipa (users reais da Firestore) -- têm de bater certo com os IDs
+  // gravados em assignedTo/assignedToIds nas tarefas, senão o nome não resolve durante
+  // uma quebra de quota da Firestore e aparece o ID em bruto na UI.
   const techs = [
-    { id: 'tech_LM', name: 'Leandro M. (LM)', abbreviation: 'LM', email: 'lm@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
-    { id: 'tech_RG', name: 'Rui Garrido (RG)', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false },
-    { id: 'tech_MarcoSilva', name: 'Marco Silva (MS)', abbreviation: 'MS', email: 'tecnico@teste.rg', role: 'technician', active: true, isExternal: false },
-    { id: 'tech_LI', name: 'Luís I. (LI)', abbreviation: 'LI', email: 'li@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
-    { id: 'tech_MC', name: 'Manuel C. (MC)', abbreviation: 'MC', email: 'mc@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
-    { id: 'tech_JC', name: 'João C. (JC)', abbreviation: 'JC', email: 'jc@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
-    { id: 'tech_MS', name: 'Mário S. (MS)', abbreviation: 'MS', email: 'ms@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
-    { id: 'tech_CB', name: 'Carlos B. (CB)', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
-    { id: 'tech_UR', name: 'Técnico UR (UR)', abbreviation: 'UR', email: 'ur@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
-    { id: 'tech_OX2', name: 'Eng. Pedro (OX2)', abbreviation: 'OX2', email: 'ox2@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_ox2', externalCompanyName: 'OX2 Especialista', specialty: 'Caldeiras & Sobreasquecimento', phone: '912 345 678' },
+    { id: 'MEGjjvqtGqv3Oosxvlrx', name: 'Leandro Maia', abbreviation: 'LM', email: 'lm@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
+    { id: 'nAcCSm4E3tNnPLr72UPl', name: 'Marco Silva', abbreviation: 'MS', email: 'ms@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
+    { id: 'zmDAeoGTzIWPavraKu0f', name: 'Carlos Branco', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
+    { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', name: 'RG - RuiG', abbreviation: 'RG', email: 'tecnico@teste.rg', role: 'technician', active: true, isExternal: false },
+    { id: 'CUodZKziOwo128GLK66i', name: 'Rui Garrido (RG)', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false },
+    { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', name: 'Admin', abbreviation: 'ADM', email: 'demo@rgmaintenance.pt', role: 'manager', active: true, isExternal: false },
+    { id: 'ue15A4DcVMRbstIEhrkny5Be42G3', name: 'Rui Garrido', abbreviation: null, email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false },
+    { id: 'q17h5HdG3R8dfjWiUZ6V', name: 'Eng. João Ramos', abbreviation: 'JR', email: 'jr@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_jr', externalCompanyName: 'João Ramos Engenharia', specialty: 'Engenharia Geral', phone: '910 000 000' },
+    { id: 'twtQs1sAj0RFc9KI2S0n', name: 'Miguel', abbreviation: 'OX2', email: 'ox2@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_ox2', externalCompanyName: 'OX2 Especialista', specialty: 'Caldeiras & Sobreaquecimento', phone: '912 345 678' },
+    { id: '2pL85QsrLpaNwYXZdVOP', name: 'Carrier (Ricardo)', abbreviation: 'CAR', email: 'carrier@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_car', externalCompanyName: 'Carrier Portugal', specialty: 'HVAC / Climatização', phone: '965 432 109' },
     { id: 'tech_BlockControl', name: 'Nuno / João (BlockControl)', abbreviation: 'BLK', email: 'blockcontrol@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_blk', externalCompanyName: 'BlockControl Automação', specialty: 'Automação & Eletrónica', phone: '934 567 890' },
-    { id: 'tech_Carrier', name: 'Ricardo (Carrier)', abbreviation: 'CAR', email: 'carrier@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_car', externalCompanyName: 'Carrier Portugal', specialty: 'HVAC / Climatização', phone: '965 432 109' },
     { id: 'tech_Schindler', name: 'Equipa Téc. (Schindler)', abbreviation: 'SCH', email: 'schindler@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_sch', externalCompanyName: 'Schindler Elevadores', specialty: 'Elevadores & Cargas', phone: '210 987 654' },
     { id: 'tech_Helenos', name: 'Heleno (Helenos)', abbreviation: 'HEL', email: 'helenos@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_hel', externalCompanyName: 'Helenos S.A.', specialty: 'Construção & Estruturas', phone: '921 112 233' }
   ]

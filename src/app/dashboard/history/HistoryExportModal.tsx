@@ -398,7 +398,7 @@ export default function HistoryExportModal({
                   <option value="">-- Todos os Tipos --</option>
                   <option value="MC">MC - Curativa</option>
                   <option value="MP">MP - Preventiva</option>
-                  <option value="PM">PM - Plano</option>
+                  <option value="PM">PM - Plano Manutenção</option>
                   <option value="PI">PI - Pedido Intervenção</option>
                   <option value="MI">MI - Investimento</option>
                   <option value="PR">PR - Projeto</option>
