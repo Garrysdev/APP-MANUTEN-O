@@ -982,7 +982,7 @@ export default function TasksClient({
               <button
                 key={t.id}
                 type="button"
-                onClick={() => router.push(`/dashboard/tasks/${t.id}`)}
+                onClick={() => openEdit(t)}
                 className="card w-full text-left border border-slate-200 dark:border-slate-800 p-3.5 space-y-2 active:bg-blue-50/70 dark:active:bg-slate-800/80 transition-colors cursor-pointer"
               >
                 <div className="flex items-center justify-between gap-2">
@@ -1130,7 +1130,7 @@ export default function TasksClient({
                   return (
                     <tr
                       key={t.id}
-                      onClick={() => router.push(`/dashboard/tasks/${t.id}`)}
+                      onClick={() => openEdit(t)}
                       className="border-b border-slate-100 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group"
                       title="Clique para abrir e ver/editar a OT"
                     >

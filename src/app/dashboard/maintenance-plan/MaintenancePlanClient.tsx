@@ -1163,20 +1163,30 @@ export default function MaintenancePlanClient({
       </div>
 
       {/* Modal criar/editar com ficha completa e campos unificados */}
-      {creating && (
+      {(creating || Boolean(editing) || Boolean(viewingTask)) && (
         <CreateTaskModal
-          isOpen={creating}
-          onClose={closeModal}
-          editingTask={editing}
-          titleText={editing ? "Editar OT no Plano" : "Novo Plano de Manutenção"}
+          isOpen={creating || Boolean(editing) || Boolean(viewingTask)}
+          onClose={() => {
+            closeModal()
+            setViewingTask(null)
+          }}
+          editingTask={viewingTask || editing}
+          titleText={
+            viewingTask
+              ? `Editar OT de PM (${viewingTask.tag || ''})`
+              : editing
+              ? `Editar Plano de Manutenção (${getPlanTag(editing) || ''})`
+              : 'Novo Plano de Manutenção'
+          }
           assets={assets}
           users={users}
           stockRefs={[]}
           isManager={true}
           createAction={createMaintenancePlanAction}
-          updateAction={updateMaintenancePlanAction}
+          updateAction={viewingTask ? updateTaskAction : updateMaintenancePlanAction}
           onSuccess={() => {
             closeModal()
+            setViewingTask(null)
             router.refresh()
           }}
         />
