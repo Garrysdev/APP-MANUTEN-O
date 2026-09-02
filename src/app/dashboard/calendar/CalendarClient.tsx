@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition, useId } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Wrench, ClipboardList, ShieldAlert, X, Plus, Minus, Package, RefreshCw, Copy, Check, ExternalLink, Share2, Calendar as CalendarIcon, GripVertical, Printer, CheckSquare, Square, Pencil } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wrench, ClipboardList, ShieldAlert, X, Plus, Minus, Package, RefreshCw, Copy, Check, CheckCircle2, ExternalLink, Share2, Calendar as CalendarIcon, GripVertical, Printer, CheckSquare, Square, Pencil } from 'lucide-react'
 import type { Task, MaintenancePlan, TaskCriticidade, TipoTarefa, TaskStatus, RecurrenceType, UserRole } from '@/types/models'
 import { CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS } from '@/types/models'
 import { createTaskFromPlanAction, rescheduleCalendarItemAction } from './actions'
@@ -10,7 +10,7 @@ import { createTaskAction, updateTaskStatusAction } from '@/app/dashboard/tasks/
 import Avatar from '@/components/ui/Avatar'
 import MaterialsSelector from '@/components/ui/MaterialsSelector'
 import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
-import { getTipoBadgeClass } from '@/components/ui/TipoBadge'
+import { TipoBadge, getTipoBadgeClass } from '@/components/ui/TipoBadge'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
@@ -99,29 +99,32 @@ function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end
     map.get(date)!.push(ev)
   }
 
-  tasks.forEach((task) => {
-    let dates: string[] = []
-    const d = task.dueDate ? task.dueDate.slice(0, 10) : task.plannedStartDate ? task.plannedStartDate.slice(0, 10) : null
-    if (d) {
-      dates = [d]
-    } else {
-      const linkedPlan = task.maintenancePlanId ? plans.find((p) => p.id === task.maintenancePlanId) : null
-      if (linkedPlan) {
-        dates = getPlanTargetDates(linkedPlan, start.getFullYear())
+  // Apenas tarefas não concluídas aparecem no calendário
+  tasks
+    .filter((task) => task.status !== 'done' && (task.status as string) !== 'completed')
+    .forEach((task) => {
+      let dates: string[] = []
+      const d = task.dueDate ? task.dueDate.slice(0, 10) : task.plannedStartDate ? task.plannedStartDate.slice(0, 10) : null
+      if (d) {
+        dates = [d]
+      } else {
+        const linkedPlan = task.maintenancePlanId ? plans.find((p) => p.id === task.maintenancePlanId) : null
+        if (linkedPlan) {
+          dates = getPlanTargetDates(linkedPlan, start.getFullYear())
+        }
       }
-    }
 
-    dates.forEach((d) => {
-      const dd = new Date(d + 'T12:00:00')
-      if (dd >= start && dd <= end) {
-        add(d, { date: d, type: 'task', task, label: task.title, criticidade: task.criticidade })
-      }
+      dates.forEach((d) => {
+        const dd = new Date(d + 'T12:00:00')
+        if (dd >= start && dd <= end) {
+          add(d, { date: d, type: 'task', task, label: task.title, criticidade: task.criticidade })
+        }
+      })
     })
-  })
 
   plans.filter((p) => p.active !== false).forEach((plan) => {
-    // Se este plano já tiver uma OT em taskList (convertida ou reagendada),
-    const hasConvertedTask = tasks.some(
+    // Se este plano já tiver uma OT concluída ou já existente em tasks, não duplica/não mostra no calendário
+    const hasConvertedOrDoneTask = tasks.some(
       (t) =>
         t.maintenancePlanId === plan.id ||
         t.id === plan.id ||
@@ -129,7 +132,7 @@ function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end
         plan.id === `plan_${t.id}` ||
         (t.maintenancePlanId && plan.id.endsWith(t.maintenancePlanId))
     )
-    if (hasConvertedTask) {
+    if (hasConvertedOrDoneTask) {
       return
     }
 
@@ -477,6 +480,52 @@ export default function CalendarClient({
     })
   }
 
+  async function handleQuickConcludeItem(ev: CalendarEvent) {
+    startStatusTransition(async () => {
+      try {
+        if (ev.type === 'task' && ev.task) {
+          const res = await updateTaskStatusAction(ev.task.id, 'done')
+          if (res.error) {
+            alert(`Erro ao concluir tarefa: ${res.error}`)
+            return
+          }
+          setTaskList((prev) => prev.map((t) => (t.id === ev.task!.id ? { ...t, status: 'done', completedAt: new Date().toISOString() } : t)))
+        } else if (ev.plan) {
+          const targetDate = ev.date || selectedDate || toYMD(new Date())
+          const fd = new FormData()
+          fd.set('planId', ev.plan.id)
+          fd.set('dueDate', targetDate)
+          fd.set('status', 'done')
+          const res = await createTaskFromPlanAction({}, fd)
+          if (res.error) {
+            alert(`Erro ao concluir plano: ${res.error}`)
+            return
+          }
+          const newDoneTask: Task = {
+            id: `task_done_${ev.plan.id}_${Date.now()}`,
+            companyId: ev.plan.companyId,
+            title: `[PM] ${ev.plan.title}`,
+            assetId: ev.plan.assetId || '',
+            criticidade: ev.plan.criticidade || 'verde',
+            tipo: 'plano',
+            status: 'done',
+            dueDate: targetDate,
+            plannedStartDate: targetDate,
+            createdAt: targetDate,
+            completedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            createdBy: userId,
+            maintenancePlanId: ev.plan.id,
+          }
+          setTaskList((prev) => [newDoneTask, ...prev])
+        }
+        router.refresh()
+      } catch (err: any) {
+        alert(`Erro: ${err?.message || err}`)
+      }
+    })
+  }
+
   // Navigation
   function prevPeriod() {
     setSelectedDate(null)
@@ -531,6 +580,9 @@ export default function CalendarClient({
 
   const filteredTaskList = React.useMemo(() => {
     return taskList.filter((t) => {
+      // No calendário só devem de aparecer OT e OT de PM não concluídas
+      if (t.status === 'done' || (t.status as string) === 'completed') return false
+
       const assetObj = t.assetId ? assetMap.get(t.assetId) : null
       const aArea = ((t as any).area || assetObj?.area || '').trim().toLowerCase()
       const aTag = ((t as any).tag || assetObj?.tag || '').trim().toLowerCase()
@@ -840,11 +892,20 @@ export default function CalendarClient({
                 >
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className={`text-xs font-extrabold w-7 h-7 flex items-center justify-center rounded-full shadow-sm ${
-                        isToday ? 'bg-[#2E86C1] text-white font-bold ring-2 ring-blue-300' : isPast ? 'text-gray-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'
-                      }`}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedDate(dateStr)
+                          setViewMode('day')
+                        }}
+                        className={`text-xs font-extrabold w-7 h-7 flex items-center justify-center rounded-full shadow-sm hover:scale-110 hover:ring-2 hover:ring-safety-orange transition-all cursor-pointer ${
+                          isToday ? 'bg-[#2E86C1] text-white font-bold ring-2 ring-blue-300' : isPast ? 'text-gray-400 dark:text-slate-500 hover:bg-slate-200' : 'text-slate-800 dark:text-slate-200 hover:bg-slate-200'
+                        }`}
+                        title={`Clique para abrir a vista detalhada do dia ${dateStr}`}
+                      >
                         {day}
-                      </span>
+                      </button>
                       {events.length > 0 && (
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                           {events.length}
@@ -863,30 +924,16 @@ export default function CalendarClient({
                               e.stopPropagation()
                               if (ev.type === 'task' && ev.task) {
                                 openEditTask(ev.task)
-                              } else if (ev.type === 'plan' && ev.plan) {
+                              } else if (ev.plan) {
                                 openPlanAsOT(ev.plan, dateStr)
                               }
                             }}
-                            title={`Arraste para alterar a data ou clique para ver: ${eventTooltip(ev)}`}
-                            className={`text-[11px] font-medium rounded-md px-1.5 py-1 truncate transition-all hover:scale-[1.02] active:scale-95 shadow-sm border cursor-grab active:cursor-grabbing flex items-center justify-between gap-1 ${
+                            title={`Clique para abrir e ver/editar: ${eventTooltip(ev)}`}
+                            className={`text-[11px] font-medium rounded-md px-1.5 py-1 truncate transition-all hover:scale-[1.02] active:scale-95 shadow-sm border cursor-pointer flex items-center justify-between gap-1 ${
                               isTaskDone ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border-emerald-300 line-through opacity-85' : getTipoBadgeClass(resolveEventType(ev))
                             }`}
                           >
                             <div className="flex items-center gap-1 min-w-0 flex-1">
-                              {ev.type === 'task' && ev.task && (
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(isTaskDone)}
-                                  disabled={role !== 'manager' || isTogglingStatus}
-                                  onChange={(e) => {
-                                    e.stopPropagation()
-                                    handleToggleTaskStatus(ev.task!.id, ev.task!.status)
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5 shrink-0 cursor-pointer disabled:cursor-not-allowed"
-                                  title={role === 'manager' ? (isTaskDone ? 'Marcar como pendente' : 'Encerrar OT no calendário') : 'Apenas gestores podem encerrar OTs'}
-                                />
-                              )}
                               <span className="truncate">{eventDisplayLabel(ev)}</span>
                             </div>
                             <GripVertical className="h-3 w-3 text-slate-400 opacity-60 shrink-0 inline" />
@@ -997,99 +1044,155 @@ export default function CalendarClient({
         </div>
       )}
 
-      {/* Day View (Grelha de Horas estilo Gmail / Google Calendar) */}
+      {/* Day View com lista completa e opção de Concluir Tarefa em cada linha */}
       {viewMode === 'day' && (
-        <div className="card overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800">
-          <div className="p-3 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <h3 className="font-extrabold text-sm text-slate-800 dark:text-slate-100">
-              Agenda do Dia: {new Date(activeSelectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </h3>
+        <div className="card overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800 space-y-4 p-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+            <div>
+              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-900 dark:text-blue-200">
+                Vista Diária
+              </span>
+              <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 capitalize mt-1">
+                {new Date(activeSelectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </h3>
+            </div>
             <button
               onClick={() => openNewTaskForDate(activeSelectedDate)}
-              className="px-3 py-1 bg-safety-orange text-white text-xs font-bold rounded-lg hover:bg-safety-orange/90 transition-all flex items-center gap-1"
+              className="px-3.5 py-2 bg-safety-orange text-white text-xs font-bold rounded-xl hover:bg-safety-orange/90 transition-all flex items-center gap-1.5 shadow-md active:scale-95"
             >
-              <Plus size={14} /> + Nova OT Neste Dia
+              <Plus size={15} /> Nova OT Neste Dia
             </button>
           </div>
 
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {HOURS.map((hour) => {
-              const events = selectedEvents
-              const isOver = dragOverDate === activeSelectedDate
-              return (
-                <div
-                  key={hour}
-                  onClick={() => setSelectedDate(activeSelectedDate)}
-                  onDragOver={(e) => handleDragOver(e, activeSelectedDate)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDropOnDate(e, activeSelectedDate)}
-                  className={`p-3 transition-colors flex items-center gap-4 cursor-pointer group ${
-                    isOver ? 'bg-amber-100/80 dark:bg-amber-900/50' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
-                  }`}
-                >
-                  <span className="font-mono text-xs font-bold text-slate-400 w-12">{hour}</span>
-                  <div className="flex-1 flex flex-wrap gap-2">
-                    {events.map((ev, j) => {
-                      const isTaskDone = ev.type === 'task' && ev.task && (ev.task.status === 'done' || (ev.task.status as string) === 'completed')
-                      return (
-                        <div
-                          key={j}
-                          draggable={true}
-                          onDragStart={(e) => handleDragStart(e, ev)}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (ev.type === 'task' && ev.task) openEditTask(ev.task)
-                            else if (ev.type === 'plan' && ev.plan) openPlanAsOT(ev.plan, activeSelectedDate)
-                          }}
-                          title={`Arraste para alterar a data: ${eventTooltip(ev)}`}
-                          className={`text-xs font-bold px-2.5 py-1 rounded-lg border shadow-sm cursor-grab active:cursor-grabbing flex items-center gap-1.5 ${
-                            isTaskDone ? 'bg-emerald-100 text-emerald-900 border-emerald-300 line-through opacity-85' : getTipoBadgeClass(resolveEventType(ev))
-                          }`}
-                        >
-                          <GripVertical className="h-3 w-3 text-slate-400 opacity-60 shrink-0" />
-                          {ev.type === 'task' && ev.task && (
-                            <input
-                              type="checkbox"
-                              checked={Boolean(isTaskDone)}
-                              disabled={role !== 'manager' || isTogglingStatus}
-                              onChange={(e) => {
-                                e.stopPropagation()
-                                handleToggleTaskStatus(ev.task!.id, ev.task!.status)
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5 shrink-0 cursor-pointer disabled:cursor-not-allowed"
-                              title={role === 'manager' ? (isTaskDone ? 'Marcar como pendente' : 'Encerrar OT no calendário') : 'Apenas gestores podem encerrar OTs'}
-                            />
+          {/* Lista de OTs do Dia com opção de Concluir Tarefa */}
+          <div>
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2.5">
+              Tarefas Agendadas para este dia ({selectedEvents.length})
+            </h4>
+            {selectedEvents.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                <p className="text-xs text-slate-400">Sem ordens de trabalho agendadas para este dia.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {selectedEvents.map((ev, idx) => {
+                  const isTaskDone = ev.type === 'task' && ev.task && (ev.task.status === 'done' || (ev.task.status as string) === 'completed')
+                  const assetTag = eventTag(ev)
+                  const targetAssetId = (ev.type === 'task' ? ev.task?.assetId : ev.plan?.assetId) || assetTag
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                        isTaskDone
+                          ? 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-300 shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div className="pt-0.5">
+                          {isTaskDone ? (
+                            <span className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs">
+                              ✓
+                            </span>
+                          ) : (
+                            <span className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs">
+                              {idx + 1}
+                            </span>
                           )}
-                          <span>{eventDisplayLabel(ev)}</span>
                         </div>
-                      )
-                    })}
-                    {events.length === 0 && (
-                      <span className="text-xs text-slate-300 dark:text-slate-600 group-hover:text-safety-orange font-medium transition-colors">
-                        + Clique para agendar OT às {hour}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <TipoBadge tipo={resolveEventType(ev)} codeOnly={true} />
+                            {targetAssetId ? (
+                              <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-industrial-blue dark:text-blue-400">
+                                {assetTag || '—'}
+                              </span>
+                            ) : null}
+                            <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                              {ev.label}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {ev.type === 'task' && ev.task ? (
+                              <>
+                                <span>{CRITICIDADE_LABELS[ev.task.criticidade]}</span>
+                                {ev.task.assignedTo && (
+                                  <span className="ml-2 font-semibold text-slate-700 dark:text-slate-300">
+                                    • Técnico: {userName(ev.task.assignedTo)}
+                                  </span>
+                                )}
+                              </>
+                            ) : ev.plan ? (
+                              <>
+                                <span>{RECURRENCE_LABELS[ev.plan.recurrence]}</span>
+                                <span className="ml-2">• {assetName(ev.plan.assetId)}</span>
+                              </>
+                            ) : null}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                        {!isTaskDone ? (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickConcludeItem(ev)}
+                            disabled={isTogglingStatus}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer disabled:opacity-50"
+                            title="Concluir esta tarefa imediatamente"
+                          >
+                            <CheckCircle2 size={14} />
+                            <span>{isTogglingStatus ? 'A concluir…' : 'Concluir Tarefa'}</span>
+                          </button>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 font-bold text-xs border border-emerald-300 flex items-center gap-1">
+                            <CheckCircle2 size={13} /> Concluída
+                          </span>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (ev.type === 'task' && ev.task) openEditTask(ev.task)
+                            else if (ev.plan) openPlanAsOT(ev.plan, activeSelectedDate)
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                          title="Abrir ficha completa de edição"
+                        >
+                          <Pencil size={13} />
+                          <span>Abrir OT</span>
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Day detail panel */}
-      {selectedDate && (
-        <div className="mt-4 card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-800 dark:text-slate-200">
-              {new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </h3>
+      {/* Day detail panel no fundo (quando selecionado dia na vista mensal) */}
+      {selectedDate && viewMode === 'month' && (
+        <div className="mt-4 card p-4 space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
+            <div>
+              <span className="text-[10px] font-bold uppercase text-slate-500">Dia Selecionado</span>
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 capitalize">
+                {new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </h3>
+            </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setViewMode('day')}
+                className="btn-secondary text-xs py-1 px-2.5 font-bold"
+              >
+                Ver em Modo Dia Completo
+              </button>
               {selectedDate >= todayStr && (
                 <button
                   onClick={() => openNewTaskForDate(selectedDate)}
-                  className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3"
+                  className="btn-primary flex items-center gap-1 text-xs py-1 px-2.5"
                 >
                   <Plus className="h-3.5 w-3.5" /> Nova OT
                 </button>
@@ -1101,80 +1204,58 @@ export default function CalendarClient({
           </div>
 
           {selectedEvents.length === 0 ? (
-            <p className="text-sm text-gray-400 dark:text-slate-500">
+            <p className="text-xs text-gray-400 dark:text-slate-500">
               {selectedDate < todayStr
                 ? 'Sem eventos registados para este dia.'
                 : 'Sem eventos para este dia. Clica em “Nova OT” para criar uma.'}
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {selectedEvents.map((ev, i) => {
                 const isTaskDone = ev.type === 'task' && ev.task && (ev.task.status === 'done' || (ev.task.status as string) === 'completed')
                 return (
-                  <div key={i} className={`rounded-lg border p-3 transition-all ${isTaskDone ? 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800' : 'border-gray-100 dark:border-slate-800'}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        {ev.type === 'task' && ev.task ? (
-                          <input
-                            type="checkbox"
-                            checked={Boolean(isTaskDone)}
-                            disabled={role !== 'manager' || isTogglingStatus}
-                            onChange={() => handleToggleTaskStatus(ev.task!.id, ev.task!.status)}
-                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 shrink-0 cursor-pointer disabled:cursor-not-allowed"
-                            title={role === 'manager' ? (isTaskDone ? 'Marcar como pendente' : 'Encerrar OT') : 'Apenas gestores podem encerrar OTs'}
-                          />
-                        ) : (
-                          <Wrench className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                        )}
-                        <div>
-                          <p className={`text-sm font-bold text-gray-800 dark:text-slate-200 ${isTaskDone ? 'line-through opacity-70 text-emerald-900 dark:text-emerald-300' : ''}`} title={eventTooltip(ev)}>
-                            {eventDisplayLabel(ev)}
-                            {isTaskDone && (
-                              <span className="ml-2 text-[10px] font-extrabold text-emerald-800 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded border border-emerald-300">Concluída</span>
-                            )}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-slate-400 flex items-center flex-wrap gap-1">
-                            {ev.type === 'task' && ev.task && <>
-                              <span>{CRITICIDADE_LABELS[ev.task.criticidade]} · {TIPO_LABELS[ev.task.tipo]}</span>
-                              {ev.task.assignedTo && (
-                                <span className="inline-flex items-center gap-1">
-                                  <span>·</span>
-                                  <Avatar name={userName(ev.task.assignedTo)} avatarUrl={userRef(ev.task.assignedTo)?.avatarUrl} size={14} />
-                                  <span>{userName(ev.task.assignedTo)}</span>
-                                </span>
-                              )}
-                            </>}
-                            {ev.type === 'plan' && ev.plan && <>
-                              {RECURRENCE_LABELS[ev.plan.recurrence]} · {assetName(ev.plan.assetId)}
-                            </>}
-                          </p>
-                        </div>
+                  <div key={i} className={`rounded-xl border p-3 transition-all flex items-center justify-between gap-3 ${isTaskDone ? 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800' : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 shadow-sm'}`}>
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <TipoBadge tipo={resolveEventType(ev)} codeOnly={true} />
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-xs font-bold text-gray-800 dark:text-slate-200 ${isTaskDone ? 'line-through opacity-70 text-emerald-900 dark:text-emerald-300' : ''}`} title={eventTooltip(ev)}>
+                          {eventDisplayLabel(ev)}
+                        </p>
+                        <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                          {ev.type === 'task' && ev.task ? (
+                            <span>{CRITICIDADE_LABELS[ev.task.criticidade]} • {userName(ev.task.assignedTo)}</span>
+                          ) : ev.plan ? (
+                            <span>{RECURRENCE_LABELS[ev.plan.recurrence]} • {assetName(ev.plan.assetId)}</span>
+                          ) : null}
+                        </p>
                       </div>
-                      {ev.type === 'plan' && ev.plan && (
-                        <button
-                          type="button"
-                          onClick={() => openPlanAsOT(ev.plan!, selectedDate)}
-                          className="btn-primary flex items-center gap-1 text-xs py-1 px-2.5"
-                        >
-                          <Pencil size={12} /> <span>Editar / Reagendar OT</span>
-                        </button>
-                      )}
-                      {ev.type === 'task' && ev.task && (
-                        <button
-                          type="button"
-                          onClick={() => openEditTask(ev.task!)}
-                          className="btn-primary flex items-center gap-1 text-xs py-1 px-2.5"
-                        >
-                          <Pencil size={12} /> <span>Editar OT</span>
-                        </button>
-                      )}
                     </div>
-                    {ev.type === 'plan' && ev.plan?.safetyRules && ev.plan.safetyRules.length > 0 && (
-                      <div className="mt-2 flex items-center gap-1 text-xs text-amber-600">
-                        <ShieldAlert className="h-3.5 w-3.5" />
-                        {ev.plan.safetyRules.length} regra(s) de segurança
-                      </div>
-                    )}
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!isTaskDone && (
+                        <button
+                          type="button"
+                          onClick={() => handleQuickConcludeItem(ev)}
+                          disabled={isTogglingStatus}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1 active:scale-95"
+                          title="Concluir tarefa"
+                        >
+                          <CheckCircle2 size={13} />
+                          <span>Concluir</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (ev.type === 'task' && ev.task) openEditTask(ev.task)
+                          else if (ev.plan) openPlanAsOT(ev.plan, selectedDate)
+                        }}
+                        className="btn-secondary flex items-center gap-1 text-xs py-1 px-2.5 font-bold"
+                      >
+                        <Pencil size={12} /> <span>Abrir OT</span>
+                      </button>
+                    </div>
                   </div>
                 )
               })}

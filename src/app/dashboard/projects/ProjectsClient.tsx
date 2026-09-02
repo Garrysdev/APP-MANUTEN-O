@@ -454,7 +454,11 @@ function GanttChartView({
 
                   return (
                     <div key={t.id} className="grid grid-cols-[380px_1fr] hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors items-center group h-10">
-                      <div className="grid grid-cols-[80px_90px_40px_60px_60px_50px] border-r border-slate-200 dark:border-slate-800 p-2 items-center font-mono">
+                      <div
+                        onClick={() => onEdit(t)}
+                        className="grid grid-cols-[80px_90px_40px_60px_60px_50px] border-r border-slate-200 dark:border-slate-800 p-2 items-center font-mono cursor-pointer"
+                        title="Clique para abrir e ver/editar a OT"
+                      >
                         <div className="flex items-center gap-1 overflow-hidden" title={`Área: ${areaStr}`}>
                           <input
                             type="checkbox"
@@ -467,11 +471,11 @@ function GanttChartView({
                             className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5 shrink-0 cursor-pointer"
                             title={isCompleted ? "Marcar como pendente" : "Encerrar OT no Gantt"}
                           />
-                          <span className="font-bold text-slate-900 dark:text-slate-100 truncate text-[10px] cursor-pointer hover:text-safety-orange" onClick={() => onEdit(t)}>
+                          <span className="font-bold text-slate-900 dark:text-slate-100 truncate text-[10px] hover:text-safety-orange">
                             {areaStr}
                           </span>
                         </div>
-                        <span className="truncate font-bold text-slate-800 dark:text-slate-200 text-[10px] cursor-pointer hover:text-safety-orange" onClick={() => onEdit(t)} title={`TAG: ${tagDisplay}`}>
+                        <span className="truncate font-bold text-slate-800 dark:text-slate-200 text-[10px] hover:text-safety-orange" title={`TAG: ${tagDisplay}`}>
                           {tagDisplay}
                         </span>
                         <span className="text-center font-bold text-slate-600 text-[10px]">{durationDays}d</span>
@@ -1333,9 +1337,14 @@ export default function ProjectsClient({
                     const eDateStr = t.dueDate ? t.dueDate.slice(0, 10) : sDateStr
 
                     return (
-                      <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors group">
+                      <tr
+                        key={t.id}
+                        onClick={() => openEdit(t)}
+                        className="border-b border-slate-100 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group"
+                        title="Clique para abrir e ver/editar a OT"
+                      >
                         <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
-                          <span className="bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200">{formattedId}</span>
+                          <span className="bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200 group-hover:border-blue-400 group-hover:bg-blue-100/80 transition-colors">{formattedId}</span>
                         </td>
                         <td className="px-3 py-2.5 font-mono font-semibold text-slate-800 whitespace-nowrap">
                           {formatDate(sDateStr || t.createdAt)}
@@ -1343,16 +1352,30 @@ export default function ProjectsClient({
                         <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
                           {(t as any).area || (asset as any)?.area || '—'}
                         </td>
-                        <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">
-                          {(asset as any)?.tag || asset?.name || (t as any).tag || '—'}
+                        <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          {(() => {
+                            const tagOrName = (asset as any)?.tag || asset?.name || (t as any).tag || '—'
+                            const targetId = asset?.id || t.assetId || (t as any).tag
+                            if (!targetId || tagOrName === '—') return <span>{tagOrName}</span>
+                            return (
+                              <Link
+                                href={`/dashboard/assets/${encodeURIComponent(targetId)}`}
+                                className="text-industrial-blue dark:text-blue-400 hover:text-safety-orange hover:underline font-bold transition-colors inline-flex items-center gap-1"
+                                title={`Abrir página do equipamento ${tagOrName}`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span>{tagOrName}</span>
+                              </Link>
+                            )
+                          })()}
                         </td>
                         <td className="px-3 py-2.5 whitespace-nowrap">
                           <TipoBadge tipo={t.tipo} codeOnly={true} />
                         </td>
                         <td className="px-3 py-2.5 text-slate-900 font-semibold max-w-[280px]">
-                          <Link href={`/dashboard/tasks/${t.id}`} className="hover:text-safety-orange transition-colors underline-offset-2 hover:underline">
+                          <span className="hover:text-safety-orange transition-colors underline-offset-2 group-hover:underline">
                             {t.title}
-                          </Link>
+                          </span>
                         </td>
                         <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">
                           {userName(t.assignedTo)}
@@ -1375,7 +1398,7 @@ export default function ProjectsClient({
                             {STATUS_LABELS[t.status]}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
                             <Link href={`/dashboard/tasks/${t.id}`} className="p-1 text-slate-600 hover:text-industrial-blue hover:bg-slate-100 rounded" title="Ver detalhes">
                               <Eye size={15} />

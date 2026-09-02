@@ -100,30 +100,30 @@ function computePICurrentYearData(allTasks: Task[]) {
   return Object.values(monthsMap)
 }
 
-// 2. Cumprimento do Plano de Manutenção por Ano — 151 concluídas de 605 planos totais no PM de 2026.
+// 2. Cumprimento do Plano de Manutenção por Ano — de todas as OT de PM existentes
+// nesse ano, a percentagem que está no estado Concluída. O total é sempre contado a
+// partir dos dados reais: nunca fixar um denominador por ano, senão a percentagem
+// deixa de acompanhar as OT que forem criadas ou fechadas.
 function computePlanYearlyData(allTasks: Task[]) {
   const planTasks = getPlanTasks(allTasks)
   const years = getAvailableYears(allTasks)
   const yearsMap: Record<string, { year: string; total: number; concluidas: number; percent: number }> = {}
 
   years.forEach((y) => {
-    const defaultTotal = y === 2026 ? 605 : 0
-    yearsMap[String(y)] = { year: String(y), total: defaultTotal, concluidas: 0, percent: 0 }
+    yearsMap[String(y)] = { year: String(y), total: 0, concluidas: 0, percent: 0 }
   })
 
   planTasks.forEach((t) => {
     const isoDate = toNormalizedIsoDate(t.plannedStartDate || t.dueDate || t.completedAt || t.createdAt)
     if (!isoDate) return
-    const yr = isoDate.slice(0, 4)
-    const bucket = yearsMap[yr]
+    const bucket = yearsMap[isoDate.slice(0, 4)]
     if (!bucket) return
 
+    bucket.total++
     if (t.status === 'done') bucket.concluidas++
-    if (yr !== '2026') bucket.total++
   })
 
   Object.values(yearsMap).forEach((item) => {
-    if (item.year === '2026' && item.total === 0) item.total = 605
     item.percent = item.total > 0 ? Math.round((item.concluidas / item.total) * 100) : 0
   })
 
