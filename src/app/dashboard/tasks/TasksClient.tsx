@@ -995,7 +995,20 @@ export default function TasksClient({
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 shrink-0">{formattedId}</span>
                     <TipoBadge tipo={t.tipo} codeOnly={true} />
-                    <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400 truncate">{tag} · {area}</span>
+                    <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400 truncate">
+                      {t.assetId || (t as any).tag ? (
+                        <Link
+                          href={`/dashboard/assets/${encodeURIComponent(t.assetId || (t as any).tag)}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-industrial-blue dark:text-blue-400 hover:text-safety-orange hover:underline font-bold"
+                          title="Ver ficha do equipamento"
+                        >
+                          {tag}
+                        </Link>
+                      ) : (
+                        tag
+                      )} · {area}
+                    </span>
                   </div>
                   <span className={`badge-${t.status} shrink-0`}>{STATUS_LABELS[t.status]}</span>
                 </div>
@@ -1149,8 +1162,22 @@ export default function TasksClient({
                       <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
                         {(t as any).area || (asset as any)?.area || '—'}
                       </td>
-                      <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">
-                        {(asset as any)?.tag || asset?.name || (t as any).tag || '—'}
+                      <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const tagOrName = (asset as any)?.tag || asset?.name || (t as any).tag || '—'
+                          const targetId = asset?.id || t.assetId || (t as any).tag
+                          if (!targetId || tagOrName === '—') return <span>{tagOrName}</span>
+                          return (
+                            <Link
+                              href={`/dashboard/assets/${encodeURIComponent(targetId)}`}
+                              className="text-industrial-blue dark:text-blue-400 hover:text-safety-orange dark:hover:text-safety-orange hover:underline font-bold transition-colors inline-flex items-center gap-1"
+                              title={`Abrir página do equipamento ${tagOrName}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span>{tagOrName}</span>
+                            </Link>
+                          )
+                        })()}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <TipoBadge tipo={t.tipo} codeOnly={true} />

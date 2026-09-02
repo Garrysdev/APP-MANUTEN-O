@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef, useTransition, useId } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Plus, Pencil, Trash2, X, ShieldAlert, Power, PowerOff, Check, CheckCircle2,
@@ -817,7 +818,18 @@ export default function MaintenancePlanClient({
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <TipoBadge tipo={p.tipo || 'plano'} codeOnly={true} />
-                    <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 truncate">{getPlanTag(p) || '—'}</span>
+                    {p.assetId || getPlanTag(p) ? (
+                      <Link
+                        href={`/dashboard/assets/${encodeURIComponent(p.assetId || getPlanTag(p))}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-industrial-blue dark:text-blue-400 hover:text-safety-orange hover:underline truncate"
+                        title="Ver ficha do equipamento"
+                      >
+                        {getPlanTag(p) || '—'}
+                      </Link>
+                    ) : (
+                      <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 truncate">{getPlanTag(p) || '—'}</span>
+                    )}
                     <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400 truncate">{p.area || '—'}</span>
                   </div>
                   <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold shrink-0 ${p.active ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-slate-100 text-slate-600 border border-slate-300'}`}>
@@ -832,7 +844,20 @@ export default function MaintenancePlanClient({
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{assetName(p.assetId)}</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+                  {p.assetId ? (
+                    <Link
+                      href={`/dashboard/assets/${encodeURIComponent(p.assetId)}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-industrial-blue dark:text-blue-400 hover:text-safety-orange hover:underline font-semibold"
+                      title="Ver ficha do equipamento"
+                    >
+                      {assetName(p.assetId)}
+                    </Link>
+                  ) : (
+                    assetName(p.assetId)
+                  )}
+                </p>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
@@ -986,12 +1011,34 @@ export default function MaintenancePlanClient({
                   title={tasks.some((t) => t.maintenancePlanId === p.id) ? 'Clique para abrir a OT desta ocorrência no calendário' : 'Clique para abrir e editar este Plano de Manutenção'}
                 >
                   <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">{p.area || '—'}</td>
-                  <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">
-                    <span className="bg-slate-100 px-1 py-0.5 rounded border border-slate-200 group-hover:border-blue-400 group-hover:bg-blue-100/80 transition-colors">{getPlanTag(p) || '—'}</span>
+                  <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    {p.assetId || getPlanTag(p) ? (
+                      <Link
+                        href={`/dashboard/assets/${encodeURIComponent(p.assetId || getPlanTag(p))}`}
+                        className="bg-slate-100 px-1 py-0.5 rounded border border-slate-200 text-industrial-blue dark:text-blue-400 hover:text-safety-orange hover:border-safety-orange hover:bg-orange-50 font-bold transition-colors inline-block"
+                        title="Ver ficha do equipamento"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {getPlanTag(p) || '—'}
+                      </Link>
+                    ) : (
+                      <span className="bg-slate-100 px-1 py-0.5 rounded border border-slate-200">{getPlanTag(p) || '—'}</span>
+                    )}
                   </td>
                   <td className="px-1 py-1.5 text-slate-800 font-semibold whitespace-nowrap">{p.system || '—'}</td>
-                  <td className="px-1 py-1.5 text-slate-900 font-bold max-w-[110px]">
-                    <span className="line-clamp-2" title={assetName(p.assetId)}>{assetName(p.assetId)}</span>
+                  <td className="px-1 py-1.5 text-slate-900 font-bold max-w-[110px]" onClick={(e) => e.stopPropagation()}>
+                    {p.assetId ? (
+                      <Link
+                        href={`/dashboard/assets/${encodeURIComponent(p.assetId)}`}
+                        className="line-clamp-2 text-industrial-blue dark:text-blue-400 hover:text-safety-orange hover:underline transition-colors"
+                        title={assetName(p.assetId)}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {assetName(p.assetId)}
+                      </Link>
+                    ) : (
+                      <span className="line-clamp-2" title={assetName(p.assetId)}>{assetName(p.assetId)}</span>
+                    )}
                   </td>
                   <td className="px-1 py-1.5 font-bold text-slate-900 max-w-[140px]">
                     <div className="flex items-center gap-1">
