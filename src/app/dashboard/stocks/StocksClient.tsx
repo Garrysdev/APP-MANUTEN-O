@@ -18,18 +18,58 @@ type ModalMode = { type: 'create' } | { type: 'edit'; item: StockItem }
 function StockForm({
   defaultValues,
   assets = [],
+  existingLocations = [],
   onSave,
   onCancel,
   dict,
 }: {
   defaultValues?: Partial<StockItem>
   assets?: Asset[]
+  existingLocations?: string[]
   onSave: (formData: FormData) => Promise<void>
   onCancel: () => void
   dict: Dictionary
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  // Área / TAG do próprio artigo — independente dos "Equipamentos Atribuídos" abaixo.
+  // As opções vêm da lista de equipamentos, mas o valor gravado é só o texto.
+  const assetAreas = useMemo(
+    () => Array.from(new Set(assets.map((a) => (a.area || '').trim()).filter(Boolean))).sort(),
+    [assets]
+  )
+  const [area, setArea] = useState(defaultValues?.area ?? '')
+  const tagsForArea = useMemo(() => {
+    const pool = area ? assets.filter((a) => (a.area || '').trim() === area) : assets
+    const set = new Set(pool.map((a) => (a.tag || '').trim()).filter(Boolean))
+    if (defaultValues?.tag) set.add(defaultValues.tag)
+    return Array.from(set).sort()
+  }, [assets, area, defaultValues?.tag])
+  const [tag, setTag] = useState(defaultValues?.tag ?? '')
+
+  // Localização / Armazém — escolher de entre os já criados, ou introduzir um novo nome.
+  const [locationMode, setLocationMode] = useState<'select' | 'new'>(
+    defaultValues?.location && !existingLocations.includes(defaultValues.location) ? 'new' : 'select'
+  )
+  const [location, setLocation] = useState(defaultValues?.location ?? '')
+
+  // Equipamentos Atribuídos — caixas de seleção em vez do <select multiple> nativo
+  // (que exigia Ctrl/Cmd e não deixava perceber o que já estava escolhido).
+  const initialAssetIds = defaultValues?.assetIds?.length
+    ? defaultValues.assetIds
+    : (defaultValues?.assetId ? [defaultValues.assetId] : [])
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>(initialAssetIds)
+  const [assetSearch, setAssetSearch] = useState('')
+  const filteredAssets = useMemo(() => {
+    const q = assetSearch.toLowerCase().trim()
+    if (!q) return assets
+    return assets.filter((a) =>
+      a.name.toLowerCase().includes(q) ||
+      (a.tag || '').toLowerCase().includes(q) ||
+      (a.area || '').toLowerCase().includes(q)
+    )
+  }, [assets, assetSearch])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -46,11 +86,53 @@ function StockForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Nome */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.stocks.formName}</label>
+        <input name="name" defaultValue={defaultValues?.name ?? ''} className="input" required />
+      </div>
+
+      {/* Área + TAG */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.stocks.formName}</label>
-          <input name="name" defaultValue={defaultValues?.name ?? ''} className="input" required />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Área</label>
+          <select
+            name="area"
+            value={area}
+            onChange={(e) => { setArea(e.target.value); setTag('') }}
+            className="input"
+          >
+            <option value="">— Sem área —</option>
+            {assetAreas.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">TAG</label>
+          <select
+            name="tag"
+            value={tag}
+            onChange={(e) => setTag(e.target.value)}
+            className="input"
+          >
+            <option value="">— Sem TAG —</option>
+            {tagsForArea.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Descrição */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Descrição / Observações</label>
+        <textarea
+          name="description"
+          defaultValue={defaultValues?.description ?? ''}
+          className="input"
+          rows={2}
+          placeholder="Notas sobre este artigo…"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.stocks.formRef}</label>
           <input name="reference" defaultValue={defaultValues?.reference ?? defaultValues?.code ?? ''} className="input" />
@@ -75,30 +157,99 @@ function StockForm({
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.stocks.formMin}</label>
           <input name="minQuantity" type="number" min="0" step="0.01" defaultValue={defaultValues?.minQuantity ?? ''} className="input" placeholder="Ex: 5" />
         </div>
+
+        {/* Localização / Armazém — escolher um já criado, ou criar um novo */}
         <div className="col-span-2">
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.stocks.formLocation}</label>
-          <input name="location" defaultValue={defaultValues?.location ?? ''} className="input" />
+          {locationMode === 'select' ? (
+            <div className="flex gap-2">
+              <select
+                name="location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="input flex-1"
+              >
+                <option value="">— Sem armazém —</option>
+                {existingLocations.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+              <button
+                type="button"
+                onClick={() => { setLocationMode('new'); setLocation('') }}
+                className="btn-secondary text-xs px-3 shrink-0"
+                title="Criar um novo armazém"
+              >
+                + Novo
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                name="location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="input flex-1"
+                placeholder="Nome do novo armazém…"
+                autoFocus
+              />
+              {existingLocations.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setLocationMode('select'); setLocation(defaultValues?.location ?? '') }}
+                  className="btn-secondary text-xs px-3 shrink-0"
+                  title="Escolher um armazém já existente"
+                >
+                  Escolher
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Atribuição a Múltiplos Equipamentos */}
         <div className="col-span-2">
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-            Equipamentos Atribuídos (Deixar em branco para Consumível Geral)
+            Equipamentos Atribuídos ({selectedAssetIds.length}) — deixar vazio para Consumível Geral
           </label>
-          <select
-            name="assetIds"
-            multiple
-            defaultValue={defaultValues?.assetIds ?? (defaultValues?.assetId ? [defaultValues.assetId] : [])}
-            className="input min-h-[90px] text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-1.5"
-          >
-            {assets.map((a) => (
-              <option key={a.id} value={a.id}>
-                [{a.area || 'Geral'}] {a.tag ? `[TAG: ${a.tag}] ` : ''}{a.name}
-              </option>
-            ))}
-          </select>
+          <input
+            type="text"
+            value={assetSearch}
+            onChange={(e) => setAssetSearch(e.target.value)}
+            placeholder="Pesquisar equipamento…"
+            className="input text-xs mb-1.5"
+          />
+          <div className="max-h-40 overflow-y-auto border border-slate-300 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-900 space-y-0.5">
+            {filteredAssets.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-2">Nenhum equipamento encontrado.</p>
+            ) : (
+              filteredAssets.map((a) => {
+                const checked = selectedAssetIds.includes(a.id)
+                return (
+                  <label
+                    key={a.id}
+                    className={`flex items-center gap-2 text-xs p-1.5 rounded cursor-pointer transition-colors ${
+                      checked ? 'bg-blue-50 dark:bg-blue-950/40 font-bold text-industrial-blue dark:text-blue-300' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      name="assetIds"
+                      value={a.id}
+                      checked={checked}
+                      onChange={(e) => {
+                        setSelectedAssetIds((prev) =>
+                          e.target.checked ? [...prev, a.id] : prev.filter((id) => id !== a.id)
+                        )
+                      }}
+                      className="rounded accent-industrial-blue h-3.5 w-3.5 shrink-0"
+                    />
+                    <span className="truncate">[{a.area || 'Geral'}] {a.tag ? `[TAG: ${a.tag}] ` : ''}{a.name}</span>
+                  </label>
+                )
+              })
+            )}
+          </div>
           <p className="text-[10px] text-slate-500 mt-1">
-            Pressiona Ctrl / Cmd para selecionar mais do que um equipamento. Se nenhum for selecionado, este artigo fica disponível como consumo livre em todas as OTs.
+            Se nenhum for selecionado, este artigo fica disponível como consumo livre em todas as OTs.
           </p>
         </div>
       </div>
@@ -208,6 +359,13 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
       const u = (i.unit || 'un').trim()
       if (u) set.add(u)
     })
+    return Array.from(set).sort()
+  }, [items])
+
+  // Armazéns já criados — derivados dos artigos existentes, para o seletor de Localização.
+  const availableLocations = useMemo(() => {
+    const set = new Set<string>()
+    items.forEach((i) => { if (i.location) set.add(i.location.trim()) })
     return Array.from(set).sort()
   }, [items])
 
@@ -665,7 +823,7 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
       {/* Modal Criar / Editar */}
       {modal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-slate-800 w-full max-w-md p-6 relative animate-in fade-in zoom-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-slate-800 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 relative animate-in fade-in zoom-in duration-150">
             <button
               onClick={() => setModal(null)}
               className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"
@@ -678,6 +836,7 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
             <StockForm
               defaultValues={modal.type === 'edit' ? modal.item : undefined}
               assets={assets}
+              existingLocations={availableLocations}
               onSave={(formData) =>
                 modal.type === 'create'
                   ? handleCreate(formData)
