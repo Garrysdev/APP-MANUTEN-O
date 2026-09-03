@@ -1032,8 +1032,11 @@ export default function CreateTaskModal({
             </div>
           )}
 
-          {/* Action bar no fundo do formulário */}
-          <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+          {/* Action bar no fundo do formulário — só em ecrãs sm+. Em telemóvel a barra fixa
+              logo abaixo já cobre isto; sem o `hidden sm:flex` apareciam as duas ao mesmo
+              tempo (era isto o "uma OT dentro da outra" visto ao fazer scroll, não o
+              portal). */}
+          <div className="hidden sm:flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 py-3 text-sm font-bold">
               Cancelar
             </button>
