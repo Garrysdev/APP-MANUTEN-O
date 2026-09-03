@@ -275,6 +275,9 @@ export default function CreateTaskModal({
   if (!isOpen) return null
 
   const selectedAsset = assets.find((a) => a.id === assetId)
+  // 'plano' é o PM propriamente dito; 'preventiva'/'mp' são a manutenção preventiva (MP).
+  // Registos antigos importados podem trazer 'pm' em bruto, fora da união TipoTarefa — daí o String().
+  const isPmTipo = ['plano', 'preventiva', 'mp', 'pm'].includes(String(tipo))
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -318,7 +321,7 @@ export default function CreateTaskModal({
       formData.set('dependsOn', JSON.stringify(dependsOn.filter(Boolean)))
       formData.set('assignedToIds', JSON.stringify(selectedTechIds))
       formData.set('addToMaintenancePlan', addToPmModal ? 'true' : 'false')
-      formData.set('periodicidade', periodicidadeModal)
+      formData.set('periodicidade', isPmTipo || addToPmModal ? periodicidadeModal : '')
       formData.set('requesterEmail', requesterEmail.trim())
       if (!dueDate.trim() && (status === 'done' || status === 'cancelled' || editingTask?.status === 'done' || editingTask?.status === 'cancelled')) {
         formData.set('status', 'pending')
@@ -471,27 +474,29 @@ export default function CreateTaskModal({
             </div>
           </div>
 
-          {/* Periodicidade & Executor */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Periodicidade</label>
-              <select
-                name="periodicidade"
-                value={periodicidadeModal}
-                onChange={(e) => setPeriodicidadeModal(e.target.value)}
-                className="input"
-              >
-                <option value="pontual">Pontual / Uma vez</option>
-                <option value="semanal">Semanal</option>
-                <option value="quinzenal">Quinzenal</option>
-                <option value="mensal">Mensal</option>
-                <option value="bimensal">Bimensal</option>
-                <option value="trimestral">Trimestral</option>
-                <option value="quadrimestral">Quadrimestral</option>
-                <option value="semestral">Semestral</option>
-                <option value="anual">Anual</option>
-              </select>
-            </div>
+          {/* Periodicidade (apenas visível em OTs de PM / Preventiva) & Executor */}
+          <div className={`grid ${isPmTipo ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+            {isPmTipo && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Periodicidade</label>
+                <select
+                  name="periodicidade"
+                  value={periodicidadeModal}
+                  onChange={(e) => setPeriodicidadeModal(e.target.value)}
+                  className="input"
+                >
+                  <option value="pontual">Pontual / Uma vez</option>
+                  <option value="semanal">Semanal</option>
+                  <option value="quinzenal">Quinzenal</option>
+                  <option value="mensal">Mensal</option>
+                  <option value="bimensal">Bimensal</option>
+                  <option value="trimestral">Trimestral</option>
+                  <option value="quadrimestral">Quadrimestral</option>
+                  <option value="semestral">Semestral</option>
+                  <option value="anual">Anual</option>
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Executor</label>
               <select
@@ -877,25 +882,31 @@ export default function CreateTaskModal({
               <span>⚙️ Criar / Incluir no Plano de Manutenção Preventiva (PM)</span>
             </label>
             {addToPmModal && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Periodicidade do PM *
-                </label>
-                <select
-                  value={periodicidadeModal}
-                  onChange={(e) => setPeriodicidadeModal(e.target.value)}
-                  className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-700"
-                >
-                  <option value="semanal">Semanal</option>
-                  <option value="quinzenal">Quinzenal</option>
-                  <option value="mensal">Mensal</option>
-                  <option value="bimensal">Bimensal</option>
-                  <option value="trimestral">Trimestral</option>
-                  <option value="quadrimestral">Quadrimestral</option>
-                  <option value="semestral">Semestral</option>
-                  <option value="anual">Anual</option>
-                </select>
-              </div>
+              isPmTipo ? (
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                  Será incluído no plano com a periodicidade definida acima: <strong>{periodicidadeModal}</strong>.
+                </p>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Periodicidade do PM *
+                  </label>
+                  <select
+                    value={periodicidadeModal}
+                    onChange={(e) => setPeriodicidadeModal(e.target.value)}
+                    className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-700"
+                  >
+                    <option value="semanal">Semanal</option>
+                    <option value="quinzenal">Quinzenal</option>
+                    <option value="mensal">Mensal</option>
+                    <option value="bimensal">Bimensal</option>
+                    <option value="trimestral">Trimestral</option>
+                    <option value="quadrimestral">Quadrimestral</option>
+                    <option value="semestral">Semestral</option>
+                    <option value="anual">Anual</option>
+                  </select>
+                </div>
+              )
             )}
           </div>
 

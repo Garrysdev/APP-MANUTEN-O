@@ -246,11 +246,23 @@ export default function TasksClient({
   const [selectedTechs, setSelectedTechs] = useState<string[]>([])
   const [statusPending, startStatusTransition] = useTransition()
 
+  // O defeito de telemóvel só se aplica uma vez, ao montar. Sem isto, qualquer nova
+  // execução deste efeito voltaria a forçar "Ativas" por cima da escolha do utilizador.
+  const mobileDefaultApplied = useRef(false)
+
   useEffect(() => {
     const pStatus = searchParams.get('status')
     if (pStatus) {
       const list = pStatus.split(',').map((s) => s.trim() as TaskStatus).filter(Boolean)
-      if (list.length > 0) setSelectedStatuses(list)
+      if (list.length > 0) {
+        setSelectedStatuses(list)
+        return
+      }
+    }
+    // Em ecrãs móveis (<768px - breakpoint md), o defeito são as OTs Ativas (Pendente + Em Curso)
+    if (!mobileDefaultApplied.current && typeof window !== 'undefined' && window.innerWidth < 768) {
+      mobileDefaultApplied.current = true
+      setSelectedStatuses(['pending', 'in_progress'])
     }
   }, [searchParams])
 
@@ -671,9 +683,33 @@ export default function TasksClient({
     return isNaN(d.getTime()) ? 0 : d.getTime()
   }
 
-  // Ordenação por coluna
+  // Prioridade de estado para ordenação por defeito:
+  // Em Curso (1) -> Pendente (2) -> Concluída (3) -> Cancelada (4)
+  const STATUS_DEFAULT_ORDER: Record<string, number> = {
+    in_progress: 1,
+    pending: 2,
+    done: 3,
+    cancelled: 4,
+  }
+
+  // Ordenação por defeito: Em Curso no topo, depois Pendentes, depois restantes.
+  // Dentro de cada grupo, mantém a ordenação por data decrescente (mais recente primeiro).
+  const defaultSortedFiltered = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const orderA = STATUS_DEFAULT_ORDER[a.status] ?? 99
+      const orderB = STATUS_DEFAULT_ORDER[b.status] ?? 99
+      if (orderA !== orderB) {
+        return orderA - orderB
+      }
+      const dateA = parseDateToTs(a.createdAt || a.plannedStartDate || (a as any).completedAt)
+      const dateB = parseDateToTs(b.createdAt || b.plannedStartDate || (b as any).completedAt)
+      return dateB - dateA
+    })
+  }, [filtered])
+
+  // Ordenação por coluna (quando sortKey !== null) ou por defeito (quando sortKey === null)
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Task>(
-    filtered,
+    defaultSortedFiltered,
     {
       id: (t) => String((t as any).otNumber || t.id).toLowerCase(),
       data: (t) => parseDateToTs(t.createdAt || t.plannedStartDate || (t as any).completedAt),
@@ -963,13 +999,106 @@ export default function TasksClient({
 
       {/* Vista em cartões — telemóvel e tablet (a tabela completa fica só para ecrãs md+) */}
       <div className="md:hidden space-y-2.5">
+        {/* Filtros em Telemóvel (Área, TAG, TI, Técnico) — acessíveis e sem corte por overflow */}
+        <div className="bg-slate-50 dark:bg-slate-900/70 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                Filtros
+              </span>
+              {(selectedAreas.length > 0 || selectedTags.length > 0 || selectedTIs.length > 0 || selectedTechs.length > 0) && (
+                <span className="bg-industrial-blue text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {selectedAreas.length + selectedTags.length + selectedTIs.length + selectedTechs.length}
+                </span>
+              )}
+            </div>
+            {(selectedAreas.length > 0 || selectedTags.length > 0 || selectedTIs.length > 0 || selectedTechs.length > 0) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedAreas([])
+                  setSelectedTags([])
+                  setSelectedTIs([])
+                  setSelectedTechs([])
+                }}
+                className="text-[11px] text-red-500 font-bold hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <X size={12} />
+                <span>Limpar filtros</span>
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <MultiSelectPopoverFilter
+                label="Área"
+                options={uniqueAreas.map((a) => ({ value: a, label: a }))}
+                selectedValues={selectedAreas}
+                onChange={setSelectedAreas}
+                placeholder="Área (Todas)"
+                width="w-64 max-w-[85vw]"
+              />
+            </div>
+            <div>
+              <MultiSelectPopoverFilter
+                label="TAG"
+                options={uniqueTags.map((t) => ({ value: t, label: t }))}
+                selectedValues={selectedTags}
+                onChange={setSelectedTags}
+                placeholder="TAG (Todas)"
+                width="!right-0 !left-auto w-64 max-w-[85vw]"
+              />
+            </div>
+            <div>
+              <MultiSelectPopoverFilter
+                label="TI"
+                options={[
+                  { value: 'PI', label: 'PI - Pedido Intervenção' },
+                  { value: 'MC', label: 'MC - Curativa' },
+                  { value: 'MP', label: 'MP - Preventiva' },
+                  { value: 'PM', label: 'PM - Plano Manutenção' },
+                  { value: 'MI', label: 'MI - Investimento' },
+                  { value: 'STP', label: 'STP / PR - Projeto' },
+                  { value: 'INS', label: 'INS - Inspeção' },
+                  { value: 'LUB', label: 'LUB - Lubrificação' },
+                  { value: 'CAL', label: 'CAL - Calibração' },
+                  { value: 'OUT', label: 'OUT - Outro' },
+                ]}
+                selectedValues={selectedTIs}
+                onChange={setSelectedTIs}
+                placeholder="TI (Todos)"
+                width="w-64 max-w-[85vw]"
+              />
+            </div>
+            <div>
+              <MultiSelectPopoverFilter
+                label="Técnico"
+                options={uniqueTechnicians.map(([val, label]) => ({ value: val, label }))}
+                selectedValues={selectedTechs}
+                onChange={setSelectedTechs}
+                placeholder="Técnico (Todos)"
+                width="!right-0 !left-auto w-64 max-w-[85vw]"
+              />
+            </div>
+          </div>
+        </div>
+
         {currentShown.length === 0 ? (
           <div className="card px-5 py-12 text-center text-slate-400 border border-slate-200 dark:border-slate-800">
             <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />
             <p className="text-sm font-medium">{dict.tasks.empty}</p>
             <button
               type="button"
-              onClick={() => { setAreaFilter(''); setTagFilter(''); setColF(emptyCol) }}
+              onClick={() => {
+                setAreaFilter('')
+                setTagFilter('')
+                setSelectedAreas([])
+                setSelectedTags([])
+                setSelectedTIs([])
+                setSelectedTechs([])
+                setColF(emptyCol)
+              }}
               className="mt-3 text-xs font-bold text-[#2E86C1] hover:underline inline-flex items-center gap-1 cursor-pointer"
             >
               <X size={14} /> Limpar Todos os Filtros
@@ -1134,6 +1263,10 @@ export default function TasksClient({
                       onClick={() => {
                         setAreaFilter('')
                         setTagFilter('')
+                        setSelectedAreas([])
+                        setSelectedTags([])
+                        setSelectedTIs([])
+                        setSelectedTechs([])
                         setColF(emptyCol)
                       }}
                       className="mt-3 text-xs font-bold text-[#2E86C1] hover:underline inline-flex items-center gap-1 cursor-pointer"
