@@ -6,11 +6,15 @@ export type TaskStatus = 'pending' | 'in_progress' | 'done' | 'cancelled'
 export type StockMovementType = 'in' | 'out'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type TaskCriticidade = 'vermelho' | 'amarelo' | 'verde'
+// 'pm' e 'projeto' já eram usados no seletor de Tipo de OT e existem em registos reais
+// na base de dados (OTs de PM geradas e OTs de projeto); faltavam nesta união.
 export type TipoTarefa =
   | 'preventiva'
   | 'curativa'
   | 'mi'
   | 'plano'
+  | 'pm'
+  | 'projeto'
   | 'pi'
   | 'stp'
   | 'mp'
@@ -144,6 +148,10 @@ export interface Task {
   completedAt?: string | null // ISO date/datetime: Data de Fim real (Data de conclusão)
   tag?: string | null // TAG do equipamento
   area?: string | null // Área da OT
+  // Persistidos por parseTask (dashboard/tasks/actions.ts) mas que faltavam nesta interface
+  legal?: boolean | null // Inspeção legal / obrigatória
+  executor?: Executor | null // Interno vs prestador externo (deduzido dos técnicos)
+  periodicidade?: Periodicidade | string | null // Só preenchido em OT de PM
   tipoText?: string | null // TI text (ex: MC, MI, PI, PM, STP, PR)
   ti?: string | null // Código TI
   observations?: string | null // Observações da OT
@@ -330,6 +338,8 @@ export const TIPO_LABELS: Record<TipoTarefa, string> = {
   curativa: 'MC',
   mi: 'MI',
   plano: 'PM',
+  pm: 'PM',
+  projeto: 'PR',
   stp: 'STP',
   preventiva: 'MP',
   mp: 'MP',

@@ -6,7 +6,7 @@ import { createStockItem, updateStockItem, deleteStockItem } from '@/lib/firebas
 import { planHas } from '@/lib/plans'
 import type { PlanName } from '@/types/models'
 
-export type StockFormState = { error?: string; ok?: boolean }
+export type StockFormState = { error?: string; ok?: boolean; id?: string }
 
 export async function createStockItemAction(
   _prev: StockFormState,
@@ -28,7 +28,7 @@ export async function createStockItemAction(
   const assetIds = formData.getAll('assetIds').map(String).filter(Boolean)
 
   try {
-    await createStockItem(profile.companyId, {
+    const id = await createStockItem(profile.companyId, {
       name,
       reference: String(formData.get('reference') ?? '').trim() || null,
       category: String(formData.get('category') ?? '').trim() || null,
@@ -41,7 +41,7 @@ export async function createStockItemAction(
       assetId: assetIds[0] || null,
     })
     revalidatePath('/dashboard/stocks')
-    return { ok: true }
+    return { ok: true, id }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao criar item.' }
   }

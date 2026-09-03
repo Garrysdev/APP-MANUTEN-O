@@ -8,7 +8,7 @@ import {
   listStockItems, listAssetRefs, listSafetyRules,
   calculateTaskCost,
 } from '@/lib/firebase/data'
-import type { TaskCriticidade, TipoTarefa, TaskStatus } from '@/types/models'
+import type { TaskCriticidade, TipoTarefa, TaskStatus, Executor } from '@/types/models'
 
 export type TaskFormState = { error?: string; ok?: boolean }
 export type StockMaterialRef = {
@@ -93,7 +93,9 @@ function parseTask(formData: FormData) {
   const periodicidade = String(formData.get('periodicidade') ?? 'mensal').trim() || null
   const addToMaintenancePlan = formData.get('addToMaintenancePlan') === 'true' || formData.get('addToMaintenancePlan') === 'on'
 
-  const executor = String(formData.get('executor') ?? 'interno').trim() || null
+  // Vem do formulário (agora deduzido dos técnicos escolhidos), por isso é validado aqui.
+  const executorRaw = String(formData.get('executor') ?? 'interno').trim()
+  const executor: Executor = executorRaw === 'externo' ? 'externo' : 'interno'
   const legal = formData.get('legal') === 'true' || formData.get('legal') === 'on'
   const requesterEmail = String(formData.get('requesterEmail') ?? '').trim() || null
 

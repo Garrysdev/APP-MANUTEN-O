@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import Link from 'next/link'
 import { Plus, X, Package, Check, Sparkles } from 'lucide-react'
 import { createStockItemAction } from '@/app/dashboard/stocks/actions'
 
@@ -9,6 +8,8 @@ export interface StockItemRef {
   id: string
   name: string
   unit: string | null
+  assetId?: string | null
+  assetIds?: string[] | null
 }
 
 export default function MaterialsSelector({
@@ -17,12 +18,14 @@ export default function MaterialsSelector({
   stockRefs = [],
   onStockItemCreated,
   isManager = true,
+  assetId,
 }: {
   items: string[]
   onChange: (items: string[]) => void
   stockRefs?: StockItemRef[]
   onStockItemCreated?: (newItem: StockItemRef) => void
   isManager?: boolean
+  assetId?: string | null
 }) {
   const [addingNew, setAddingNew] = useState(false)
   const [newItemName, setNewItemName] = useState('')
@@ -30,10 +33,16 @@ export default function MaterialsSelector({
   const [initialQty, setInitialQty] = useState('10')
   const [unit, setUnit] = useState('unidade')
   const [creating, setCreating] = useState(false)
+  const [createdItems, setCreatedItems] = useState<StockItemRef[]>([])
 
   const sortedStockRefs = useMemo(() => {
-    return [...stockRefs].sort((a, b) => a.name.localeCompare(b.name, 'pt'))
-  }, [stockRefs])
+    const map = new Map<string, StockItemRef>()
+    for (const s of stockRefs) map.set(s.id, s)
+    for (const s of createdItems) map.set(s.id, s)
+    return Array.from(map.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, 'pt', { numeric: true, sensitivity: 'base' })
+    )
+  }, [stockRefs, createdItems])
 
   function handleSelectExisting(index: number, value: string) {
     const updated = [...items]
@@ -63,9 +72,21 @@ export default function MaterialsSelector({
         fd.set('name', name)
         fd.set('quantity', initialQty || '10')
         fd.set('unit', unit || 'unidade')
+        if (assetId) {
+          fd.append('assetIds', assetId)
+        }
         const res = await createStockItemAction({}, fd)
-        if (res.ok && onStockItemCreated) {
-          onStockItemCreated({ id: Math.random().toString(), name, unit })
+        if (res.ok && res.id) {
+          const newItem: StockItemRef = {
+            id: res.id,
+            name,
+            unit: unit || null,
+            assetIds: assetId ? [assetId] : null,
+          }
+          setCreatedItems((prev) => [...prev, newItem])
+          if (onStockItemCreated) {
+            onStockItemCreated(newItem)
+          }
         }
       }
 
@@ -89,14 +110,6 @@ export default function MaterialsSelector({
         <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center gap-1.5">
           <Package className="h-3.5 w-3.5 text-slate-500" /> Materiais a utilizar
         </label>
-        {isManager && (
-          <Link
-            href="/dashboard/stocks"
-            className="text-[11px] font-bold text-safety-orange hover:underline"
-          >
-            Gerir inventário em Stocks ↗
-          </Link>
-        )}
       </div>
 
       {/* Lista de Seleção de Materiais */}

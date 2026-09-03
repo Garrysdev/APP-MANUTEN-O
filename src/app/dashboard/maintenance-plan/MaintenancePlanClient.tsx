@@ -28,7 +28,7 @@ import {
   generateAnnualPMScheduleAction,
 } from './actions'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
-import { updateTaskStatusAction, updateTaskAction } from '../tasks/actions'
+import { updateTaskStatusAction, updateTaskAction, loadStockRefsAction, type StockMaterialRef } from '../tasks/actions'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
@@ -206,10 +206,35 @@ export default function MaintenancePlanClient({
     setSafetyRules([''])
   }
 
+  // Carrega o Stock sob demanda (1×) quando o modal de criação/edição do PM abre
+  const [stockRefs, setStockRefs] = useState<StockMaterialRef[]>([])
+  const [stockLoading, setStockLoading] = useState(false)
+  const [stockLoaded, setStockLoaded] = useState(false)
+
+  async function ensureStockLoaded() {
+    if (stockLoaded || stockLoading) return
+    setStockLoading(true)
+    try {
+      const refs = await loadStockRefsAction()
+      setStockRefs(refs)
+      setStockLoaded(true)
+    } finally {
+      setStockLoading(false)
+    }
+  }
+
   // Se o plano já tem OTs geradas no calendário, clicar na linha deve abrir a mesma
   // janela de edição das OT (com as datas e a opção de concluir), não o editor do
   // plano-modelo. Só cai no editor de plano quando ainda não há nenhuma OT associada.
   const [viewingTask, setViewingTask] = useState<Task | null>(null)
+
+  // Carrega o stock só quando um dos modais abre. Tem de vir depois de viewingTask
+  // ser declarado, senão é usado antes da declaração.
+  useEffect(() => {
+    if (creating || Boolean(editing) || Boolean(viewingTask)) {
+      void ensureStockLoaded()
+    }
+  }, [creating, editing, viewingTask])
 
   // Seletor de ano da tabela do PM — permite ver as OT geradas em anos anteriores
   // e futuros, não só o ano corrente.
@@ -584,6 +609,7 @@ export default function MaintenancePlanClient({
         onClose={() => setViewingTask(null)}
         assets={assets}
         users={users}
+        stockRefs={stockRefs}
         isManager={true}
         onSuccess={() => {
           setViewingTask(null)
@@ -1227,7 +1253,7 @@ export default function MaintenancePlanClient({
           }
           assets={assets}
           users={users}
-          stockRefs={[]}
+          stockRefs={stockRefs}
           isManager={true}
           createAction={createMaintenancePlanAction}
           updateAction={viewingTask ? updateTaskAction : updateMaintenancePlanAction}

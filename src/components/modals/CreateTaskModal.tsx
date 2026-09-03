@@ -1,15 +1,15 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useId } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import Image from 'next/image'
 import {
-  X, ShieldAlert, Camera, Images, Plus, Trash2, MapPin, Tag, Wrench, Mail, ArrowLeft, FolderKanban
+  X, ShieldAlert, Camera, Images, Wrench, ArrowLeft, FolderKanban
 } from 'lucide-react'
-import type { Task, TaskCriticidade, TipoTarefa, User, Asset, Periodicidade } from '@/types/models'
-import { TIPO_LABELS, CRITICIDADE_LABELS, STATUS_LABELS } from '@/types/models'
+import type { Task, TaskCriticidade, TipoTarefa } from '@/types/models'
+import { STATUS_LABELS } from '@/types/models'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
-import { formatDate, formatDateTime } from '@/lib/utils'
+import { formatDateTime } from '@/lib/utils'
 import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
 import MaterialsSelector from '@/components/ui/MaterialsSelector'
 import { TaskDocPickerManager } from '@/components/ui/TaskDocRequirements'
@@ -32,6 +32,59 @@ export const PREDEFINED_SAFETY_RULES = [
   'Manter área limpa e livre de obstáculos'
 ]
 
+// Comparador partilhado: ordena pelo texto visível, respeitando acentos e números.
+// Nota: `satisfies` (em vez de anotar a const) é necessário porque o .sort() encadeado
+// corta o tipo contextual e alargaria os `value` para string.
+const byLabel = <T extends { label: string }>(a: T, b: T) =>
+  a.label.localeCompare(b.label, 'pt', { numeric: true, sensitivity: 'base' })
+
+export const TIPO_OPTIONS = ([
+  { value: 'calibracao', label: 'CAL (Calibração)' },
+  { value: 'inspecao', label: 'INS (Inspeção)' },
+  { value: 'lubrificacao', label: 'LUB (Lubrificação)' },
+  { value: 'curativa', label: 'MC (Manutenção Curativa)' },
+  { value: 'mi', label: 'MI (Melhoria / Investimento)' },
+  { value: 'preventiva', label: 'MP (Manutenção Preventiva / Preditiva)' },
+  { value: 'outro', label: 'OUT (Outro)' },
+  { value: 'pi', label: 'PI (Pedido de Intervenção)' },
+  { value: 'pm', label: 'PM (Plano de Manutenção)' },
+  { value: 'projeto', label: 'PR (Projeto)' },
+  { value: 'stp', label: 'STP (STOP-PARAGEM)' },
+] satisfies { value: TipoTarefa; label: string }[]).sort(byLabel)
+
+export const CRITICIDADE_OPTIONS = ([
+  { value: 'vermelho', label: 'Alta / Urgente (Vermelho)' },
+  { value: 'verde', label: 'Baixa / Normal (Verde)' },
+  { value: 'amarelo', label: 'Média (Amarelo)' },
+] satisfies { value: TaskCriticidade; label: string }[]).sort(byLabel)
+
+export const PERIODICIDADE_OPTIONS = [
+  { value: 'anual', label: 'Anual' },
+  { value: 'bimensal', label: 'Bimensal' },
+  { value: 'mensal', label: 'Mensal' },
+  { value: 'pontual', label: 'Pontual / Uma vez' },
+  { value: 'quadrimestral', label: 'Quadrimestral' },
+  { value: 'quinzenal', label: 'Quinzenal' },
+  { value: 'semanal', label: 'Semanal' },
+  { value: 'semestral', label: 'Semestral' },
+  { value: 'trimestral', label: 'Trimestral' },
+].sort((a, b) => a.label.localeCompare(b.label, 'pt', { numeric: true, sensitivity: 'base' }))
+
+export const PERIODICIDADE_PM_OPTIONS = [
+  { value: 'anual', label: 'Anual' },
+  { value: 'bimensal', label: 'Bimensal' },
+  { value: 'mensal', label: 'Mensal' },
+  { value: 'quadrimestral', label: 'Quadrimestral' },
+  { value: 'quinzenal', label: 'Quinzenal' },
+  { value: 'semanal', label: 'Semanal' },
+  { value: 'semestral', label: 'Semestral' },
+  { value: 'trimestral', label: 'Trimestral' },
+].sort((a, b) => a.label.localeCompare(b.label, 'pt', { numeric: true, sensitivity: 'base' }))
+
+export const STATUS_OPTIONS = Object.entries(STATUS_LABELS)
+  .map(([value, label]) => ({ value, label }))
+  .sort((a, b) => a.label.localeCompare(b.label, 'pt', { numeric: true, sensitivity: 'base' }))
+
 function isInternalUser(u: any): boolean {
   if (!u || u.active === false) return false
   if (u.isExternal === true || u.isExternal === 'true') return false
@@ -49,85 +102,6 @@ function isInternalUser(u: any): boolean {
   if (n.includes('heleno') || e.includes('heleno') || a.includes('heleno') || id.includes('heleno')) return false
   if (n.includes('prestador') || n.includes('externo')) return false
   return true
-}
-
-function DynamicList({
-  label,
-  icon: Icon,
-  items,
-  onChange,
-  placeholder,
-  addLabel,
-  suggestions,
-}: {
-  label: string
-  icon: React.ElementType
-  items: string[]
-  onChange: (items: string[]) => void
-  placeholder: string
-  addLabel: string
-  suggestions?: string[]
-}) {
-  const datalistId = useId()
-  const update = (index: number, val: string) => {
-    const next = [...items]
-    next[index] = val
-    onChange(next)
-  }
-  const remove = (index: number) => {
-    onChange(items.filter((_, i) => i !== index))
-  }
-  const add = () => {
-    onChange([...items, ''])
-  }
-
-  return (
-    <div className="space-y-1.5">
-      {label && (
-        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 flex items-center gap-1.5">
-          {Icon && <Icon className="h-3.5 w-3.5 text-safety-orange" />}
-          {label}
-        </label>
-      )}
-      <div className="space-y-2">
-        {items.map((val, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <input
-              value={val}
-              onChange={(e) => update(i, e.target.value)}
-              className="input flex-1 text-xs"
-              placeholder={placeholder}
-              list={suggestions ? datalistId : undefined}
-            />
-            {items.length > 1 && (
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                className="text-gray-400 hover:text-red-500 p-1 flex-shrink-0"
-                aria-label="Remover"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-      {suggestions && (
-        <datalist id={datalistId}>
-          {suggestions.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-      )}
-      <button
-        type="button"
-        onClick={add}
-        className="mt-1 text-xs font-bold text-safety-orange hover:text-safety-orange/80 transition-colors flex items-center gap-1"
-      >
-        <Plus className="h-3 w-3" /> {addLabel}
-      </button>
-    </div>
-  )
 }
 
 export interface CreateTaskModalProps {
@@ -175,7 +149,6 @@ export default function CreateTaskModal({
   const [description, setDescription] = useState('')
   const [observacoes, setObservacoes] = useState('')
   const [status, setStatus] = useState<'pending' | 'in_progress' | 'done' | 'cancelled'>('pending')
-  const [executor, setExecutor] = useState<string>('interno')
   const [legal, setLegal] = useState<boolean>(false)
   const [safetyRules, setSafetyRules] = useState<string[]>([])
   const [dynamicSafetyRules, setDynamicSafetyRules] = useState<string[]>(PREDEFINED_SAFETY_RULES)
@@ -191,9 +164,15 @@ export default function CreateTaskModal({
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
 
-  const [requesterEmail, setRequesterEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  const availableRules = useMemo(() => {
+    const set = new Set([...dynamicSafetyRules, ...safetyRules])
+    return Array.from(set).filter(Boolean).sort((a, b) =>
+      a.localeCompare(b, 'pt', { numeric: true, sensitivity: 'base' })
+    )
+  }, [dynamicSafetyRules, safetyRules])
 
   useEffect(() => {
     if (isOpen) {
@@ -227,14 +206,12 @@ export default function CreateTaskModal({
         setDescription(editingTask.description || '')
         setObservacoes(editingTask.observacoes || editingTask.observations || '')
         setStatus(editingTask.status || 'pending')
-        setExecutor(editingTask.executor || 'interno')
         setLegal(Boolean(editingTask.legal || editingTask.inspecaoLegal))
         setSafetyRules(editingTask.safetyRules?.length ? editingTask.safetyRules : [])
         setMaterialsRequired(editingTask.materialsRequired?.length ? editingTask.materialsRequired : [])
         setRequiredFRs(editingTask.requiredFRs || [])
         setRequiredITs(editingTask.requiredITs || [])
         setDependsOn(Array.isArray(editingTask.dependsOn) ? (editingTask.dependsOn as string[]) : [])
-        setRequesterEmail(editingTask.requesterEmail || '')
         setPhotoPreview(editingTask.photoUrl || (editingTask.photoUrls && editingTask.photoUrls[0]) || null)
         setPeriodicidadeModal(editingTask.periodicidade || 'mensal')
       } else {
@@ -254,9 +231,7 @@ export default function CreateTaskModal({
       setCompletedAt('')
       setDescription('')
       setObservacoes('')
-      setRequesterEmail('')
       setStatus('pending')
-      setExecutor('interno')
       setLegal(false)
       setSafetyRules([])
       setMaterialsRequired([])
@@ -314,6 +289,16 @@ export default function CreateTaskModal({
         }
       }
 
+      // Dedução automática de executor a partir dos técnicos atribuídos (Tarefa 1)
+      const selectedUsers = selectedTechIds
+        .map((id) => users.find((u) => u.id === id || u.abbreviation === id))
+        .filter(Boolean)
+      const isAllExternal =
+        selectedUsers.length > 0 &&
+        selectedUsers.every((u) => u.isExternal === true || !isInternalUser(u))
+      const deducedExecutor = isAllExternal ? 'externo' : 'interno'
+      formData.set('executor', deducedExecutor)
+
       formData.set('safetyRules', JSON.stringify(safetyRules.filter(Boolean)))
       formData.set('materialsRequired', JSON.stringify(materialsRequired.filter(Boolean)))
       formData.set('requiredFRs', JSON.stringify(requiredFRs.filter(Boolean)))
@@ -322,7 +307,10 @@ export default function CreateTaskModal({
       formData.set('assignedToIds', JSON.stringify(selectedTechIds))
       formData.set('addToMaintenancePlan', addToPmModal ? 'true' : 'false')
       formData.set('periodicidade', isPmTipo || addToPmModal ? periodicidadeModal : '')
-      formData.set('requesterEmail', requesterEmail.trim())
+      formData.set('legal', legal ? 'true' : 'false')
+      if (editingTask?.requesterEmail) {
+        formData.set('requesterEmail', editingTask.requesterEmail)
+      }
       if (!dueDate.trim() && (status === 'done' || status === 'cancelled' || editingTask?.status === 'done' || editingTask?.status === 'cancelled')) {
         formData.set('status', 'pending')
       } else {
@@ -355,7 +343,9 @@ export default function CreateTaskModal({
           criticidade,
           tipo,
           status,
-          requesterEmail: requesterEmail.trim() || null,
+          legal,
+          executor: deducedExecutor,
+          requesterEmail: editingTask?.requesterEmail || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           createdBy: 'eu',
@@ -439,24 +429,31 @@ export default function CreateTaskModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Tipo de OT *</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Tipo de OT *</label>
+                <label
+                  className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer select-none"
+                  title="Inspeção legal / obrigatória por regulamentação oficial"
+                >
+                  <input
+                    type="checkbox"
+                    name="legal"
+                    checked={legal}
+                    onChange={(e) => setLegal(e.target.checked)}
+                    className="rounded accent-red-600 h-3.5 w-3.5"
+                  />
+                  <span>⚖️ Legal</span>
+                </label>
+              </div>
               <select
                 name="tipo"
                 value={tipo}
                 onChange={(e) => setTipo(e.target.value as TipoTarefa)}
                 className="input"
               >
-                <option value="pm">PM (Plano de Manutenção)</option>
-                <option value="curativa">MC (Manutenção Curativa)</option>
-                <option value="preventiva">MP (Manutenção Preventiva / Preditiva)</option>
-                <option value="pi">PI (Pedido de Intervenção)</option>
-                <option value="mi">MI (Melhoria / Investimento)</option>
-                <option value="stp">STP (STOP-PARAGEM)</option>
-                <option value="inspecao">INS (Inspeção)</option>
-                <option value="lubrificacao">LUB (Lubrificação)</option>
-                <option value="calibracao">CAL (Calibração)</option>
-                <option value="projeto">PR (Projeto)</option>
-                <option value="outro">OUT (Outro)</option>
+                {TIPO_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -467,83 +464,29 @@ export default function CreateTaskModal({
                 onChange={(e) => setCriticidade(e.target.value as TaskCriticidade)}
                 className="input"
               >
-                <option value="verde">Baixa / Normal (Verde)</option>
-                <option value="amarelo">Média (Amarelo)</option>
-                <option value="vermelho">Alta / Urgente (Vermelho)</option>
+                {CRITICIDADE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
           </div>
 
-          {/* Periodicidade (apenas visível em OTs de PM / Preventiva) & Executor */}
-          <div className={`grid ${isPmTipo ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
-            {isPmTipo && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Periodicidade</label>
-                <select
-                  name="periodicidade"
-                  value={periodicidadeModal}
-                  onChange={(e) => setPeriodicidadeModal(e.target.value)}
-                  className="input"
-                >
-                  <option value="pontual">Pontual / Uma vez</option>
-                  <option value="semanal">Semanal</option>
-                  <option value="quinzenal">Quinzenal</option>
-                  <option value="mensal">Mensal</option>
-                  <option value="bimensal">Bimensal</option>
-                  <option value="trimestral">Trimestral</option>
-                  <option value="quadrimestral">Quadrimestral</option>
-                  <option value="semestral">Semestral</option>
-                  <option value="anual">Anual</option>
-                </select>
-              </div>
-            )}
+          {/* Periodicidade (apenas visível em OTs de PM / Preventiva) */}
+          {isPmTipo && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Executor</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Periodicidade</label>
               <select
-                name="executor"
-                value={executor}
-                onChange={(e) => setExecutor(e.target.value)}
+                name="periodicidade"
+                value={periodicidadeModal}
+                onChange={(e) => setPeriodicidadeModal(e.target.value)}
                 className="input"
               >
-                <option value="interno">Interno (RG / Equipa Própria)</option>
-                <option value="externo">Prestador Externo</option>
-                <option value="outro">Outro</option>
+                {PERIODICIDADE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
-          </div>
-
-          {/* Inspeção Legal / Obrigatória */}
-          <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none bg-slate-100/70 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
-            <input
-              type="checkbox"
-              name="legal"
-              checked={legal}
-              onChange={(e) => setLegal(e.target.checked)}
-              className="rounded accent-red-600 h-4 w-4"
-            />
-            <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
-              ⚖️ Inspeção legal / obrigatória (Regulamentação Oficial)
-            </span>
-          </label>
-
-          {/* Email do Requerente / Solicitante (PI) */}
-          <div className="bg-sky-50/60 dark:bg-sky-950/20 p-3.5 rounded-xl border border-sky-200 dark:border-sky-800/50 space-y-1.5">
-            <label className="block text-xs font-bold text-sky-900 dark:text-sky-300 flex items-center gap-1.5">
-              <Mail className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-              Email do Requerente / Solicitante (Pedido de Intervenção - PI)
-            </label>
-            <input
-              type="email"
-              name="requesterEmail"
-              value={requesterEmail}
-              onChange={(e) => setRequesterEmail(e.target.value)}
-              className="input text-xs bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-700"
-              placeholder="Ex.: requerente@empresa.pt"
-            />
-            <p className="text-[11px] text-sky-700 dark:text-sky-400">
-              💡 Ao fechar esta OT, poderá enviar a resposta do relatório de fecho para este e-mail.
-            </p>
-          </div>
+          )}
 
           <div>
             <SearchableAssetSelect
@@ -574,7 +517,11 @@ export default function CreateTaskModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                   {users
                     .filter((u: any) => u.active !== false && isInternalUser(u))
-                    .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+                    .sort((a, b) => {
+                      const labelA = `${(a as any).abbreviation ? `[${(a as any).abbreviation}] ` : ''}${a.name}`
+                      const labelB = `${(b as any).abbreviation ? `[${(b as any).abbreviation}] ` : ''}${b.name}`
+                      return labelA.localeCompare(labelB, 'pt', { numeric: true, sensitivity: 'base' })
+                    })
                     .map((u) => {
                       const checked = selectedTechIds.includes(u.id) || (u.abbreviation ? selectedTechIds.includes(u.abbreviation) : false)
                       return (
@@ -608,7 +555,17 @@ export default function CreateTaskModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                   {users
                     .filter((u: any) => u.active !== false && !isInternalUser(u))
-                    .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+                    .sort((a, b) => {
+                      const compA = (a as any).externalCompanyName || (a as any).company || 'Empresa Externa'
+                      const abbrA = (a as any).abbreviation ? `[${(a as any).abbreviation}] ` : ''
+                      const labelA = a.name.toLowerCase().includes(compA.toLowerCase()) ? `${abbrA}${a.name}` : `${abbrA}${a.name} (${compA})`
+
+                      const compB = (b as any).externalCompanyName || (b as any).company || 'Empresa Externa'
+                      const abbrB = (b as any).abbreviation ? `[${(b as any).abbreviation}] ` : ''
+                      const labelB = b.name.toLowerCase().includes(compB.toLowerCase()) ? `${abbrB}${b.name}` : `${abbrB}${b.name} (${compB})`
+
+                      return labelA.localeCompare(labelB, 'pt', { numeric: true, sensitivity: 'base' })
+                    })
                     .map((u) => {
                       const checked = selectedTechIds.includes(u.id) || (u.abbreviation ? selectedTechIds.includes(u.abbreviation) : false)
                       const compName = (u as any).externalCompanyName || (u as any).company || 'Empresa Externa'
@@ -710,6 +667,13 @@ export default function CreateTaskModal({
               <div className="max-h-36 overflow-y-auto border border-indigo-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-900 space-y-1">
                 {availableTasksForDependencies
                   ?.filter((t) => t.id !== editingTask?.id)
+                  .sort((a, b) => {
+                    const tagA = (a as any).tag || ''
+                    const labelA = tagA ? `[${tagA}] ${a.title}` : a.title
+                    const tagB = (b as any).tag || ''
+                    const labelB = tagB ? `[${tagB}] ${b.title}` : b.title
+                    return labelA.localeCompare(labelB, 'pt', { numeric: true, sensitivity: 'base' })
+                  })
                   .map((t) => {
                     const isSelected = dependsOn.includes(t.id)
                     const createsCycle = Boolean(editingTask?.id && t.dependsOn && Array.isArray(t.dependsOn) && t.dependsOn.includes(editingTask.id))
@@ -792,8 +756,8 @@ export default function CreateTaskModal({
                 onChange={(e) => setStatus(e.target.value as any)}
                 className="input"
               >
-                {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
             </div>
@@ -841,25 +805,45 @@ export default function CreateTaskModal({
             <input ref={galleryInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
           </div>
 
-          {/* Regras de segurança */}
-          <div>
+          {/* Regras de segurança (Seleção das regras existentes) */}
+          <div className="space-y-2">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Regras de Segurança</span>
-              {isManager && (
-                <a href="/dashboard/safety-rules" target="_blank" className="text-[11px] font-bold text-safety-orange hover:underline">
-                  Gerir Itens de Segurança ↗
-                </a>
-              )}
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center gap-1.5">
+                <ShieldAlert className="h-3.5 w-3.5 text-safety-orange" />
+                Regras de Segurança ({safetyRules.length} selecionada{safetyRules.length !== 1 ? 's' : ''})
+              </label>
             </div>
-            <DynamicList
-              label=""
-              icon={ShieldAlert}
-              items={safetyRules}
-              onChange={setSafetyRules}
-              placeholder="Ex.: Usar EPI, desligar máquina antes…"
-              addLabel="Adicionar regra"
-              suggestions={PREDEFINED_SAFETY_RULES}
-            />
+            <div className="max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {availableRules.map((rule) => {
+                  const isChecked = safetyRules.includes(rule)
+                  return (
+                    <label
+                      key={rule}
+                      className={`flex items-center gap-2 text-xs p-1.5 rounded-lg cursor-pointer transition-colors ${
+                        isChecked
+                          ? 'bg-amber-100/70 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 font-semibold'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSafetyRules((prev) => [...prev, rule])
+                          } else {
+                            setSafetyRules((prev) => prev.filter((r) => r !== rule))
+                          }
+                        }}
+                        className="rounded accent-safety-orange h-3.5 w-3.5 shrink-0"
+                      />
+                      <span className="truncate" title={rule}>{rule}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
           {/* Materiais / Peças a Utilizar */}
@@ -868,47 +852,8 @@ export default function CreateTaskModal({
             onChange={setMaterialsRequired}
             stockRefs={stockRefs}
             isManager={isManager}
+            assetId={assetId}
           />
-
-          {/* Incluir no PM e Periodicidade */}
-          <div className="bg-amber-50/60 dark:bg-amber-900/20 p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/50 space-y-3">
-            <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-amber-900 dark:text-amber-300">
-              <input
-                type="checkbox"
-                checked={addToPmModal}
-                onChange={(e) => setAddToPmModal(e.target.checked)}
-                className="rounded accent-amber-600 h-4 w-4"
-              />
-              <span>⚙️ Criar / Incluir no Plano de Manutenção Preventiva (PM)</span>
-            </label>
-            {addToPmModal && (
-              isPmTipo ? (
-                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
-                  Será incluído no plano com a periodicidade definida acima: <strong>{periodicidadeModal}</strong>.
-                </p>
-              ) : (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Periodicidade do PM *
-                  </label>
-                  <select
-                    value={periodicidadeModal}
-                    onChange={(e) => setPeriodicidadeModal(e.target.value)}
-                    className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-700"
-                  >
-                    <option value="semanal">Semanal</option>
-                    <option value="quinzenal">Quinzenal</option>
-                    <option value="mensal">Mensal</option>
-                    <option value="bimensal">Bimensal</option>
-                    <option value="trimestral">Trimestral</option>
-                    <option value="quadrimestral">Quadrimestral</option>
-                    <option value="semestral">Semestral</option>
-                    <option value="anual">Anual</option>
-                  </select>
-                </div>
-              )
-            )}
-          </div>
 
           {isManager && (
             <TaskDocPickerManager
@@ -971,6 +916,41 @@ export default function CreateTaskModal({
               )}
             </div>
           )}
+
+          {/* Incluir no PM e Periodicidade (Último bloco do formulário) */}
+          <div className="bg-amber-50/60 dark:bg-amber-900/20 p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/50 space-y-3">
+            <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-amber-900 dark:text-amber-300">
+              <input
+                type="checkbox"
+                checked={addToPmModal}
+                onChange={(e) => setAddToPmModal(e.target.checked)}
+                className="rounded accent-amber-600 h-4 w-4"
+              />
+              <span>⚙️ Criar / Incluir no Plano de Manutenção Preventiva (PM)</span>
+            </label>
+            {addToPmModal && (
+              isPmTipo ? (
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                  Será incluído no plano com a periodicidade definida acima: <strong>{periodicidadeModal}</strong>.
+                </p>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Periodicidade do PM *
+                  </label>
+                  <select
+                    value={periodicidadeModal}
+                    onChange={(e) => setPeriodicidadeModal(e.target.value)}
+                    className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-700"
+                  >
+                    {PERIODICIDADE_PM_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )
+            )}
+          </div>
 
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">
