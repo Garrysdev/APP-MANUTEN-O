@@ -10,6 +10,7 @@ import {
 } from '@/lib/firebase/data'
 import { adminDb } from '@/lib/firebase/admin'
 import type { Task, TaskCriticidade, TipoTarefa, TaskStatus } from '@/types/models'
+import { TIPOS_TAREFA } from '@/types/models'
 
 export type TaskFormState = { error?: string; ok?: boolean }
 export type StockMaterialRef = { id: string; name: string; unit: string | null }
@@ -28,7 +29,8 @@ export async function loadPlanTaskRefsAction(): Promise<PlanTaskRef[]> {
 }
 
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
-const TIPOS: TipoTarefa[] = ['preventiva', 'curativa', 'mi', 'plano', 'pi', 'stp', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
+// Lista canónica em @/types/models — derivada do próprio tipo, nunca escrita à mão.
+const TIPOS = TIPOS_TAREFA
 const STATUSES: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
 
 function parseProjectTask(formData: FormData) {

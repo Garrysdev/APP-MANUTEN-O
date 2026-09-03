@@ -33,8 +33,16 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // translate="no" + .notranslate: a tradução automática do Chrome substitui nós de texto
+  // por baixo do React. Como o React continua a guardar referências aos nós originais, ao
+  // re-renderizar rebenta ("removeChild"/"insertBefore" em nós que já não existem) — o que
+  // se vê como páginas a desformatar e formulários que deixam de gravar. A app já está em
+  // português, por isso não se perde nada ao desligar a tradução.
   return (
-    <html lang="pt" suppressHydrationWarning>
+    <html lang="pt" translate="no" className="notranslate" suppressHydrationWarning>
+      <head>
+        <meta name="google" content="notranslate" />
+      </head>
       <body>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
           <OfflineProvider>

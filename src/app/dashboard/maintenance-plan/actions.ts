@@ -15,7 +15,7 @@ import {
 } from '@/lib/firebase/data'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 import type { TaskCriticidade, TipoTarefa, Periodicidade, Executor } from '@/types/models'
-import { periodicidadeToRecurrence, CRITICIDADE_LABELS, PERIODICIDADE_LABELS } from '@/types/models'
+import { periodicidadeToRecurrence, CRITICIDADE_LABELS, PERIODICIDADE_LABELS, TIPOS_TAREFA } from '@/types/models'
 
 export type PlanFormState = { error?: string; ok?: boolean; id?: string }
 
@@ -75,7 +75,8 @@ export async function generateAnnualPMScheduleAction(
 }
 
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
-const TIPOS: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'pi', 'stp', 'mi', 'mp', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
+// Lista canónica em @/types/models — derivada do próprio tipo, nunca escrita à mão.
+const TIPOS = TIPOS_TAREFA
 const PERIODICIDADES: Periodicidade[] = ['semanal', 'mensal', 'trimestral', 'bianual', 'anual', 'bienal', 'trianual', 'horas', 'pontual']
 const EXECUTORES: Executor[] = ['interno', 'externo']
 

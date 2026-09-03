@@ -9,6 +9,7 @@ import {
   calculateTaskCost,
 } from '@/lib/firebase/data'
 import type { TaskCriticidade, TipoTarefa, TaskStatus, Executor } from '@/types/models'
+import { TIPOS_TAREFA } from '@/types/models'
 
 export type TaskFormState = { error?: string; ok?: boolean }
 export type StockMaterialRef = {
@@ -49,7 +50,8 @@ export async function loadPlanTaskRefsAction(): Promise<PlanTaskRef[]> {
 }
 
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
-const TIPOS: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'pi', 'stp', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
+// Lista canónica em @/types/models — derivada do próprio tipo, nunca escrita à mão.
+const TIPOS = TIPOS_TAREFA
 const STATUSES: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
 
 function parseTask(formData: FormData) {

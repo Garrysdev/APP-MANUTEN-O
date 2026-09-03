@@ -85,6 +85,68 @@ export const STATUS_OPTIONS = Object.entries(STATUS_LABELS)
   .map(([value, label]) => ({ value, label }))
   .sort((a, b) => a.label.localeCompare(b.label, 'pt', { numeric: true, sensitivity: 'base' }))
 
+/** "agora" no formato que o input datetime-local usa, em hora local (não UTC). */
+function nowForInput(): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** Mostra a data/hora carimbada, ou um botão para a carimbar no momento. */
+function StampField({
+  label, name, value, onStamp, onClear, actionLabel, tone, disabled = false, disabledHint,
+}: {
+  label: string
+  name: string
+  value: string
+  onStamp: () => void
+  onClear: () => void
+  actionLabel: string
+  tone: 'blue' | 'emerald'
+  disabled?: boolean
+  disabledHint?: string
+}) {
+  const tones = {
+    blue: 'bg-blue-600 hover:bg-blue-700 border-blue-700',
+    emerald: 'bg-emerald-600 hover:bg-emerald-700 border-emerald-700',
+  }
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{label}</label>
+      {/* O valor viaja no formulário como campo escondido — o botão só o preenche. */}
+      <input type="hidden" name={name} value={value} />
+      {value ? (
+        <div className="flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2">
+          <span className="flex-1 text-sm font-bold text-slate-800 dark:text-slate-100 tabular-nums">
+            {value.replace('T', '  ').slice(0, 16)}
+          </span>
+          <button
+            type="button"
+            onClick={onClear}
+            title="Limpar"
+            className="text-slate-400 hover:text-red-500 cursor-pointer shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onStamp}
+          disabled={disabled}
+          title={disabled ? disabledHint : `Regista a data e hora atuais`}
+          className={`w-full text-white font-bold text-sm rounded-xl border px-3 py-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${tones[tone]}`}
+        >
+          {actionLabel}
+        </button>
+      )}
+      {disabled && disabledHint && !value && (
+        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{disabledHint}</p>
+      )}
+    </div>
+  )
+}
+
 function isInternalUser(u: any): boolean {
   if (!u || u.active === false) return false
   if (u.isExternal === true || u.isExternal === 'true') return false
@@ -623,27 +685,29 @@ export default function CreateTaskModal({
             </div>
           </div>
 
+          {/* Início e Fim reais: carimbados por botão, para o técnico registar no momento
+              em que arranca e em que acaba, sem ter de escolher data e hora à mão. */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data de Início (real)</label>
-              <input
-                type="datetime-local"
-                name="startedAt"
-                value={startedAt}
-                onChange={(e) => setStartedAt(e.target.value)}
-                className="input"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data de Fim (real)</label>
-              <input
-                type="datetime-local"
-                name="completedAt"
-                value={completedAt}
-                onChange={(e) => setCompletedAt(e.target.value)}
-                className="input"
-              />
-            </div>
+            <StampField
+              label="Início da OT"
+              name="startedAt"
+              value={startedAt}
+              onStamp={() => setStartedAt(nowForInput())}
+              onClear={() => setStartedAt('')}
+              actionLabel="Iniciar OT"
+              tone="blue"
+            />
+            <StampField
+              label="Fim da OT"
+              name="completedAt"
+              value={completedAt}
+              onStamp={() => setCompletedAt(nowForInput())}
+              onClear={() => setCompletedAt('')}
+              actionLabel="Terminar OT"
+              tone="emerald"
+              disabled={!startedAt}
+              disabledHint="Marque primeiro o início"
+            />
           </div>
 
           {/* Seletor de Dependências Finish-to-Start (Visível quando showDependencies ou há tarefas disponíveis) */}

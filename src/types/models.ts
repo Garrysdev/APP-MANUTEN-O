@@ -349,6 +349,15 @@ export const TIPO_LABELS: Record<TipoTarefa, string> = {
   outro: 'OUT',
 }
 
+/**
+ * Lista canónica dos tipos de OT aceites ao gravar.
+ * Derivada de TIPO_LABELS (que é Record<TipoTarefa, string>), por isso fica sempre completa
+ * quando a união crescer. Havia três cópias desta lista escritas à mão nas server actions,
+ * todas diferentes e incompletas — escolher "PM", "PR (Projeto)" ou "MI" era silenciosamente
+ * gravado como "preventiva".
+ */
+export const TIPOS_TAREFA = Object.keys(TIPO_LABELS) as TipoTarefa[]
+
 export const ROLE_LABELS: Record<UserRole, string> = {
   manager: 'Gestor',
   technician: 'Técnico',

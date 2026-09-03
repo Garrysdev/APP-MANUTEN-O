@@ -1399,25 +1399,15 @@ export default function TasksClient({
           </div>
         )}
 
-      {/* Unified Nova OT Modal Component */}
-      <CreateTaskModal
-        isOpen={showForm && !editing}
-        onClose={closeModal}
-        initialAssetId={assetId}
-        assets={assets}
-        users={users}
-        stockRefs={stockRefs}
-        isManager={isManager}
-        onSuccess={() => {
-          router.refresh()
-        }}
-      />
-
-      {/* Modal unificado para Criar ou Editar OT com registo de auditoria ERP */}
+      {/* Modal único para Criar ou Editar OT. Havia aqui uma segunda instância aberta em
+          `showForm && !editing`, que ao criar uma OT nova abria empilhada com esta — dois
+          formulários com os mesmos campos ao mesmo tempo — e que no sucesso não fechava a
+          janela, dando a impressão de que a gravação não tinha feito nada. */}
       <CreateTaskModal
         isOpen={showForm}
         editingTask={editing}
         onClose={closeModal}
+        initialAssetId={assetId}
         assets={assets}
         users={users}
         stockRefs={stockRefs}
