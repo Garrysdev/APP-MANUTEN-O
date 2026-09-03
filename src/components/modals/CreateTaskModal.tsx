@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import {
   X, ShieldAlert, Camera, Images, Wrench, ArrowLeft, FolderKanban
@@ -223,6 +224,7 @@ export default function CreateTaskModal({
 
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
 
@@ -309,7 +311,15 @@ export default function CreateTaskModal({
     }
   }, [isOpen, initialAssetId, editingTask])
 
-  if (!isOpen) return null
+  // O modal é enviado para o <body> por portal. Sem isto, o `fixed inset-0` deixa de se
+  // posicionar pelo ecrã: as páginas usam `animate-fade-in-up`, que acaba em
+  // `transform: translateY(0)` com `forwards`, e um elemento com transform passa a ser o
+  // referencial dos filhos `fixed`. O resultado era o formulário aparecer encaixado dentro
+  // do conteúdo da página — "uma edição dentro da outra" ao fazer scroll.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!isOpen || !mounted) return null
 
   const selectedAsset = assets.find((a) => a.id === assetId)
   // 'plano' é o PM propriamente dito; 'preventiva'/'mp' são a manutenção preventiva (MP).
@@ -441,7 +451,7 @@ export default function CreateTaskModal({
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[200] bg-slate-50 dark:bg-slate-950 overflow-y-auto flex flex-col">
       {/* Sticky Header de Página Completa */}
       <div className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-sm">
@@ -476,7 +486,7 @@ export default function CreateTaskModal({
 
       {/* Conteúdo Principal de Página Completa */}
       <div className="flex-1 w-full max-w-3xl mx-auto p-4 sm:p-8 space-y-6 pb-28">
-        <form onSubmit={handleSubmit} className="card p-6 shadow-xl space-y-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
+        <form ref={formRef} onSubmit={handleSubmit} className="card p-6 shadow-xl space-y-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Título *</label>
             <input
@@ -1039,13 +1049,15 @@ export default function CreateTaskModal({
         <button type="button" onClick={onClose} className="btn-secondary flex-1 py-2.5 text-xs font-bold">
           Cancelar
         </button>
-        <button type="button" onClick={(e) => {
-          const form = document.querySelector('form')
-          if (form) form.requestSubmit()
-        }} disabled={busy} className="btn-primary flex-1 py-2.5 text-xs font-bold shadow-md">
-          {busy ? 'A guardar…' : 'Guardar Nova OT'}
+        {/* Submete o formulário DESTE modal. Usava `document.querySelector('form')`, que
+            devolve o primeiro <form> do documento — podia ser o de pesquisa da página por
+            trás, e a OT não era gravada. */}
+        <button type="button" onClick={() => formRef.current?.requestSubmit()}
+          disabled={busy} className="btn-primary flex-1 py-2.5 text-xs font-bold shadow-md">
+          {busy ? 'A guardar…' : editingTask ? 'Guardar Alterações' : 'Guardar Nova OT'}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
