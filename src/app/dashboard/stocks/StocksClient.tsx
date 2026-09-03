@@ -11,6 +11,7 @@ import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import type { Dictionary } from '@/lib/i18n/dictionaries'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
+import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 
 type ModalMode = { type: 'create' } | { type: 'edit'; item: StockItem }
 
@@ -159,12 +160,14 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
 
   const [colF, setColF] = useState({
     code: '',
-    area: 'all',
-    tag: 'all',
-    system: 'all',
     name: '',
     unit: 'all',
   })
+  // Área/TAG/Sistema em multi-seleção com popover — mesmo padrão das OTs e do Plano de
+  // Manutenção — em vez do <select> de valor único que havia antes.
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedSystems, setSelectedSystems] = useState<string[]>([])
 
   // Modal para atribuição em lote a equipamentos por Área/TAG
   const [showBulkAssignModal, setShowBulkAssignModal] = useState(false)
@@ -182,13 +185,13 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
 
   const availableTags = useMemo(() => {
     const set = new Set<string>()
-    const poolAssets = colF.area !== 'all'
-      ? assets.filter(a => (a.area || '').trim().toLowerCase() === colF.area.toLowerCase())
+    const poolAssets = selectedAreas.length > 0
+      ? assets.filter(a => selectedAreas.some((sel) => sel.toLowerCase() === (a.area || '').trim().toLowerCase()))
       : assets
     poolAssets.forEach((a) => { if (a.tag) set.add(a.tag.trim()) })
     items.forEach((i) => { if (i.tag) set.add(i.tag.trim()) })
     return Array.from(set).sort()
-  }, [items, assets, colF.area])
+  }, [items, assets, selectedAreas])
 
   const availableSystems = useMemo(() => {
     const set = new Set<string>()
@@ -229,16 +232,16 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
         if (!codeVal.includes(cq)) return false
       }
 
-      if (colF.area !== 'all' && (item.area || '—') !== colF.area) return false
+      if (selectedAreas.length > 0 && !selectedAreas.includes(item.area || '—')) return false
 
-      if (colF.tag !== 'all') {
-        const itemTag = (item.tag || (item.assetId ? assets.find(a => a.id === item.assetId)?.tag : '') || '').trim().toLowerCase()
-        if (itemTag !== colF.tag.trim().toLowerCase()) return false
+      if (selectedTags.length > 0) {
+        const itemTag = (item.tag || (item.assetId ? assets.find(a => a.id === item.assetId)?.tag : '') || '—').trim()
+        if (!selectedTags.some((t) => t.toLowerCase() === itemTag.toLowerCase())) return false
       }
 
-      if (colF.system !== 'all') {
+      if (selectedSystems.length > 0) {
         const sysVal = item.system || item.category || '—'
-        if (sysVal !== colF.system) return false
+        if (!selectedSystems.includes(sysVal)) return false
       }
 
       if (colF.name.trim()) {
@@ -250,7 +253,7 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
 
       return true
     })
-  }, [items, assets, search, colF])
+  }, [items, assets, search, colF, selectedAreas, selectedTags, selectedSystems])
 
   const { sorted: baseSorted, sortKey, sortDir, toggleSort: requestSort } = useTableSort(
     filteredItems,
@@ -279,20 +282,20 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
       if (aHasTag && !bHasTag) return -1
       if (!aHasTag && bHasTag) return 1
 
-      if (colF.tag !== 'all') {
-        const aMatch = (aTagVal || '').toLowerCase() === colF.tag.toLowerCase()
-        const bMatch = (bTagVal || '').toLowerCase() === colF.tag.toLowerCase()
+      if (selectedTags.length > 0) {
+        const aMatch = selectedTags.some((t) => t.toLowerCase() === (aTagVal || '').toLowerCase())
+        const bMatch = selectedTags.some((t) => t.toLowerCase() === (bTagVal || '').toLowerCase())
         if (aMatch && !bMatch) return -1
         if (!aMatch && bMatch) return 1
       }
 
       return 0
     })
-  }, [baseSorted, assets, colF.tag])
+  }, [baseSorted, assets, selectedTags])
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [search, colF, pageSize])
+  }, [search, colF, selectedAreas, selectedTags, selectedSystems, pageSize])
 
   const effectivePageSize = pageSize === -1 ? (sortedItems.length || 1) : pageSize
   const totalPages = Math.ceil(sortedItems.length / effectivePageSize) || 1
@@ -370,7 +373,87 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
           <p className="text-sm">{dict.stocks.empty}</p>
         </div>
       ) : (
-        <div className="card overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800">
+        <>
+          {/* Vista em cartões — telemóvel e tablet (a tabela completa fica só para ecrãs md+) */}
+          <div className="md:hidden space-y-2.5">
+            <div className="bg-slate-50 dark:bg-slate-900/70 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Filtros</span>
+                {(selectedAreas.length > 0 || selectedTags.length > 0 || selectedSystems.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedAreas([]); setSelectedTags([]); setSelectedSystems([]) }}
+                    className="text-[11px] text-red-500 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <X size={12} /> Limpar filtros
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <MultiSelectPopoverFilter
+                  label="Área"
+                  options={availableAreas.map((a) => ({ value: a, label: a }))}
+                  selectedValues={selectedAreas}
+                  onChange={setSelectedAreas}
+                  placeholder="Área (Todas)"
+                  width="w-64 max-w-[85vw]"
+                />
+                <MultiSelectPopoverFilter
+                  label="TAG"
+                  options={availableTags.map((t) => ({ value: t, label: t }))}
+                  selectedValues={selectedTags}
+                  onChange={setSelectedTags}
+                  placeholder="TAG (Todas)"
+                  width="!right-0 !left-auto w-64 max-w-[85vw]"
+                />
+              </div>
+            </div>
+
+            {paginatedItems.length === 0 ? (
+              <div className="card px-5 py-12 text-center text-gray-400 dark:text-slate-500">
+                <Boxes className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                <p className="text-sm">Nenhum artigo corresponde aos filtros.</p>
+              </div>
+            ) : (
+              paginatedItems.map((item) => {
+                const isLow = item.minQuantity != null && item.quantity <= item.minQuantity && item.quantity > 0
+                const itemTagVal = item.tag || (item.assetId ? assets.find(a => a.id === item.assetId)?.tag : '') || '—'
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setModal({ type: 'edit', item })}
+                    className="card w-full text-left border border-slate-200 dark:border-slate-800 p-3.5 space-y-2 active:bg-blue-50/70 dark:active:bg-slate-800/80 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-mono font-bold text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 shrink-0">
+                          {item.code || item.reference || item.tag || '—'}
+                        </span>
+                        <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400 truncate">
+                          {itemTagVal} · {item.area || '—'}
+                        </span>
+                      </div>
+                      <span className={`font-mono font-extrabold text-sm shrink-0 ${isLow ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                        {item.quantity} {item.unit ?? 'un'}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-2">{item.name}</p>
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                      <span className="line-clamp-1">{item.system || item.category || '—'}</span>
+                      {isLow && (
+                        <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800/50 rounded px-1.5 py-0.2 shrink-0">
+                          <AlertTriangle className="h-2.5 w-2.5" /> stock baixo
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })
+            )}
+          </div>
+
+        <div className="hidden md:block card overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800">
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -396,34 +479,31 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
                     />
                   </td>
                   <td className="p-1">
-                    <select
-                      value={colF.area}
-                      onChange={(e) => setColF((prev) => ({ ...prev, area: e.target.value }))}
-                      className="input text-[11px] py-1 px-1 w-full bg-white dark:bg-slate-900"
-                    >
-                      <option value="all">Todas ({availableAreas.length})</option>
-                      {availableAreas.map((a) => <option key={a} value={a}>{a}</option>)}
-                    </select>
+                    <MultiSelectPopoverFilter
+                      label="Área"
+                      options={availableAreas.map((a) => ({ value: a, label: a }))}
+                      selectedValues={selectedAreas}
+                      onChange={setSelectedAreas}
+                      placeholder="Área (Todas)"
+                    />
                   </td>
                   <td className="p-1">
-                    <select
-                      value={colF.tag}
-                      onChange={(e) => setColF((prev) => ({ ...prev, tag: e.target.value }))}
-                      className="input text-[11px] py-1 px-1 w-full bg-white dark:bg-slate-900"
-                    >
-                      <option value="all">Todas ({availableTags.length})</option>
-                      {availableTags.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    <MultiSelectPopoverFilter
+                      label="TAG"
+                      options={availableTags.map((t) => ({ value: t, label: t }))}
+                      selectedValues={selectedTags}
+                      onChange={setSelectedTags}
+                      placeholder="TAG (Todas)"
+                    />
                   </td>
                   <td className="p-1">
-                    <select
-                      value={colF.system}
-                      onChange={(e) => setColF((prev) => ({ ...prev, system: e.target.value }))}
-                      className="input text-[11px] py-1 px-1 w-full bg-white dark:bg-slate-900"
-                    >
-                      <option value="all">Todos ({availableSystems.length})</option>
-                      {availableSystems.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    <MultiSelectPopoverFilter
+                      label="Sistema"
+                      options={availableSystems.map((s) => ({ value: s, label: s }))}
+                      selectedValues={selectedSystems}
+                      onChange={setSelectedSystems}
+                      placeholder="Sistema (Todos)"
+                    />
                   </td>
                   <td className="p-1">
                     <input
@@ -446,9 +526,14 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
                     </select>
                   </td>
                   <td className="p-1 text-center">
-                    {(colF.code || colF.area !== 'all' || colF.tag !== 'all' || colF.system !== 'all' || colF.name || colF.unit !== 'all') && (
+                    {(colF.code || colF.name || colF.unit !== 'all' || selectedAreas.length > 0 || selectedTags.length > 0 || selectedSystems.length > 0) && (
                       <button
-                        onClick={() => setColF({ code: '', area: 'all', tag: 'all', system: 'all', name: '', unit: 'all' })}
+                        onClick={() => {
+                          setColF({ code: '', name: '', unit: 'all' })
+                          setSelectedAreas([])
+                          setSelectedTags([])
+                          setSelectedSystems([])
+                        }}
                         className="text-[10px] text-red-600 dark:text-red-400 hover:underline font-semibold"
                       >
                         Limpar
@@ -463,9 +548,16 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
                   const itemTagVal = item.tag || (item.assetId ? assets.find(a => a.id === item.assetId)?.tag : '') || '—'
 
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                    <tr
+                      key={item.id}
+                      onClick={() => setModal({ type: 'edit', item })}
+                      className="hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group"
+                      title="Clique para editar este artigo"
+                    >
                       <td className="px-2.5 py-2 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                        {item.code || item.reference || item.tag || '—'}
+                        <span className="bg-slate-100/90 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 group-hover:border-blue-400 group-hover:bg-blue-100/80 dark:group-hover:bg-blue-950/40 transition-colors">
+                          {item.code || item.reference || item.tag || '—'}
+                        </span>
                       </td>
                       <td className="px-2 py-2 text-slate-700 dark:text-slate-300 font-mono font-semibold whitespace-nowrap">
                         {item.area || '—'}
@@ -479,7 +571,12 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
                         </span>
                       </td>
                       <td className="px-2.5 py-2 max-w-[300px]">
-                        <Link href={`/dashboard/stocks/${item.id}`} className="font-bold text-[#2E86C1] hover:underline transition-colors block line-clamp-2" title={item.name}>
+                        <Link
+                          href={`/dashboard/stocks/${item.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-bold text-[#2E86C1] hover:underline transition-colors block line-clamp-2"
+                          title={`Ver ficha completa de ${item.name}`}
+                        >
                           {item.name}
                         </Link>
                         {item.description && (
@@ -495,7 +592,7 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
                         {item.quantity}
                       </td>
                       <td className="px-2 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">{item.unit ?? 'un'}</td>
-                      <td className="px-2 py-2 text-center whitespace-nowrap">
+                      <td className="px-2 py-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 justify-center">
                           <button
                             onClick={() => setModal({ type: 'edit', item })}
@@ -521,9 +618,10 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
               </tbody>
             </table>
           </div>
+        </div>
 
-          {/* Paginação */}
-          <div className="p-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          {/* Paginação — comum às duas vistas */}
+          <div className="card mt-2.5 md:mt-0 md:rounded-t-none p-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
               <span>Mostrar</span>
               <select
@@ -561,7 +659,7 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
               </div>
             )}
           </div>
-        </div>
+        </>
       )}
 
       {/* Modal Criar / Editar */}
