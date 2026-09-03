@@ -33,6 +33,7 @@ export default function MaterialsSelector({
   const [initialQty, setInitialQty] = useState('10')
   const [unit, setUnit] = useState('unidade')
   const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
   const [createdItems, setCreatedItems] = useState<StockItemRef[]>([])
 
   const sortedStockRefs = useMemo(() => {
@@ -64,6 +65,7 @@ export default function MaterialsSelector({
     if (!newItemName.trim()) return
 
     const name = newItemName.trim()
+    setCreateError('')
     setCreating(true)
 
     try {
@@ -76,17 +78,21 @@ export default function MaterialsSelector({
           fd.append('assetIds', assetId)
         }
         const res = await createStockItemAction({}, fd)
-        if (res.ok && res.id) {
-          const newItem: StockItemRef = {
-            id: res.id,
-            name,
-            unit: unit || null,
-            assetIds: assetId ? [assetId] : null,
-          }
-          setCreatedItems((prev) => [...prev, newItem])
-          if (onStockItemCreated) {
-            onStockItemCreated(newItem)
-          }
+        if (!res.ok || !res.id) {
+          // Falhou a gravação no inventário: avisar e não seguir em frente, senão o
+          // material era acrescentado à OT como se tivesse sido criado no stock.
+          setCreateError(res.error || 'Não foi possível criar o artigo no inventário.')
+          return
+        }
+        const newItem: StockItemRef = {
+          id: res.id,
+          name,
+          unit: unit || null,
+          assetIds: assetId ? [assetId] : null,
+        }
+        setCreatedItems((prev) => [...prev, newItem])
+        if (onStockItemCreated) {
+          onStockItemCreated(newItem)
         }
       }
 
@@ -227,10 +233,16 @@ export default function MaterialsSelector({
             </div>
           )}
 
+          {createError && (
+            <p className="text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg px-2 py-1.5">
+              {createError}
+            </p>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={() => setAddingNew(false)}
+              onClick={() => { setCreateError(''); setAddingNew(false) }}
               className="btn-secondary text-xs py-1 px-3"
             >
               Cancelar

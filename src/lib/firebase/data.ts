@@ -1390,8 +1390,11 @@ export async function createStockItem(
       .add({ ...data, companyId, createdAt: now, updatedAt: now })
     return ref.id
   } catch (err) {
+    // Nunca devolver um id fabricado aqui: o artigo não chegou a ser gravado, e um id
+    // falso faria a UI dar a criação como boa e associá-lo a equipamentos que nunca
+    // vão encontrá-lo. O erro tem de subir para quem chamou o poder mostrar.
     console.error('[createStockItem] Error:', err)
-    return `stock_${Date.now()}`
+    throw err instanceof Error ? err : new Error('Erro ao gravar o artigo no inventário.')
   }
 }
 
