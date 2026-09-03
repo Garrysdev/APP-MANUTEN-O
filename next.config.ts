@@ -2,6 +2,12 @@ import type { NextConfig } from 'next'
 import withPWA from '@ducanh2912/next-pwa'
 
 const nextConfig: NextConfig = {
+  // Identificador único do build, lido pelo OfflineProvider para purgar a cache do PWA
+  // sempre que há um deploy novo. No Vercel usa o commit; localmente, a hora do build.
+  env: {
+    NEXT_PUBLIC_BUILD_VERSION:
+      process.env.VERCEL_GIT_COMMIT_SHA || `local-${Date.now()}`,
+  },
   images: {
     remotePatterns: [
       {

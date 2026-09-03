@@ -35,9 +35,13 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       setIsOnline(navigator.onLine)
 
-      // Purga automática de cache do Service Worker a cada novo deploy
+      // Purga automática de cache do Service Worker a cada novo deploy.
+      // A versão vem do build (commit no Vercel), NÃO de uma constante escrita à mão:
+      // estava fixa em 'v2026_09_02_v1' e por isso deixou de disparar em cada deploy —
+      // o telemóvel continuava a servir o bundle antigo em cache e a mostrar bugs já
+      // corrigidos. Um valor que tem de acompanhar a realidade não pode ser manual.
       if ('caches' in window) {
-        const CURRENT_VERSION = 'v2026_09_02_v1'
+        const CURRENT_VERSION = process.env.NEXT_PUBLIC_BUILD_VERSION || 'dev'
         const lastVersion = localStorage.getItem('app_build_version')
         if (lastVersion !== CURRENT_VERSION) {
           localStorage.setItem('app_build_version', CURRENT_VERSION)
