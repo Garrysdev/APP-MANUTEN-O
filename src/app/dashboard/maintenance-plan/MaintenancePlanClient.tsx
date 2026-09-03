@@ -601,21 +601,10 @@ export default function MaintenancePlanClient({
       {lockedFeature && (
         <UpgradeModal feature={lockedFeature} isTeaser={true} onClose={() => setLockedFeature(null)} />
       )}
-      {/* Editar a OT gerada por este Plano de Manutenção — mesma janela usada nas OTs,
-          já com as datas do calendário e a opção de a concluir. */}
-      <CreateTaskModal
-        isOpen={!!viewingTask}
-        editingTask={viewingTask}
-        onClose={() => setViewingTask(null)}
-        assets={assets}
-        users={users}
-        stockRefs={stockRefs}
-        isManager={true}
-        onSuccess={() => {
-          setViewingTask(null)
-          router.refresh()
-        }}
-      />
+      {/* A OT gerada por este plano é editada no modal único no fim deste ficheiro,
+          que já trata dos três casos (ver OT de PM, editar plano, criar plano). Havia
+          aqui uma segunda instância que abria em simultâneo com essa, empilhando dois
+          modais iguais — sem título próprio e sem a ação de gravação correta. */}
       <div className="flex items-center justify-between mb-4 gap-2">
         <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 shrink-0">
           {shown.length} / {plans.length}
