@@ -351,6 +351,11 @@ export default function CreateTaskModal({
     try {
       const formData = new FormData(e.currentTarget)
       if (!formData.get('assetId')) formData.set('assetId', assetId)
+      // Quando o assetId não corresponde a nenhum equipamento real (dados antigos importados,
+      // ex. assetId "Varios"), selectedAsset fica undefined — sem este fallback, tag/area eram
+      // apagados silenciosamente em cada gravação por não haver <input hidden> a submeter.
+      formData.set('tag', selectedAsset?.tag ?? editingTask?.tag ?? '')
+      formData.set('area', selectedAsset?.area ?? editingTask?.area ?? '')
 
       if (photoFile) {
         try {
@@ -523,6 +528,13 @@ export default function CreateTaskModal({
                 onChange={(e) => setTipo(e.target.value as TipoTarefa)}
                 className="input"
               >
+                {/* Registos antigos importados podem trazer um tipo fora da lista canónica
+                    (ex. "melhoria"). Sem esta opção sintética, o <select> controlado mostrava
+                    e submetia silenciosamente a primeira opção da lista, corrompendo o campo
+                    em qualquer gravação em que o utilizador não mexesse no tipo. */}
+                {!TIPO_OPTIONS.some((opt) => opt.value === tipo) && (
+                  <option value={tipo}>{String(tipo)} (valor original — escolha o tipo correto)</option>
+                )}
                 {TIPO_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
@@ -567,12 +579,6 @@ export default function CreateTaskModal({
               assets={assets}
               required
             />
-            {selectedAsset && (
-              <>
-                <input type="hidden" name="tag" value={selectedAsset.tag ?? ''} />
-                <input type="hidden" name="area" value={selectedAsset.area ?? ''} />
-              </>
-            )}
           </div>
 
           <div className="space-y-3">

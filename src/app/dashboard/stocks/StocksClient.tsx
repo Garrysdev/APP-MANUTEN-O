@@ -562,7 +562,7 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
                   selectedValues={selectedTags}
                   onChange={setSelectedTags}
                   placeholder="TAG (Todas)"
-                  width="!right-0 !left-auto w-64 max-w-[85vw]"
+                  width="w-64 max-w-[85vw]"
                 />
               </div>
             </div>

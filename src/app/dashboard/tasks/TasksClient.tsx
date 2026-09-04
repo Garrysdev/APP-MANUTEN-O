@@ -1047,7 +1047,7 @@ export default function TasksClient({
                 selectedValues={selectedTags}
                 onChange={setSelectedTags}
                 placeholder="TAG (Todas)"
-                width="!right-0 !left-auto w-64 max-w-[85vw]"
+                width="w-64 max-w-[85vw]"
               />
             </div>
             <div>
@@ -1078,7 +1078,7 @@ export default function TasksClient({
                 selectedValues={selectedTechs}
                 onChange={setSelectedTechs}
                 placeholder="Técnico (Todos)"
-                width="!right-0 !left-auto w-64 max-w-[85vw]"
+                width="w-64 max-w-[85vw]"
               />
             </div>
           </div>

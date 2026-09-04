@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Search, X, Check } from 'lucide-react'
 
 export interface FilterOption {
@@ -28,15 +29,61 @@ export default function MultiSelectPopoverFilter({
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
 
   const count = selectedValues.length
 
-  // Fechar ao clicar fora
+  // O popover é enviado por portal para o <body> e posicionado a partir das coordenadas
+  // reais do botão (position: fixed), em vez de position: absolute dentro do fluxo normal.
+  // Sem isto, qualquer antepassado com scroll (ex.: o <main> da página, que tem
+  // overflow-y-auto) corta o menu quando o botão está perto do fundo do ecrã visível —
+  // era isso que fazia o popover mostrar só a primeira linha em telemóvel.
+  function reposition() {
+    const btn = buttonRef.current
+    const pop = popoverRef.current
+    if (!btn) return
+    const r = btn.getBoundingClientRect()
+    const popW = pop?.offsetWidth || 240
+    const popH = pop?.offsetHeight || 0
+    let left = r.left
+    if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8
+    if (left < 8) left = 8
+    let top = r.bottom + 4
+    if (popH > 0 && top + popH > window.innerHeight - 8 && r.top - popH - 4 > 8) {
+      top = r.top - popH - 4 // não cabe por baixo: abre para cima
+    }
+    if (pop) {
+      pop.style.setProperty('left', `${Math.round(left)}px`, 'important')
+      pop.style.setProperty('top', `${Math.round(top)}px`, 'important')
+    }
+  }
+
+  useLayoutEffect(() => {
+    if (!open) return
+    reposition()
+    // Recalcula depois do primeiro paint (a largura real só se conhece com o conteúdo montado).
+    const raf = requestAnimationFrame(reposition)
+    window.addEventListener('resize', reposition)
+    window.addEventListener('scroll', reposition, true)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', reposition)
+      window.removeEventListener('scroll', reposition, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  // Fechar ao clicar fora (o popover vive fora de containerRef por ser portalado — conta
+  // também como "dentro" se o clique cair nele).
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false)
-      }
+      const target = event.target as Node
+      if (containerRef.current?.contains(target)) return
+      if (popoverRef.current?.contains(target)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -96,6 +143,7 @@ export default function MultiSelectPopoverFilter({
     <div ref={containerRef} className={`relative inline-block w-full max-w-full text-left ${className}`}>
       {/* Botão de Disparo do Filtro */}
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen(!open)}
         className={`w-full max-w-full !text-[10px] sm:!text-[11px] !py-0.5 sm:!py-1 !px-1.5 font-extrabold rounded-md flex items-center justify-between gap-1 cursor-pointer shadow-xs transition-all border ${
@@ -109,10 +157,11 @@ export default function MultiSelectPopoverFilter({
         <span className="text-[8px] opacity-70 shrink-0">▼</span>
       </button>
 
-      {/* Popover / Menu Suspenso de Filtro */}
-      {open && (
+      {/* Popover / Menu Suspenso de Filtro — por portal no <body>, posição calculada em JS */}
+      {open && mounted && createPortal(
         <div
-          className={`absolute top-full left-0 z-[100] mt-1 ${width} min-w-[200px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-2.5 space-y-2 text-xs animate-in fade-in zoom-in-95 duration-100`}
+          ref={popoverRef}
+          className={`fixed z-[200] ${width} min-w-[200px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-2.5 space-y-2 text-xs animate-in fade-in zoom-in-95 duration-100`}
         >
           {/* Cabeçalho do Popover */}
           <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800 px-1">
@@ -207,7 +256,8 @@ export default function MultiSelectPopoverFilter({
               <span>Aplicar</span>
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

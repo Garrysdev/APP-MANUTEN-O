@@ -10,6 +10,7 @@ import {
 } from '@/lib/firebase/data'
 import type { TaskCriticidade, TipoTarefa, TaskStatus, Executor } from '@/types/models'
 import { TIPOS_TAREFA } from '@/types/models'
+import { isTaskAssignedToUser } from '@/lib/task-assignment'
 
 export type TaskFormState = { error?: string; ok?: boolean }
 export type StockMaterialRef = {
@@ -224,9 +225,19 @@ export async function updateTaskAction(
 ): Promise<TaskFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
-  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
   const id = String(formData.get('id') ?? '')
   if (!id) return { error: 'ID em falta.' }
+
+  // Era manager-only sem exceção, o que impedia qualquer técnico de gravar uma edição
+  // na sua própria OT — incluindo fotos, observações e fecho. Um técnico só pode gravar
+  // OTs que lhe estão atribuídas (mesmo critério de updateTaskStatusAction).
+  if (profile.role === 'technician') {
+    const existing = await getTask(profile.companyId, id)
+    if (!existing) return { error: 'Tarefa não encontrada.' }
+    if (!isTaskAssignedToUser(existing, profile)) {
+      return { error: 'Sem permissão para editar esta OT.' }
+    }
+  }
   try {
     await updateTask(profile.companyId, id, parseTask(formData))
     revalidatePath('/dashboard/tasks')

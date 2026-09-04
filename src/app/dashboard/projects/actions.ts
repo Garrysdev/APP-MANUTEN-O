@@ -11,6 +11,7 @@ import {
 import { adminDb } from '@/lib/firebase/admin'
 import type { Task, TaskCriticidade, TipoTarefa, TaskStatus } from '@/types/models'
 import { TIPOS_TAREFA } from '@/types/models'
+import { isTaskAssignedToUser } from '@/lib/task-assignment'
 
 export type TaskFormState = { error?: string; ok?: boolean }
 export type StockMaterialRef = { id: string; name: string; unit: string | null }
@@ -141,9 +142,18 @@ export async function updateProjectTaskAction(
 ): Promise<TaskFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
-  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
   const id = String(formData.get('id') ?? '')
   if (!id) return { error: 'ID em falta.' }
+
+  // Mesma correção que em tasks/actions.ts: um técnico só pode gravar tarefas de
+  // projeto que lhe estão atribuídas, não fica bloqueado de todas por omissão.
+  if (profile.role === 'technician') {
+    const existing = await getTask(profile.companyId, id)
+    if (!existing) return { error: 'Tarefa não encontrada.' }
+    if (!isTaskAssignedToUser(existing, profile)) {
+      return { error: 'Sem permissão para editar esta tarefa.' }
+    }
+  }
   try {
     const parsed = parseProjectTask(formData)
     await updateTask(profile.companyId, id, parsed)
