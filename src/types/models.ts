@@ -285,6 +285,17 @@ export interface StockItem {
   unitCost?: number | null
   minQuantity?: number | null
   location?: string | null
+  locationId?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Warehouse {
+  id: string
+  companyId: string
+  name: string
+  address?: string | null
+  notes?: string | null
   createdAt: string
   updatedAt: string
 }

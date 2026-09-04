@@ -4,8 +4,9 @@ import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, X, AlertTriangle, Boxes, Search, Filter, ChevronLeft, ChevronRight, Tag, Layers, CheckSquare } from 'lucide-react'
-import type { StockItem, PlanName, Asset } from '@/types/models'
+import type { StockItem, PlanName, Asset, Warehouse } from '@/types/models'
 import { createStockItemAction, updateStockItemAction, deleteStockItemAction, bulkAssignStockAssetsAction } from './actions'
+import { createWarehouseAction } from '../warehouses/actions'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
@@ -18,14 +19,14 @@ type ModalMode = { type: 'create' } | { type: 'edit'; item: StockItem }
 function StockForm({
   defaultValues,
   assets = [],
-  existingLocations = [],
+  warehouses = [],
   onSave,
   onCancel,
   dict,
 }: {
   defaultValues?: Partial<StockItem>
   assets?: Asset[]
-  existingLocations?: string[]
+  warehouses?: Warehouse[]
   onSave: (formData: FormData) => Promise<void>
   onCancel: () => void
   dict: Dictionary
@@ -48,11 +49,19 @@ function StockForm({
   }, [assets, area, defaultValues?.tag])
   const [tag, setTag] = useState(defaultValues?.tag ?? '')
 
-  // Localização / Armazém — escolher de entre os já criados, ou introduzir um novo nome.
+  // Localização / Armazém — escolher de entre os armazéns já criados (coleção própria,
+  // gerida em /dashboard/warehouses), ou criar um novo diretamente aqui.
+  const matchedWarehouse = defaultValues?.locationId
+    ? warehouses.find((w) => w.id === defaultValues.locationId)
+    : warehouses.find((w) => w.name === defaultValues?.location)
   const [locationMode, setLocationMode] = useState<'select' | 'new'>(
-    defaultValues?.location && !existingLocations.includes(defaultValues.location) ? 'new' : 'select'
+    defaultValues?.location && !matchedWarehouse ? 'new' : 'select'
   )
-  const [location, setLocation] = useState(defaultValues?.location ?? '')
+  const [warehouseId, setWarehouseId] = useState(matchedWarehouse?.id ?? '')
+  const [newWarehouseName, setNewWarehouseName] = useState(
+    defaultValues?.location && !matchedWarehouse ? defaultValues.location : ''
+  )
+  const [warehouseError, setWarehouseError] = useState('')
 
   // Equipamentos Atribuídos — caixas de seleção em vez do <select multiple> nativo
   // (que exigia Ctrl/Cmd e não deixava perceber o que já estava escolhido).
@@ -75,8 +84,38 @@ function StockForm({
     e.preventDefault()
     setBusy(true)
     setError('')
+    setWarehouseError('')
     try {
-      await onSave(new FormData(e.currentTarget))
+      const formData = new FormData(e.currentTarget)
+
+      let finalLocationId = warehouseId
+      let finalLocationName = warehouses.find((w) => w.id === warehouseId)?.name ?? ''
+
+      if (locationMode === 'new' && newWarehouseName.trim()) {
+        const existing = warehouses.find(
+          (w) => w.name.trim().toLowerCase() === newWarehouseName.trim().toLowerCase()
+        )
+        if (existing) {
+          finalLocationId = existing.id
+          finalLocationName = existing.name
+        } else {
+          const wfd = new FormData()
+          wfd.set('name', newWarehouseName.trim())
+          const res = await createWarehouseAction(wfd)
+          if (res.error || !res.id) {
+            setWarehouseError(res.error || 'Erro ao criar o novo armazém.')
+            setBusy(false)
+            return
+          }
+          finalLocationId = res.id
+          finalLocationName = newWarehouseName.trim()
+        }
+      }
+
+      formData.set('location', finalLocationName)
+      formData.set('locationId', finalLocationId)
+
+      await onSave(formData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido.')
     } finally {
@@ -164,17 +203,16 @@ function StockForm({
           {locationMode === 'select' ? (
             <div className="flex gap-2">
               <select
-                name="location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                value={warehouseId}
+                onChange={(e) => setWarehouseId(e.target.value)}
                 className="input flex-1"
               >
                 <option value="">— Sem armazém —</option>
-                {existingLocations.map((l) => <option key={l} value={l}>{l}</option>)}
+                {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
               <button
                 type="button"
-                onClick={() => { setLocationMode('new'); setLocation('') }}
+                onClick={() => { setLocationMode('new'); setNewWarehouseName('') }}
                 className="btn-secondary text-xs px-3 shrink-0"
                 title="Criar um novo armazém"
               >
@@ -184,17 +222,16 @@ function StockForm({
           ) : (
             <div className="flex gap-2">
               <input
-                name="location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                value={newWarehouseName}
+                onChange={(e) => setNewWarehouseName(e.target.value)}
                 className="input flex-1"
                 placeholder="Nome do novo armazém…"
                 autoFocus
               />
-              {existingLocations.length > 0 && (
+              {warehouses.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => { setLocationMode('select'); setLocation(defaultValues?.location ?? '') }}
+                  onClick={() => { setLocationMode('select'); setWarehouseId(matchedWarehouse?.id ?? '') }}
                   className="btn-secondary text-xs px-3 shrink-0"
                   title="Escolher um armazém já existente"
                 >
@@ -203,6 +240,12 @@ function StockForm({
               )}
             </div>
           )}
+          {warehouseError && (
+            <p className="text-xs text-red-600 mt-1">{warehouseError}</p>
+          )}
+          <p className="text-[11px] text-slate-400 mt-1">
+            Gerir armazéns (morada, notas) em <span className="font-semibold">Armazéns</span> no menu lateral.
+          </p>
         </div>
 
         {/* Atribuição a Múltiplos Equipamentos */}
@@ -268,7 +311,7 @@ function StockForm({
   )
 }
 
-export default function StocksClient({ items, assets = [], plan }: { items: StockItem[], assets?: Asset[], plan: PlanName }) {
+export default function StocksClient({ items, assets = [], warehouses = [], plan }: { items: StockItem[], assets?: Asset[], warehouses?: Warehouse[], plan: PlanName }) {
   const router = useRouter()
   const { dict } = useLanguage()
   const [modal, setModal] = useState<ModalMode | null>(null)
@@ -359,13 +402,6 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
       const u = (i.unit || 'un').trim()
       if (u) set.add(u)
     })
-    return Array.from(set).sort()
-  }, [items])
-
-  // Armazéns já criados — derivados dos artigos existentes, para o seletor de Localização.
-  const availableLocations = useMemo(() => {
-    const set = new Set<string>()
-    items.forEach((i) => { if (i.location) set.add(i.location.trim()) })
     return Array.from(set).sort()
   }, [items])
 
@@ -836,7 +872,7 @@ export default function StocksClient({ items, assets = [], plan }: { items: Stoc
             <StockForm
               defaultValues={modal.type === 'edit' ? modal.item : undefined}
               assets={assets}
-              existingLocations={availableLocations}
+              warehouses={warehouses}
               onSave={(formData) =>
                 modal.type === 'create'
                   ? handleCreate(formData)

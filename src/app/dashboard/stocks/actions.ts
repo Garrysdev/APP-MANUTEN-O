@@ -40,6 +40,7 @@ export async function createStockItemAction(
       unitCost: unitCostRaw > 0 ? unitCostRaw : null,
       minQuantity: minQtyRaw > 0 ? minQtyRaw : null,
       location: String(formData.get('location') ?? '').trim() || null,
+      locationId: String(formData.get('locationId') ?? '').trim() || null,
       assetIds: assetIds.length > 0 ? assetIds : null,
       assetId: assetIds[0] || null,
     })
@@ -82,6 +83,7 @@ export async function updateStockItemAction(
       unitCost: unitCostRaw > 0 ? unitCostRaw : null,
       minQuantity: minQtyRaw > 0 ? minQtyRaw : null,
       location: String(formData.get('location') ?? '').trim() || null,
+      locationId: String(formData.get('locationId') ?? '').trim() || null,
       assetIds: assetIds.length > 0 ? assetIds : null,
       assetId: assetIds[0] || null,
     })

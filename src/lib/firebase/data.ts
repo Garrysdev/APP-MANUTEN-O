@@ -9,7 +9,7 @@ import { adminDb, adminAuth } from './admin'
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
-import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage } from '@/types/models'
+import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
   return { id: doc.id, ...doc.data() } as T
@@ -1423,6 +1423,65 @@ export async function deleteStockItem(companyId: string, id: string): Promise<vo
     }
   } catch (err) {
     console.error('[deleteStockItem] Error:', err)
+  }
+}
+
+// ── WAREHOUSES (ARMAZÉNS) ───────────────────────────────────────────────────
+
+export const listWarehouses = cache(async function(companyId: string): Promise<Warehouse[]> {
+  try {
+    const snap = await adminDb()
+      .collection('warehouses')
+      .where('companyId', '==', companyId)
+      .get()
+    return snap.docs.map((d) => serialize<Warehouse>(d)).sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+  } catch (err) {
+    console.error('[listWarehouses] Error:', err)
+    return []
+  }
+})
+
+export async function createWarehouse(
+  companyId: string,
+  data: Omit<Warehouse, 'id' | 'companyId' | 'createdAt' | 'updatedAt'>
+): Promise<string> {
+  const now = new Date().toISOString()
+  try {
+    const ref = await adminDb()
+      .collection('warehouses')
+      .add({ ...data, companyId, createdAt: now, updatedAt: now })
+    return ref.id
+  } catch (err) {
+    console.error('[createWarehouse] Error:', err)
+    throw err instanceof Error ? err : new Error('Erro ao gravar o armazém.')
+  }
+}
+
+export async function updateWarehouse(
+  companyId: string,
+  id: string,
+  data: Partial<Omit<Warehouse, 'id' | 'companyId' | 'createdAt'>>
+): Promise<void> {
+  try {
+    const ref = adminDb().collection('warehouses').doc(id)
+    const doc = await ref.get()
+    if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Armazém não encontrado.')
+    await ref.update({ ...data, updatedAt: new Date().toISOString() })
+  } catch (err) {
+    console.error('[updateWarehouse] Error:', err)
+    throw err instanceof Error ? err : new Error('Erro ao atualizar o armazém.')
+  }
+}
+
+export async function deleteWarehouse(companyId: string, id: string): Promise<void> {
+  try {
+    const ref = adminDb().collection('warehouses').doc(id)
+    const doc = await ref.get()
+    if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Armazém não encontrado.')
+    await ref.delete()
+  } catch (err) {
+    console.error('[deleteWarehouse] Error:', err)
+    throw err instanceof Error ? err : new Error('Erro ao apagar o armazém.')
   }
 }
 
