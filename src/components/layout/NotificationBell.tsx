@@ -27,13 +27,14 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
   useEffect(() => {
     let isMounted = true
     const interval = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
       try {
         const fresh = await getLatestNotificationsAction()
         if (isMounted && Array.isArray(fresh) && fresh.length >= 0) {
           setNotifications(fresh)
         }
       } catch {}
-    }, 15000)
+    }, 30000)
 
     return () => {
       isMounted = false

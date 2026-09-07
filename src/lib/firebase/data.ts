@@ -1511,11 +1511,26 @@ export async function deleteStockItem(companyId: string, id: string): Promise<vo
 
 export const listWarehouses = cache(async function(companyId: string): Promise<Warehouse[]> {
   try {
+    const finalCompanyId = companyId || DEMO_COMPANY_ID
     const snap = await adminDb()
       .collection('warehouses')
-      .where('companyId', '==', companyId)
+      .where('companyId', '==', finalCompanyId)
       .get()
-    return snap.docs.map((d) => serialize<Warehouse>(d)).sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+    
+    let docs = snap.docs.map((d) => serialize<Warehouse>(d))
+    
+    if (docs.length === 0 && isDemoCompany(finalCompanyId)) {
+      const altSnap = await adminDb()
+        .collection('warehouses')
+        .where('companyId', 'in', [DEMO_COMPANY_ID, 'demo', 'demo_company'])
+        .get()
+        .catch(() => null)
+      if (altSnap && !altSnap.empty) {
+        docs = altSnap.docs.map((d) => serialize<Warehouse>(d))
+      }
+    }
+    
+    return docs.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'))
   } catch (err) {
     console.error('[listWarehouses] Error:', err)
     return []
@@ -1527,14 +1542,24 @@ export async function createWarehouse(
   data: Omit<Warehouse, 'id' | 'companyId' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   const now = new Date().toISOString()
+  const finalCompanyId = companyId || DEMO_COMPANY_ID
+  const cleanObj = JSON.parse(
+    JSON.stringify({
+      name: (data.name || '').trim(),
+      address: data.address ? String(data.address).trim() : null,
+      notes: data.notes ? String(data.notes).trim() : null,
+      companyId: finalCompanyId,
+      createdAt: now,
+      updatedAt: now,
+    })
+  )
   try {
-    const ref = await adminDb()
-      .collection('warehouses')
-      .add({ ...data, companyId, createdAt: now, updatedAt: now })
+    const ref = await adminDb().collection('warehouses').add(cleanObj)
+    revalidateTag('warehouses')
     return ref.id
   } catch (err) {
     console.error('[createWarehouse] Error:', err)
-    throw err instanceof Error ? err : new Error('Erro ao gravar o armazém.')
+    throw err instanceof Error ? err : new Error('Erro ao gravar o armazém no Firestore.')
   }
 }
 
@@ -1546,8 +1571,24 @@ export async function updateWarehouse(
   try {
     const ref = adminDb().collection('warehouses').doc(id)
     const doc = await ref.get()
-    if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Armazém não encontrado.')
-    await ref.update({ ...data, updatedAt: new Date().toISOString() })
+    if (!doc.exists) throw new Error('Armazém não encontrado.')
+    const existingCompanyId = doc.data()?.companyId
+    if (
+      existingCompanyId &&
+      existingCompanyId !== companyId &&
+      !isDemoCompany(companyId) &&
+      !isDemoCompany(existingCompanyId)
+    ) {
+      throw new Error('Armazém não pertence à sua empresa.')
+    }
+    const cleanObj = JSON.parse(
+      JSON.stringify({
+        ...data,
+        updatedAt: new Date().toISOString(),
+      })
+    )
+    await ref.update(cleanObj)
+    revalidateTag('warehouses')
   } catch (err) {
     console.error('[updateWarehouse] Error:', err)
     throw err instanceof Error ? err : new Error('Erro ao atualizar o armazém.')
@@ -1558,8 +1599,18 @@ export async function deleteWarehouse(companyId: string, id: string): Promise<vo
   try {
     const ref = adminDb().collection('warehouses').doc(id)
     const doc = await ref.get()
-    if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Armazém não encontrado.')
+    if (!doc.exists) throw new Error('Armazém não encontrado.')
+    const existingCompanyId = doc.data()?.companyId
+    if (
+      existingCompanyId &&
+      existingCompanyId !== companyId &&
+      !isDemoCompany(companyId) &&
+      !isDemoCompany(existingCompanyId)
+    ) {
+      throw new Error('Armazém não pertence à sua empresa.')
+    }
     await ref.delete()
+    revalidateTag('warehouses')
   } catch (err) {
     console.error('[deleteWarehouse] Error:', err)
     throw err instanceof Error ? err : new Error('Erro ao apagar o armazém.')
@@ -2050,54 +2101,59 @@ export async function createInternalMessage(
     }
   }
 
-  try {
-    const allUsersSnap = await adminDb().collection('users').get()
-    const companyUsers = allUsersSnap.docs.map((d) => serialize<User>(d))
+  // Disparar notificações em background para não bloquear a resposta do servidor nem tornar o envio lento
+  void (async () => {
+    try {
+      const allUsersSnap = await adminDb().collection('users').get()
+      const companyUsers = allUsersSnap.docs.map((d) => serialize<User>(d))
 
-    const targetUserIds = new Set<string>()
-    if (data.recipientIds.includes('ALL')) {
-      companyUsers.forEach((u) => { if (u.id !== senderId) targetUserIds.add(u.id) })
-    } else {
-      data.recipientIds.forEach((rec) => {
-        const recClean = String(rec).toLowerCase().trim().replace(/^(tech_|user_)/, '')
-        companyUsers.forEach((u) => {
-          const uAbbr = String(u.abbreviation || '').toLowerCase().trim()
-          const uName = String(u.name || '').toLowerCase().trim()
-          const uId = String(u.id || '').toLowerCase().trim().replace(/^(tech_|user_)/, '')
-          if (
-            u.id !== senderId &&
-            (uId === recClean ||
-             uAbbr === recClean ||
-             uName === recClean ||
-             recClean.includes(uAbbr) ||
-             recClean.includes(uName))
-          ) {
-            targetUserIds.add(u.id)
-          }
+      const targetUserIds = new Set<string>()
+      if (data.recipientIds.includes('ALL')) {
+        companyUsers.forEach((u) => { if (u.id !== senderId) targetUserIds.add(u.id) })
+      } else {
+        data.recipientIds.forEach((rec) => {
+          const recClean = String(rec).toLowerCase().trim().replace(/^(tech_|user_)/, '')
+          companyUsers.forEach((u) => {
+            const uAbbr = String(u.abbreviation || '').toLowerCase().trim()
+            const uName = String(u.name || '').toLowerCase().trim()
+            const uId = String(u.id || '').toLowerCase().trim().replace(/^(tech_|user_)/, '')
+            if (
+              u.id !== senderId &&
+              (uId === recClean ||
+               uAbbr === recClean ||
+               uName === recClean ||
+               recClean.includes(uAbbr) ||
+               recClean.includes(uName))
+            ) {
+              targetUserIds.add(u.id)
+            }
+          })
         })
-      })
-    }
+      }
 
-    const notifTitle = data.replyToId
-      ? `↩️ Resposta de ${data.senderName}`
-      : (data.requiresResponse || data.status === 'awaiting_reply'
-          ? `⏳ Mensagem (Aguarda Resposta) de ${data.senderName}`
-          : `💬 Nova Mensagem de ${data.senderName}`)
+      const notifTitle = data.replyToId
+        ? `↩️ Resposta de ${data.senderName}`
+        : (data.requiresResponse || data.status === 'awaiting_reply'
+            ? `⏳ Mensagem (Aguarda Resposta) de ${data.senderName}`
+            : `💬 Nova Mensagem de ${data.senderName}`)
 
-    for (const uId of Array.from(targetUserIds)) {
-      await createNotification(companyId, {
-        userId: uId,
-        title: notifTitle,
-        body: data.content.slice(0, 80) + (data.content.length > 80 ? '...' : ''),
-        type: 'internal_message',
-        link: '/dashboard/messages',
-        senderName: data.senderName,
-        senderAbbr: data.senderAbbr,
-      }).catch(console.error)
+      await Promise.allSettled(
+        Array.from(targetUserIds).map((uId) =>
+          createNotification(companyId, {
+            userId: uId,
+            title: notifTitle,
+            body: data.content.slice(0, 80) + (data.content.length > 80 ? '...' : ''),
+            type: 'internal_message',
+            link: '/dashboard/messages',
+            senderName: data.senderName,
+            senderAbbr: data.senderAbbr,
+          })
+        )
+      )
+    } catch (err) {
+      console.error('[createInternalMessage notifications] Error:', err)
     }
-  } catch (err) {
-    console.error('[createInternalMessage notifications] Error:', err)
-  }
+  })()
 
   return msgObj.id
 }

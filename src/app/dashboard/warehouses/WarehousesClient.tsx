@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Warehouse as WarehouseIcon, Plus, Trash2, Edit2, MapPin } from 'lucide-react'
 import type { Warehouse } from '@/types/models'
@@ -16,6 +16,10 @@ export default function WarehousesClient({ initialWarehouses }: { initialWarehou
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    setWarehouses(initialWarehouses)
+  }, [initialWarehouses])
 
   function openCreate() {
     setEditingWarehouse(null)
@@ -45,9 +49,9 @@ export default function WarehousesClient({ initialWarehouses }: { initialWarehou
     setError('')
 
     const formData = new FormData()
-    formData.append('name', name)
-    formData.append('address', address)
-    formData.append('notes', notes)
+    formData.append('name', name.trim())
+    formData.append('address', address.trim())
+    formData.append('notes', notes.trim())
 
     const res = editingWarehouse
       ? await updateWarehouseAction(editingWarehouse.id, formData)
@@ -57,6 +61,30 @@ export default function WarehousesClient({ initialWarehouses }: { initialWarehou
     if (res?.error) {
       setError(res.error)
     } else {
+      if (editingWarehouse) {
+        setWarehouses((prev) =>
+          prev.map((w) =>
+            w.id === editingWarehouse.id
+              ? { ...w, name: name.trim(), address: address.trim() || null, notes: notes.trim() || null }
+              : w
+          ).sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+        )
+      } else if (res.id) {
+        setWarehouses((prev) =>
+          [
+            ...prev,
+            {
+              id: res.id!,
+              companyId: '',
+              name: name.trim(),
+              address: address.trim() || null,
+              notes: notes.trim() || null,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ].sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+        )
+      }
       setModalOpen(false)
       router.refresh()
     }
