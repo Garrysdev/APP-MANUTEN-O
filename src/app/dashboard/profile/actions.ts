@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { getCurrentProfile } from '@/lib/firebase/session'
+import { getCurrentProfile, DEMO_COMPANY_ID } from '@/lib/firebase/session'
 import { updateUserProfile } from '@/lib/firebase/data'
 import { adminAuth } from '@/lib/firebase/admin'
 

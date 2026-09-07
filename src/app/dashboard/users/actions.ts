@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { getCurrentProfile } from '@/lib/firebase/session'
+import { getCurrentProfile, DEMO_COMPANY_ID } from '@/lib/firebase/session'
 import { createUserDirect, deactivateUser, deleteUserPermanent, checkUserHasHistory, countActiveUsers, countPendingInvites, createInviteToken, updateUserRate } from '@/lib/firebase/data'
 import { adminDb } from '@/lib/firebase/admin'
 import { LIMITS } from '@/lib/plans'
