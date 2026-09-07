@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   MessageSquare, Send, Plus, Search, Filter, Camera, Image as ImageIcon,
   CheckCheck, User, Users, ClipboardList, ShieldAlert, ArrowLeft, X, Paperclip,
@@ -49,7 +50,12 @@ export default function MessagesClient({
   currentUserAbbr: string
   isManager: boolean
 }) {
+  const router = useRouter()
   const [localMessages, setLocalMessages] = useState<InternalMessage[]>(messages)
+
+  useEffect(() => {
+    setLocalMessages(messages)
+  }, [messages])
   const [filter, setFilter] = useState<'all' | 'inbox' | 'sent'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | MessageStatus>('all')
   const [techFilter, setTechFilter] = useState('')
@@ -105,8 +111,13 @@ export default function MessagesClient({
 
   const filteredMessages = localMessages.filter((m) => {
     // 1. Folder (Inbox / Sent)
-    if (filter === 'inbox' && m.senderId === currentUserId) return false
-    if (filter === 'sent' && m.senderId !== currentUserId) return false
+    const isSentByMe =
+      m.senderId === currentUserId ||
+      (currentUserAbbr && m.senderAbbr?.toUpperCase() === currentUserAbbr.toUpperCase()) ||
+      (currentUserName && m.senderName?.toLowerCase() === currentUserName.toLowerCase())
+
+    if (filter === 'inbox' && isSentByMe) return false
+    if (filter === 'sent' && !isSentByMe) return false
 
     // 2. Status filter
     const effectiveStatus = m.status || (m.requiresResponse ? 'awaiting_reply' : 'info')
@@ -244,6 +255,8 @@ export default function MessagesClient({
     setStatusUpdatingId(null)
     if (!res.ok && res.error) {
       alert(`Erro ao atualizar estado: ${res.error}`)
+    } else {
+      router.refresh()
     }
   }
 
@@ -260,6 +273,8 @@ export default function MessagesClient({
     const res = await deleteInternalMessageAction(messageId)
     if (!res.ok && res.error) {
       alert(`Erro ao apagar mensagem: ${res.error}`)
+    } else {
+      router.refresh()
     }
   }
 
@@ -365,6 +380,7 @@ export default function MessagesClient({
         setSelectedTechIds([])
         setPhotoFile(null)
         setPhotoPreview(null)
+        router.refresh()
       }
     } catch (err) {
       setBusy(false)

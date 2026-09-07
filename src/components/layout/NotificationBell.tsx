@@ -3,7 +3,7 @@ import { useRouter } from 'next/navigation'
 import { Bell, CheckCheck, MessageSquare, ClipboardList, AlertTriangle, ExternalLink, X, Volume2, Smartphone } from 'lucide-react'
 import type { AppNotification } from '@/types/models'
 import { formatDateTime } from '@/lib/utils'
-import { markNotificationReadAction, markAllNotificationsReadAction } from '@/app/dashboard/messages/actions'
+import { markNotificationReadAction, markAllNotificationsReadAction, getLatestNotificationsAction } from '@/app/dashboard/messages/actions'
 import { playNotificationSound } from '@/lib/sound'
 
 export default function NotificationBell({ initialNotifications = [] }: { initialNotifications?: AppNotification[] }) {
@@ -22,6 +22,24 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
     }
     prevCountRef.current = unreadCount
   }, [unreadCount])
+
+  // Polling periódico em segundo plano para capturar novas mensagens / OTs atribuídas
+  useEffect(() => {
+    let isMounted = true
+    const interval = setInterval(async () => {
+      try {
+        const fresh = await getLatestNotificationsAction()
+        if (isMounted && Array.isArray(fresh) && fresh.length >= 0) {
+          setNotifications(fresh)
+        }
+      } catch {}
+    }, 15000)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [])
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {

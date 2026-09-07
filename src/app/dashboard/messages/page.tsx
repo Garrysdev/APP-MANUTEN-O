@@ -9,8 +9,16 @@ export default async function MessagesPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
 
+  const roleStr = String(profile.role || '').toLowerCase().trim()
+  const isManager =
+    roleStr === 'manager' ||
+    roleStr === 'admin' ||
+    roleStr === 'gestor' ||
+    roleStr === 'administrador' ||
+    profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
+
   const [messages, users, tasks] = await Promise.all([
-    listInternalMessages(profile.companyId, profile.role === 'manager' ? undefined : profile.id),
+    listInternalMessages(profile.companyId, isManager ? undefined : profile),
     listUsers(profile.companyId),
     listTasks(profile.companyId),
   ])
@@ -37,7 +45,7 @@ export default async function MessagesPage() {
       currentUserId={profile.id}
       currentUserName={profile.name}
       currentUserAbbr={profile.abbreviation ?? profile.name.split(' ').map((n) => n[0]).join('').toUpperCase()}
-      isManager={profile.role === 'manager'}
+      isManager={isManager}
     />
   )
 }

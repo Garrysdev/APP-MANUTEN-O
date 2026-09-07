@@ -134,3 +134,10 @@ export async function markAllNotificationsReadAction() {
   await markAllNotificationsRead(profile.companyId, profile.id)
   revalidatePath('/dashboard')
 }
+
+export async function getLatestNotificationsAction() {
+  const profile = await getCurrentProfile()
+  if (!profile) return []
+  const { listNotifications } = await import('@/lib/firebase/data')
+  return listNotifications(profile.companyId, profile.id)
+}

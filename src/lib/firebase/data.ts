@@ -1772,12 +1772,19 @@ const listNotificationsCached = unstable_cache(
       const snap = await adminDb()
         .collection('notifications')
         .where('companyId', '==', companyId)
-        .where('userId', '==', userId)
         .orderBy('createdAt', 'desc')
-        .limit(50)
+        .limit(100)
         .get()
       const docs = snap.docs.map((d) => serialize<AppNotification>(d))
-      if (docs.length > 0) return docs
+      if (docs.length > 0) {
+        const uLower = String(userId || '').toLowerCase().trim()
+        const uClean = uLower.replace(/^(tech_|user_)/, '')
+        return docs.filter((n) => {
+          const target = String(n.userId || '').toLowerCase().trim()
+          const targetClean = target.replace(/^(tech_|user_)/, '')
+          return target === uLower || target === uClean || targetClean === uClean
+        })
+      }
     } catch (err: any) {
       const isQuotaErr = String(err?.message || err).includes('Quota exceeded') || String(err?.message || err).includes('RESOURCE_EXHAUSTED')
       if (isQuotaErr) {
@@ -1786,7 +1793,14 @@ const listNotificationsCached = unstable_cache(
         console.error('[listNotifications] Error:', err)
       }
     }
-    return cachedNotifications.filter((n) => n.companyId === companyId && n.userId === userId)
+    const uLower = String(userId || '').toLowerCase().trim()
+    const uClean = uLower.replace(/^(tech_|user_)/, '')
+    return cachedNotifications.filter((n) => {
+      if (n.companyId !== companyId) return false
+      const target = String(n.userId || '').toLowerCase().trim()
+      const targetClean = target.replace(/^(tech_|user_)/, '')
+      return target === uLower || target === uClean || targetClean === uClean
+    })
   },
   ['notifications'],
   { revalidate: 15, tags: ['notifications'] }
@@ -1850,50 +1864,143 @@ export async function markNotificationRead(companyId: string, id: string): Promi
 }
 
 export async function markAllNotificationsRead(companyId: string, userId: string): Promise<void> {
+  const uLower = String(userId || '').toLowerCase().trim()
+  const uClean = uLower.replace(/^(tech_|user_)/, '')
   try {
     const snap = await adminDb()
       .collection('notifications')
       .where('companyId', '==', companyId)
-      .where('userId', '==', userId)
       .where('read', '==', false)
       .get()
     const batch = adminDb().batch()
-    snap.docs.forEach((doc) => batch.update(doc.ref, { read: true }))
+    snap.docs.forEach((doc) => {
+      const target = String(doc.data()?.userId || '').toLowerCase().trim()
+      const targetClean = target.replace(/^(tech_|user_)/, '')
+      if (target === uLower || target === uClean || targetClean === uClean) {
+        batch.update(doc.ref, { read: true })
+      }
+    })
     await batch.commit()
   } catch (err) {
     console.error('[markAllNotificationsRead] Error:', err)
   }
   cachedNotifications.forEach((n) => {
-    if (n.companyId === companyId && n.userId === userId) n.read = true
+    if (n.companyId === companyId) {
+      const target = String(n.userId || '').toLowerCase().trim()
+      const targetClean = target.replace(/^(tech_|user_)/, '')
+      if (target === uLower || target === uClean || targetClean === uClean) {
+        n.read = true
+      }
+    }
   })
   revalidateTag('notifications')
 }
 
-export const listInternalMessages = cache(async function(companyId: string, userId?: string): Promise<InternalMessage[]> {
+export const listInternalMessages = cache(async function(
+  companyId: string,
+  userRefOrId?: any
+): Promise<InternalMessage[]> {
   try {
-    const snap = await adminDb()
-      .collection('internal_messages')
-      .get()
-    const docs = snap.docs
-      .map((d) => ({ ...serialize<InternalMessage>(d), id: d.id }))
-      .filter((m) => !m.companyId || m.companyId === companyId || companyId === DEMO_COMPANY_ID)
-      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    let docs: InternalMessage[] = []
+    try {
+      const snap = await adminDb()
+        .collection('internal_messages')
+        .get()
+      docs = snap.docs.map((d) => ({ ...serialize<InternalMessage>(d), id: d.id }))
+    } catch (dbErr) {
+      console.error('[listInternalMessages Firestore read error]:', dbErr)
+    }
 
-    if (!userId) return docs
-    return docs.filter(
-      (m) =>
-        m.senderId === userId ||
-        (m.recipientIds || []).includes(userId) ||
-        (m.recipientIds || []).includes('ALL')
-    )
+    const seen = new Set<string>()
+    const allDocs: InternalMessage[] = []
+    for (const m of [...docs, ...cachedInternalMessages]) {
+      if (m.id && !seen.has(m.id)) {
+        seen.add(m.id)
+        if (!m.companyId || m.companyId === companyId || companyId === DEMO_COMPANY_ID || isDemoCompany(companyId) || isDemoCompany(m.companyId)) {
+          allDocs.push(m)
+        }
+      }
+    }
+    allDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+
+    if (!userRefOrId) return allDocs
+
+    // Se for gestor ou admin sem filtro específico, acede a todas as mensagens da empresa
+    const roleStr = String(userRefOrId?.role || '').toLowerCase().trim()
+    const emailStr = String(userRefOrId?.email || '').toLowerCase().trim()
+    const isManager =
+      roleStr === 'manager' ||
+      roleStr === 'admin' ||
+      roleStr === 'gestor' ||
+      roleStr === 'administrador' ||
+      emailStr === 'garrido.rui@gmail.com'
+
+    // Se for gestor puro (sem objeto de técnico), devolve tudo
+    if (isManager && !userRefOrId?.forceTechnicianFilter) {
+      return allDocs
+    }
+
+    // Extrair todos os possíveis tokens do utilizador
+    const tokens = new Set<string>()
+    const addToken = (val?: string | null) => {
+      if (!val) return
+      const clean = String(val).trim().toLowerCase()
+      if (clean) {
+        tokens.add(clean)
+        tokens.add(clean.replace(/^(tech_|user_)/, ''))
+      }
+    }
+
+    if (typeof userRefOrId === 'string') {
+      addToken(userRefOrId)
+    } else if (typeof userRefOrId === 'object') {
+      addToken(userRefOrId.id)
+      addToken(userRefOrId.abbreviation)
+      addToken(userRefOrId.name)
+      addToken(userRefOrId.email)
+    }
+
+    return allDocs.filter((m) => {
+      // 1. Mensagens para todos os técnicos
+      const recIds = (m.recipientIds || []).map((r) => String(r).toLowerCase().trim())
+      if (recIds.includes('all') || (m.recipientNames || '').toLowerCase().includes('todos')) {
+        return true
+      }
+
+      // 2. Destinatário nos recipientIds
+      for (const r of recIds) {
+        const cleanR = r.replace(/^(tech_|user_)/, '')
+        if (tokens.has(r) || tokens.has(cleanR)) return true
+      }
+
+      // 3. Destinatário no recipientNames
+      if (m.recipientNames) {
+        const rnLower = m.recipientNames.toLowerCase()
+        for (const t of Array.from(tokens)) {
+          if (t.length >= 2 && rnLower.includes(t)) return true
+        }
+      }
+
+      // 4. Remetente é o próprio utilizador (mensagens enviadas por ele)
+      if (m.senderId) {
+        const sLower = String(m.senderId).toLowerCase().trim()
+        const sClean = sLower.replace(/^(tech_|user_)/, '')
+        if (tokens.has(sLower) || tokens.has(sClean)) return true
+      }
+      if (m.senderAbbr && tokens.has(String(m.senderAbbr).toLowerCase().trim())) return true
+      if (m.senderName) {
+        const snLower = m.senderName.toLowerCase()
+        for (const t of Array.from(tokens)) {
+          if (t.length >= 3 && snLower.includes(t)) return true
+        }
+      }
+
+      return false
+    })
   } catch (err) {
     console.error('[listInternalMessages] Error:', err)
   }
-  return cachedInternalMessages.filter(
-    (m) =>
-      (!m.companyId || m.companyId === companyId) &&
-      (!userId || m.senderId === userId || (m.recipientIds || []).includes(userId) || (m.recipientIds || []).includes('ALL'))
-  )
+  return cachedInternalMessages
 })
 
 export async function createInternalMessage(
@@ -1902,9 +2009,11 @@ export async function createInternalMessage(
   data: Omit<InternalMessage, 'id' | 'companyId' | 'senderId' | 'createdAt'>
 ): Promise<string> {
   const now = new Date().toISOString()
+  const finalCompanyId = companyId || DEMO_COMPANY_ID
+  const generatedId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
   const msgObj: InternalMessage = {
-    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    companyId,
+    id: generatedId,
+    companyId: finalCompanyId,
     senderId,
     createdAt: now,
     readBy: [senderId],
@@ -1922,6 +2031,7 @@ export async function createInternalMessage(
     console.error('[createInternalMessage] Error:', err)
   }
   cachedInternalMessages.unshift(msgObj)
+  revalidateTag('messages')
 
   // Se esta mensagem é uma resposta a outra, atualizar o estado da mensagem original para 'replied'
   if (data.replyToId) {
@@ -1949,8 +2059,19 @@ export async function createInternalMessage(
       companyUsers.forEach((u) => { if (u.id !== senderId) targetUserIds.add(u.id) })
     } else {
       data.recipientIds.forEach((rec) => {
+        const recClean = String(rec).toLowerCase().trim().replace(/^(tech_|user_)/, '')
         companyUsers.forEach((u) => {
-          if (u.id !== senderId && (u.id === rec || u.abbreviation === rec || u.name === rec)) {
+          const uAbbr = String(u.abbreviation || '').toLowerCase().trim()
+          const uName = String(u.name || '').toLowerCase().trim()
+          const uId = String(u.id || '').toLowerCase().trim().replace(/^(tech_|user_)/, '')
+          if (
+            u.id !== senderId &&
+            (uId === recClean ||
+             uAbbr === recClean ||
+             uName === recClean ||
+             recClean.includes(uAbbr) ||
+             recClean.includes(uName))
+          ) {
             targetUserIds.add(u.id)
           }
         })
@@ -1999,6 +2120,7 @@ export async function updateInternalMessageStatus(
   } catch (err) {
     console.error('[updateInternalMessageStatus] Error:', err)
   }
+  revalidateTag('messages')
 }
 
 export async function deleteInternalMessage(
@@ -2015,6 +2137,7 @@ export async function deleteInternalMessage(
     console.error('[deleteInternalMessage] Error:', err)
     throw err
   }
+  revalidateTag('messages')
 }
 
 
