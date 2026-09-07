@@ -79,8 +79,8 @@ const MANUAL_SECTIONS: ManualSection[] = [
     title: '3. Notificações no Telemóvel & Mensagens Internas',
     icon: Smartphone,
     category: 'Comunicação',
-    badge: 'Mobile Push',
-    summary: 'Receba alertas instantâneos no telemóvel para novas OTs atribuídas e mensagens da equipa em tempo real.',
+    badge: 'Mobile & Estados',
+    summary: 'Receba alertas instantâneos no telemóvel para novas OTs e comunique com a equipa através de mensagens com múltiplos estados e pedidos de resposta.',
     steps: [
       {
         title: 'Notificações Web Push em Tempo Real',
@@ -88,16 +88,23 @@ const MANUAL_SECTIONS: ManualSection[] = [
         tip: 'Certifique-se de aceitar as permissões de notificação do browser quando solicitado.'
       },
       {
-        title: 'Ativação e Sincronização Automática',
-        desc: 'Ao iniciar sessão no telemóvel, o sistema sincroniza a subscrição de notificações de forma transparente. Pode também clicar no **Sino de Notificações** no topo e premir "Ativar Notificações no Telemóvel".'
+        title: 'Estados das Mensagens (Aguarda Resposta, Respondida, Informativa, Fechada)',
+        desc: 'Cada mensagem interna suporta 4 estados: **⏳ Aguarda Resposta** (alerta destacado para resposta obrigatória), **💬 Respondida** (atualizado automaticamente após o destinatário responder), **ℹ️ Informativa** (comunicação sem necessidade de retorno) e **✅ Fechada** (concluída/arquivada).',
+        tip: 'Pode alterar o estado diretamente no seletor rápido do cartão da mensagem ou no modal de detalhe.'
       },
       {
-        title: 'Canal de Mensagens Internas',
-        desc: 'Aceda a **Mensagens** na barra lateral para comunicar em direto com a equipa técnica, partilhar fotografias de avarias e coordenar intervenções urgentes.'
+        title: 'Responder no Mesmo Menu de Nova Mensagem',
+        desc: 'Ao clicar em **"Responder"** num cartão ou no detalhe da mensagem, é aberto o mesmo menu de composição, com o destinatário, assunto (`Re: ...`), OT associada e trecho da mensagem original preenchidos de forma automática.',
+        tip: 'Ao enviar a resposta, a mensagem original passa automaticamente ao estado "Respondida".'
+      },
+      {
+        title: 'Ativação e Sincronização Automática no Telemóvel',
+        desc: 'Ao iniciar sessão no telemóvel, o sistema sincroniza a subscrição de notificações de forma transparente. Pode também clicar no **Sino de Notificações** no topo e premir "Ativar Notificações no Telemóvel".'
       }
     ],
     faqs: [
-      { q: 'Não estou a receber notificações no meu smartphone Android / iPhone. O que fazer?', a: '1) Clique no ícone do sino e selecione "Ativar Notificações"; 2) Verifique nas definições do telemóvel se o browser (Chrome / Safari) tem permissão para emitir notificações.' }
+      { q: 'Não estou a receber notificações no meu smartphone Android / iPhone. O que fazer?', a: '1) Clique no ícone do sino e selecione "Ativar Notificações"; 2) Verifique nas definições do telemóvel se o browser (Chrome / Safari) tem permissão para emitir notificações.' },
+      { q: 'Como saber se uma mensagem aguarda a minha resposta?', a: 'Mensagens que aguardam resposta surgem destacadas a cor âmbar com o badge "⏳ Aguarda Resposta" e botão direto "Responder".' }
     ]
   },
   {

@@ -5,10 +5,12 @@ import Link from 'next/link'
 import {
   MessageSquare, Send, Plus, Search, Filter, Camera, Image as ImageIcon,
   CheckCheck, User, Users, ClipboardList, ShieldAlert, ArrowLeft, X, Paperclip,
+  Clock, Reply, CheckCircle2, Info, Check, RefreshCw
 } from 'lucide-react'
-import type { InternalMessage } from '@/types/models'
-import { formatDate, formatDateTime } from '@/lib/utils'
-import { sendInternalMessageAction } from './actions'
+import type { InternalMessage, MessageStatus } from '@/types/models'
+import { MESSAGE_STATUS_LABELS } from '@/types/models'
+import { formatDateTime } from '@/lib/utils'
+import { sendInternalMessageAction, updateMessageStatusAction } from './actions'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
 
@@ -49,13 +51,17 @@ export default function MessagesClient({
 }) {
   const [localMessages, setLocalMessages] = useState<InternalMessage[]>(messages)
   const [filter, setFilter] = useState<'all' | 'inbox' | 'sent'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | MessageStatus>('all')
   const [techFilter, setTechFilter] = useState('')
   const [otFilter, setOtFilter] = useState<'all' | 'with_ot' | 'no_ot'>('all')
   const [photoFilter, setPhotoFilter] = useState<'all' | 'with_photo'>('all')
   const [dateStart, setDateStart] = useState('')
   const [dateEnd, setDateEnd] = useState('')
   const [search, setSearch] = useState('')
+
+  // Modal / Composer State
   const [modalOpen, setModalOpen] = useState(false)
+  const [replyToMessage, setReplyToMessage] = useState<InternalMessage | null>(null)
   const [selectedMessage, setSelectedMessage] = useState<InternalMessage | null>(null)
 
   // Form State
@@ -63,9 +69,12 @@ export default function MessagesClient({
   const [subject, setSubject] = useState('')
   const [content, setContent] = useState('')
   const [selectedTaskId, setSelectedTaskId] = useState('')
+  const [requiresResponse, setRequiresResponse] = useState<boolean>(true)
+  const [messageStatus, setMessageStatus] = useState<MessageStatus>('awaiting_reply')
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -76,12 +85,12 @@ export default function MessagesClient({
     return r === 'technician' || r === 'tecnico' || r === 'técnico' || r === 'tech'
   }
 
-  // Apenas técnicos ATIVOS e INTERNOS (exclui prestadores externos Schindler, Helenos, etc)
+  // Lista de técnicos e utilizadores disponíveis
   const activeTechs = users
-    .filter((u) => u.active !== false && !u.isExternal && u.role !== 'external' && u.role !== 'prestador' && isTechRole(u.role))
+    .filter((u) => u.active !== false && !u.isExternal && u.role !== 'external' && u.role !== 'prestador' && (isTechRole(u.role) || isManager))
     .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
 
-  // OTs ordenadas rigorosamente por ÁREA (depois TAG/Título)
+  // OTs ordenadas por ÁREA e TAG
   const sortedTasksForSelect = useMemo(() => {
     return [...tasks].sort((a, b) => {
       const areaA = (a.area || 'Geral').toLowerCase().trim()
@@ -99,7 +108,11 @@ export default function MessagesClient({
     if (filter === 'inbox' && m.senderId === currentUserId) return false
     if (filter === 'sent' && m.senderId !== currentUserId) return false
 
-    // 2. Tech filter (sender or recipient)
+    // 2. Status filter
+    const effectiveStatus = m.status || (m.requiresResponse ? 'awaiting_reply' : 'info')
+    if (statusFilter !== 'all' && effectiveStatus !== statusFilter) return false
+
+    // 3. Tech filter (sender or recipient)
     if (techFilter) {
       const selectedUserObj = users.find((u) => u.id === techFilter || u.abbreviation === techFilter)
       const matchesSender = m.senderId === techFilter || (selectedUserObj && (m.senderName === selectedUserObj.name || m.senderAbbr === selectedUserObj.abbreviation))
@@ -107,14 +120,14 @@ export default function MessagesClient({
       if (!matchesSender && !matchesRecipient) return false
     }
 
-    // 3. OT filter
+    // 4. OT filter
     if (otFilter === 'with_ot' && !m.taskId) return false
     if (otFilter === 'no_ot' && m.taskId) return false
 
-    // 4. Photo filter
+    // 5. Photo filter
     if (photoFilter === 'with_photo' && !m.photoUrl) return false
 
-    // 5. Date filter
+    // 6. Date filter
     if (dateStart && m.createdAt) {
       const msgDate = m.createdAt.slice(0, 10)
       if (msgDate < dateStart) return false
@@ -124,7 +137,7 @@ export default function MessagesClient({
       if (msgDate > dateEnd) return false
     }
 
-    // 6. Text Search
+    // 7. Text Search
     if (search.trim()) {
       const q = search.toLowerCase()
       const matchText = (
@@ -140,6 +153,53 @@ export default function MessagesClient({
 
     return true
   })
+
+  // Abrir modal de Nova Mensagem
+  function handleOpenCreate() {
+    setReplyToMessage(null)
+    setSelectedTechIds([])
+    setSubject('')
+    setContent('')
+    setSelectedTaskId('')
+    setRequiresResponse(true)
+    setMessageStatus('awaiting_reply')
+    setPhotoFile(null)
+    setPhotoPreview(null)
+    setError('')
+    setModalOpen(true)
+  }
+
+  // Abrir o MESMO menu de mensagem para Responder
+  function handleOpenReply(msg: InternalMessage) {
+    setReplyToMessage(msg)
+    setSelectedMessage(null) // Fecha o modal de detalhe se estiver aberto
+
+    // Pre-selecionar o remetente original como destinatário
+    const senderObj = users.find((u) => u.id === msg.senderId || (u.name && u.name.toLowerCase() === msg.senderName.toLowerCase()))
+    if (senderObj) {
+      setSelectedTechIds([senderObj.id])
+    } else if (msg.senderId) {
+      setSelectedTechIds([msg.senderId])
+    } else {
+      setSelectedTechIds([])
+    }
+
+    // Pre-definir assunto com Re:
+    const baseSubject = msg.subject || (msg.taskTitle ? `OT ${msg.taskTitle}` : 'Mensagem')
+    setSubject(baseSubject.startsWith('Re:') ? baseSubject : `Re: ${baseSubject}`)
+
+    // Pre-definir OT
+    setSelectedTaskId(msg.taskId || '')
+
+    // Por defeito, uma resposta responde e pode pedir esclarecimento adicional ou fechar
+    setRequiresResponse(false)
+    setMessageStatus('replied')
+    setContent('')
+    setPhotoFile(null)
+    setPhotoPreview(null)
+    setError('')
+    setModalOpen(true)
+  }
 
   async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -169,6 +229,24 @@ export default function MessagesClient({
     }
   }
 
+  // Alteração direta de estado da mensagem (Aguarda Resposta, Respondida, Informativa, Fechada)
+  async function handleUpdateStatus(messageId: string, newStatus: MessageStatus) {
+    setStatusUpdatingId(messageId)
+    // Atualização otimista local
+    setLocalMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, status: newStatus } : m))
+    )
+    if (selectedMessage && selectedMessage.id === messageId) {
+      setSelectedMessage((prev) => (prev ? { ...prev, status: newStatus } : null))
+    }
+
+    const res = await updateMessageStatusAction(messageId, newStatus)
+    setStatusUpdatingId(null)
+    if (!res.ok && res.error) {
+      alert(`Erro ao atualizar estado: ${res.error}`)
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!content.trim()) {
@@ -176,7 +254,7 @@ export default function MessagesClient({
       return
     }
     if (!selectedTechIds.length) {
-      setError('Selecione pelo menos um técnico destinatário.')
+      setError('Selecione pelo menos um destinatário.')
       return
     }
 
@@ -202,10 +280,15 @@ export default function MessagesClient({
             })
             .join(', ')
 
+      const finalStatus: MessageStatus = messageStatus || (requiresResponse ? 'awaiting_reply' : 'info')
+
       const formData = new FormData()
       formData.set('content', content.trim())
       formData.set('recipientIds', JSON.stringify(selectedTechIds))
       formData.set('recipientNames', recipientNamesText)
+      formData.set('status', finalStatus)
+      formData.set('requiresResponse', requiresResponse ? 'true' : 'false')
+
       if (subject.trim()) formData.set('subject', subject.trim())
       if (selectedTaskId) {
         const t = tasks.find((tk) => tk.id === selectedTaskId)
@@ -213,6 +296,13 @@ export default function MessagesClient({
         if (t) formData.set('taskTitle', t.title)
       }
       if (photoUrl) formData.set('photoUrl', photoUrl)
+
+      if (replyToMessage) {
+        formData.set('replyToId', replyToMessage.id)
+        formData.set('replyToSubject', replyToMessage.subject || replyToMessage.taskTitle || 'Mensagem')
+        formData.set('replyToSender', replyToMessage.senderName)
+        formData.set('replyToContent', replyToMessage.content.slice(0, 150))
+      }
 
       const res = await sendInternalMessageAction({}, formData)
       setBusy(false)
@@ -233,21 +323,72 @@ export default function MessagesClient({
           taskId: selectedTaskId || null,
           taskTitle: selectedTaskId ? (tasks.find((tk) => tk.id === selectedTaskId)?.title || null) : null,
           photoUrl: photoUrl || null,
+          status: finalStatus,
+          requiresResponse,
+          replyToId: replyToMessage?.id || null,
+          replyToSubject: replyToMessage?.subject || null,
+          replyToSender: replyToMessage?.senderName || null,
+          replyToContent: replyToMessage?.content ? replyToMessage.content.slice(0, 150) : null,
           createdAt: new Date().toISOString(),
         }
-        setLocalMessages((prev) => [newMsgObj, ...prev])
+
+        // Se for resposta, atualizar também a mensagem original para 'replied' localmente
+        if (replyToMessage) {
+          setLocalMessages((prev) =>
+            [newMsgObj, ...prev.map((m) => (m.id === replyToMessage.id ? { ...m, status: 'replied' as MessageStatus } : m))]
+          )
+        } else {
+          setLocalMessages((prev) => [newMsgObj, ...prev])
+        }
+
         setModalOpen(false)
+        setReplyToMessage(null)
         setContent('')
         setSubject('')
         setSelectedTaskId('')
         setSelectedTechIds([])
-        setPhotoFile(null)
         setPhotoFile(null)
         setPhotoPreview(null)
       }
     } catch (err) {
       setBusy(false)
       setError(err instanceof Error ? err.message : 'Erro ao enviar mensagem.')
+    }
+  }
+
+  // Render do Badge de Estado
+  const renderStatusBadge = (msg: InternalMessage) => {
+    const st = msg.status || (msg.requiresResponse ? 'awaiting_reply' : 'info')
+    switch (st) {
+      case 'awaiting_reply':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-700 shadow-2xs">
+            <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400 animate-pulse" />
+            <span>Aguarda Resposta</span>
+          </span>
+        )
+      case 'replied':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-900 dark:bg-blue-950/80 dark:text-sky-300 border border-blue-300 dark:border-blue-700">
+            <Reply className="h-3 w-3 text-blue-600 dark:text-sky-400" />
+            <span>Respondida</span>
+          </span>
+        )
+      case 'closed':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-900 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+            <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+            <span>Fechada</span>
+          </span>
+        )
+      case 'info':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            <Info className="h-3 w-3 text-slate-500 dark:text-slate-400" />
+            <span>Informativa</span>
+          </span>
+        )
     }
   }
 
@@ -264,14 +405,14 @@ export default function MessagesClient({
               Mensagens Internas & Comunicação Técnica
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Comunicação em tempo real para equipa de manutenção e técnicos
+              Comunicação em tempo real para equipa de manutenção com múltiplos estados e pedidos de resposta
             </p>
           </div>
         </div>
 
         <button
           type="button"
-          onClick={() => setModalOpen(true)}
+          onClick={handleOpenCreate}
           className="btn-primary flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl shadow-md text-sm font-bold cursor-pointer"
         >
           <Plus className="h-4 w-4" />
@@ -279,17 +420,18 @@ export default function MessagesClient({
         </button>
       </div>
 
-      {/* Painel Completo de Filtros (Estilo Tabela) */}
+      {/* Painel Completo de Filtros */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
           <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2">
             <Filter className="h-4 w-4 text-industrial-blue dark:text-sky-400" />
             <span>Filtros de Mensagens</span>
           </span>
-          {(filter !== 'all' || techFilter || otFilter !== 'all' || photoFilter !== 'all' || dateStart || dateEnd || search) && (
+          {(filter !== 'all' || statusFilter !== 'all' || techFilter || otFilter !== 'all' || photoFilter !== 'all' || dateStart || dateEnd || search) && (
             <button
               onClick={() => {
                 setFilter('all')
+                setStatusFilter('all')
                 setTechFilter('')
                 setOtFilter('all')
                 setPhotoFilter('all')
@@ -323,7 +465,25 @@ export default function MessagesClient({
             </div>
           </div>
 
-          {/* 2. Pasta / Origem */}
+          {/* 2. Estado da Mensagem */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+              Estado da Mensagem
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+            >
+              <option value="all">⚡ Todos os Estados</option>
+              <option value="awaiting_reply">⏳ Aguarda Resposta</option>
+              <option value="replied">💬 Respondida</option>
+              <option value="info">ℹ️ Informativa</option>
+              <option value="closed">✅ Fechada</option>
+            </select>
+          </div>
+
+          {/* 3. Pasta / Origem */}
           <div>
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
               Pasta
@@ -333,16 +493,16 @@ export default function MessagesClient({
               onChange={(e) => setFilter(e.target.value as any)}
               className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
             >
-              <option value="all">📥 Todas as Mensagens ({localMessages.length})</option>
+              <option value="all">📥 Todas ({localMessages.length})</option>
               <option value="inbox">📬 Recebidas</option>
               <option value="sent">📤 Enviadas por mim</option>
             </select>
           </div>
 
-          {/* 3. Filtro por Técnico */}
+          {/* 4. Filtro por Técnico */}
           <div>
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-              Técnico (Destinatário / Remetente)
+              Técnico / Remetente
             </label>
             <select
               value={techFilter}
@@ -358,7 +518,7 @@ export default function MessagesClient({
             </select>
           </div>
 
-          {/* 4. Associação a OT */}
+          {/* 5. Associação a OT */}
           <div>
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
               Ligação a OT
@@ -369,12 +529,12 @@ export default function MessagesClient({
               className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
             >
               <option value="all">Todas as Mensagens</option>
-              <option value="with_ot">⚙️ Apenas com OT Associada</option>
-              <option value="no_ot">💬 Sem OT Associada</option>
+              <option value="with_ot">⚙️ Apenas com OT</option>
+              <option value="no_ot">💬 Sem OT</option>
             </select>
           </div>
 
-          {/* 5. Fotos / Anexos */}
+          {/* 6. Fotos / Anexos */}
           <div>
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
               Imagens / Fotos
@@ -385,11 +545,11 @@ export default function MessagesClient({
               className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
             >
               <option value="all">Todas as Mensagens</option>
-              <option value="with_photo">📷 Apenas com Foto Anexada</option>
+              <option value="with_photo">📷 Com Foto Anexa</option>
             </select>
           </div>
 
-          {/* 6. Data Início */}
+          {/* 7. Data Início */}
           <div>
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
               Data Início
@@ -402,7 +562,7 @@ export default function MessagesClient({
             />
           </div>
 
-          {/* 7. Data Fim */}
+          {/* 8. Data Fim */}
           <div>
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
               Data Fim
@@ -435,19 +595,28 @@ export default function MessagesClient({
         ) : (
           filteredMessages.map((msg) => {
             const isSentByMe = msg.senderId === currentUserId
+            const isAwaitingReply = (msg.status === 'awaiting_reply' || msg.requiresResponse) && msg.status !== 'closed' && msg.status !== 'replied'
+
             return (
               <div
                 key={msg.id}
-                onClick={() => setSelectedMessage(msg)}
-                className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 transition-all cursor-pointer shadow-xs space-y-2"
+                className={`bg-white dark:bg-slate-900 p-4 rounded-xl border transition-all shadow-xs space-y-2.5 ${
+                  isAwaitingReply
+                    ? 'border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-400/20 bg-amber-50/10'
+                    : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600'
+                }`}
               >
+                {/* Header do Cartão */}
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/60 text-industrial-blue dark:text-sky-400 font-black text-xs flex items-center justify-center border border-blue-200 dark:border-blue-700">
+                  <div
+                    onClick={() => setSelectedMessage(msg)}
+                    className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0"
+                  >
+                    <span className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/60 text-industrial-blue dark:text-sky-400 font-black text-xs flex items-center justify-center border border-blue-200 dark:border-blue-700 shrink-0">
                       {msg.senderAbbr || 'RG'}
                     </span>
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-extrabold text-slate-900 dark:text-slate-100">
                           {msg.senderName}
                         </span>
@@ -456,40 +625,82 @@ export default function MessagesClient({
                             Você
                           </span>
                         )}
+                        {renderStatusBadge(msg)}
                       </div>
-                      <span className="text-[11px] text-slate-500">
+                      <span className="text-[11px] text-slate-500 truncate block">
                         Para: <strong className="text-slate-700 dark:text-slate-300">{msg.recipientNames || 'Técnicos'}</strong>
                       </span>
                     </div>
                   </div>
 
-                  <span className="text-[10px] font-mono text-slate-400 whitespace-nowrap">
-                    {formatDateTime(msg.createdAt)}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-mono text-slate-400 whitespace-nowrap">
+                      {formatDateTime(msg.createdAt)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenReply(msg)}
+                      className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900 text-industrial-blue dark:text-sky-300 text-xs font-bold rounded-lg border border-blue-200 dark:border-blue-800 transition-colors flex items-center gap-1 cursor-pointer"
+                      title="Responder a esta mensagem no mesmo menu"
+                    >
+                      <Reply className="h-3 w-3" />
+                      <span>Responder</span>
+                    </button>
+                  </div>
                 </div>
 
-                {msg.subject && (
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    {msg.subject}
-                  </h4>
+                {/* Bloco de Contexto se responde a outra mensagem */}
+                {msg.replyToSender && (
+                  <div className="text-[11px] bg-slate-50 dark:bg-slate-800/60 border-l-2 border-industrial-blue dark:border-sky-400 px-2.5 py-1 rounded-r text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                    <Reply className="h-3 w-3 text-slate-400" />
+                    <span>Em resposta a <strong>{msg.replyToSender}</strong>{msg.replyToSubject ? `: "${msg.replyToSubject}"` : ''}</span>
+                  </div>
                 )}
 
-                <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
-                  {msg.content}
-                </p>
-
-                <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
-                  {msg.taskTitle ? (
-                    <span className="inline-flex items-center gap-1 text-industrial-blue dark:text-sky-400 font-semibold bg-blue-50 dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-slate-700">
-                      <ClipboardList className="h-3 w-3" /> OT: {msg.taskTitle}
-                    </span>
-                  ) : <span />}
-
-                  {msg.photoUrl && (
-                    <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
-                      <ImageIcon className="h-3.5 w-3.5" /> Foto Anexa
-                    </span>
+                {/* Assunto e Conteúdo */}
+                <div onClick={() => setSelectedMessage(msg)} className="cursor-pointer space-y-1">
+                  {msg.subject && (
+                    <h4 className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                      {msg.subject}
+                    </h4>
                   )}
+                  <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
+                    {msg.content}
+                  </p>
+                </div>
+
+                {/* Footer do Cartão */}
+                <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800/60">
+                  <div className="flex items-center gap-2">
+                    {msg.taskTitle && (
+                      <span className="inline-flex items-center gap-1 text-industrial-blue dark:text-sky-400 font-semibold bg-blue-50 dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-slate-700">
+                        <ClipboardList className="h-3 w-3" /> OT: {msg.taskTitle}
+                      </span>
+                    )}
+
+                    {msg.photoUrl && (
+                      <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
+                        <ImageIcon className="h-3.5 w-3.5" /> Foto Anexa
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Seletor Rápido de Estado Inline */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-400">Estado:</span>
+                    <select
+                      value={msg.status || (msg.requiresResponse ? 'awaiting_reply' : 'info')}
+                      disabled={statusUpdatingId === msg.id}
+                      onChange={(e) => handleUpdateStatus(msg.id, e.target.value as MessageStatus)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[10px] font-bold py-0.5 px-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer"
+                    >
+                      <option value="awaiting_reply">⏳ Aguarda Resposta</option>
+                      <option value="replied">💬 Respondida</option>
+                      <option value="info">ℹ️ Informativa</option>
+                      <option value="closed">✅ Fechada</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             )
@@ -500,16 +711,19 @@ export default function MessagesClient({
       {/* Modal de Detalhe da Mensagem */}
       {selectedMessage && (
         <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-6 space-y-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2.5">
                 <span className="w-9 h-9 rounded-full bg-industrial-blue text-white font-black text-xs flex items-center justify-center">
                   {selectedMessage.senderAbbr || 'RG'}
                 </span>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    {selectedMessage.senderName}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                      {selectedMessage.senderName}
+                    </h3>
+                    {renderStatusBadge(selectedMessage)}
+                  </div>
                   <span className="text-[11px] text-slate-500 font-mono">
                     {formatDateTime(selectedMessage.createdAt)}
                   </span>
@@ -523,18 +737,40 @@ export default function MessagesClient({
               </button>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="text-xs text-slate-500">
                 Para: <strong className="text-slate-800 dark:text-slate-200">{selectedMessage.recipientNames || 'Técnicos'}</strong>
               </div>
+
+              {selectedMessage.replyToSender && (
+                <div className="text-xs bg-slate-50 dark:bg-slate-800/80 border-l-3 border-industrial-blue p-2.5 rounded-r text-slate-600 dark:text-slate-300">
+                  <span className="font-bold flex items-center gap-1 text-industrial-blue dark:text-sky-400">
+                    <Reply className="h-3.5 w-3.5" /> Em resposta a {selectedMessage.replyToSender}:
+                  </span>
+                  {selectedMessage.replyToContent && (
+                    <p className="mt-1 italic text-[11px] text-slate-500 dark:text-slate-400">
+                      "{selectedMessage.replyToContent}"
+                    </p>
+                  )}
+                </div>
+              )}
+
               {selectedMessage.subject && (
                 <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
                   {selectedMessage.subject}
                 </div>
               )}
-              <div className="text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+
+              <div className="text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
                 {selectedMessage.content}
               </div>
+
+              {selectedMessage.taskTitle && (
+                <div className="text-xs bg-blue-50 dark:bg-blue-950/40 p-2.5 rounded-xl border border-blue-200 dark:border-blue-900 flex items-center gap-2 text-industrial-blue dark:text-sky-300 font-semibold">
+                  <ClipboardList className="h-4 w-4" />
+                  <span>Associada à OT: {selectedMessage.taskTitle}</span>
+                </div>
+              )}
 
               {selectedMessage.photoUrl && (
                 <div className="mt-3">
@@ -550,9 +786,71 @@ export default function MessagesClient({
                   </a>
                 </div>
               )}
+
+              {/* Ações de Estado */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  Alterar Estado da Mensagem:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus(selectedMessage.id, 'awaiting_reply')}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all border text-center ${
+                      selectedMessage.status === 'awaiting_reply'
+                        ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                        : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 border-amber-300 hover:bg-amber-50'
+                    }`}
+                  >
+                    ⏳ Aguarda
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus(selectedMessage.id, 'replied')}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all border text-center ${
+                      selectedMessage.status === 'replied'
+                        ? 'bg-blue-600 text-white border-blue-700 shadow-xs'
+                        : 'bg-white dark:bg-slate-800 text-blue-700 dark:text-sky-400 border-blue-300 hover:bg-blue-50'
+                    }`}
+                  >
+                    💬 Respondida
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus(selectedMessage.id, 'info')}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all border text-center ${
+                      selectedMessage.status === 'info'
+                        ? 'bg-slate-600 text-white border-slate-700 shadow-xs'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    ℹ️ Info
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateStatus(selectedMessage.id, 'closed')}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all border text-center ${
+                      selectedMessage.status === 'closed'
+                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
+                        : 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 border-emerald-300 hover:bg-emerald-50'
+                    }`}
+                  >
+                    ✅ Fechada
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => handleOpenReply(selectedMessage)}
+                className="btn-primary px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md"
+              >
+                <Reply className="h-4 w-4" />
+                <span>Responder no Menu</span>
+              </button>
+
               <button
                 onClick={() => setSelectedMessage(null)}
                 className="btn-secondary px-4 py-2 text-xs font-bold rounded-xl"
@@ -564,14 +862,23 @@ export default function MessagesClient({
         </div>
       )}
 
-      {/* Modal Criar Nova Mensagem */}
+      {/* Modal UNIFICADO: Criar Nova Mensagem & Responder à Mensagem */}
       {modalOpen && (
         <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-6 space-y-4 my-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <Send className="h-5 w-5 text-industrial-blue dark:text-sky-400" />
-                <span>Nova Mensagem Interna</span>
+                {replyToMessage ? (
+                  <>
+                    <Reply className="h-5 w-5 text-industrial-blue dark:text-sky-400" />
+                    <span>Responder a {replyToMessage.senderName}</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-5 w-5 text-industrial-blue dark:text-sky-400" />
+                    <span>Nova Mensagem Interna</span>
+                  </>
+                )}
               </h3>
               <button
                 onClick={() => setModalOpen(false)}
@@ -581,32 +888,52 @@ export default function MessagesClient({
               </button>
             </div>
 
+            {/* Banner de Contexto da Mensagem a que se responde */}
+            {replyToMessage && (
+              <div className="bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl p-3 text-xs space-y-1">
+                <div className="flex items-center justify-between text-blue-800 dark:text-sky-300 font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <Reply className="h-3.5 w-3.5 text-industrial-blue dark:text-sky-400" />
+                    <span>Em resposta à mensagem de {replyToMessage.senderName}</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">{formatDateTime(replyToMessage.createdAt)}</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 italic line-clamp-2">
+                  "{replyToMessage.content}"
+                </p>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Seleção de Técnicos */}
+              {/* Seleção de Destinatários */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                     Destinatário(s) *
                   </label>
-                  <button
-                    type="button"
-                    onClick={handleSelectAll}
-                    className="text-[11px] font-bold text-industrial-blue dark:text-sky-400 hover:underline"
-                  >
-                    {selectedTechIds.includes('ALL') ? 'Desmarcar Todos' : 'Enviar para Todos os Técnicos'}
-                  </button>
+                  {!replyToMessage && (
+                    <button
+                      type="button"
+                      onClick={handleSelectAll}
+                      className="text-[11px] font-bold text-industrial-blue dark:text-sky-400 hover:underline"
+                    >
+                      {selectedTechIds.includes('ALL') ? 'Desmarcar Todos' : 'Enviar para Todos os Técnicos'}
+                    </button>
+                  )}
                 </div>
 
-                <div className="max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-900/50 space-y-1.5">
-                  <label className="flex items-center gap-2 text-xs font-bold text-blue-900 dark:text-blue-300 cursor-pointer p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800">
-                    <input
-                      type="checkbox"
-                      checked={selectedTechIds.includes('ALL')}
-                      onChange={handleSelectAll}
-                      className="rounded accent-blue-600 h-4 w-4"
-                    />
-                    <span>📢 TODOS OS TÉCNICOS (Mensagem Geral / Transmissão)</span>
-                  </label>
+                <div className="max-h-32 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-900/50 space-y-1.5">
+                  {!replyToMessage && (
+                    <label className="flex items-center gap-2 text-xs font-bold text-blue-900 dark:text-blue-300 cursor-pointer p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800">
+                      <input
+                        type="checkbox"
+                        checked={selectedTechIds.includes('ALL')}
+                        onChange={handleSelectAll}
+                        className="rounded accent-blue-600 h-4 w-4"
+                      />
+                      <span>📢 TODOS OS TÉCNICOS (Mensagem Geral)</span>
+                    </label>
+                  )}
 
                   {!selectedTechIds.includes('ALL') && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
@@ -615,7 +942,11 @@ export default function MessagesClient({
                         return (
                           <label
                             key={u.id}
-                            className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 p-1 rounded transition-colors"
+                            className={`flex items-center gap-2 text-xs cursor-pointer p-1 rounded transition-colors ${
+                              checked
+                                ? 'bg-blue-100/70 dark:bg-blue-900/40 text-blue-900 dark:text-sky-200 font-bold'
+                                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
                           >
                             <input
                               type="checkbox"
@@ -631,6 +962,64 @@ export default function MessagesClient({
                       })}
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Tipo de Interação / Espera Resposta */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Estado & Resposta Requerida
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label className={`flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                    requiresResponse
+                      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-400 text-amber-900 dark:text-amber-200 shadow-2xs'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="responseRequirement"
+                      checked={requiresResponse}
+                      onChange={() => {
+                        setRequiresResponse(true)
+                        setMessageStatus('awaiting_reply')
+                      }}
+                      className="accent-amber-600 mt-0.5"
+                    />
+                    <div>
+                      <span className="text-xs font-bold block flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5 text-amber-600" /> Aguarda Resposta
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">
+                        Destinatários devem responder
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                    !requiresResponse
+                      ? 'bg-slate-100 dark:bg-slate-800 border-slate-400 text-slate-900 dark:text-slate-100 shadow-2xs'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="responseRequirement"
+                      checked={!requiresResponse}
+                      onChange={() => {
+                        setRequiresResponse(false)
+                        setMessageStatus(replyToMessage ? 'replied' : 'info')
+                      }}
+                      className="accent-slate-600 mt-0.5"
+                    />
+                    <div>
+                      <span className="text-xs font-bold block flex items-center gap-1">
+                        <Info className="h-3.5 w-3.5 text-slate-500" /> Apenas Informativa
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">
+                        Não necessita de resposta
+                      </span>
+                    </div>
+                  </label>
                 </div>
               </div>
 
@@ -671,11 +1060,11 @@ export default function MessagesClient({
               {/* Texto da mensagem */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Conteúdo da Mensagem *
+                  Conteúdo da {replyToMessage ? 'Resposta' : 'Mensagem'} *
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="Escreva aqui a mensagem interna..."
+                  placeholder={replyToMessage ? 'Escreva aqui a sua resposta...' : 'Escreva aqui a mensagem interna...'}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   className="input text-xs"
@@ -699,7 +1088,7 @@ export default function MessagesClient({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5 font-bold"
+                    className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5 font-bold cursor-pointer"
                   >
                     <Camera className="h-4 w-4 text-safety-orange" />
                     <span>{photoFile ? 'Alterar Foto' : 'Tirar ou Escolher Foto'}</span>
@@ -737,17 +1126,17 @@ export default function MessagesClient({
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="btn-secondary flex-1 py-2.5 text-xs font-bold"
+                  className="btn-secondary flex-1 py-2.5 text-xs font-bold cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={busy}
-                  className="btn-primary flex-1 py-2.5 text-xs font-bold shadow-md flex items-center justify-center gap-2"
+                  className="btn-primary flex-1 py-2.5 text-xs font-bold shadow-md flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Send className="h-3.5 w-3.5" />
-                  <span>{busy ? 'A enviar...' : 'Enviar Mensagem'}</span>
+                  {replyToMessage ? <Reply className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
+                  <span>{busy ? 'A enviar...' : (replyToMessage ? 'Enviar Resposta' : 'Enviar Mensagem')}</span>
                 </button>
               </div>
             </form>
@@ -757,3 +1146,4 @@ export default function MessagesClient({
     </div>
   )
 }
+

@@ -1908,6 +1908,7 @@ export async function createInternalMessage(
     senderId,
     createdAt: now,
     readBy: [senderId],
+    status: data.status || (data.requiresResponse ? 'awaiting_reply' : 'info'),
     ...data,
   }
   
@@ -1921,6 +1922,23 @@ export async function createInternalMessage(
     console.error('[createInternalMessage] Error:', err)
   }
   cachedInternalMessages.unshift(msgObj)
+
+  // Se esta mensagem é uma resposta a outra, atualizar o estado da mensagem original para 'replied'
+  if (data.replyToId) {
+    try {
+      const origMsg = cachedInternalMessages.find((m) => m.id === data.replyToId)
+      if (origMsg) {
+        origMsg.status = 'replied'
+      }
+      await adminDb()
+        .collection('internal_messages')
+        .doc(data.replyToId)
+        .update({ status: 'replied', updatedAt: now })
+        .catch(() => {})
+    } catch (err) {
+      console.error('[createInternalMessage reply status update] Error:', err)
+    }
+  }
 
   try {
     const allUsersSnap = await adminDb().collection('users').get()
@@ -1939,10 +1957,16 @@ export async function createInternalMessage(
       })
     }
 
+    const notifTitle = data.replyToId
+      ? `↩️ Resposta de ${data.senderName}`
+      : (data.requiresResponse || data.status === 'awaiting_reply'
+          ? `⏳ Mensagem (Aguarda Resposta) de ${data.senderName}`
+          : `💬 Nova Mensagem de ${data.senderName}`)
+
     for (const uId of Array.from(targetUserIds)) {
       await createNotification(companyId, {
         userId: uId,
-        title: `💬 Nova Mensagem de ${data.senderName}`,
+        title: notifTitle,
         body: data.content.slice(0, 80) + (data.content.length > 80 ? '...' : ''),
         type: 'internal_message',
         link: '/dashboard/messages',
@@ -1956,3 +1980,24 @@ export async function createInternalMessage(
 
   return msgObj.id
 }
+
+export async function updateInternalMessageStatus(
+  companyId: string,
+  messageId: string,
+  status: MessageStatus
+): Promise<void> {
+  const now = new Date().toISOString()
+  try {
+    const orig = cachedInternalMessages.find((m) => m.id === messageId)
+    if (orig) {
+      orig.status = status
+    }
+    await adminDb()
+      .collection('internal_messages')
+      .doc(messageId)
+      .update({ status, updatedAt: now })
+  } catch (err) {
+    console.error('[updateInternalMessageStatus] Error:', err)
+  }
+}
+

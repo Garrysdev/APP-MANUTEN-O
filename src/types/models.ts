@@ -433,6 +433,15 @@ export interface AppNotification {
   senderAbbr?: string | null
 }
 
+export type MessageStatus = 'awaiting_reply' | 'replied' | 'info' | 'closed'
+
+export const MESSAGE_STATUS_LABELS: Record<MessageStatus, string> = {
+  awaiting_reply: 'Aguarda Resposta',
+  replied: 'Respondida',
+  info: 'Informativa',
+  closed: 'Fechada',
+}
+
 export interface InternalMessage {
   id: string
   companyId: string
@@ -448,4 +457,10 @@ export interface InternalMessage {
   photoUrl?: string | null
   createdAt: string
   readBy?: string[]
+  status?: MessageStatus // 'awaiting_reply' | 'replied' | 'info' | 'closed'
+  requiresResponse?: boolean // Se a mensagem solicita/aguarda resposta
+  replyToId?: string | null // ID da mensagem a que responde
+  replyToSubject?: string | null // Assunto da mensagem original
+  replyToSender?: string | null // Nome do remetente da mensagem original
+  replyToContent?: string | null // Trecho da mensagem original
 }
