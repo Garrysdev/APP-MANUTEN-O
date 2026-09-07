@@ -63,7 +63,9 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
 
     const docData = userSnap.data() || {}
     const rawRole = (docData.role as string)?.toLowerCase()?.trim()
-    const userRole = (rawRole === 'technician' || rawRole === 'tecnico' || rawRole === 'técnico' || rawRole === 'tech') ? 'technician' : 'manager'
+    const userRole = isRGAdmin
+      ? 'manager'
+      : ((rawRole === 'technician' || rawRole === 'tecnico' || rawRole === 'técnico' || rawRole === 'tech') ? 'technician' : 'manager')
 
     const companyId = docData.companyId || DEMO_COMPANY_ID
 

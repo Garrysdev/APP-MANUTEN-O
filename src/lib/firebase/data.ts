@@ -768,11 +768,16 @@ export async function deleteTasksByMaintenancePlan(companyId: string, planId: st
 const listUsersCached = unstable_cache(
   async (companyId: string): Promise<User[]> => {
     try {
-      const snap = await adminDb()
-        .collection('users')
-        .where('companyId', '==', companyId)
-        .get()
-      const dbDocs = snap.docs.map((d) => serialize<User>(d))
+      const finalCompanyId = companyId || DEMO_COMPANY_ID
+      const snap = await adminDb().collection('users').get()
+      const allDbDocs = snap.docs.map((d) => serialize<User>(d))
+
+      const dbDocs = allDbDocs.filter((u) => {
+        if (!u.companyId) return true
+        if (u.companyId === finalCompanyId) return true
+        if (isDemoCompany(finalCompanyId) && isDemoCompany(u.companyId)) return true
+        return false
+      })
 
       let deletedIds = new Set<string>()
       let deletedEmails = new Set<string>()
@@ -787,29 +792,47 @@ const listUsersCached = unstable_cache(
         })
       } catch { /* ignore */ }
 
-      const isDeleted = (u: { id: string; email?: string | null; abbreviation?: string | null; active?: boolean }) => {
-        if (u.active === false) return true
+      const isDeleted = (u: { id: string; email?: string | null; abbreviation?: string | null }) => {
         if (deletedIds.has(u.id)) return true
         if (u.email && deletedEmails.has(u.email.toLowerCase())) return true
         if (u.abbreviation && deletedAbbrs.has(u.abbreviation.toUpperCase())) return true
         return false
       }
 
-      const validDbDocs = dbDocs.filter((d) => !isDeleted(d))
-
-      if (validDbDocs.length > 0 || !isDemoCompany(companyId)) {
-        return validDbDocs
+      // Merge fallback users with DB users: DB doc with matching ID or email takes precedence
+      const userMap = new Map<string, User>()
+      
+      if (isDemoCompany(finalCompanyId)) {
+        getFallbackUsers().forEach((f) => {
+          if (!isDeleted(f)) {
+            userMap.set(f.id, { ...f, companyId: finalCompanyId })
+          }
+        })
       }
 
-      const fallbacks = getFallbackUsers().filter((f) => !isDeleted(f))
-      return fallbacks
+      dbDocs.forEach((u) => {
+        if (!isDeleted(u)) {
+          // If a fallback has the same email or ID, remove the fallback key first
+          for (const [key, existing] of userMap.entries()) {
+            if (
+              existing.id === u.id ||
+              (existing.email && u.email && existing.email.toLowerCase() === u.email.toLowerCase())
+            ) {
+              userMap.delete(key)
+            }
+          }
+          userMap.set(u.id, u)
+        }
+      })
+
+      return Array.from(userMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'))
     } catch (err) {
       console.error('[listUsers] Error:', err)
     }
-    return isDemoCompany(companyId) ? getFallbackUsers().filter((f) => f.active !== false) : []
+    return isDemoCompany(companyId) ? getFallbackUsers() : []
   },
   ['users'],
-  { revalidate: 60, tags: ['users'] }
+  { revalidate: 30, tags: ['users'] }
 )
 export const listUsers = cache(async function(companyId: string): Promise<User[]> {
   return listUsersCached(companyId)
@@ -1191,9 +1214,13 @@ export async function updateUserProfile(
     externalCompanyName?: string | null
     phone?: string | null
     hourlyRate?: number
+    companyId?: string
   }
 ): Promise<void> {
-  const update: Record<string, unknown> = { updatedAt: new Date().toISOString() }
+  const update: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+    companyId: data.companyId || DEMO_COMPANY_ID,
+  }
   if (data.name !== undefined) update.name = data.name.trim()
   if (data.email !== undefined) update.email = data.email
   if (data.abbreviation !== undefined) update.abbreviation = data.abbreviation ? data.abbreviation.trim().toUpperCase() : null
@@ -1210,7 +1237,8 @@ export async function updateUserProfile(
   if (data.phone !== undefined) update.phone = data.phone
   if (data.hourlyRate !== undefined) update.hourlyRate = data.hourlyRate
 
-  await adminDb().collection('users').doc(userId).set(update, { merge: true })
+  const sanitized = JSON.parse(JSON.stringify(update))
+  await adminDb().collection('users').doc(userId).set(sanitized, { merge: true })
   revalidateTag('users')
 }
 
@@ -1512,25 +1540,18 @@ export async function deleteStockItem(companyId: string, id: string): Promise<vo
 export const listWarehouses = cache(async function(companyId: string): Promise<Warehouse[]> {
   try {
     const finalCompanyId = companyId || DEMO_COMPANY_ID
-    const snap = await adminDb()
-      .collection('warehouses')
-      .where('companyId', '==', finalCompanyId)
-      .get()
+    const snap = await adminDb().collection('warehouses').get()
     
     let docs = snap.docs.map((d) => serialize<Warehouse>(d))
     
-    if (docs.length === 0 && isDemoCompany(finalCompanyId)) {
-      const altSnap = await adminDb()
-        .collection('warehouses')
-        .where('companyId', 'in', [DEMO_COMPANY_ID, 'demo', 'demo_company'])
-        .get()
-        .catch(() => null)
-      if (altSnap && !altSnap.empty) {
-        docs = altSnap.docs.map((d) => serialize<Warehouse>(d))
-      }
-    }
+    const filtered = docs.filter((w) => {
+      if (!w.companyId) return true
+      if (w.companyId === finalCompanyId) return true
+      if (isDemoCompany(finalCompanyId) && isDemoCompany(w.companyId)) return true
+      return false
+    })
     
-    return docs.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'))
+    return filtered.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'))
   } catch (err) {
     console.error('[listWarehouses] Error:', err)
     return []
@@ -1962,10 +1983,18 @@ export const listInternalMessages = cache(async function(
       console.error('[listInternalMessages Firestore read error]:', dbErr)
     }
 
+    let deletedIds = new Set<string>()
+    try {
+      const delSnap = await adminDb().collection('deleted_internal_messages').get().catch(() => null)
+      if (delSnap && !delSnap.empty) {
+        deletedIds = new Set<string>(delSnap.docs.map((d) => d.id))
+      }
+    } catch { /* ignore */ }
+
     const seen = new Set<string>()
     const allDocs: InternalMessage[] = []
     for (const m of [...docs, ...cachedInternalMessages]) {
-      if (m.id && !seen.has(m.id)) {
+      if (m.id && !seen.has(m.id) && !deletedIds.has(m.id)) {
         seen.add(m.id)
         if (!m.companyId || m.companyId === companyId || companyId === DEMO_COMPANY_ID || isDemoCompany(companyId) || isDemoCompany(m.companyId)) {
           allDocs.push(m)
@@ -2183,15 +2212,16 @@ export async function deleteInternalMessage(
   companyId: string,
   messageId: string
 ): Promise<void> {
+  const finalCompanyId = companyId || DEMO_COMPANY_ID
+  cachedInternalMessages = cachedInternalMessages.filter((m) => m.id !== messageId)
   try {
-    const idx = cachedInternalMessages.findIndex((m) => m.id === messageId)
-    if (idx !== -1) {
-      cachedInternalMessages.splice(idx, 1)
-    }
-    await adminDb().collection('internal_messages').doc(messageId).delete()
+    await adminDb().collection('internal_messages').doc(messageId).delete().catch(() => {})
+    await adminDb().collection('deleted_internal_messages').doc(messageId).set({
+      deletedAt: new Date().toISOString(),
+      companyId: finalCompanyId,
+    }).catch(() => {})
   } catch (err) {
     console.error('[deleteInternalMessage] Error:', err)
-    throw err
   }
   revalidateTag('messages')
 }

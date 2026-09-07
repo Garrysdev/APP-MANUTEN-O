@@ -30,12 +30,14 @@ export async function updateProfileAction(
   try {
     await updateUserProfile(profile.id, { 
       name, 
+      companyId: profile.companyId || DEMO_COMPANY_ID,
       ...(abbreviation !== undefined ? { abbreviation } : {}),
       ...(avatarUrl !== undefined ? { avatarUrl } : {}),
       ...(language !== undefined ? { language } : {})
     })
     revalidatePath('/dashboard/profile')
     revalidatePath('/dashboard')
+    revalidatePath('/dashboard/users')
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao atualizar perfil.' }

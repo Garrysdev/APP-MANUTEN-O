@@ -232,7 +232,10 @@ export async function updateUserByManagerAction(
   const phone = phoneRaw !== null ? String(phoneRaw).trim() || null : undefined
 
   try {
-    const updateData: any = { name }
+    const updateData: any = { 
+      name,
+      companyId: profile.companyId || DEMO_COMPANY_ID 
+    }
     if (language) updateData.language = language
     if (role && userId !== profile.id) updateData.role = role
     if (active !== undefined && userId !== profile.id) updateData.active = active
@@ -249,14 +252,10 @@ export async function updateUserByManagerAction(
       try {
         const authUser = await adminAuth().getUser(userId).catch(() => null)
         if (authUser && authUser.email?.toLowerCase() !== emailRaw.toLowerCase()) {
-          await adminAuth().updateUser(userId, { email: emailRaw })
+          await adminAuth().updateUser(userId, { email: emailRaw }).catch(() => {})
         }
         updateData.email = emailRaw
       } catch (authErr: any) {
-        if (authErr.code === 'auth/email-already-exists') {
-          return { error: 'Este e-mail já está a ser utilizado por outra conta.' }
-        }
-        // Se for user fallback ou sem conta no Auth, atualiza no Firestore sem travar
         updateData.email = emailRaw
       }
     }
