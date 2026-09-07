@@ -749,7 +749,7 @@ export default function MessagesClient({
                   </span>
                   {selectedMessage.replyToContent && (
                     <p className="mt-1 italic text-[11px] text-slate-500 dark:text-slate-400">
-                      "{selectedMessage.replyToContent}"
+                      &quot;{selectedMessage.replyToContent}&quot;
                     </p>
                   )}
                 </div>
@@ -899,7 +899,7 @@ export default function MessagesClient({
                   <span className="text-[10px] font-mono text-slate-400">{formatDateTime(replyToMessage.createdAt)}</span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 italic line-clamp-2">
-                  "{replyToMessage.content}"
+                  &quot;{replyToMessage.content}&quot;
                 </p>
               </div>
             )}

@@ -9,7 +9,7 @@ import { adminDb, adminAuth } from './admin'
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
-import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage } from '@/types/models'
+import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
   return { id: doc.id, ...doc.data() } as T
