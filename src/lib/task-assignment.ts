@@ -2,8 +2,13 @@ import type { Task, User } from '@/types/models'
 
 /**
  * Validação rigorosa e tokenizada de atribuição de tarefas a um técnico/utilizador.
- * Suporta atribuições múltiplas como "MS+CB", "LM+MS", "MS", "Marco Silva",
- * bem como arrays de IDs (assignedToIds) e referências diretas por ID ou Abreviatura.
+ * Suporta:
+ * 1. Atribuições diretas por ID ou array de IDs (assignedTo, assignedToIds).
+ * 2. Tokens de texto em assignedToText e assignedTo (ex: "RG", "LM", "MS+CB", "LM+RG", "Marco Silva").
+ * 3. Abreviaturas e nomes normalizados do técnico.
+ * 
+ * NOTA IMPORTANTE: Apenas verifica a ATRIBUIÇÃO efetiva do técnico à tarefa.
+ * NÃO considera createdBy, garantindo que cada técnico só vê as tarefas atribuídas a si.
  */
 export function isTaskAssignedToUser(t: any, profile: any): boolean {
   if (!t || !profile) return false
@@ -13,24 +18,63 @@ export function isTaskAssignedToUser(t: any, profile: any): boolean {
   const pName = String(profile.name || '').toLowerCase().trim()
   const pEmail = String(profile.email || '').toLowerCase().trim()
 
-  // 1. Verificação direta por ID na lista de técnicos atribuídos
-  if (t.assignedTo && String(t.assignedTo).toLowerCase().trim() === pId) return true
-  if (Array.isArray(t.assignedToIds) && t.assignedToIds.some((id: string) => String(id).toLowerCase().trim() === pId)) return true
+  // Conjunto de identificadores válidos para este utilizador
+  const userTokens = new Set<string>()
+  if (pId) userTokens.add(pId)
+  if (pEmail) userTokens.add(pEmail)
+  if (pAbbr) userTokens.add(pAbbr)
 
-  // 2. Análise por tokens do texto de atribuição (ex: "MS+CB", "LM+MS", "MS", "Marco Silva")
-  const textToScan = `${t.assignedToText || ''} ${t.assignedTo || ''}`.trim()
-  if (textToScan) {
-    const tokens = textToScan.split(/[\+,\/&|;\s]+/).map((s) => s.toLowerCase().trim()).filter(Boolean)
-    if (pAbbr && tokens.includes(pAbbr)) return true
-    if (pId && tokens.includes(pId)) return true
-    if (pEmail && tokens.includes(pEmail)) return true
-    if (pName && textToScan.toLowerCase().includes(pName)) return true
+  // Extrair abreviatura ou tokens específicos do nome (ex: "RG - RuiG" -> "rg", "ruig"; "Rui Garrido (RG)" -> "rg")
+  if (pName) {
+    userTokens.add(pName)
+    const parenthesized = pName.match(/\(([a-z0-9_-]+)\)/i)
+    if (parenthesized && parenthesized[1]) {
+      userTokens.add(parenthesized[1].toLowerCase().trim())
+    }
+    const prefixAbbr = pName.match(/^([a-z0-9]{2,5})\s*[-–—]/i)
+    if (prefixAbbr && prefixAbbr[1]) {
+      userTokens.add(prefixAbbr[1].toLowerCase().trim())
+    }
+    const cleanName = pName.replace(/\(.*?\)/g, '').replace(/^[a-z0-9]{2,5}\s*[-–—]\s*/i, '').trim().toLowerCase()
+    if (cleanName && cleanName.length >= 3) {
+      userTokens.add(cleanName)
+    }
   }
 
-  // 3. Tarefas criadas explicitamente por este utilizador (nunca 'system')
-  if (t.createdBy && t.createdBy !== 'system' && t.createdBy !== 'eu') {
-    const c = String(t.createdBy).toLowerCase().trim()
-    if (c === pId || (pEmail && c === pEmail)) return true
+  // 1. Verificação direta por ID em assignedTo
+  if (t.assignedTo) {
+    const assignedStr = String(t.assignedTo).toLowerCase().trim()
+    if (userTokens.has(assignedStr)) return true
+    const stripped = assignedStr.replace(/^(tech_|user_)/, '')
+    if (userTokens.has(stripped)) return true
+  }
+
+  // 2. Verificação direta no array assignedToIds
+  if (Array.isArray(t.assignedToIds)) {
+    for (const id of t.assignedToIds) {
+      const idStr = String(id || '').toLowerCase().trim()
+      if (userTokens.has(idStr)) return true
+      const stripped = idStr.replace(/^(tech_|user_)/, '')
+      if (userTokens.has(stripped)) return true
+    }
+  }
+
+  // 3. Análise tokenizada por delimitadores (+, ,, /, &, |, ;, espaços) em assignedToText e assignedTo
+  const rawText = `${t.assignedToText || ''} ${typeof t.assignedTo === 'string' ? t.assignedTo : ''}`.trim().toLowerCase()
+  if (rawText) {
+    const tokens = rawText
+      .split(/[\+,\/&|;\s\r\n\t]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+    for (const tok of tokens) {
+      if (userTokens.has(tok)) return true
+      const stripped = tok.replace(/^(tech_|user_)/, '')
+      if (userTokens.has(stripped)) return true
+    }
+
+    if (pName && rawText === pName) return true
+    if (pAbbr && tokens.includes(pAbbr)) return true
   }
 
   return false
@@ -55,8 +99,8 @@ export function matchesTechFilter(t: any, tecFilterRaw: string, users: any[]): b
     return isTaskAssignedToUser(t, userObj)
   }
 
-  // Se não encontrar o objeto utilizador, pesquisa por token/substring direto
+  // Se não encontrar o objeto utilizador, pesquisa por token exato
   const textToScan = `${t.assignedToText || ''} ${t.assignedTo || ''} ${Array.isArray(t.assignedToIds) ? t.assignedToIds.join(' ') : ''}`.trim().toLowerCase()
   const tokens = textToScan.split(/[\+,\/&|;\s]+/).map((s) => s.toLowerCase().trim()).filter(Boolean)
-  return tokens.includes(tecFilter) || textToScan.includes(tecFilter)
+  return tokens.includes(tecFilter) || tokens.some((tok) => tok.replace(/^(tech_|user_)/, '') === tecFilter)
 }

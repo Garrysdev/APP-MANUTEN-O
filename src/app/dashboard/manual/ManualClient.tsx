@@ -5,7 +5,8 @@ import {
   BookOpen, Search, Printer, ChevronRight, CheckCircle2,
   Wrench, Calendar, ClipboardList, Package, FolderKanban,
   Activity, ShieldCheck, Boxes, FileSpreadsheet, Download,
-  HelpCircle, ExternalLink, PlayCircle, Sparkles, AlertTriangle, Lightbulb
+  HelpCircle, ExternalLink, PlayCircle, Sparkles, AlertTriangle, Lightbulb,
+  Smartphone, Bell, MessageSquare
 } from 'lucide-react'
 
 interface ManualSection {
@@ -22,157 +23,199 @@ interface ManualSection {
 const MANUAL_SECTIONS: ManualSection[] = [
   {
     id: 'introducao',
-    title: '1. Introdução e Visão Geral',
+    title: '1. Introdução e Perfis de Utilizador',
     icon: BookOpen,
     category: 'Primeiros Passos',
     badge: 'Essencial',
-    summary: 'O RG Maintenance OS é uma plataforma industrial desenvolvida para simplificar a gestão de equipamentos, planos de manutenção preventiva, ordens de trabalho e conformidade normativa.',
+    summary: 'O RG Maintenance OS é uma plataforma industrial para gestão ágil de equipamentos, planos preventivos, ordens de trabalho e comunicação em chão de fábrica.',
     steps: [
       {
-        title: 'Perfis de Utilizador',
-        desc: 'Existem 2 perfis: **Gestor de Manutenção** (acesso a todas as definições, encerramento de OTs, planos e relatórios) e **Técnico** (acesso focado nas OTs atribuídas e registo de intervenções).',
-        tip: 'Apenas os Gestores têm permissão para encerrar OTs diretamente no calendário ou importar planos em Excel.'
+        title: 'Perfil Gestor de Manutenção',
+        desc: 'Acesso integral ao sistema: Gestão de Equipamentos, Planos de Manutenção Preventiva, Calendário Geral, Gráficos Gantt, Indicadores de Fiabilidade (MTBF/MTTR), Encerramento e Validação de OTs e atribuição de equipas.',
+        tip: 'Os Gestores têm permissão para importar planos em Excel e gerir o cadastro de todos os ativos fabris.'
       },
       {
-        title: 'Navegação Principal',
-        desc: 'Utilize a barra lateral esquerda para aceder rapidamente aos módulos de OTs, Calendário, Plano de Manutenção, Equipamentos, Gantt e Fiabilidade.'
+        title: 'Perfil Técnico de Manutenção',
+        desc: 'Interface limpa e focada no telemóvel e tablet: O menu lateral apresenta exclusivamente **Ordens de Trabalho**, **Mensagens Internas**, **Manual do Utilizador** e **O meu Perfil**.',
+        tip: 'Cada técnico visualiza apenas as OTs que lhe foram diretamente atribuídas, eliminando distrações e confusões entre equipas.'
       }
     ],
     faqs: [
-      { q: 'Como alterar o meu idioma ou palavra-passe?', a: 'Aceda ao menu "O meu Perfil" no fundo da barra lateral para alterar dados pessoais, foto de perfil ou palavra-passe.' }
-    ]
-  },
-  {
-    id: 'equipamentos',
-    title: '2. Gestão de Equipamentos e Ativos',
-    icon: Package,
-    category: 'Cadastros',
-    badge: 'Estrutura',
-    summary: 'A hierarquia de ativos organiza a fábrica em Áreas, TAGs e Sistemas para garantir uma identificação rápida e sem erros.',
-    steps: [
-      {
-        title: 'Cadastrar um Novo Equipamento',
-        desc: 'Vá a **Equipamentos** -> clique em **Novo Equipamento**. Preencha o Nome, Área (ex: 20), TAG (ex: 20 P1) e Sistema.',
-        tip: 'A combinação de Área + TAG permite pesquisas instantâneas e filtragens em cascata na criação de OTs.'
-      },
-      {
-        title: 'Histórico por Equipamento',
-        desc: 'No cartão de cada equipamento, clique em "Ver OTs" para aceder ao histórico de manutenções preventivas e corretivas efetuadas nesse ativo.'
-      }
-    ],
-    faqs: [
-      { q: 'Por que motivo a pesquisa por TAG é tão rápida?', a: 'O sistema utiliza índices otimizados e suporte a pesquisa por prefixos locais para resposta imediata.' }
+      { q: 'Como alterar palavra-passe ou foto de perfil?', a: 'Aceda ao menu "O meu Perfil" na barra lateral ou no menu de topo para gerir a sua conta e preferências.' }
     ]
   },
   {
     id: 'ots',
-    title: '3. Ordens de Trabalho (OTs)',
+    title: '2. Ordens de Trabalho (OTs) & Filtragem do Técnico',
     icon: ClipboardList,
     category: 'Operações',
     badge: 'Diário',
-    summary: 'Crie, atribua e gira Ordens de Trabalho preventivas e corretivas com formulários em cascata e associação de normas de segurança.',
+    summary: 'Criação, gestão e execução de Ordens de Trabalho com isolamento estrito por técnico e abertura rápida de fichas de equipamentos.',
     steps: [
       {
-        title: 'Criar uma Nova OT',
-        desc: 'Clique no botão **+ Nova Ordem** (ou no Calendário/Lista de OTs). Selecione primeiro a **Área**. Automaticamente, o campo **TAG** será filtrado apenas com as TAGs daquela Área. Ao escolher a TAG, o **Nome do Equipamento** é preenchido de forma automática.',
-        tip: 'Pode incluir múltiplas Folhas de Registo Obrigatórias (FR) e Instruções de Trabalho (IT) assim como Regras de Segurança.'
+        title: 'Isolamento Rigoroso de OTs por Técnico',
+        desc: 'Quando um técnico inicia sessão, o sistema filtra e apresenta exclusivamente as ordens de trabalho atribuídas à sua sigla/nome (ex.: RG, LM, MS, CB). Todas as categorias de estado são mantidas acessíveis: **Pendentes**, **Em curso**, **Concluídas** e **Canceladas**.',
+        tip: 'Um técnico nunca visualiza OTs atribuídas exclusivamente a outros colegas, garantindo total privacidade e foco.'
       },
       {
-        title: 'Atribuir Técnicos e Criticidade',
-        desc: 'Defina o técnico responsável (ou empresa externa contratada), a data limite de execução (Prazo) e a Criticidade (Vermelho - Alta, Amarelo - Média, Verde - Baixa).'
+        title: 'Edição e Consulta Rápida',
+        desc: 'Basta **clicar em qualquer linha da tabela de OTs** para abrir instantaneamente o modal de detalhes e edição da ordem de trabalho correspondente.'
       },
       {
-        title: 'Encerrar OT no Calendário (Gestores)',
-        desc: 'No Calendário, marque a caixa de seleção `[x]` diretamente na badge da OT agendada. A OT passará a estado "Concluída" instantaneamente.'
+        title: 'Link Direto para Ficha do Equipamento',
+        desc: 'Na tabela de OTs e OTs de PM, o nome e TAG do equipamento funcionam como links diretos: ao clicar, abre-se a página com a ficha técnica e histórico desse ativo.'
+      },
+      {
+        title: 'Criar uma Nova Ordem (Gestores / Técnicos)',
+        desc: 'Clique em **+ Nova Ordem**. Selecione primeiro a **Área** para que o campo **TAG** filtre apenas os equipamentos dessa área fabril. O nome do ativo preenche-se automaticamente.'
       }
     ],
     faqs: [
-      { q: 'Um técnico pode encerrar OTs no calendário?', a: 'Não. Por razões de controlo de qualidade, a caixa de verificação direta no calendário fica ativa apenas para Gestores.' }
+      { q: 'Porque não vejo OTs de outros técnicos no meu perfil?', a: 'Por regra de segurança e organização de fábrica, a vista do técnico é restrita às tarefas da sua responsabilidade.' }
     ]
   },
   {
-    id: 'plano-manutencao',
-    title: '4. Plano de Manutenção Preventiva',
-    icon: Wrench,
-    category: 'Planeamento',
-    badge: 'ISO 9001',
-    summary: 'Estruture o seu plano anual preventivo, agende tarefas automaticamente e sincronize datas com o Calendário de fábrica.',
+    id: 'notificacoes-mobile',
+    title: '3. Notificações no Telemóvel & Mensagens Internas',
+    icon: Smartphone,
+    category: 'Comunicação',
+    badge: 'Mobile Push',
+    summary: 'Receba alertas instantâneos no telemóvel para novas OTs atribuídas e mensagens da equipa em tempo real.',
     steps: [
       {
-        title: 'Importar Plano Excel (PL-MAN-01)',
-        desc: 'Clique em **Plano Manutenção** -> **Importar**. Carregue o seu ficheiro Excel oficial. O sistema deteta automaticamente Áreas, TAGs, Ações e Periodicidades.',
-        tip: 'O validador ignora linhas duplicadas e previne dados corrompidos.'
+        title: 'Notificações Web Push em Tempo Real',
+        desc: 'Sempre que o Gestor atribuir uma nova OT ou um colega enviar uma mensagem no chat interno, o técnico recebe uma notificação sonoro-visual no telemóvel ou tablet (mesmo com o browser em segundo plano).',
+        tip: 'Certifique-se de aceitar as permissões de notificação do browser quando solicitado.'
       },
       {
-        title: 'Agendar para o Calendário',
-        desc: 'Em cada plano, selecione a caixa `[x] Calendário`. É aberto o modal de agendamento automático onde pode escolher a Data de Início e ver todas as datas projetadas (Semanal, Mensal, Anual, etc.).'
+        title: 'Ativação e Sincronização Automática',
+        desc: 'Ao iniciar sessão no telemóvel, o sistema sincroniza a subscrição de notificações de forma transparente. Pode também clicar no **Sino de Notificações** no topo e premir "Ativar Notificações no Telemóvel".'
+      },
+      {
+        title: 'Canal de Mensagens Internas',
+        desc: 'Aceda a **Mensagens** na barra lateral para comunicar em direto com a equipa técnica, partilhar fotografias de avarias e coordenar intervenções urgentes.'
       }
+    ],
+    faqs: [
+      { q: 'Não estou a receber notificações no meu smartphone Android / iPhone. O que fazer?', a: '1) Clique no ícone do sino e selecione "Ativar Notificações"; 2) Verifique nas definições do telemóvel se o browser (Chrome / Safari) tem permissão para emitir notificações.' }
     ]
   },
   {
     id: 'calendario',
-    title: '5. Calendário Interativo e Reagendamento por Arraste',
+    title: '4. Calendário, Vista de Dia e Conclusão Rápida',
     icon: Calendar,
     category: 'Agendamento',
-    badge: 'Novo',
-    summary: 'Visualização completa da carga de trabalho em vista de Mês, Semana e Dia, com alteração de datas por Drag & Drop e impressão de relatórios.',
+    badge: 'Interativo',
+    summary: 'Visualização de tarefas ativas com reagendamento por arraste (Drag & Drop), vista detalhada do dia e botão direto para Concluir.',
     steps: [
       {
-        title: 'Alterar Datas por Arraste (Drag & Drop)',
-        desc: 'Para mudar a data de uma OT ou Plano, clique e **arraste o cartão do evento** até ao dia pretendido no calendário. A célula de destino fica destacada em dourado.',
-        tip: 'Estilo semelhante ao Google Calendar ou Outlook Web.'
+        title: 'Foco em Tarefas Não Concluídas',
+        desc: 'Para manter o calendário limpo e operacional, apenas as OTs e manutenções preventivas pendentes/em curso são visíveis nos blocos diários.',
+        tip: 'As tarefas já concluídas ficam arquivadas no Histórico e na Lista de OTs.'
       },
       {
-        title: 'Imprimir Agendamentos da Semana ou Mês',
-        desc: 'Clique no botão **🖨️ Imprimir Agendamentos** no topo do calendário para gerar um relatório formatado com resumo de tarefas pendentes, concluídas e lista detalhada para impressão ou PDF.'
+        title: 'Vista Diária ao Clicar no Cabeçalho do Dia',
+        desc: 'Ao clicar no **número do dia (topo da célula)** no calendário de Mês ou Semana, abre-se a **Vista Diária** com todas as intervenções agendadas para essa data específica.'
+      },
+      {
+        title: 'Ação Rápida de Conclusão de Tarefas',
+        desc: 'Na Vista Diária, cada linha de intervenção dispõe de um botão **Concluir Tarefa** para registar a conclusão imediata sem necessidade de passos adicionais.'
+      },
+      {
+        title: 'Abrir OT ao Clicar em Qualquer Evento',
+        desc: 'Ao clicar diretamente no cartão de uma OT ou OT de PM no calendário, abre-se a janela de edição e registo de horas.'
+      },
+      {
+        title: 'Reagendar por Arraste (Drag & Drop)',
+        desc: 'Arraste qualquer cartão de intervenção para outro dia para atualizar automaticamente a data de execução planeada.'
       }
     ]
   },
   {
     id: 'gantt',
-    title: '6. Gráficos Gantt de Projetos e Paragens',
+    title: '5. Gráficos Gantt de Projetos e Paragens',
     icon: FolderKanban,
     category: 'Projetos',
     badge: 'Projetos',
-    summary: 'Controlo de paragens industriais (Agosto / Dezembro) com filtros dedicados por Área, TAG e ordenação de colunas.',
+    summary: 'Controlo cronológico de paragens industriais (Agosto / Dezembro) com abertura direta de OTs nas linhas e barras.',
     steps: [
       {
-        title: 'Alternar entre Paragens e Gantt Geral',
-        desc: 'Utilize o seletor superior para alternar entre "Paragem" e "Projetos". Os totalizadores superiores atualizam-se dinamicamente.',
-        tip: 'Pode filtrar os trabalhos por Área e TAG nos menus suspensos da barra de ferramentas.'
+        title: 'Abertura de OTs por Clique no Gantt',
+        desc: 'Ao clicar em qualquer linha ou barra cronológica do gráfico Gantt, a respetiva Ordem de Trabalho abre-se de imediato para consulta e edição de progresso.',
+        tip: 'Facilita a atualização de percentagens de avanço durante as reuniões diárias de paragem.'
+      },
+      {
+        title: 'Filtros Dinâmicos por Área e TAG',
+        desc: 'Utilize os filtros superiores para isolar intervenções de áreas críticas da fábrica ou selecionar apenas projetos de paragem específicos.'
+      }
+    ]
+  },
+  {
+    id: 'equipamentos',
+    title: '6. Gestão de Equipamentos e Ativos (Gestores)',
+    icon: Package,
+    category: 'Cadastros',
+    badge: 'Estrutura',
+    summary: 'Organização estruturada da fábrica por Áreas, TAGs e Sistemas para parametrização dos planos e histórico de manutenção.',
+    steps: [
+      {
+        title: 'Acesso Reservado a Gestores',
+        desc: 'O módulo de Equipamentos fica disponível para Gestores de Manutenção para cadastrar, editar fichas técnicas e gerir dados de placas de características.',
+        tip: 'Os técnicos acedem aos dados do equipamento diretamente através das suas OTs atribuídas.'
+      },
+      {
+        title: 'Histórico Completo por Ativo',
+        desc: 'No cartão do equipamento, aceda a "Ver OTs" para consultar o histórico integral de intervenções preventivas e corretivas.'
+      }
+    ]
+  },
+  {
+    id: 'plano-manutencao',
+    title: '7. Plano de Manutenção Preventiva (PL-MAN-01)',
+    icon: Wrench,
+    category: 'Planeamento',
+    badge: 'ISO 9001',
+    summary: 'Estruture o plano anual preventivo, gere agendamentos automáticos e acompanhe o rácio de cumprimento.',
+    steps: [
+      {
+        title: 'Importar Plano Excel Oficial',
+        desc: 'Em **Plano Manutenção** -> **Importar**, carregue o ficheiro Excel. O validador deteta automaticamente periodicidades (S, M, T, S, A) e converte em agendamentos de fábrica.'
+      },
+      {
+        title: 'Acompanhamento do Rácio de Cumprimento',
+        desc: 'O dashboard apresenta a taxa de execução real calculando a proporção de OTs de PM concluídas face ao total de intervenções planeadas para o ano em curso.'
       }
     ]
   },
   {
     id: 'fiabilidade',
-    title: '7. Indicadores de Fiabilidade (MTBF & MTTR)',
+    title: '8. Indicadores de Fiabilidade (MTBF & MTTR)',
     icon: Activity,
     category: 'Engenharia',
     badge: 'Métricas',
-    summary: 'Monitore o Tempo Médio Entre Falhas (MTBF), Tempo Médio de Reparação (MTTR) e a Disponibilidade Operacional da Fábrica.',
+    summary: 'Monitorização em tempo real do Tempo Médio Entre Falhas (MTBF), Tempo Médio de Reparação (MTTR) e Taxa de Disponibilidade.',
     steps: [
       {
-        title: 'Análise de Disponibilidade',
-        desc: 'Aceda ao menu **Fiabilidade** para visualizar os gráficos de uptime e downtime por equipamento e identificar os ativos mais críticos.'
+        title: 'Análise de Indicadores',
+        desc: 'Aceda ao menu **Fiabilidade** para identificar os equipamentos que geram maior tempo de indisponibilidade e orientar melhorias contínuas.'
       }
     ]
   },
   {
     id: 'backups',
-    title: '8. Backups Automáticos e Ficheiros Excel',
+    title: '9. Backups Automáticos e Ficheiros Excel',
     icon: FileSpreadsheet,
     category: 'Segurança',
     badge: 'Segurança',
-    summary: 'Cópias de segurança diárias automáticas em Excel formatado na pasta `DOWNLOADS CHROME` e descarregamento manual em 1 clique.',
+    summary: 'Cópias de segurança diárias automáticas em Excel formatado e descarregamento instantâneo em 1 clique.',
     steps: [
       {
-        title: 'Exportar Backup em 1 Clique',
-        desc: 'Nas páginas de **Plano de Manutenção** ou **Histórico**, clique no botão verde **📊 Backup Excel (Planos + OTs)** para descarregar imediatamente os ficheiros `PL-MAN-01` e `FR-MAN-09`.',
-        tip: 'Os ficheiros são formatados segundo a norma industrial com cabeçalhos azuis e estados coloridos.'
+        title: 'Descarregar Backups em 1 Clique',
+        desc: 'Prima o botão **Descarregar Backups Excel** no topo do manual para obter imediatamente os ficheiros `PL-MAN-01` e `FR-MAN-09` atualizados.'
       },
       {
-        title: 'Backup Diário Automático no PC',
-        desc: 'O script local `scripts/run-daily-backup.bat` executa diariamente no computador da fábrica e guarda os ficheiros atualizados na pasta de trabalho.'
+        title: 'Backup Diário Automático no Computador Local',
+        desc: 'O script local `scripts/run-daily-backup.bat` corre em segundo plano diariamente e guarda as cópias de segurança na pasta local do computador da fábrica.'
       }
     ]
   }

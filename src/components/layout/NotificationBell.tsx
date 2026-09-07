@@ -26,12 +26,45 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Solicitar permissão para Notificações do Navegador (Web Push)
+  // Solicitar permissão e registar subscrição Web Push no telemóvel/browser
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(console.error)
+    async function initPush() {
+      if (typeof window === 'undefined') return
+      if ('Notification' in window && 'serviceWorker' in navigator) {
+        if (Notification.permission === 'granted') {
+          try {
+            const { subscribeToPushNotifications } = await import('@/lib/webpush-client')
+            await subscribeToPushNotifications('auto').catch(() => {})
+          } catch (e) {
+            console.warn('[NotificationBell] Push sync warning:', e)
+          }
+        } else if (Notification.permission === 'default') {
+          try {
+            const perm = await Notification.requestPermission()
+            if (perm === 'granted') {
+              const { subscribeToPushNotifications } = await import('@/lib/webpush-client')
+              await subscribeToPushNotifications('auto').catch(() => {})
+            }
+          } catch (e) {
+            console.warn('[NotificationBell] Push permission error:', e)
+          }
+        }
+      }
     }
+    void initPush()
   }, [])
+
+  async function handleEnablePush() {
+    try {
+      const { subscribeToPushNotifications } = await import('@/lib/webpush-client')
+      const ok = await subscribeToPushNotifications('manual')
+      if (ok) {
+        alert('Notificações no telemóvel ativadas com sucesso!')
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Falha ao ativar notificações.')
+    }
+  }
 
   async function handleMarkRead(n: AppNotification) {
     if (!n.read) {

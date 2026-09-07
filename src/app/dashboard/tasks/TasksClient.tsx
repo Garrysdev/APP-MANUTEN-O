@@ -39,7 +39,7 @@ import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_
 import { createMaintenancePlanAction, importMaintenancePlansAction } from '../maintenance-plan/actions'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
-import { matchesTechFilter } from '@/lib/task-assignment'
+import { matchesTechFilter, isTaskAssignedToUser } from '@/lib/task-assignment'
 
 const PERIODICIDADE_OPTIONS: Periodicidade[] = ['semanal', 'mensal', 'trimestral', 'bianual', 'anual', 'bienal', 'trianual', 'horas', 'pontual']
 
@@ -468,17 +468,26 @@ export default function TasksClient({
   const assetName = (id?: string | null) => (id ? assetMap.get(id) ?? '—' : '—')
   const userName = (id?: string | null) => (id ? userMap.get(id) ?? id ?? '—' : '—')
 
+  const currentUser = useMemo(() => users.find((u) => u.id === userId), [users, userId])
+
+  // Se o utilizador não for gestor, garante que apenas vê tarefas atribuídas a si
+  const safeTasks = useMemo(() => {
+    if (isManager) return tasks
+    const profileForMatch = currentUser || { id: userId, role: 'technician' }
+    return tasks.filter((t) => isTaskAssignedToUser(t, profileForMatch))
+  }, [tasks, isManager, currentUser, userId])
+
   const assetAreaMap = useMemo(() => new Map(assets.map((a) => [a.id, a.area || ''])), [assets])
   const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
   const uniqueAreas = useMemo(() => {
     const set = new Set<string>()
     assets.forEach((a) => { if (a.area && a.area.trim()) set.add(a.area.trim()) })
-    tasks.forEach((t: any) => {
+    safeTasks.forEach((t: any) => {
       const area = t.area || assetAreaMap.get(t.assetId)
       if (area && area.trim() && area !== '—') set.add(area.trim())
     })
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-  }, [assets, tasks, assetAreaMap])
+  }, [assets, safeTasks, assetAreaMap])
 
   const uniqueTags = useMemo(() => {
     const set = new Set<string>()
@@ -494,7 +503,7 @@ export default function TasksClient({
       }
     })
 
-    tasks.forEach((t: any) => {
+    safeTasks.forEach((t: any) => {
       const tArea = ((t as any).area || assetAreaMap.get(t.assetId) || '').trim().toLowerCase()
       const tag = (t as any).tag || assetTagMap.get(t.assetId)
       if (activeAreas.length === 0 || activeAreas.some((af) => tArea === af)) {
@@ -503,9 +512,15 @@ export default function TasksClient({
     })
 
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-  }, [assets, tasks, selectedAreas, areaFilter, assetAreaMap, assetTagMap])
+  }, [assets, safeTasks, selectedAreas, areaFilter, assetAreaMap, assetTagMap])
 
   const uniqueTechnicians = useMemo(() => {
+    if (!isManager) {
+      if (currentUser) {
+        return [[currentUser.abbreviation || currentUser.id, currentUser.abbreviation ? `${currentUser.abbreviation} - ${currentUser.name}` : currentUser.name] as [string, string]]
+      }
+      return []
+    }
     const map = new Map<string, string>()
     users.forEach((u) => {
       if ((u as any).active !== false) {
@@ -517,7 +532,7 @@ export default function TasksClient({
         }
       }
     })
-    tasks.forEach((t) => {
+    safeTasks.forEach((t) => {
       if (t.assignedTo) {
         const u = users.find((usr) => usr.id === t.assignedTo || usr.abbreviation === t.assignedTo)
         if (u) {
@@ -532,19 +547,19 @@ export default function TasksClient({
       }
     })
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], 'pt'))
-  }, [tasks, users])
+  }, [safeTasks, users, isManager, currentUser])
 
   const searchIndex = useMemo(() => {
     const assetSearchMap = new Map(assets.map((a) => [a.id, `${a.name || ''} ${(a as any).tag || ''} ${(a as any).area || ''}`.toLowerCase()]))
     const userSearchMap = new Map(users.map((u) => [u.id, `${u.name || ''} ${(u as any).abbreviation || ''}`.toLowerCase()]))
 
-    return tasks.map((t) => {
+    return safeTasks.map((t) => {
       const aSearch = t.assetId ? assetSearchMap.get(t.assetId) || '' : ''
       const uSearch = t.assignedTo ? userSearchMap.get(t.assignedTo) || '' : ''
       const text = `${t.title || ''} ${t.description || ''} ${(t as any).tag || ''} ${(t as any).area || ''} ${aSearch} ${uSearch}`.toLowerCase()
       return { task: t, text }
     })
-  }, [tasks, assets, users])
+  }, [safeTasks, assets, users])
 
   useEffect(() => { setCurrentPage(1) }, [search, selectedStatuses, selectedTIs, selectedAreas, selectedTags, selectedTechs, areaFilter, tagFilter, colF, pageSize])
 

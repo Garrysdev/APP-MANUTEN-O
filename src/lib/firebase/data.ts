@@ -530,6 +530,92 @@ export const getTask = cache(async function(companyId: string, id: string): Prom
   return isDemoCompany(companyId) ? (getFallbackTasks().find(t => t.id === id) || null) : null
 })
 
+export async function notifyAssignedTechnicians(
+  companyId: string,
+  taskId: string,
+  taskTitle: string,
+  assignedTo?: string | null,
+  assignedToIds?: string[] | null,
+  assignedToText?: string | null,
+  area?: string | null,
+  tag?: string | null,
+  createdByName?: string | null,
+  createdBy?: string | null
+) {
+  try {
+    const allUsersSnap = await adminDb().collection('users').get().catch(() => null)
+    if (!allUsersSnap) return
+    const companyUsers = allUsersSnap.docs.map((d) => ({ ...serialize<User>(d), id: d.id }))
+
+    const targetUserIds = new Set<string>()
+
+    // 1. Verificação por ID direto em assignedTo
+    if (assignedTo) {
+      const aLower = assignedTo.toLowerCase().trim()
+      companyUsers.forEach((u) => {
+        if (
+          (u.id.toLowerCase() === aLower ||
+            (u.abbreviation && u.abbreviation.toLowerCase() === aLower) ||
+            u.name.toLowerCase() === aLower ||
+            aLower.replace(/^(tech_|user_)/, '') === (u.abbreviation || '').toLowerCase()) &&
+          u.id !== createdBy
+        ) {
+          targetUserIds.add(u.id)
+        }
+      })
+    }
+
+    // 2. Verificação por array de IDs
+    if (Array.isArray(assignedToIds)) {
+      assignedToIds.forEach((id) => {
+        const idLower = String(id || '').toLowerCase().trim()
+        companyUsers.forEach((u) => {
+          if (
+            (u.id.toLowerCase() === idLower ||
+              (u.abbreviation && u.abbreviation.toLowerCase() === idLower) ||
+              u.name.toLowerCase() === idLower) &&
+            u.id !== createdBy
+          ) {
+            targetUserIds.add(u.id)
+          }
+        })
+      })
+    }
+
+    // 3. Verificação por tokens de texto (ex: "MS+RG", "LM", etc.)
+    const textToScan = `${assignedToText || ''} ${typeof assignedTo === 'string' ? assignedTo : ''}`.trim().toLowerCase()
+    if (textToScan) {
+      const tokens = textToScan.split(/[\+,\/&|;\s]+/).map((s) => s.trim()).filter(Boolean)
+      companyUsers.forEach((u) => {
+        const uAbbr = (u.abbreviation || '').toLowerCase().trim()
+        const uName = (u.name || '').toLowerCase().trim()
+        if (
+          ((uAbbr && tokens.includes(uAbbr)) ||
+            (uName && tokens.includes(uName)) ||
+            (u.id && tokens.includes(u.id.toLowerCase()))) &&
+          u.id !== createdBy
+        ) {
+          targetUserIds.add(u.id)
+        }
+      })
+    }
+
+    const areaTagStr = [area, tag].filter(Boolean).join(' • ')
+    for (const techId of Array.from(targetUserIds)) {
+      await createNotification(companyId, {
+        userId: techId,
+        title: `📋 Nova OT Atribuída: ${taskTitle}`,
+        body: `Foi-lhe atribuída uma nova Ordem de Trabalho${areaTagStr ? ` (${areaTagStr})` : ''}.`,
+        type: 'task_assigned',
+        link: `/dashboard/tasks`,
+        senderName: createdByName || 'Gestor',
+      }).catch(console.error)
+    }
+  } catch (err) {
+    console.error('[notifyAssignedTechnicians] Error:', err)
+  }
+}
+
 export async function createTask(
   companyId: string,
   createdBy: string,
@@ -553,38 +639,19 @@ export async function createTask(
       .add({ createdAt: now, updatedAt: now, ...data, companyId, createdBy })
     generatedId = ref.id
 
-    // NOTIFICAÇÕES PARA TÉCNICOS ATRIBUÍDOS
-    const techIdsToNotify = new Set<string>()
-    if (data.assignedToIds && Array.isArray(data.assignedToIds)) {
-      data.assignedToIds.forEach((id) => { if (id && id !== createdBy) techIdsToNotify.add(id) })
-    }
-    if (techIdsToNotify.size === 0 && data.assignedTo) {
-      try {
-        const allUsersSnap = await adminDb().collection('users').where('companyId', '==', companyId).get()
-        allUsersSnap.docs.forEach((d) => {
-          const u = d.data() as User
-          if (
-            d.id !== createdBy &&
-            (d.id === data.assignedTo || u.abbreviation === data.assignedTo || u.name === data.assignedTo)
-          ) {
-            techIdsToNotify.add(d.id)
-          }
-        })
-      } catch (err) {
-        console.error('[createTask notify users] Error:', err)
-      }
-    }
-
-    for (const techId of techIdsToNotify) {
-      await createNotification(companyId, {
-        userId: techId,
-        title: `📋 Nova OT Atribuída: ${data.title}`,
-        body: `Foi-lhe atribuída uma nova OT na Área ${data.area || 'Geral'} (TAG: ${data.tag || '—'})`,
-        type: 'task_assigned',
-        link: `/dashboard/tasks/${generatedId}`,
-        senderName: data.createdByName || 'Gestor',
-      }).catch(console.error)
-    }
+    // Notificar os técnicos atribuídos via Web Push e Notificação Interna
+    await notifyAssignedTechnicians(
+      companyId,
+      generatedId,
+      data.title,
+      data.assignedTo,
+      data.assignedToIds,
+      (data as any).assignedToText,
+      data.area,
+      data.tag,
+      data.createdByName,
+      createdBy
+    ).catch(console.error)
 
     if (data.criticidade === 'vermelho' || data.tipo === 'curativa') {
       await sendUrgentTaskEmail({ id: generatedId, title: data.title, companyId }).catch(() => {})
@@ -635,6 +702,20 @@ export async function updateTask(
     )
   } else {
     await ref.update({ ...data, updatedAt: now })
+  }
+
+  if (data.assignedTo || data.assignedToIds || (data as any).assignedToText) {
+    const title = data.title || doc?.data()?.title || 'OT'
+    await notifyAssignedTechnicians(
+      companyId,
+      id,
+      title,
+      data.assignedTo,
+      data.assignedToIds,
+      (data as any).assignedToText,
+      data.area || doc?.data()?.area,
+      data.tag || doc?.data()?.tag
+    ).catch(console.error)
   }
 
   if (id.startsWith('plan_')) {

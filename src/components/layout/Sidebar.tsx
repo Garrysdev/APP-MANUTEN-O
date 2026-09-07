@@ -107,7 +107,6 @@ function isTechRole(role?: string | null): boolean {
 const techNavKeys: NavItem[] = [
   { href: '/dashboard/tasks',    key: 'tasks',    icon: ClipboardList },
   { href: '/dashboard/messages', key: 'messages', icon: MessageSquare },
-  { href: '/dashboard/assets',   key: 'assets',   icon: Package },
   { href: '/dashboard/manual',   key: 'userManual', icon: BookOpen },
   { href: '/dashboard/profile',  key: 'profile',  icon: UserCircle },
 ]

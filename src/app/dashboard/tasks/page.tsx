@@ -30,14 +30,11 @@ export default async function TasksPage() {
     roleStr === 'manager' ||
     roleStr === 'admin' ||
     roleStr === 'gestor' ||
-    roleStr === 'administrador' ||
-    profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
+    roleStr === 'administrador'
 
   const tasks = !isManagerOrAdmin
     ? normalTasks.filter((t) => isTaskAssignedToUser(t, profile))
     : normalTasks
-
-  const activeTasks = tasks.filter((t) => t.status !== 'done')
 
   return (
     <Suspense fallback={<div className="p-6 text-slate-500 font-medium">A carregar Gestão de OTs...</div>}>
@@ -56,7 +53,7 @@ export default async function TasksPage() {
           externalCompanyName: (u as any).externalCompanyName,
         }))}
         externalCompanies={externalCompanies}
-        role={isManagerOrAdmin ? 'manager' : profile.role}
+        role={isManagerOrAdmin ? 'manager' : 'technician'}
         userId={profile.id}
       />
     </Suspense>
