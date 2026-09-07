@@ -5,12 +5,12 @@ import Link from 'next/link'
 import {
   MessageSquare, Send, Plus, Search, Filter, Camera, Image as ImageIcon,
   CheckCheck, User, Users, ClipboardList, ShieldAlert, ArrowLeft, X, Paperclip,
-  Clock, Reply, CheckCircle2, Info, Check, RefreshCw
+  Clock, Reply, CheckCircle2, Info, Check, RefreshCw, Trash2
 } from 'lucide-react'
 import type { InternalMessage, MessageStatus } from '@/types/models'
 import { MESSAGE_STATUS_LABELS } from '@/types/models'
 import { formatDateTime } from '@/lib/utils'
-import { sendInternalMessageAction, updateMessageStatusAction } from './actions'
+import { sendInternalMessageAction, updateMessageStatusAction, deleteInternalMessageAction } from './actions'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
 
@@ -244,6 +244,22 @@ export default function MessagesClient({
     setStatusUpdatingId(null)
     if (!res.ok && res.error) {
       alert(`Erro ao atualizar estado: ${res.error}`)
+    }
+  }
+
+  // Apagar mensagem permanentemente (apenas para Admin / Gestor)
+  async function handleDeleteMessage(messageId: string) {
+    if (!isManager) return
+    if (!window.confirm('Tem a certeza que deseja apagar esta mensagem permanentemente?')) return
+
+    setLocalMessages((prev) => prev.filter((m) => m.id !== messageId))
+    if (selectedMessage && selectedMessage.id === messageId) {
+      setSelectedMessage(null)
+    }
+
+    const res = await deleteInternalMessageAction(messageId)
+    if (!res.ok && res.error) {
+      alert(`Erro ao apagar mensagem: ${res.error}`)
     }
   }
 
@@ -646,6 +662,19 @@ export default function MessagesClient({
                       <Reply className="h-3 w-3" />
                       <span>Responder</span>
                     </button>
+                    {isManager && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteMessage(msg.id)
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors cursor-pointer"
+                        title="Apagar Mensagem (Admin)"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -842,18 +871,32 @@ export default function MessagesClient({
             </div>
 
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => handleOpenReply(selectedMessage)}
-                className="btn-primary px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md"
-              >
-                <Reply className="h-4 w-4" />
-                <span>Responder no Menu</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenReply(selectedMessage)}
+                  className="btn-primary px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md cursor-pointer"
+                >
+                  <Reply className="h-4 w-4" />
+                  <span>Responder no Menu</span>
+                </button>
+
+                {isManager && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteMessage(selectedMessage.id)}
+                    className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:hover:bg-red-900 text-xs font-bold rounded-xl border border-red-200 dark:border-red-800 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Apagar Mensagem Permanentemente"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Apagar</span>
+                  </button>
+                )}
+              </div>
 
               <button
                 onClick={() => setSelectedMessage(null)}
-                className="btn-secondary px-4 py-2 text-xs font-bold rounded-xl"
+                className="btn-secondary px-4 py-2 text-xs font-bold rounded-xl cursor-pointer"
               >
                 Fechar
               </button>

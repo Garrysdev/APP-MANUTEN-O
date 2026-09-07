@@ -1,19 +1,27 @@
-'use client'
-
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, CheckCheck, MessageSquare, ClipboardList, AlertTriangle, ExternalLink, X } from 'lucide-react'
+import { Bell, CheckCheck, MessageSquare, ClipboardList, AlertTriangle, ExternalLink, X, Volume2, Smartphone } from 'lucide-react'
 import type { AppNotification } from '@/types/models'
 import { formatDateTime } from '@/lib/utils'
 import { markNotificationReadAction, markAllNotificationsReadAction } from '@/app/dashboard/messages/actions'
+import { playNotificationSound } from '@/lib/sound'
 
 export default function NotificationBell({ initialNotifications = [] }: { initialNotifications?: AppNotification[] }) {
   const router = useRouter()
   const [notifications, setNotifications] = useState<AppNotification[]>(initialNotifications)
   const [open, setOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const prevCountRef = useRef(initialNotifications.filter((n) => !n.read).length)
 
   const unreadCount = notifications.filter((n) => !n.read).length
+
+  // Tocar som se chegarem novas notificações não lidas
+  useEffect(() => {
+    if (unreadCount > prevCountRef.current) {
+      playNotificationSound()
+    }
+    prevCountRef.current = unreadCount
+  }, [unreadCount])
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -56,14 +64,19 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
 
   async function handleEnablePush() {
     try {
+      playNotificationSound()
       const { subscribeToPushNotifications } = await import('@/lib/webpush-client')
       const ok = await subscribeToPushNotifications('manual')
       if (ok) {
-        alert('Notificações no telemóvel ativadas com sucesso!')
+        alert('Notificações e sons no telemóvel ativados com sucesso!')
       }
     } catch (err: any) {
       alert(err?.message || 'Falha ao ativar notificações.')
     }
+  }
+
+  function handleTestSound() {
+    playNotificationSound()
   }
 
   async function handleMarkRead(n: AppNotification) {
@@ -160,16 +173,36 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
             )}
           </div>
 
-          <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 text-center">
+          <div className="p-2.5 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex flex-col gap-1 text-center">
+            <div className="flex items-center justify-between gap-2 px-1">
+              <button
+                type="button"
+                onClick={handleTestSound}
+                className="text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:text-industrial-blue dark:hover:text-sky-400 flex items-center gap-1 py-1 cursor-pointer"
+              >
+                <Volume2 className="h-3.5 w-3.5 text-safety-orange" />
+                <span>Testar Som</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleEnablePush}
+                className="text-[11px] font-bold text-safety-orange hover:underline flex items-center gap-1 py-1 cursor-pointer"
+              >
+                <Smartphone className="h-3.5 w-3.5" />
+                <span>Ativar no Telemóvel</span>
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={() => {
                 setOpen(false)
                 router.push('/dashboard/messages')
               }}
-              className="text-xs font-bold text-industrial-blue dark:text-sky-400 hover:underline flex items-center justify-center gap-1 w-full py-1 cursor-pointer"
+              className="text-xs font-bold text-industrial-blue dark:text-sky-400 hover:underline flex items-center justify-center gap-1 w-full pt-1 border-t border-slate-200/60 dark:border-slate-700/60 cursor-pointer"
             >
-              <span>Ver todas as mensagens e notificações</span>
+              <span>Ver todas as mensagens</span>
               <ExternalLink className="h-3 w-3" />
             </button>
           </div>
@@ -178,3 +211,4 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
     </div>
   )
 }
+

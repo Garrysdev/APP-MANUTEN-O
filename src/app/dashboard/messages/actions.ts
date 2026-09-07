@@ -93,6 +93,34 @@ export async function updateMessageStatusAction(
   }
 }
 
+export async function deleteInternalMessageAction(
+  messageId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { ok: false, error: 'Sessão expirada.' }
+
+  const roleStr = String(profile.role || '').toLowerCase().trim()
+  const isManagerOrAdmin =
+    roleStr === 'manager' ||
+    roleStr === 'admin' ||
+    roleStr === 'gestor' ||
+    roleStr === 'administrador' ||
+    profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
+
+  if (!isManagerOrAdmin) {
+    return { ok: false, error: 'Apenas Administradores / Gestores têm permissão para apagar mensagens.' }
+  }
+
+  try {
+    const { deleteInternalMessage } = await import('@/lib/firebase/data')
+    await deleteInternalMessage(profile.companyId, messageId)
+    revalidatePath('/dashboard/messages')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Erro ao apagar mensagem.' }
+  }
+}
+
 export async function markNotificationReadAction(notificationId: string) {
   const profile = await getCurrentProfile()
   if (!profile) return

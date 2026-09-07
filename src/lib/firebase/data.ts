@@ -2001,3 +2001,21 @@ export async function updateInternalMessageStatus(
   }
 }
 
+export async function deleteInternalMessage(
+  companyId: string,
+  messageId: string
+): Promise<void> {
+  try {
+    const idx = cachedInternalMessages.findIndex((m) => m.id === messageId)
+    if (idx !== -1) {
+      cachedInternalMessages.splice(idx, 1)
+    }
+    await adminDb().collection('internal_messages').doc(messageId).delete()
+  } catch (err) {
+    console.error('[deleteInternalMessage] Error:', err)
+    throw err
+  }
+}
+
+
+

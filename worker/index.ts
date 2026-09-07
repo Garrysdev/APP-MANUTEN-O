@@ -3,14 +3,23 @@ declare let self: ServiceWorkerGlobalScope
 // Escuta pelo evento 'push' que o nosso servidor envia
 self.addEventListener('push', function (event) {
   if (event.data) {
-    const data = event.data.json()
+    let data: any = {}
+    try {
+      data = event.data.json()
+    } catch {
+      data = { message: event.data.text() }
+    }
     const title = data.title || 'RG Maintenance'
-    const options = {
-      body: data.message,
+    const options: any = {
+      body: data.message || data.body || 'Nova notificação de manutenção.',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
-      vibrate: [200, 100, 200],
-      data: data.url || '/',
+      vibrate: [300, 100, 300, 100, 300],
+      tag: data.tag || 'rg-notif-' + Date.now(),
+      renotify: true,
+      requireInteraction: true,
+      silent: false,
+      data: data.url || data.link || '/dashboard',
     }
     event.waitUntil(self.registration.showNotification(title, options))
   }
