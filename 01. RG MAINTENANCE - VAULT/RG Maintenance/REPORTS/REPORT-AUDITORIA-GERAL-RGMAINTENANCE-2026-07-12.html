@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RG Maintenance — Auditoria Geral do Projeto · 2026-07-12</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F4F6F8;--navy:#1B4F72;--navy-light:#D6E4F0;--ink:#15202b;
+  --ink-soft:#3d4a58;--muted:#6b7a89;--border:rgba(27,79,114,0.18);
+  --green:#2e9e6b;--yellow:#b89020;--red:#b04040;--blue:#3a7fa8;--orange:#c07030
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.7}
+.page{max-width:920px;margin:0 auto;padding:48px 40px}
+@media(max-width:680px){.page{padding:28px 18px}}
+.capa{text-align:center;padding:64px 0 48px;border-bottom:1px solid var(--border);margin-bottom:48px}
+.capa .versao{font-size:10px;letter-spacing:5px;text-transform:uppercase;color:var(--navy);margin-bottom:20px}
+.capa h1{font-family:'EB Garamond',serif;font-size:36px;font-weight:400;line-height:1.2;margin-bottom:10px}
+.capa h1 em{color:var(--navy);font-style:italic}
+.capa .subtitulo{font-size:13px;color:var(--muted);letter-spacing:1px}
+.divider{width:48px;height:1px;background:var(--navy);margin:0 auto 20px;opacity:.4}
+.sec{margin-bottom:44px}
+.sec-num{font-size:9px;letter-spacing:5px;text-transform:uppercase;color:var(--navy);margin-bottom:8px}
+.sec h2{font-family:'EB Garamond',serif;font-size:23px;font-weight:400;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.sec h3{font-size:14px;font-weight:600;margin:20px 0 8px;color:var(--ink)}
+.sec p{font-size:13.5px;color:var(--ink-soft);line-height:1.8;margin-bottom:12px}
+table{width:100%;border-collapse:collapse;font-size:12.8px;margin:12px 0}
+th{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:8px 10px;text-align:left;border-bottom:2px solid var(--border)}
+td{padding:8px 10px;border-bottom:1px solid rgba(27,79,114,.08);color:var(--ink-soft);vertical-align:top}
+td:first-child{font-weight:600;color:var(--ink)}
+tr:last-child td{border-bottom:none}
+.badge{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:2px 9px;border-radius:20px}
+.b-crit{background:rgba(176,64,64,.14);color:#8a2020}
+.b-alto{background:rgba(192,112,48,.14);color:#8a4a10}
+.b-medio{background:rgba(184,144,32,.13);color:#7a5c00}
+.b-baixo{background:rgba(107,122,137,.15);color:var(--muted)}
+.b-ok{background:rgba(46,158,107,.12);color:#1a7a4e}
+.b-warn{background:rgba(184,144,32,.12);color:#7a5c00}
+.b-rui{background:rgba(58,127,168,.12);color:#1a5070}
+.nota{background:rgba(27,79,114,.06);border-left:3px solid var(--navy);border-radius:0 6px 6px 0;padding:10px 16px;font-size:12.5px;color:var(--ink-soft);margin:12px 0;line-height:1.6}
+.nota strong{color:var(--ink)}
+.alerta{background:rgba(176,64,64,.07);border-left:3px solid var(--red);border-radius:0 6px 6px 0;padding:10px 16px;font-size:12.5px;color:var(--ink-soft);margin:12px 0;line-height:1.6}
+.alerta strong{color:#8a2020}
+.swot{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
+@media(max-width:600px){.swot{grid-template-columns:1fr}}
+.swot-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:18px 20px}
+.swot-card h4{font-size:11px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px}
+.swot-card.s h4{color:var(--green)}.swot-card.w h4{color:var(--red)}
+.swot-card.o h4{color:var(--blue)}.swot-card.t h4{color:var(--orange)}
+.swot-card ul{list-style:none}
+.swot-card ul li{font-size:12.6px;color:var(--ink-soft);padding:4px 0 4px 16px;position:relative;line-height:1.55;border-bottom:1px solid rgba(27,79,114,.06)}
+.swot-card ul li:last-child{border-bottom:none}
+.swot-card ul li::before{content:'·';position:absolute;left:2px;color:var(--navy);font-weight:700}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+@media(max-width:680px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center}
+.kpi .v{font-family:'EB Garamond',serif;font-size:24px;color:var(--navy);line-height:1.1}
+.kpi .l{font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-top:5px}
+.prio{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:12px}
+.prio .ph{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.prio .pn{font-family:'EB Garamond',serif;font-size:20px;color:var(--navy);min-width:36px}
+.prio .pt{font-size:14px;font-weight:600}
+.prio ul{list-style:none;margin-left:46px}
+.prio ul li{font-size:12.8px;color:var(--ink-soft);padding:4px 0 4px 16px;position:relative;line-height:1.6;border-bottom:1px solid rgba(27,79,114,.06)}
+.prio ul li:last-child{border-bottom:none}
+.prio ul li::before{content:'→';position:absolute;left:0;color:var(--navy);font-size:11px}
+code{font-family:Consolas,monospace;font-size:11.5px;background:rgba(27,79,114,.08);padding:1px 5px;border-radius:3px}
+.rodape{text-align:center;font-size:11px;color:var(--muted);padding:36px 0 28px;letter-spacing:.5px;border-top:1px solid var(--border);margin-top:44px}
+.rodape strong{color:var(--navy)}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="capa">
+  <div class="versao">RG Maintenance · Auditoria Geral · 2026-07-12</div>
+  <div class="divider"></div>
+  <h1>Auditoria do <em>Projeto</em></h1>
+  <div class="subtitulo">Planos · Monetização · Cronograma · Segurança · SWOT · Uso interno Rui + Claude</div>
+</div>
+
+<!-- §1 SUMÁRIO -->
+<div class="sec">
+  <div class="sec-num">§ 1</div>
+  <h2>Sumário Executivo</h2>
+  <p>O RG Maintenance é o caso <strong>inverso do EneaSpirit</strong>: aqui o produto está muito à frente dos documentos. A app está <strong>deployada e viva no Vercel</strong> (HTTP 200), com 14 módulos de dashboard, Stripe integrado (test mode), PWA, e <strong>dados reais da fábrica importados</strong> (894 equipamentos + 605 planos de manutenção preventiva) — mas o cronograma oficial ainda diz "semana 1 de 12", o Log de Decisões parou em junho, e a decisão estratégica central (<strong>uso interno vs SaaS, Decisão #003</strong>) está pendente há 5 semanas. Em segurança, há <strong>1 achado crítico</strong> (chave privada Firebase Admin na raiz do projeto, fora do .gitignore) mas também um destaque positivo raro: as regras Firestore multi-tenant estão bem desenhadas.</p>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="v">14</div><div class="l">Módulos dashboard live</div></div>
+    <div class="kpi"><div class="v">894+605</div><div class="l">Ativos + planos reais</div></div>
+    <div class="kpi"><div class="v">€0</div><div class="l">Receita (Stripe em test)</div></div>
+    <div class="kpi"><div class="v">1</div><div class="l">Achado crítico segurança</div></div>
+  </div>
+</div>
+
+<!-- §2 PLANOS & CRONOGRAMA -->
+<div class="sec">
+  <div class="sec-num">§ 2</div>
+  <h2>Planos & Cronograma — Drift Documental Severo</h2>
+  <p>Os documentos de gestão congelaram em 08–10 de junho, mas o desenvolvimento continuou intensamente até 26-06 (diário) e para além. O resultado é que <strong>os documentos descrevem um projeto que já não existe</strong>:</p>
+  <table>
+    <tr><th>Documento diz</th><th>Realidade em 12-07</th></tr>
+    <tr><td>"Semana 1 de 12 · Fase 1 em curso"</td><td>Funcionalidades das Fases 1–5 em grande parte construídas; hoje seria a semana 5</td></tr>
+    <tr><td>"Criar repositório GitHub" pendente</td><td>Continua pendente — <strong>sem git de todo</strong></td></tr>
+    <tr><td>"Deploy inicial no Vercel" pendente</td><td>App deployada e live (<code>rg-maintenance.vercel.app</code> → HTTP 200)</td></tr>
+    <tr><td>Stack: Supabase + RLS</td><td>Stack real: <strong>Firebase/Firestore</strong> + Cloudinary + Vercel (Decisão #010 referida mas nunca registada no log)</td></tr>
+    <tr><td>Gates A1–A5 por aprovar</td><td>Na prática ultrapassados sem registo formal (login, dashboard, PWA, tarefas, plano de manutenção — tudo existe)</td></tr>
+    <tr><td>Log de Decisões: última #004 (10-06)</td><td>Dezenas de decisões técnicas tomadas desde então, nenhuma registada</td></tr>
+    <tr><td>Diário de Progresso</td><td>Parado desde 26-06 (16 dias)</td></tr>
+  </table>
+  <div class="nota"><strong>A decisão que trava tudo — #003 (pendente desde 08-06):</strong> uso interno primeiro ou SaaS desde o início? Domínio? Esta é a única decisão que define o próximo passo de monetização, e está aberta há 5 semanas. Recomendação clara abaixo (§3).</div>
+</div>
+
+<!-- §3 MONETIZAÇÃO -->
+<div class="sec">
+  <div class="sec-num">§ 3</div>
+  <h2>Monetização — Diagnóstico</h2>
+  <p>O plano de monetização é sólido e realista: SaaS por subscrição (Starter grátis / Pro €29 / Business €79 / Enterprise €199+), concorrência mapeada com vantagem clara (5× mais barato + português + suporte local), KPIs definidos. E ao contrário do EneaSpirit, <strong>o checkout já existe</strong> — Stripe checkout/portal/webhook implementados, apenas em test mode.</p>
+  <h3>O que falta para a primeira fatura</h3>
+  <table>
+    <tr><th>Bloqueio</th><th>De quem</th><th>Nota</th></tr>
+    <tr><td>Decisão #003: interno vs SaaS + domínio</td><td><span class="badge b-rui">Rui</span></td><td>Decisão estratégica central — tudo o resto depende dela</td></tr>
+    <tr><td>Stripe live keys (hoje test)</td><td><span class="badge b-rui">Rui</span></td><td>Ativar conta Stripe live + trocar chaves</td></tr>
+    <tr><td>Faturação certificada PT</td><td><span class="badge b-rui">Rui</span></td><td>InvoiceXpress (mesma conta serviria EneaSpirit) — não está no plano e é obrigatório para faturar legalmente em Portugal</td></tr>
+    <tr><td>Landing page pública + domínio</td><td>Claude</td><td>Rápido de construir depois da #003</td></tr>
+    <tr><td>RGPD: política de privacidade + termos + DPA</td><td>Claude (draft) + Rui (rever)</td><td>Obrigatório antes de clientes externos — a app guarda dados industriais de terceiros</td></tr>
+  </table>
+  <div class="nota"><strong>Recomendação estratégica:</strong> resolver a #003 como <strong>"interno primeiro"</strong>. Os dados da fábrica já estão importados — usar a app em produção real na SOREB/RG durante 4–8 semanas produz o caso de estudo ("894 equipamentos, 605 planos preventivos geridos") que é o melhor argumento de vendas possível para os primeiros clientes Pro. O SaaS lança-se com prova social em vez de promessas. <strong>Atenção:</strong> clarificar formalmente com o empregador o uso dos dados da fábrica no produto pessoal (ver Ameaças, §6).</div>
+</div>
+
+<!-- §4 SEGURANÇA -->
+<div class="sec">
+  <div class="sec-num">§ 4</div>
+  <h2>Segurança — Achados</h2>
+
+  <div class="alerta"><strong>Crítico:</strong> o ficheiro <code>rg-maintenance-11474-firebase-adminsdk-fbsvc-2bfc599028.json</code> (service account com <code>private_key</code> — acesso administrativo total ao Firebase, ignora todas as regras de segurança) está na <strong>raiz do projeto e NÃO consta do .gitignore</strong>. No momento em que se fizer <code>git init + add</code>, a chave vai parar ao repositório — e se o repo for para o GitHub, é comprometimento total da base de dados de todos os futuros clientes.</div>
+
+  <table>
+    <tr><th>#</th><th>Severidade</th><th>Achado</th><th>Correção</th></tr>
+    <tr><td>S1</td><td><span class="badge b-crit">Crítico</span></td><td>Service account Firebase Admin em JSON na raiz, fora do .gitignore; redundante (a app lê <code>FIREBASE_PRIVATE_KEY</code> do .env.local)</td><td>Apagar o ficheiro + rotar a chave na consola Firebase + adicionar <code>*adminsdk*.json</code> ao .gitignore</td></tr>
+    <tr><td>S2</td><td><span class="badge b-medio">Médio</span></td><td>Sem repositório git — sem histórico, sem backup, sem CI; viola a regra de portabilidade do projeto</td><td><code>git init</code> + commit <strong>depois</strong> de corrigir S1</td></tr>
+    <tr><td>S3</td><td><span class="badge b-medio">Médio</span></td><td>Cloudinary partilhado com o EneaSpirit (mesma cloud <code>dqgh…</code>) e upload preset exposto no cliente (<code>NEXT_PUBLIC_…_UPLOAD_PRESET</code>) — uploads unsigned possíveis por terceiros; fotos industriais e media editorial na mesma conta</td><td>Preset com pasta restrita + limites; considerar conta/ambiente separado antes de clientes externos</td></tr>
+    <tr><td>S4</td><td><span class="badge b-medio">Médio</span></td><td>Cobertura de testes mínima: 1 ficheiro (<code>finance.test.ts</code>) vs regra interna de 80% — os fluxos críticos (isolamento multi-tenant, webhook Stripe) não têm testes</td><td>Testes de integração para auth multi-tenant e webhook antes do lançamento</td></tr>
+    <tr><td>S5</td><td><span class="badge b-baixo">Baixo</span></td><td>Dados reais da fábrica numa empresa de teste (<code>company-rgb-business</code>) sem política de retenção definida</td><td>Definir o que acontece a estes dados quando a app tiver clientes externos</td></tr>
+    <tr><td>S6</td><td><span class="badge b-baixo">Baixo</span></td><td>Stripe em test mode com <code>sk_test</code> no .env.local — risco baixo, mas o webhook secret deve ser regenerado ao passar a live</td><td>Rotina de passagem test→live documentada</td></tr>
+  </table>
+  <p style="font-size:12px;color:var(--muted)">Destaques positivos: <strong>firestore.rules multi-tenant bem desenhadas</strong> (default-deny em todas as escritas, leitura scoped por <code>companyId</code>, mutações só via Admin SDK no servidor — defesa em profundidade correta); nenhum segredo hardcoded encontrado em <code>src/</code>; .env.local corretamente gitignored.</p>
+</div>
+
+<!-- §5 OPERAÇÕES -->
+<div class="sec">
+  <div class="sec-num">§ 5</div>
+  <h2>Operações</h2>
+  <p>Não há daemons nem tarefas agendadas específicas deste projeto (ao contrário do EneaSpirit) — a operação é a app no Vercel + Firebase, ambos em free tier. O diário registou um "agente noturno" a 26-06, mas não há tarefa agendada ativa correspondente no Task Scheduler. Higiene: diário parado desde 26-06; cronograma e log de decisões desde 08–10/06. A pasta <code>scratch/</code> e ficheiros soltos na raiz (<code>test-live.js</code>, <code>seed-test.js/ts</code> duplicados, <code>clean.js</code>) merecem arrumação antes do commit inicial.</p>
+</div>
+
+<!-- §6 SWOT -->
+<div class="sec">
+  <div class="sec-num">§ 6</div>
+  <h2>Análise SWOT</h2>
+  <div class="swot">
+    <div class="swot-card s">
+      <h4>Forças</h4>
+      <ul>
+        <li>Produto real, funcional e deployado — 14 módulos, PWA, relatórios, stocks, fiabilidade, IA</li>
+        <li>Dogfooding único: dados reais de uma fábrica (894 ativos, 605 planos) já dentro da app</li>
+        <li>Conhecimento de domínio em primeira mão — o Rui é o próprio utilizador-alvo</li>
+        <li>Segurança multi-tenant desenhada corretamente desde o início</li>
+        <li>Stripe já integrado (checkout, portal, webhook) — só falta passar a live</li>
+        <li>Vantagem competitiva clara: 5× mais barato, em português, suporte local</li>
+      </ul>
+    </div>
+    <div class="swot-card w">
+      <h4>Fraquezas</h4>
+      <ul>
+        <li>Governança documental abandonada — cronograma/decisões/diário congelados há semanas</li>
+        <li>Decisão estratégica #003 (interno vs SaaS) aberta há 5 semanas trava a monetização</li>
+        <li>Sem git — todo o código sem histórico nem backup</li>
+        <li>Cobertura de testes mínima nos fluxos que mais importam (multi-tenant, pagamentos)</li>
+        <li>Receita €0 e sem presença pública (domínio, landing)</li>
+        <li>Tempo do Rui dividido com o EneaSpirit — dois produtos pré-receita em simultâneo</li>
+      </ul>
+    </div>
+    <div class="swot-card o">
+      <h4>Oportunidades</h4>
+      <ul>
+        <li>Uso interno na fábrica → caso de estudo real → prova social para os primeiros clientes Pro</li>
+        <li>Mercado PT sem CMMS acessível em português (concorrentes a €120–500/mês, em EN/ES)</li>
+        <li>Plano de manutenção legal (tarefas "-legal") como argumento de compliance para PMEs</li>
+        <li>Parcerias com empresas de manutenção industrial como revendedores (20%)</li>
+        <li>Roadmap v2 (IoT, preditiva, SAP/Primavera) com upsell natural</li>
+        <li>InvoiceXpress partilhado com EneaSpirit — uma conta serve os dois projetos</li>
+      </ul>
+    </div>
+    <div class="swot-card t">
+      <h4>Ameaças</h4>
+      <ul>
+        <li><strong>Dados do empregador no produto pessoal</strong> — o uso dos Excel da SOREB/RG precisa de autorização clara; risco legal e reputacional se não for formalizado</li>
+        <li>RGPD/compliance para dados industriais de clientes — obrigatório antes do 1.º cliente externo</li>
+        <li>Concorrentes internacionais podem lançar localização PT a qualquer momento</li>
+        <li>Free tiers Firebase/Vercel têm limites — custos aparecem com os primeiros clientes reais</li>
+        <li>Chave Admin exposta (S1) seria fatal num produto multi-tenant com dados de terceiros</li>
+        <li>Projeto de "um homem só": férias/doença/EneaSpirit param tudo</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- §7 SUGESTÕES -->
+<div class="sec">
+  <div class="sec-num">§ 7</div>
+  <h2>Sugestões de Melhoria — Priorizadas</h2>
+
+  <div class="prio">
+    <div class="ph"><div class="pn">P0</div><div class="pt">Segurança (imediato)</div></div>
+    <ul>
+      <li>Apagar o JSON da service account da raiz + rotar a chave na consola Firebase (S1)</li>
+      <li>Adicionar <code>*adminsdk*.json</code> e <code>scratch/</code> ao .gitignore</li>
+      <li>Só depois: <code>git init</code> + commit inicial (S2)</li>
+    </ul>
+  </div>
+
+  <div class="prio">
+    <div class="ph"><div class="pn">P1</div><div class="pt">Estratégia (decisão do Rui, esta semana)</div></div>
+    <ul>
+      <li>Fechar a Decisão #003 — recomendação: <strong>uso interno primeiro</strong> (4–8 semanas na fábrica) → caso de estudo → lançamento SaaS com prova social</li>
+      <li>Clarificar formalmente o uso dos dados SOREB/RG no produto (autorização escrita ou anonimização)</li>
+      <li>Escolher domínio (rgmaintenance.pt sugerido) — pode-se registar já sem decidir o resto</li>
+    </ul>
+  </div>
+
+  <div class="prio">
+    <div class="ph"><div class="pn">P2</div><div class="pt">Qualidade (noites, sem input do Rui)</div></div>
+    <ul>
+      <li>Reconciliar cronograma/plano/log de decisões com a realidade (marcar fases e gates conforme o que existe)</li>
+      <li>Testes de integração: isolamento multi-tenant (empresa A não vê dados da B) e webhook Stripe</li>
+      <li>Retomar o diário; arrumar ficheiros soltos da raiz</li>
+      <li>Importar os dados para a empresa real "UR" + decidir os 35 planos órfãos (pendência de 26-06)</li>
+    </ul>
+  </div>
+
+  <div class="prio">
+    <div class="ph"><div class="pn">P3</div><div class="pt">Lançamento (após #003)</div></div>
+    <ul>
+      <li>Landing page + domínio + política de privacidade/termos RGPD</li>
+      <li>Stripe test→live + InvoiceXpress (webhook de faturação automática)</li>
+      <li>Onboarding self-service + trial 30 dias sem cartão (como previsto no plano)</li>
+      <li>Primeiros 5 clientes via rede de contactos com o caso de estudo da fábrica</li>
+    </ul>
+  </div>
+</div>
+
+<div class="rodape">
+  <strong>RG MAINTENANCE</strong> · Auditoria Geral · 2026-07-12 · Gerada por Claude (auditoria de planos, código, deploy e configurações)<br>
+  Fontes: 01-Plano de Implementação · 02-Cronograma · 04-Monetização · Log de Decisões · Diário · firestore.rules · .env.local (mascarado) · Vercel
+</div>
+
+</div>
+</body>
+</html>

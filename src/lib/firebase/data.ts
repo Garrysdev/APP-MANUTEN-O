@@ -99,8 +99,11 @@ function getFallbackTasks(): Task[] {
       const json = JSON.parse(raw)
       cachedFallbackTasks = json
         .filter((item: any) => {
+          // As 265 OTs importadas da folha UR devem ser SEMPRE mantidas
+          if (item.source === 'excel_ur' || item.id?.startsWith('task_excel_ur_')) return true
           const isScheduledPM = Boolean(
             item.source === 'pm_agendamento_2026' ||
+            item.source === 'pm_anual_paragem_verao_2026' ||
             item.source === 'plan' ||
             (item.title && (item.title.startsWith('[PM]') || item.title.startsWith('[MP]'))) ||
             item.maintenancePlanId
@@ -454,9 +457,14 @@ const listTasksCached = unstable_cache(
       const dbDocs = snap.docs
         .map((d) => serialize<Task>(d))
         .filter((t) => {
+          // Manter SEMPRE todas as tarefas da folha UR
+          if (t.source === 'excel_ur' || t.source === 'folha_ur_historico' || t.id.startsWith('task_excel_ur_') || t.id.includes('t-ur-')) {
+            return true
+          }
           // Filtrar OTs de PM em massa que possam ter sobrado
           const isScheduledPM = Boolean(
             (t as any).source === 'pm_agendamento_2026' ||
+            (t as any).source === 'pm_anual_paragem_verao_2026' ||
             (t.title && (t.title.startsWith('[PM]') || t.title.startsWith('[MP]')))
           )
           if (isScheduledPM && t.status !== 'done') return false
@@ -469,7 +477,7 @@ const listTasksCached = unstable_cache(
       }
       let fallbacks = getFallbackTasks()
       if (!includeCompleted) {
-        fallbacks = fallbacks.filter((f) => f.status !== 'done' && f.status !== 'cancelled')
+        fallbacks = fallbacks.filter((f) => f.source === 'excel_ur' || (f.status !== 'done' && f.status !== 'cancelled'))
       }
       if (dbDocs.length === 0) return fallbacks
 
@@ -486,7 +494,7 @@ const listTasksCached = unstable_cache(
       }
       let fallbacks = getFallbackTasks()
       if (!includeCompleted) {
-        fallbacks = fallbacks.filter((f) => f.status !== 'done' && f.status !== 'cancelled')
+        fallbacks = fallbacks.filter((f) => f.source === 'excel_ur' || (f.status !== 'done' && f.status !== 'cancelled'))
       }
       return isDemoCompany(companyId) ? fallbacks : []
     }
@@ -497,8 +505,8 @@ const listTasksCached = unstable_cache(
 
 export const listTasks = cache(async function(
   companyId: string,
-  limitCount = 1000,
-  includeCompleted = false
+  limitCount = 2000,
+  includeCompleted = true
 ): Promise<Task[]> {
   return listTasksCached(companyId, limitCount, includeCompleted)
 })

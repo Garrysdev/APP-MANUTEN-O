@@ -238,7 +238,7 @@ export default function TasksClient({
       const list = pStatus.split(',').map((s) => s.trim() as TaskStatus).filter(Boolean)
       if (list.length > 0) return list
     }
-    return ['pending', 'in_progress'] // DEFAULT: OTs Não Concluídas (Ativas)
+    return [] // DEFAULT: Mostrar todas as OTs por omissão (como na quinta-feira)
   })
   const [selectedTIs, setSelectedTIs] = useState<string[]>([])
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])

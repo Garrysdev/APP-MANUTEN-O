@@ -1,0 +1,26 @@
+{
+  "_note": "Snapshot cross-project (meta) das listas Google Tasks do Rui, usado pelo watchdog diário para detetar itens novos. Não é conteúdo do projeto RG Maintenance — vive aqui por ser o vault designado para meta-trabalho cross-project.",
+  "atualizado_em": "2026-07-02",
+  "listas": {
+    "CLAUDE_ENEASPIRIT": [
+      "00. Fazer a triagem e os resumos na pasta dos temas da semana: eneagrama",
+      "01. Interligar Claude ao Google Tasks ou ToDoIst",
+      "02. Colocar a CRM a funcionar para controlar acessos de estudantes a cada área",
+      "06. Criar um report diário que registe o que se fez e se gastou entre limites de acesso no Claude, para percebermos o que podemos melhorar",
+      "07. quero um cronograma no dashboard com os vários agentes para ver possiveis conflitos de horários e de funções"
+    ],
+    "CLAUDE_RG MAINTENANCE": [
+      "00. O objetivo é começar a testar na empresa em julho o mais tardar quero testar na paragem",
+      "02. No Plano de MANUTENÇÃO TER A HIPOTESE DE IMPORTAÇÃO/EXPORTAÇÃO PARA EXCELL",
+      "04. Ao se criar uma tarefa tipo Plano de Manutenção, deve de perguntar ao se gravar se queremos adicionar ao Plano, e se for para adicionar, perguntar qual a periodicidade",
+      "05. Ver a sequencia de campos na criação das tarefas e quais os campos obrigatórios",
+      "09. quando vou criar uma nova tarefa, a listagem de materiais a usar tem que vir beber da BD Stocks. Ou seja, primeiro cria stock, e só depois posso abrir tarefa.",
+      "10. quando o tecnico inicia uma tarefa, tem que ter um botão de \"Iniciar\" tarefa, e outro \"Concluir\", o de concluir é que vai abrir a janela de registo de trabalho que já vem parcialmente preenchida com data/hora, e os restantes dados da tarefa",
+      "13. Criar perfil do técnico tambem com fotos, que passam a ser o icon do técnico acompanha o nome do mesmo nas várias paginas onde aparece.",
+      "17. Criar um \"pacote\" onde tenha todo o projecto para \"vender\" ao cliente, ou irá funcionar de outra maneira?",
+      "avança com código. Equipamento=Cadastro importa (AREA, TAG, DESIGNAÇÃO, CARACTERISTICAS, FORNECEDOR, OBS. ).",
+      "Na página Equipamentos coloca filtros e ordenaçºao",
+      "Nota de foto"
+    ]
+  }
+}
