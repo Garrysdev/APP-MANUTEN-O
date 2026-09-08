@@ -42,36 +42,49 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
       }
     }
 
-    if (!userSnap.exists) {
+    const docData = (userSnap && userSnap.exists) ? (userSnap.data() || {}) : {}
+    const KNOWN_USERS = [
+      { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', email: 'tecnico@teste.rg', name: 'RG - RuiG', abbreviation: 'RG', role: 'technician' },
+      { id: 'MEGjjvqtGqv3Oosxvlrx', email: 'lm@rgmaintenance.pt', name: 'Leandro Maia', abbreviation: 'LM', role: 'technician' },
+      { id: 'nAcCSm4E3tNnPLr72UPl', email: 'ms@rgmaintenance.pt', name: 'Marco Silva', abbreviation: 'MS', role: 'technician' },
+      { id: 'zmDAeoGTzIWPavraKu0f', email: 'cb@rgmaintenance.pt', name: 'Carlos Branco', abbreviation: 'CB', role: 'technician' },
+      { id: 'CUodZKziOwo128GLK66i', email: 'garrido.rui@gmail.com', name: 'Rui Garrido (RG)', abbreviation: 'RG', role: 'manager' },
+      { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', email: 'demo@rgmaintenance.pt', name: 'Admin', abbreviation: 'ADM', role: 'manager' },
+    ]
+    const matchedKnown = KNOWN_USERS.find((k) => k.id === session.uid || (userEmail && k.email.toLowerCase() === userEmail))
+
+    if (!userSnap || !userSnap.exists) {
       const targetCompanyId = (session as any).companyId || DEMO_COMPANY_ID
-      const fallbackRole = isRGAdmin ? 'manager' : 'technician'
+      const fallbackRole = isRGAdmin ? 'manager' : (matchedKnown?.role || 'technician')
       return {
-        id: session.uid,
-        email: session.email || '',
-        name: session.name || 'Utilizador',
+        id: matchedKnown?.id || session.uid,
+        email: userEmail || matchedKnown?.email || '',
+        name: matchedKnown?.name || session.name || (isRGAdmin ? 'Rui Garrido' : 'Utilizador'),
+        abbreviation: matchedKnown?.abbreviation || (isRGAdmin ? 'RG' : null),
         role: fallbackRole,
         companyId: targetCompanyId,
         company: {
           id: targetCompanyId,
           name: 'Empresa UR',
           plan: 'enterprise',
-          activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
-          aiCredits: 100
-        }
+          activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'messages'],
+          aiCredits: 100,
+        },
       } as UserProfile
     }
 
-    const docData = userSnap.data() || {}
     const rawRole = (docData.role as string)?.toLowerCase()?.trim()
     const userRole = isRGAdmin
       ? 'manager'
-      : ((rawRole === 'technician' || rawRole === 'tecnico' || rawRole === 'técnico' || rawRole === 'tech') ? 'technician' : 'manager')
+      : ((rawRole === 'technician' || rawRole === 'tecnico' || rawRole === 'técnico' || rawRole === 'tech') ? 'technician' : (rawRole || 'manager'))
 
     const companyId = docData.companyId || DEMO_COMPANY_ID
 
     const user = { 
       id: userSnap.id, 
       ...docData, 
+      name: docData.name || matchedKnown?.name || session.name || 'Utilizador',
+      abbreviation: docData.abbreviation || matchedKnown?.abbreviation || (isRGAdmin ? 'RG' : null),
       role: userRole,
       companyId
     } as UserProfile
@@ -85,7 +98,7 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
         id: companySnap.id, 
         name: c.name || 'Empresa UR', 
         plan: (isRGAdmin || companyId === DEMO_COMPANY_ID) ? 'enterprise' : (c.plan || 'starter'), 
-        activeModules: c.activeModules || ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
+        activeModules: c.activeModules || ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'messages'],
         aiCredits: c.aiCredits || 100 
       }
     } else {
@@ -93,34 +106,37 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
         id: companyId,
         name: isRGAdmin ? 'Empresa UR' : 'Minha Empresa',
         plan: (isRGAdmin || companyId === DEMO_COMPANY_ID) ? 'enterprise' : 'starter',
-        activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
+        activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'messages'],
         aiCredits: 100
       }
     }
 
     return user
   } catch (err: any) {
-    const isQuotaErr = String(err?.message || err).includes('Quota exceeded') || String(err?.message || err).includes('RESOURCE_EXHAUSTED')
-    if (isQuotaErr) {
-      console.warn('[getCurrentProfile] Quota do Firestore atingida. A usar perfil de sessão local.')
-    } else {
-      console.error('[getCurrentProfile] Firestore query error:', err?.message || err)
-    }
-    const targetCompanyId = isRGAdmin ? DEMO_COMPANY_ID : ((session as any).companyId || DEMO_COMPANY_ID)
-    const fallbackRole = isRGAdmin ? 'manager' : 'technician'
+    console.error('[getCurrentProfile Error]:', err)
+    const KNOWN_USERS = [
+      { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', email: 'tecnico@teste.rg', name: 'RG - RuiG', abbreviation: 'RG', role: 'technician' },
+      { id: 'MEGjjvqtGqv3Oosxvlrx', email: 'lm@rgmaintenance.pt', name: 'Leandro Maia', abbreviation: 'LM', role: 'technician' },
+      { id: 'nAcCSm4E3tNnPLr72UPl', email: 'ms@rgmaintenance.pt', name: 'Marco Silva', abbreviation: 'MS', role: 'technician' },
+      { id: 'zmDAeoGTzIWPavraKu0f', email: 'cb@rgmaintenance.pt', name: 'Carlos Branco', abbreviation: 'CB', role: 'technician' },
+      { id: 'CUodZKziOwo128GLK66i', email: 'garrido.rui@gmail.com', name: 'Rui Garrido (RG)', abbreviation: 'RG', role: 'manager' },
+      { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', email: 'demo@rgmaintenance.pt', name: 'Admin', abbreviation: 'ADM', role: 'manager' },
+    ]
+    const matchedKnown = KNOWN_USERS.find((k) => k.id === session.uid || (userEmail && k.email.toLowerCase() === userEmail))
     return {
-      id: session.uid,
-      email: session.email || '',
-      name: session.name || 'Utilizador',
-      role: fallbackRole,
-      companyId: targetCompanyId,
+      id: matchedKnown?.id || session.uid,
+      email: userEmail || matchedKnown?.email || '',
+      name: matchedKnown?.name || session.name || (isRGAdmin ? 'Rui Garrido' : 'Utilizador'),
+      abbreviation: matchedKnown?.abbreviation || (isRGAdmin ? 'RG' : null),
+      role: isRGAdmin ? 'manager' : (matchedKnown?.role || 'technician'),
+      companyId: DEMO_COMPANY_ID,
       company: {
-        id: targetCompanyId,
-        name: isRGAdmin ? 'Empresa UR' : 'Minha Empresa',
-        plan: (isRGAdmin || targetCompanyId === DEMO_COMPANY_ID) ? 'enterprise' : 'starter',
-        activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history'],
-        aiCredits: 100
-      }
+        id: DEMO_COMPANY_ID,
+        name: 'Empresa UR',
+        plan: 'enterprise',
+        activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'messages'],
+        aiCredits: 100,
+      },
     } as UserProfile
   }
 })

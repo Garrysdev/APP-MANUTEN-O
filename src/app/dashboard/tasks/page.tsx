@@ -22,7 +22,10 @@ export default async function TasksPage() {
   const normalTasks = allTasks.filter(
     (t) =>
       (t as any).source !== 'folha_projetos' &&
-      !(t as any).isProject
+      !(t as any).isProject &&
+      (t as any).source !== 'pm_agendamento_2026' &&
+      (t as any).source !== 'pm_anual_paragem_verao_2026' &&
+      !t.maintenancePlanId
   )
 
   const roleStr = String(profile.role || '').toLowerCase().trim()

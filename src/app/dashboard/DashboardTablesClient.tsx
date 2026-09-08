@@ -120,7 +120,7 @@ function computePlanYearlyData(allTasks: Task[]) {
     if (!bucket) return
 
     bucket.total++
-    if (t.status === 'done') bucket.concluidas++
+    if (t.status === 'done' || !!t.completedAt) bucket.concluidas++
   })
 
   Object.values(yearsMap).forEach((item) => {
@@ -186,7 +186,7 @@ export default function DashboardTablesClient({
               <BarChart3 className="text-safety-orange h-5 w-5" />
               <div>
                 <h3 className="text-base font-bold text-gray-900 dark:text-slate-100">
-                  Pedidos de PI ({currentYear} — Mês a Mês)
+                  Pedidos de PI (KPI por Mês)
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-slate-400">
                   PIs Pedidas vs Concluídas por mês no ano corrente
@@ -228,14 +228,14 @@ export default function DashboardTablesClient({
           </div>
         </div>
 
-        {/* Gráfico 2: Cumprimento do Plano de Manutenção por Ano */}
+        {/* Gráfico 2: Plano de Manutenção (% por Ano) */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <TrendingUp className="text-emerald-600 h-5 w-5" />
               <div>
                 <h3 className="text-base font-bold text-gray-900 dark:text-slate-100">
-                  Cumprimento do Plano de Manutenção (% por Ano)
+                  Plano de Manutenção (% por Ano)
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-slate-400">
                   % das OT de PM do ano que estão concluídas

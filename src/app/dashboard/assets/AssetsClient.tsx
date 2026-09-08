@@ -685,8 +685,9 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
           currentShown.map((a) => (
             <div
               key={a.id}
-              onClick={() => openEdit(a)}
+              onClick={() => router.push(`/dashboard/assets/${encodeURIComponent(a.id)}`)}
               className="card flex items-center gap-3 p-3.5 active:bg-slate-100/80 dark:active:bg-slate-800/60 transition-colors cursor-pointer"
+              title={`Clique para abrir a ficha de ${a.name}`}
             >
               <input
                 type="checkbox"
@@ -715,9 +716,22 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                   <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400">{a.area ?? '—'}</span>
                 </div>
               </div>
-              <span className={`${a.active ? 'badge-done' : 'badge-cancelled'} shrink-0`}>
-                {a.active ? dict.assets.lblActive : dict.assets.lblInactive}
-              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`${a.active ? 'badge-done' : 'badge-cancelled'}`}>
+                  {a.active ? dict.assets.lblActive : dict.assets.lblInactive}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openEdit(a)
+                  }}
+                  className="p-1.5 text-slate-500 hover:text-[#2E86C1] hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
+                  title="Editar equipamento"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -735,6 +749,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 <SortableTh label={dict.assets.colTag} sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
                 <SortableTh label={dict.assets.colName} sortableKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
                 <SortableTh label={dict.common.status} sortableKey="active" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-left text-slate-700 font-bold" />
+                <th className="px-3 py-3 text-right">Ações</th>
               </tr>
               {/* Linha de Filtro por Colunas em Equipamentos */}
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
@@ -773,12 +788,13 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                     <option value="inactive">Inativo</option>
                   </select>
                 </td>
+                <td className="p-1" />
               </tr>
             </thead>
             <tbody>
               {currentShown.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={6} className="px-5 py-12 text-center text-slate-400">
                     <Package className="h-10 w-10 mx-auto mb-3 opacity-40" />
                     <p className="text-sm font-medium">{temFiltro ? dict.assets.emptyFilter : dict.assets.empty}</p>
                     {temFiltro && (
@@ -796,9 +812,9 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 currentShown.map((a) => (
                   <tr
                     key={a.id}
-                    onClick={() => openEdit(a)}
-                    className="border-b border-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition-colors cursor-pointer"
-                    title={`Clique para editar / visualizar ${a.name}`}
+                    onClick={() => router.push(`/dashboard/assets/${encodeURIComponent(a.id)}`)}
+                    className="border-b border-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition-colors cursor-pointer group"
+                    title={`Clique para abrir a ficha de ${a.name}`}
                   >
                     <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedAssets.has(a.id)} onChange={() => toggleSelection(a.id)} className="rounded border-slate-300 bg-white" />
@@ -822,7 +838,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                             <Package className="h-3.5 w-3.5 text-slate-500" />
                           </div>
                         )}
-                        <span className="hover:text-safety-orange hover:underline transition-colors">
+                        <span className="text-[#2E86C1] group-hover:underline transition-colors">
                           {a.name}
                         </span>
                       </div>
@@ -831,6 +847,17 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                       <span className={a.active ? 'badge-done' : 'badge-cancelled'}>
                         {a.active ? dict.assets.lblActive : dict.assets.lblInactive}
                       </span>
+                    </td>
+                    <td className="px-3 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => openEdit(a)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#2E86C1] hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors border border-slate-200 dark:border-slate-700"
+                        title="Editar equipamento"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Editar</span>
+                      </button>
                     </td>
                   </tr>
                 ))

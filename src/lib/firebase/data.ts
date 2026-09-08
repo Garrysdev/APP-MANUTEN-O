@@ -97,20 +97,7 @@ function getFallbackTasks(): Task[] {
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf-8')
       const json = JSON.parse(raw)
-      cachedFallbackTasks = json
-        .filter((item: any) => {
-          // As 265 OTs importadas da folha UR devem ser SEMPRE mantidas
-          if (item.source === 'excel_ur' || item.id?.startsWith('task_excel_ur_')) return true
-          const isScheduledPM = Boolean(
-            item.source === 'pm_agendamento_2026' ||
-            item.source === 'pm_anual_paragem_verao_2026' ||
-            item.source === 'plan' ||
-            (item.title && (item.title.startsWith('[PM]') || item.title.startsWith('[MP]'))) ||
-            item.maintenancePlanId
-          )
-          return !isScheduledPM
-        })
-        .map((item: any, idx: number) => ({
+      cachedFallbackTasks = json.map((item: any, idx: number) => ({
         id: item.id || `task_${idx + 1}`,
         companyId: 'rjHNaSUbLm4qTMyKP0oX',
         title: item.title || 'Ordem de Trabalho',
@@ -538,7 +525,17 @@ export const listCompletedTasksPaged = cache(async function(
   }
 })
 
+function normAlphaNumData(str?: string | null): string {
+  if (!str) return ''
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
 export const listTasksByAsset = cache(async function(companyId: string, assetId: string, providedAssetTag?: string | null): Promise<Task[]> {
+  const cleanTag = (providedAssetTag || '').trim().toLowerCase()
+  const cleanId = (assetId || '').trim().toLowerCase()
+  const tagAlpha = normAlphaNumData(providedAssetTag)
+  const idAlpha = normAlphaNumData(assetId)
+
   try {
     let assetTag = providedAssetTag?.trim()
     if (!assetTag && !assetId.startsWith('asset_')) {
@@ -550,7 +547,7 @@ export const listTasksByAsset = cache(async function(companyId: string, assetId:
         .collection('tasks')
         .where('companyId', '==', companyId)
         .where('assetId', '==', assetId)
-        .limit(100)
+        .limit(200)
         .get()
         .catch(() => ({ docs: [] }))
     ]
@@ -561,7 +558,7 @@ export const listTasksByAsset = cache(async function(companyId: string, assetId:
           .collection('tasks')
           .where('companyId', '==', companyId)
           .where('tag', '==', assetTag)
-          .limit(100)
+          .limit(200)
           .get()
           .catch(() => ({ docs: [] }))
       )
@@ -575,19 +572,42 @@ export const listTasksByAsset = cache(async function(companyId: string, assetId:
       }
     })
 
-    if (!isDemoCompany(companyId)) {
-      return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    const filterFn = (t: Task) => {
+      if (t.assetId && (t.assetId === assetId || t.assetId.toLowerCase() === cleanId || normAlphaNumData(t.assetId) === idAlpha)) return true
+      if (t.tag) {
+        const tTagLower = t.tag.trim().toLowerCase()
+        const tTagAlpha = normAlphaNumData(t.tag)
+        if (cleanTag && (tTagLower === cleanTag || tTagAlpha === tagAlpha)) return true
+        if (cleanId && (tTagLower === cleanId || tTagAlpha === idAlpha)) return true
+      }
+      return false
     }
 
-    const fallbacks = getFallbackTasks().filter((t) => t.assetId === assetId || (assetTag && t.tag === assetTag))
-    const merged = Array.from(new Map([...dbDocs, ...fallbacks].map((t) => [t.id, t])).values())
+    if (!isDemoCompany(companyId)) {
+      return dbDocs.filter(filterFn).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    }
+
+    const fallbacks = getFallbackTasks().filter(filterFn)
+    const merged = Array.from(new Map([...dbDocs.filter(filterFn), ...fallbacks].map((t) => [t.id, t])).values())
     if (merged.length > 0) {
       return merged.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     }
   } catch (err) {
     console.error('[listTasksByAsset] Error:', err)
   }
-  return isDemoCompany(companyId) ? getFallbackTasks().filter((t) => t.assetId === assetId) : []
+
+  const fallbackFilter = (t: Task) => {
+    if (t.assetId && (t.assetId === assetId || t.assetId.toLowerCase() === cleanId || normAlphaNumData(t.assetId) === idAlpha)) return true
+    if (t.tag) {
+      const tTagLower = t.tag.trim().toLowerCase()
+      const tTagAlpha = normAlphaNumData(t.tag)
+      if (cleanTag && (tTagLower === cleanTag || tTagAlpha === tagAlpha)) return true
+      if (cleanId && (tTagLower === cleanId || tTagAlpha === idAlpha)) return true
+    }
+    return false
+  }
+
+  return isDemoCompany(companyId) ? getFallbackTasks().filter(fallbackFilter) : []
 })
 
 export const getTask = cache(async function(companyId: string, id: string): Promise<Task | null> {
@@ -706,9 +726,9 @@ export async function createTask(
         if (!data.area && asset.area) (data as any).area = asset.area
       }
     }
-    const ref = await adminDb()
-      .collection('tasks')
-      .add({ createdAt: now, updatedAt: now, ...data, companyId, createdBy })
+    const rawDoc = { createdAt: now, updatedAt: now, ...data, companyId, createdBy }
+    const cleanObj = JSON.parse(JSON.stringify(rawDoc))
+    const ref = await adminDb().collection('tasks').add(cleanObj)
     generatedId = ref.id
 
     // Notificar os técnicos atribuídos via Web Push e Notificação Interna
@@ -729,7 +749,7 @@ export async function createTask(
       await sendUrgentTaskEmail({ id: generatedId, title: data.title, companyId }).catch(() => {})
     }
   } catch (err) {
-    console.error('Erro em createTask:', err)
+    console.error('Erro em createTask Firestore:', err)
   }
 
   const newTaskObj: Task = {
@@ -745,6 +765,15 @@ export async function createTask(
     cachedFallbackTasks.unshift(newTaskObj)
   }
 
+  try {
+    const filePath = path.join(process.cwd(), 'scripts', 'import', 'tasks.json')
+    if (fs.existsSync(filePath)) {
+      const current = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+      current.unshift(newTaskObj)
+      fs.writeFileSync(filePath, JSON.stringify(current, null, 2))
+    }
+  } catch { /* read-only fs */ }
+
   revalidateTag('tasks')
   return generatedId
 }
@@ -759,22 +788,39 @@ export async function updateTask(
   const now = new Date().toISOString()
 
   if (!doc || !doc.exists) {
-    await ref.set(
-      {
-        id,
-        companyId,
-        createdAt: now,
-        updatedAt: now,
-        status: 'pending',
-        tipo: 'plano',
-        criticidade: 'verde',
-        ...data,
-      },
-      { merge: true }
-    )
+    const rawDoc = {
+      id,
+      companyId,
+      createdAt: now,
+      updatedAt: now,
+      status: 'pending',
+      tipo: 'plano',
+      criticidade: 'verde',
+      ...data,
+    }
+    await ref.set(JSON.parse(JSON.stringify(rawDoc)), { merge: true }).catch(console.error)
   } else {
-    await ref.update({ ...data, updatedAt: now })
+    await ref.update(JSON.parse(JSON.stringify({ ...data, updatedAt: now }))).catch(console.error)
   }
+
+  if (cachedFallbackTasks) {
+    const idx = cachedFallbackTasks.findIndex((t) => t.id === id)
+    if (idx >= 0) {
+      cachedFallbackTasks[idx] = { ...cachedFallbackTasks[idx], ...data, updatedAt: now }
+    }
+  }
+
+  try {
+    const filePath = path.join(process.cwd(), 'scripts', 'import', 'tasks.json')
+    if (fs.existsSync(filePath)) {
+      const current = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+      const idx = current.findIndex((t: any) => t.id === id)
+      if (idx >= 0) {
+        current[idx] = { ...current[idx], ...data, updatedAt: now }
+        fs.writeFileSync(filePath, JSON.stringify(current, null, 2))
+      }
+    }
+  } catch { /* read-only fs */ }
 
   if (data.assignedTo || data.assignedToIds || (data as any).assignedToText) {
     const title = data.title || doc?.data()?.title || 'OT'
@@ -2075,6 +2121,7 @@ export const listInternalMessages = cache(async function(
     try {
       const snap = await adminDb()
         .collection('internal_messages')
+        .limit(100)
         .get()
       docs = snap.docs.map((d) => ({ ...serialize<InternalMessage>(d), id: d.id }))
     } catch (dbErr) {
@@ -2083,15 +2130,24 @@ export const listInternalMessages = cache(async function(
 
     let deletedIds = new Set<string>()
     try {
-      const delSnap = await adminDb().collection('deleted_internal_messages').get().catch(() => null)
+      const delSnap = await adminDb().collection('deleted_internal_messages').limit(100).get().catch(() => null)
       if (delSnap && !delSnap.empty) {
         deletedIds = new Set<string>(delSnap.docs.map((d) => d.id))
       }
     } catch { /* ignore */ }
 
+    // Carregar mensagens de fallback persistidas em disco (se existirem)
+    let fileMessages: InternalMessage[] = []
+    try {
+      const filePath = path.join(process.cwd(), 'scripts', 'import', 'messages.json')
+      if (fs.existsSync(filePath)) {
+        fileMessages = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+      }
+    } catch {}
+
     const seen = new Set<string>()
     const allDocs: InternalMessage[] = []
-    for (const m of [...docs, ...cachedInternalMessages]) {
+    for (const m of [...docs, ...cachedInternalMessages, ...fileMessages]) {
       if (m.id && !seen.has(m.id) && !deletedIds.has(m.id)) {
         seen.add(m.id)
         if (!m.companyId || m.companyId === companyId || companyId === DEMO_COMPANY_ID || isDemoCompany(companyId) || isDemoCompany(m.companyId)) {
@@ -2136,6 +2192,16 @@ export const listInternalMessages = cache(async function(
       addToken(userRefOrId.abbreviation)
       addToken(userRefOrId.name)
       addToken(userRefOrId.email)
+    }
+
+    // Alias explícito para o técnico RG - RuiG
+    if (tokens.has('rg') || tokens.has('ruig') || tokens.has('mwsstrtgq5qcohusdtvygdvrwht2') || tokens.has('tecnico@teste.rg')) {
+      tokens.add('rg')
+      tokens.add('ruig')
+      tokens.add('rg - ruig')
+      tokens.add('mwsstrtgq5qcohusdtvygdvrwht2')
+      tokens.add('tech_rg')
+      tokens.add('tecnico@teste.rg')
     }
 
     return allDocs.filter((m) => {
@@ -2206,9 +2272,20 @@ export async function createInternalMessage(
     const ref = await adminDb().collection('internal_messages').add(sanitizedObj)
     msgObj.id = ref.id
   } catch (err) {
-    console.error('[createInternalMessage] Error:', err)
+    console.error('[createInternalMessage Firestore error]:', err)
   }
   cachedInternalMessages.unshift(msgObj)
+
+  try {
+    const filePath = path.join(process.cwd(), 'scripts', 'import', 'messages.json')
+    let current: InternalMessage[] = []
+    if (fs.existsSync(filePath)) {
+      current = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+    }
+    current.unshift(msgObj)
+    fs.writeFileSync(filePath, JSON.stringify(current.slice(0, 100), null, 2))
+  } catch { /* read-only fs */ }
+
   revalidateTag('messages')
 
   // Se esta mensagem é uma resposta a outra, atualizar o estado da mensagem original para 'replied'
@@ -2231,8 +2308,7 @@ export async function createInternalMessage(
   // Disparar notificações em background para não bloquear a resposta do servidor nem tornar o envio lento
   void (async () => {
     try {
-      const allUsersSnap = await adminDb().collection('users').get()
-      const companyUsers = allUsersSnap.docs.map((d) => serialize<User>(d))
+      const companyUsers = getFallbackUsers()
 
       const targetUserIds = new Set<string>()
       if (data.recipientIds.includes('ALL')) {
@@ -2240,6 +2316,10 @@ export async function createInternalMessage(
       } else {
         data.recipientIds.forEach((rec) => {
           const recClean = String(rec).toLowerCase().trim().replace(/^(tech_|user_)/, '')
+          // Mapeamento especial de RG
+          if (recClean === 'rg' || recClean === 'ruig' || recClean === 'mwsstrtgq5qcohusdtvygdvrwht2') {
+            targetUserIds.add('mWSsTRtgq5QcOHusTdVYgDVrwHt2')
+          }
           companyUsers.forEach((u) => {
             const uAbbr = String(u.abbreviation || '').toLowerCase().trim()
             const uName = String(u.name || '').toLowerCase().trim()

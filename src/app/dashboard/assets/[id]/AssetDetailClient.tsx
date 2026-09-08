@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, Activity, Thermometer, Clock, Package, 
   Settings, PenTool, Edit2, Save, X, Camera, ImageOff, Plus,
-  ShieldAlert, Trash2, Wrench
+  ShieldAlert, Trash2, Wrench, CalendarClock
 } from 'lucide-react'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
@@ -37,6 +37,28 @@ export default function AssetDetailClient({
   React.useEffect(() => {
     setTaskList(tasks)
   }, [tasks])
+
+  const isPMTask = (t: Task) => {
+    const tipoStr = String(t.tipo || '').toLowerCase().trim()
+    const tiStr = String((t as any).ti || '').toUpperCase().trim()
+    const tipoText = String((t as any).tipoText || '').toUpperCase().trim()
+    return (
+      tipoStr === 'pm' ||
+      tipoStr === 'plano' ||
+      tipoStr === 'preventiva' ||
+      tiStr === 'PM' ||
+      tipoText === 'PM' ||
+      Boolean(t.maintenancePlanId) ||
+      (t as any).source === 'plano_manutencao' ||
+      (t as any).source === 'pm_anual_paragem_verao_2026' ||
+      (t as any).source === 'pm_agendamento_2026' ||
+      String(t.id || '').startsWith('task_pm_') ||
+      (t.title && (t.title.startsWith('[PM]') || t.title.startsWith('[MP]')))
+    )
+  }
+
+  const pmTasks = React.useMemo(() => taskList.filter(isPMTask), [taskList])
+  const correctiveTasks = React.useMemo(() => taskList.filter((t) => !isPMTask(t)), [taskList])
 
   const { sorted: sortedTasks, sortKey, sortDir, toggleSort } = useTableSort<Task>(
     taskList,
@@ -244,51 +266,146 @@ export default function AssetDetailClient({
         <div className="lg:col-span-2 space-y-6">
           
           {/* KPI ROW - Métricas Reais do Equipamento */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="card p-5 border border-[#2E86C1]/20 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/80">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-[#2E86C1]/10 rounded-lg text-[#2E86C1]">
-                  <Activity className="h-5 w-5" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="card p-4 border border-[#2E86C1]/20 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/80">
+              <div className="flex items-center gap-2.5 mb-1.5">
+                <div className="p-1.5 bg-[#2E86C1]/10 rounded-lg text-[#2E86C1]">
+                  <Activity className="h-4 w-4" />
                 </div>
-                <h3 className="text-sm font-semibold text-gray-600 dark:text-slate-300">Total de OTs</h3>
+                <h3 className="text-xs font-semibold text-gray-600 dark:text-slate-300">Total de OTs</h3>
               </div>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{tasks.length} <span className="text-xs font-normal text-gray-500">registadas</span></p>
-              <p className="text-xs text-gray-500 mt-2">Histórico completo de intervenções</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{taskList.length} <span className="text-xs font-normal text-gray-500">registadas</span></p>
+              <p className="text-[11px] text-gray-500 mt-1">Histórico completo</p>
             </div>
 
-            <div className="card p-5 border border-emerald-500/20 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/80">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
-                  <Clock className="h-5 w-5" />
+            <div className="card p-4 border border-emerald-500/20 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/80">
+              <div className="flex items-center gap-2.5 mb-1.5">
+                <div className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-500">
+                  <Clock className="h-4 w-4" />
                 </div>
-                <h3 className="text-sm font-semibold text-gray-600 dark:text-slate-300">OTs Concluídas</h3>
+                <h3 className="text-xs font-semibold text-gray-600 dark:text-slate-300">OTs Concluídas</h3>
               </div>
-              <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{tasks.filter(t => t.status === 'done').length} <span className="text-xs font-normal text-gray-500">finalizadas</span></p>
-              <p className="text-xs text-gray-500 mt-2">Intervenções realizadas com sucesso</p>
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{taskList.filter(t => t.status === 'done').length} <span className="text-xs font-normal text-gray-500">finalizadas</span></p>
+              <p className="text-[11px] text-gray-500 mt-1">Intervenções realizadas</p>
             </div>
 
-            <div className="card p-5 border border-amber-500/20 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/80">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
-                  <Settings className="h-5 w-5" />
+            <div className="card p-4 border border-amber-500/20 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/80">
+              <div className="flex items-center gap-2.5 mb-1.5">
+                <div className="p-1.5 bg-amber-500/10 rounded-lg text-amber-500">
+                  <CalendarClock className="h-4 w-4" />
                 </div>
-                <h3 className="text-sm font-semibold text-gray-600 dark:text-slate-300">OTs Ativas / Em Curso</h3>
+                <h3 className="text-xs font-semibold text-gray-600 dark:text-slate-300">Plano PM</h3>
               </div>
-              <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">{tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled').length} <span className="text-xs font-normal text-gray-500">em curso</span></p>
-              <p className="text-xs text-gray-500 mt-2">Pendentes de execução ou fecho</p>
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+                {pmTasks.filter(t => t.status === 'done').length} <span className="text-xs font-normal text-gray-500">/ {pmTasks.length} OTs</span>
+              </p>
+              <p className="text-[11px] text-gray-500 mt-1">
+                {pmTasks.length > 0 ? `${Math.round((pmTasks.filter(t => t.status === 'done').length / pmTasks.length) * 100)}% concluído` : 'Sem PM agendado'}
+              </p>
+            </div>
+
+            <div className="card p-4 border border-blue-500/20 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/80">
+              <div className="flex items-center gap-2.5 mb-1.5">
+                <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-500">
+                  <Settings className="h-4 w-4" />
+                </div>
+                <h3 className="text-xs font-semibold text-gray-600 dark:text-slate-300">Em Curso / Pendentes</h3>
+              </div>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">{taskList.filter(t => t.status !== 'done' && t.status !== 'cancelled').length} <span className="text-xs font-normal text-gray-500">ativas</span></p>
+              <p className="text-[11px] text-gray-500 mt-1">Aguardam execução</p>
             </div>
           </div>
 
-          {/* HISTORY TABLE */}
-          <div className="card overflow-hidden">
-            <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+          {/* 1. TABELA DE OTs DO PLANO DE MANUTENÇÃO (PM) */}
+          <div className="card overflow-hidden border border-amber-500/20">
+            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-slate-800 bg-amber-50/40 dark:bg-amber-950/20 flex items-center justify-between flex-wrap gap-2">
               <h3 className="font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
-                <PenTool className="h-4 w-4 text-[#2E86C1]" /> Histórico de Intervenções
+                <CalendarClock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <span>Ordens de Trabalho — Plano de Manutenção Preventiva (PM)</span>
               </h3>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                {pmTasks.length} {pmTasks.length === 1 ? 'OT de PM' : 'OTs de PM'}
+              </span>
             </div>
-            {tasks.length === 0 ? (
+
+            {pmTasks.length === 0 ? (
               <div className="p-8 text-center text-gray-500 dark:text-slate-400 text-sm">
-                Nenhum registo de manutenção encontrado.
+                Nenhuma Ordem de Trabalho do Plano de Manutenção (PM) registada para este equipamento.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
+                      <th className="px-4 py-3">Data Prevista Execução</th>
+                      <th className="px-4 py-3">Ordem de Trabalho (PM)</th>
+                      <th className="px-4 py-3">Periodicidade</th>
+                      <th className="px-4 py-3">Data Realizada</th>
+                      <th className="px-4 py-3">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pmTasks.map((t) => {
+                      const datePlanned = t.plannedStartDate || t.dueDate || (t as any).scheduledDate || t.createdAt
+                      const dateFormatted = datePlanned
+                        ? (datePlanned.includes('T') ? datePlanned.split('T')[0] : datePlanned)
+                        : '—'
+                      const dateDone = t.completedAt ? t.completedAt.split('T')[0] : '—'
+                      const periodicidadeLabel = t.periodicidade || (t as any).periodicidadeLabel || 'Anual'
+
+                      return (
+                        <tr
+                          key={t.id}
+                          onClick={() => router.push(`/dashboard/tasks/${t.id}`)}
+                          className="border-b border-gray-50 dark:border-slate-800/50 hover:bg-amber-50/60 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group"
+                          title={`Clique para abrir a OT ${t.title}`}
+                        >
+                          <td className="px-4 py-3 text-slate-700 dark:text-slate-300 whitespace-nowrap font-mono font-bold">
+                            {dateFormatted}
+                          </td>
+                          <td className="px-4 py-3 font-bold text-[#2E86C1] group-hover:underline">
+                            <Link href={`/dashboard/tasks/${t.id}`} onClick={(e) => e.stopPropagation()}>
+                              {t.title}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs font-medium uppercase">
+                            {periodicidadeLabel}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 dark:text-slate-400 whitespace-nowrap font-mono text-xs">
+                            {dateDone}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={
+                              t.status === 'done' ? 'badge-done' : 
+                              t.status === 'in_progress' ? 'badge-pending' : 
+                              t.status === 'cancelled' ? 'badge-cancelled' : 'badge-neutral'
+                            }>
+                              {STATUS_LABELS[t.status] || t.status}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* 2. TABELA DE HISTÓRICO DE INTERVENÇÕES CORRETIVAS / OUTRAS */}
+          <div className="card overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
+              <h3 className="font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                <PenTool className="h-4 w-4 text-[#2E86C1]" />
+                <span>Histórico de Intervenções (Corretivas / Pedidos de Intervenção)</span>
+              </h3>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                {correctiveTasks.length} {correctiveTasks.length === 1 ? 'Intervenção' : 'Intervenções'}
+              </span>
+            </div>
+            {correctiveTasks.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 dark:text-slate-400 text-sm">
+                Nenhum registo de intervenção corretiva encontrado.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -302,16 +419,17 @@ export default function AssetDetailClient({
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedTasks.map(t => (
+                    {sortedTasks.filter((t) => !isPMTask(t)).map(t => (
                       <tr
                         key={t.id}
                         onClick={() => router.push(`/dashboard/tasks/${t.id}`)}
-                        className="border-b border-gray-50 dark:border-slate-800/50 hover:bg-blue-50/60 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                        className="border-b border-gray-50 dark:border-slate-800/50 hover:bg-blue-50/60 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group"
+                        title={`Clique para abrir a OT ${t.title}`}
                       >
                         <td className="px-4 py-3 text-gray-500 dark:text-slate-400 whitespace-nowrap font-mono">
                           {new Date(t.createdAt).toLocaleDateString('pt-PT')}
                         </td>
-                        <td className="px-4 py-3 font-bold text-[#2E86C1] hover:underline">
+                        <td className="px-4 py-3 font-bold text-[#2E86C1] group-hover:underline">
                           <Link href={`/dashboard/tasks/${t.id}`} onClick={(e) => e.stopPropagation()}>
                             {t.title}
                           </Link>
