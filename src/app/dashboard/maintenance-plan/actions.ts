@@ -31,7 +31,6 @@ export async function generateAnnualPMScheduleAction(
     const plans = await listMaintenancePlans(profile.companyId)
     const activePlans = plans.filter((p) => p.active !== false && (!planIds || planIds.includes(p.id)))
 
-    let totalTasksCreated = 0
     for (const plan of activePlans) {
       const dates = calculatePlanAnnualDates(plan, targetYear)
       if (dates.length === 0) continue
@@ -42,25 +41,8 @@ export async function generateAnnualPMScheduleAction(
         calendarDates: dates,
       })
 
-      // Eliminar tarefas agendadas anteriores deste plano
-      await deleteTasksByMaintenancePlan(profile.companyId, plan.id)
-
-      for (const d of dates) {
-        await createTask(profile.companyId, profile.id, {
-          title: `[PM] ${plan.title}`,
-          description: plan.description,
-          assetId: plan.assetId,
-          assignedTo: plan.assignedTo,
-          criticidade: plan.criticidade,
-          tipo: plan.tipo || 'preventiva',
-          status: 'pending',
-          dueDate: d,
-          plannedStartDate: d,
-          safetyRules: plan.safetyRules,
-          maintenancePlanId: plan.id,
-        })
-        totalTasksCreated++
-      }
+      // Eliminar quaisquer tarefas duplicadas na coleção tasks
+      await deleteTasksByMaintenancePlan(profile.companyId, plan.id).catch(() => {})
     }
 
     revalidatePath('/dashboard/maintenance-plan')
@@ -68,9 +50,57 @@ export async function generateAnnualPMScheduleAction(
     revalidatePath('/dashboard/tasks')
     revalidatePath('/dashboard/projects')
     revalidatePath('/dashboard')
-    return { ok: true, totalPlans: activePlans.length, totalTasksCreated }
+    return { ok: true, totalPlans: activePlans.length, totalTasksCreated: activePlans.length }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao gerar agendamento anual de PMs.' }
+  }
+}
+
+export async function concludePMAction(
+  planId: string,
+  data: {
+    executedAt?: string | null
+    technicianId?: string | null
+    notes?: string | null
+  }
+): Promise<PlanFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão. Apenas gestores podem concluir manutenções preventivas.' }
+
+  try {
+    const plan = await getMaintenancePlan(profile.companyId, planId)
+    if (!plan) return { error: 'Plano de manutenção não encontrado.' }
+
+    const now = new Date().toISOString()
+    const execDate = data.executedAt || now.slice(0, 10)
+
+    // Registar intervenção no histórico para manter rastreabilidade
+    const { createIntervention } = await import('@/lib/firebase/data')
+    await createIntervention(profile.companyId, {
+      taskId: `pm_${planId}_${Date.now()}`,
+      technicianId: data.technicianId || profile.id,
+      observations: `[PM Concluída] ${plan.title}${data.notes ? ` - ${data.notes}` : ''}`,
+      startedAt: `${execDate}T09:00:00.000Z`,
+      endedAt: `${execDate}T10:00:00.000Z`,
+      checklist: [],
+    }).catch(console.error)
+
+    // Atualizar plano com data de última execução e limpar tarefas residuais
+    await updateMaintenancePlan(profile.companyId, planId, {
+      lastGeneratedAt: execDate,
+      updatedAt: now,
+    })
+    await deleteTasksByMaintenancePlan(profile.companyId, planId).catch(() => {})
+
+    revalidatePath('/dashboard/maintenance-plan')
+    revalidatePath('/dashboard/calendar')
+    revalidatePath('/dashboard/tasks')
+    revalidatePath('/dashboard/history')
+    revalidatePath('/dashboard')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao concluir Manutenção Preventiva.' }
   }
 }
 
@@ -130,7 +160,6 @@ export async function togglePlanCalendarAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   try {
-    const plan = await getMaintenancePlan(profile.companyId, id)
     await updateMaintenancePlan(profile.companyId, id, {
       showInCalendar,
       calendarStartDate: calendarStartDate ?? null,
@@ -138,25 +167,7 @@ export async function togglePlanCalendarAction(
     })
 
     // Eliminar tarefas agendadas anteriores deste plano
-    await deleteTasksByMaintenancePlan(profile.companyId, id)
-
-    if (showInCalendar && calendarDates && calendarDates.length > 0 && plan) {
-      for (const d of calendarDates) {
-        await createTask(profile.companyId, profile.id, {
-          title: `[PM] ${plan.title}`,
-          description: plan.description,
-          assetId: plan.assetId,
-          assignedTo: plan.assignedTo,
-          criticidade: plan.criticidade,
-          tipo: plan.tipo || 'preventiva',
-          status: 'pending',
-          dueDate: d,
-          plannedStartDate: d,
-          safetyRules: plan.safetyRules,
-          maintenancePlanId: id,
-        })
-      }
-    }
+    await deleteTasksByMaintenancePlan(profile.companyId, id).catch(() => {})
 
     revalidatePath('/dashboard/maintenance-plan')
     revalidatePath('/dashboard/calendar')
@@ -360,11 +371,14 @@ export async function updateMaintenancePlanAction(
 export async function deleteMaintenancePlanAction(id: string): Promise<PlanFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
-  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão. Apenas gestores podem eliminar planos de manutenção.' }
   try {
     await deleteMaintenancePlan(profile.companyId, id)
+    await deleteTasksByMaintenancePlan(profile.companyId, id).catch(() => {})
     revalidatePath('/dashboard/maintenance-plan')
     revalidatePath('/dashboard/calendar')
+    revalidatePath('/dashboard/tasks')
+    revalidatePath('/dashboard')
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao eliminar plano.' }

@@ -26,6 +26,7 @@ import {
   togglePlanCalendarAction,
   togglePlanGanttAction,
   generateAnnualPMScheduleAction,
+  concludePMAction,
 } from './actions'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 import { updateTaskStatusAction, updateTaskAction, loadStockRefsAction, type StockMaterialRef } from '../tasks/actions'
@@ -262,18 +263,17 @@ export default function MaintenancePlanClient({
     return pending[0] || mostRecent
   }
   function openPlanRow(p: MaintenancePlan) {
-    const t = findPlanTask(p)
-    if (t) setViewingTask(t)
-    else openEdit(p)
+    openEdit(p)
   }
 
-  // Concluir diretamente na tabela, sem abrir a ficha completa — para OTs de PM
-  // rotineiras que não têm nada a acrescentar (sem observações, materiais, etc.).
-  const [concludingTaskId, setConcludingTaskId] = useState<string | null>(null)
-  async function handleQuickConclude(taskId: string) {
-    setConcludingTaskId(taskId)
-    const res = await updateTaskStatusAction(taskId, 'done')
-    setConcludingTaskId(null)
+  // Concluir diretamente na tabela, registando a execução da PM sem duplicar tarefas
+  const [concludingPlanId, setConcludingPlanId] = useState<string | null>(null)
+  async function handleQuickConcludePlan(planId: string) {
+    setConcludingPlanId(planId)
+    const res = await concludePMAction(planId, {
+      executedAt: new Date().toISOString().slice(0, 10),
+    })
+    setConcludingPlanId(null)
     if (res?.error) {
       alert(res.error)
     } else {
@@ -883,29 +883,20 @@ export default function MaintenancePlanClient({
                     )}
                   </div>
                   <span onClick={(e) => e.stopPropagation()}>
-                    {!t ? (
-                      <span className="text-slate-400 text-[10px] font-medium">—</span>
-                    ) : t.status === 'done' ? (
-                      <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400 font-bold text-[9px] bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
-                        <CheckCircle2 className="h-3 w-3" /> Concluída
+                    <button
+                      type="button"
+                      onClick={() => handleQuickConcludePlan(p.id)}
+                      disabled={concludingPlanId === p.id}
+                      title="Marcar esta Manutenção Preventiva como executada/concluída"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 font-bold text-[9px] transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      {concludingPlanId === p.id ? 'A concluir…' : 'Concluir PM'}
+                    </button>
+                    {p.lastGeneratedAt && (
+                      <span className="text-[9px] text-slate-500 ml-1">
+                        Últ: {formatDate(p.lastGeneratedAt)}
                       </span>
-                    ) : t.status === 'in_progress' ? (
-                      <span className="inline-flex items-center gap-0.5 text-blue-700 dark:text-blue-400 font-bold text-[9px] bg-blue-50 px-1 py-0.5 rounded border border-blue-200">
-                        ⏳ Em curso
-                      </span>
-                    ) : t.status === 'cancelled' ? (
-                      <span className="text-slate-400 text-[9px] font-semibold">Cancelada</span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleQuickConclude(t.id)}
-                        disabled={concludingTaskId === t.id}
-                        title="Marcar esta OT como concluída sem abrir a ficha completa"
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 font-bold text-[9px] transition-colors disabled:opacity-50"
-                      >
-                        <CheckCircle2 className="h-3 w-3" />
-                        {concludingTaskId === t.id ? 'A concluir…' : 'Concluir'}
-                      </button>
                     )}
                   </span>
                 </div>
@@ -1139,39 +1130,21 @@ export default function MaintenancePlanClient({
                     </span>
                   </td>
                   <td className="px-1 py-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                    {(() => {
-                      const t = findPlanTask(p)
-                      if (!t) return <span className="text-slate-400 text-[10px] font-medium">—</span>
-                      if (t.status === 'done') {
-                        return (
-                          <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400 font-bold text-[9px] bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
-                            <CheckCircle2 className="h-3 w-3" /> Concluída
-                          </span>
-                        )
-                      }
-                      if (t.status === 'in_progress') {
-                        return (
-                          <span className="inline-flex items-center gap-0.5 text-blue-700 dark:text-blue-400 font-bold text-[9px] bg-blue-50 px-1 py-0.5 rounded border border-blue-200">
-                            ⏳ Em curso
-                          </span>
-                        )
-                      }
-                      if (t.status === 'cancelled') {
-                        return <span className="text-slate-400 text-[9px] font-semibold">Cancelada</span>
-                      }
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => handleQuickConclude(t.id)}
-                          disabled={concludingTaskId === t.id}
-                          title="Marcar esta OT como concluída sem abrir a ficha completa"
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 font-bold text-[9px] transition-colors disabled:opacity-50"
-                        >
-                          <CheckCircle2 className="h-3 w-3" />
-                          {concludingTaskId === t.id ? 'A concluir…' : 'Concluir'}
-                        </button>
-                      )
-                    })()}
+                    <button
+                      type="button"
+                      onClick={() => handleQuickConcludePlan(p.id)}
+                      disabled={concludingPlanId === p.id}
+                      title="Marcar esta Manutenção Preventiva como executada/concluída"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 font-bold text-[9px] transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      {concludingPlanId === p.id ? 'A concluir…' : 'Concluir PM'}
+                    </button>
+                    {p.lastGeneratedAt && (
+                      <div className="text-[9px] text-slate-500 mt-0.5">
+                        Últ: {formatDate(p.lastGeneratedAt)}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1225,18 +1198,13 @@ export default function MaintenancePlanClient({
       </div>
 
       {/* Modal criar/editar com ficha completa e campos unificados */}
-      {(creating || Boolean(editing) || Boolean(viewingTask)) && (
+      {(creating || Boolean(editing)) && (
         <CreateTaskModal
-          isOpen={creating || Boolean(editing) || Boolean(viewingTask)}
-          onClose={() => {
-            closeModal()
-            setViewingTask(null)
-          }}
-          editingTask={viewingTask || editing}
+          isOpen={creating || Boolean(editing)}
+          onClose={closeModal}
+          editingTask={editing}
           titleText={
-            viewingTask
-              ? `Editar OT de PM (${viewingTask.tag || ''})`
-              : editing
+            editing
               ? `Editar Plano de Manutenção (${getPlanTag(editing) || ''})`
               : 'Novo Plano de Manutenção'
           }
@@ -1245,10 +1213,10 @@ export default function MaintenancePlanClient({
           stockRefs={stockRefs}
           isManager={true}
           createAction={createMaintenancePlanAction}
-          updateAction={viewingTask ? updateTaskAction : updateMaintenancePlanAction}
+          updateAction={updateMaintenancePlanAction}
+          deleteAction={deleteMaintenancePlanAction}
           onSuccess={() => {
             closeModal()
-            setViewingTask(null)
             router.refresh()
           }}
         />

@@ -33,7 +33,7 @@ import { useLanguage } from '@/components/providers/LanguageProvider'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
 import {
   createTaskAction, updateTaskAction, deleteTaskAction, updateTaskStatusAction,
-  loadPlanTaskRefsAction, loadStockRefsAction, type StockMaterialRef,
+  loadPlanTaskRefsAction, loadStockRefsAction, loadCompletedTasksAction, type StockMaterialRef,
 } from './actions'
 import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import { createMaintenancePlanAction, importMaintenancePlansAction } from '../maintenance-plan/actions'
@@ -238,7 +238,7 @@ export default function TasksClient({
       const list = pStatus.split(',').map((s) => s.trim() as TaskStatus).filter(Boolean)
       if (list.length > 0) return list
     }
-    return [] // DEFAULT: Mostrar todas as OTs por omissão
+    return ['pending', 'in_progress'] // DEFAULT: OTs Não Concluídas (Ativas)
   })
   const [selectedTIs, setSelectedTIs] = useState<string[]>([])
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])
@@ -246,25 +246,24 @@ export default function TasksClient({
   const [selectedTechs, setSelectedTechs] = useState<string[]>([])
   const [statusPending, startStatusTransition] = useTransition()
 
-  // O defeito de telemóvel só se aplica uma vez, ao montar. Sem isto, qualquer nova
-  // execução deste efeito voltaria a forçar "Ativas" por cima da escolha do utilizador.
-  const mobileDefaultApplied = useRef(false)
+  // Carregamento de OTs Concluídas / Histórico sob demanda (de folha em folha)
+  const [extraCompletedTasks, setExtraCompletedTasks] = useState<Task[]>([])
+  const [loadingCompleted, setLoadingCompleted] = useState(false)
+  const [completedLoaded, setCompletedLoaded] = useState(false)
 
   useEffect(() => {
-    const pStatus = searchParams.get('status')
-    if (pStatus) {
-      const list = pStatus.split(',').map((s) => s.trim() as TaskStatus).filter(Boolean)
-      if (list.length > 0) {
-        setSelectedStatuses(list)
-        return
-      }
+    const wantsCompleted = selectedStatuses.includes('done') || selectedStatuses.includes('cancelled')
+    if (wantsCompleted && !completedLoaded && !loadingCompleted) {
+      setLoadingCompleted(true)
+      loadCompletedTasksAction(1, 250).then((res) => {
+        setExtraCompletedTasks(res.tasks || [])
+        setCompletedLoaded(true)
+        setLoadingCompleted(false)
+      }).catch(() => {
+        setLoadingCompleted(false)
+      })
     }
-    // Em ecrãs móveis (<768px - breakpoint md), o defeito são as OTs Ativas (Pendente + Em Curso)
-    if (!mobileDefaultApplied.current && typeof window !== 'undefined' && window.innerWidth < 768) {
-      mobileDefaultApplied.current = true
-      setSelectedStatuses(['pending', 'in_progress'])
-    }
-  }, [searchParams])
+  }, [selectedStatuses, completedLoaded, loadingCompleted])
 
   const [safetyRules, setSafetyRules] = useState<string[]>([''])
   const [materialsRequired, setMaterialsRequired] = useState<string[]>([''])
@@ -468,14 +467,20 @@ export default function TasksClient({
   const assetName = (id?: string | null) => (id ? assetMap.get(id) ?? '—' : '—')
   const userName = (id?: string | null) => (id ? userMap.get(id) ?? id ?? '—' : '—')
 
-  const currentUser = useMemo(() => users.find((u) => u.id === userId), [users, userId])
+  const combinedTasks = useMemo(() => {
+    if (extraCompletedTasks.length === 0) return tasks
+    const map = new Map<string, Task>()
+    tasks.forEach((t) => map.set(t.id, t))
+    extraCompletedTasks.forEach((t) => map.set(t.id, t))
+    return Array.from(map.values())
+  }, [tasks, extraCompletedTasks])
 
   // Se o utilizador não for gestor, garante que apenas vê tarefas atribuídas a si
   const safeTasks = useMemo(() => {
-    if (isManager) return tasks
-    const profileForMatch = currentUser || { id: userId, role: 'technician' }
-    return tasks.filter((t) => isTaskAssignedToUser(t, profileForMatch))
-  }, [tasks, isManager, currentUser, userId])
+    if (isManager) return combinedTasks
+    const profileForMatch = { id: userId, role }
+    return combinedTasks.filter((t) => isTaskAssignedToUser(t, profileForMatch))
+  }, [combinedTasks, isManager, role, userId])
 
   const assetAreaMap = useMemo(() => new Map(assets.map((a) => [a.id, a.area || ''])), [assets])
   const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
@@ -516,8 +521,9 @@ export default function TasksClient({
 
   const uniqueTechnicians = useMemo(() => {
     if (!isManager) {
-      if (currentUser) {
-        return [[currentUser.abbreviation || currentUser.id, currentUser.abbreviation ? `${currentUser.abbreviation} - ${currentUser.name}` : currentUser.name] as [string, string]]
+      const currentTech = users.find((u) => u.id === userId)
+      if (currentTech) {
+        return [[currentTech.abbreviation || currentTech.id, currentTech.abbreviation ? `${currentTech.abbreviation} - ${currentTech.name}` : currentTech.name] as [string, string]]
       }
       return []
     }
@@ -547,7 +553,7 @@ export default function TasksClient({
       }
     })
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], 'pt'))
-  }, [safeTasks, users, isManager, currentUser])
+  }, [safeTasks, users, isManager, userId])
 
   const searchIndex = useMemo(() => {
     const assetSearchMap = new Map(assets.map((a) => [a.id, `${a.name || ''} ${(a as any).tag || ''} ${(a as any).area || ''}`.toLowerCase()]))
@@ -1427,6 +1433,7 @@ export default function TasksClient({
         users={users}
         stockRefs={stockRefs}
         isManager={isManager}
+        deleteAction={deleteTaskAction}
         onSuccess={() => {
           closeModal()
           router.refresh()

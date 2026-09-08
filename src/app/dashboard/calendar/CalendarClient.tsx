@@ -92,6 +92,16 @@ function getPlanTargetDates(plan: MaintenancePlan, targetYear = 2026): string[] 
   return calculatePlanAnnualDates(plan, targetYear)
 }
 
+function isDailyOrWeekly(plan: MaintenancePlan): boolean {
+  const p = (plan.periodicidade || '').toLowerCase().trim()
+  const r = (plan.recurrence || '').toLowerCase().trim()
+  const label = (plan.periodicidadeLabel || '').toLowerCase().trim()
+  if (p === 'semanal' || p === 'diaria' || p === 'diário' || p === 'diario') return true
+  if (r === 'daily' || r === 'weekly') return true
+  if (label.includes('semanal') || label.includes('diária') || label.includes('diaria')) return true
+  return false
+}
+
 function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end: Date): Map<string, CalendarEvent[]> {
   const map = new Map<string, CalendarEvent[]>()
   function add(date: string, ev: CalendarEvent) {
@@ -99,57 +109,32 @@ function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end
     map.get(date)!.push(ev)
   }
 
-  // Apenas tarefas não concluídas aparecem no calendário
-  tasks
-    .filter((task) => task.status !== 'done' && (task.status as string) !== 'completed')
-    .forEach((task) => {
-      let dates: string[] = []
-      const d = task.dueDate ? task.dueDate.slice(0, 10) : task.plannedStartDate ? task.plannedStartDate.slice(0, 10) : null
-      if (d) {
-        dates = [d]
-      } else {
-        const linkedPlan = task.maintenancePlanId ? plans.find((p) => p.id === task.maintenancePlanId) : null
-        if (linkedPlan) {
-          dates = getPlanTargetDates(linkedPlan, start.getFullYear())
-        }
-      }
-
-      dates.forEach((d) => {
-        const dd = new Date(d + 'T12:00:00')
-        if (dd >= start && dd <= end) {
-          add(d, { date: d, type: 'task', task, label: task.title, criticidade: task.criticidade })
-        }
-      })
-    })
-
-  plans.filter((p) => p.active !== false).forEach((plan) => {
-    // Se este plano já tiver uma OT concluída ou já existente em tasks, não duplica/não mostra no calendário
-    const hasConvertedOrDoneTask = tasks.some(
-      (t) =>
-        t.maintenancePlanId === plan.id ||
-        t.id === plan.id ||
-        t.id === `plan_${plan.id}` ||
-        plan.id === `plan_${t.id}` ||
-        (t.maintenancePlanId && plan.id.endsWith(t.maintenancePlanId))
-    )
-    if (hasConvertedOrDoneTask) {
-      return
-    }
-
-    const targetDates = getPlanTargetDates(plan, start.getFullYear())
-    if (targetDates.length > 0) {
-      targetDates.forEach((d) => {
-        const dd = new Date(d + 'T12:00:00')
-        if (dd >= start && dd <= end) {
+  // No Calendário PM, colocamos as ocorrências de Planos de Manutenção Preventiva (PM)
+  // consoante as suas periodicidades (mensal, trimestral, bianual, anual), excluindo diárias e semanais.
+  plans
+    .filter((p) => p.active !== false && !isDailyOrWeekly(p))
+    .forEach((plan) => {
+      const targetDates = getPlanTargetDates(plan, start.getFullYear())
+      if (targetDates.length > 0) {
+        targetDates.forEach((d) => {
+          const dd = new Date(d + 'T12:00:00')
+          if (dd >= start && dd <= end) {
+            add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
+          }
+        })
+      } else if (plan.calendarDates && plan.calendarDates.length > 0) {
+        plan.calendarDates.forEach((d) => {
+          const dd = new Date(d + 'T12:00:00')
+          if (dd >= start && dd <= end) {
+            add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
+          }
+        })
+      } else if (plan.showInCalendar) {
+        computePlanOccurrencesInRange(plan, start, end).forEach((d) =>
           add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
-        }
-      })
-    } else if (plan.showInCalendar || (plan.calendarDates && plan.calendarDates.length > 0)) {
-      computePlanOccurrencesInRange(plan, start, end).forEach((d) =>
-        add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
-      )
-    }
-  })
+        )
+      }
+    })
 
   return map
 }

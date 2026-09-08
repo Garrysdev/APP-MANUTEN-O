@@ -6,9 +6,9 @@ import {
   createTask, updateTask, deleteTask, getTask,
   listPlanTaskRefs, type PlanTaskRef,
   listStockItems, listAssetRefs, listSafetyRules,
-  calculateTaskCost,
+  calculateTaskCost, listCompletedTasksPaged,
 } from '@/lib/firebase/data'
-import type { TaskCriticidade, TipoTarefa, TaskStatus, Executor } from '@/types/models'
+import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, Executor } from '@/types/models'
 import { TIPOS_TAREFA } from '@/types/models'
 
 export type TaskFormState = { error?: string; ok?: boolean }
@@ -318,4 +318,14 @@ export async function updateTaskStatusAction(
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao atualizar estado.' }
   }
+}
+
+/** Carrega tarefas concluídas sob demanda (paginação de folha em folha) */
+export async function loadCompletedTasksAction(
+  page = 1,
+  pageSize = 50
+): Promise<{ tasks: Task[]; total: number }> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { tasks: [], total: 0 }
+  return listCompletedTasksPaged(profile.companyId, page, pageSize)
 }

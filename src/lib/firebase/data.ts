@@ -97,7 +97,17 @@ function getFallbackTasks(): Task[] {
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf-8')
       const json = JSON.parse(raw)
-      cachedFallbackTasks = json.map((item: any, idx: number) => ({
+      cachedFallbackTasks = json
+        .filter((item: any) => {
+          const isScheduledPM = Boolean(
+            item.source === 'pm_agendamento_2026' ||
+            item.source === 'plan' ||
+            (item.title && (item.title.startsWith('[PM]') || item.title.startsWith('[MP]'))) ||
+            item.maintenancePlanId
+          )
+          return !isScheduledPM
+        })
+        .map((item: any, idx: number) => ({
         id: item.id || `task_${idx + 1}`,
         companyId: 'rjHNaSUbLm4qTMyKP0oX',
         title: item.title || 'Ordem de Trabalho',
@@ -430,18 +440,37 @@ export async function deleteAsset(companyId: string, id: string): Promise<void> 
 
 // ── TASKS ───────────────────────────────────────────────────────────────────
 const listTasksCached = unstable_cache(
-  async (companyId: string, limitCount: number): Promise<Task[]> => {
+  async (companyId: string, limitCount: number, includeCompleted: boolean): Promise<Task[]> => {
     try {
-      const snap = await adminDb()
+      let query = adminDb()
         .collection('tasks')
         .where('companyId', '==', companyId)
-        .limit(limitCount)
-        .get()
-      const dbDocs = snap.docs.map((d) => serialize<Task>(d))
+
+      if (!includeCompleted) {
+        query = query.where('status', 'in', ['pending', 'in_progress']) as any
+      }
+
+      const snap = await query.limit(limitCount).get()
+      const dbDocs = snap.docs
+        .map((d) => serialize<Task>(d))
+        .filter((t) => {
+          // Filtrar OTs de PM em massa que possam ter sobrado
+          const isScheduledPM = Boolean(
+            (t as any).source === 'pm_agendamento_2026' ||
+            (t.title && (t.title.startsWith('[PM]') || t.title.startsWith('[MP]')))
+          )
+          if (isScheduledPM && t.status !== 'done') return false
+          if (!includeCompleted && (t.status === 'done' || t.status === 'cancelled')) return false
+          return true
+        })
+
       if (!isDemoCompany(companyId)) {
         return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
       }
-      const fallbacks = getFallbackTasks()
+      let fallbacks = getFallbackTasks()
+      if (!includeCompleted) {
+        fallbacks = fallbacks.filter((f) => f.status !== 'done' && f.status !== 'cancelled')
+      }
       if (dbDocs.length === 0) return fallbacks
 
       const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
@@ -455,15 +484,50 @@ const listTasksCached = unstable_cache(
       } else {
         console.error('[listTasks] Error:', err)
       }
-      return isDemoCompany(companyId) ? getFallbackTasks() : []
+      let fallbacks = getFallbackTasks()
+      if (!includeCompleted) {
+        fallbacks = fallbacks.filter((f) => f.status !== 'done' && f.status !== 'cancelled')
+      }
+      return isDemoCompany(companyId) ? fallbacks : []
     }
-    return isDemoCompany(companyId) ? getFallbackTasks() : []
   },
   ['tasks'],
   { revalidate: 30, tags: ['tasks'] }
 )
-export const listTasks = cache(async function(companyId: string, limitCount = 2000): Promise<Task[]> {
-  return listTasksCached(companyId, limitCount)
+
+export const listTasks = cache(async function(
+  companyId: string,
+  limitCount = 1000,
+  includeCompleted = false
+): Promise<Task[]> {
+  return listTasksCached(companyId, limitCount, includeCompleted)
+})
+
+export const listCompletedTasksPaged = cache(async function(
+  companyId: string,
+  page = 1,
+  pageSize = 50
+): Promise<{ tasks: Task[]; total: number }> {
+  try {
+    const snap = await adminDb()
+      .collection('tasks')
+      .where('companyId', '==', companyId)
+      .where('status', 'in', ['done', 'cancelled'])
+      .get()
+
+    const dbDocs = snap.docs
+      .map((d) => serialize<Task>(d))
+      .sort((a, b) => (b.completedAt || b.updatedAt || b.createdAt || '').localeCompare(a.completedAt || a.updatedAt || a.createdAt || ''))
+
+    const offset = (page - 1) * pageSize
+    const paginated = dbDocs.slice(offset, offset + pageSize)
+    return { tasks: paginated, total: dbDocs.length }
+  } catch (err) {
+    console.error('[listCompletedTasksPaged] Error:', err)
+    const fallbacks = getFallbackTasks().filter((f) => f.status === 'done' || f.status === 'cancelled')
+    const offset = (page - 1) * pageSize
+    return { tasks: fallbacks.slice(offset, offset + pageSize), total: fallbacks.length }
+  }
 })
 
 export const listTasksByAsset = cache(async function(companyId: string, assetId: string, providedAssetTag?: string | null): Promise<Task[]> {

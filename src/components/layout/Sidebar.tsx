@@ -58,7 +58,6 @@ const managerNavGroups: NavGroup[] = [
   {
     groupName: 'Módulos Starter',
     items: [
-      { href: '/dashboard/projects',           key: 'projects',        icon: FolderKanban,   feature: 'projects' },
       { href: '/dashboard/calendar',           key: 'calendar',        icon: Calendar,       feature: 'calendar' },
       { href: '/dashboard/maintenance-plan',   key: 'maintenancePlan', icon: Wrench,         feature: 'maintenance-plan' },
     ]

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import {
-  X, ShieldAlert, Camera, Images, Wrench, ArrowLeft, FolderKanban
+  X, ShieldAlert, Camera, Images, Wrench, ArrowLeft, FolderKanban, Trash2
 } from 'lucide-react'
 import type { Task, TaskCriticidade, TipoTarefa } from '@/types/models'
 import { STATUS_LABELS } from '@/types/models'
@@ -180,6 +180,8 @@ export interface CreateTaskModalProps {
   onSuccess?: (newTask?: Task) => void
   createAction?: (prevState: any, formData: FormData) => Promise<any>
   updateAction?: (prevState: any, formData: FormData) => Promise<any>
+  deleteAction?: (id: string) => Promise<any>
+  onDelete?: () => void
   availableTasksForDependencies?: Task[]
   showDependencies?: boolean
 }
@@ -197,6 +199,8 @@ export default function CreateTaskModal({
   onSuccess,
   createAction,
   updateAction,
+  deleteAction,
+  onDelete,
   availableTasksForDependencies,
   showDependencies = false,
 }: CreateTaskModalProps) {
@@ -479,14 +483,40 @@ export default function CreateTaskModal({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full"
-          title="Fechar"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {isManager && editingTask && (deleteAction || onDelete) && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm(`Tem a certeza de que pretende eliminar "${editingTask.title || 'este registo'}"?`)) return
+                if (deleteAction) {
+                  setBusy(true)
+                  const res = await deleteAction(editingTask.id)
+                  setBusy(false)
+                  if (res?.error) {
+                    setError(res.error)
+                    return
+                  }
+                }
+                if (onDelete) onDelete()
+                onClose()
+              }}
+              className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:hover:bg-red-900/60 dark:text-red-300 border border-red-200 dark:border-red-800 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Eliminar este registo"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Eliminar</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full"
+            title="Fechar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       {/* Conteúdo Principal de Página Completa */}
