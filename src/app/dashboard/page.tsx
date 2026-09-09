@@ -4,7 +4,6 @@ import { getCurrentProfile } from '@/lib/firebase/session'
 import { listTasks, listUsers, listAssets, listInterventions } from '@/lib/firebase/data'
 import { formatDate } from '@/lib/utils'
 import { ClipboardList, Users, Timer, ArrowUp, ArrowDown, Plus, AlertCircle, FolderKanban } from 'lucide-react'
-import ReportsChartsClient from './reports/ReportsChartsClient'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,10 +77,71 @@ export default async function DashboardPage() {
     })
     .slice(0, 10)
 
+  const isPMTask = (t: any) => {
+    const tipoLow = String(t.tipo || '').toLowerCase().trim()
+    const tiLow = String(t.ti || t.tipoText || '').toLowerCase().trim()
+    const titleLow = String(t.title || '').toLowerCase()
+    return (
+      tipoLow === 'mp' ||
+      tipoLow === 'pm' ||
+      tipoLow === 'preventiva' ||
+      tipoLow === 'plano' ||
+      tiLow === 'mp' ||
+      tiLow === 'pm' ||
+      tiLow === 'preventiva' ||
+      tiLow === 'plano' ||
+      Boolean(t.maintenancePlanId) ||
+      t.source === 'plano_manutencao' ||
+      t.source === 'folha_ur_planos' ||
+      String(t.id || '').startsWith('task_pm_') ||
+      titleLow.includes('plano de manutenção') ||
+      titleLow.startsWith('pm ') ||
+      titleLow.startsWith('pm-') ||
+      titleLow.startsWith('mp ') ||
+      titleLow.startsWith('mp-')
+    )
+  }
+
+  const isPITask = (t: any) => {
+    const tipoLow = String(t.tipo || '').toLowerCase().trim()
+    const tiLow = String(t.ti || t.tipoText || '').toLowerCase().trim()
+    const titleLow = String(t.title || '').toLowerCase()
+    return (
+      tipoLow === 'pi' ||
+      tiLow === 'pi' ||
+      tipoLow === 'solicitacao' ||
+      t.source === 'folha_ur_pi' ||
+      t.source === 'pedidos_pi' ||
+      Boolean(t.requesterEmail) ||
+      titleLow.startsWith('pi ') ||
+      titleLow.startsWith('pi-') ||
+      titleLow.includes('pedido de intervenção') ||
+      titleLow.includes('pedido pi')
+    )
+  }
+
+  const totalOTs = tasks.length
+  const doneOTs = tasks.filter((t) => t.status === 'done').length
+  const inProgressOTs = tasks.filter((t) => t.status === 'in_progress').length
+  const pendingOTs = tasks.filter((t) => t.status === 'pending').length
+
+  const pmTasks = tasks.filter(isPMTask)
+  const pmTotal = pmTasks.length
+  const pmDone = pmTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
+  const pmCompliancePct = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : 100
+
+  const piTasks = tasks.filter(isPITask)
+  const piRequested = piTasks.length
+  const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
+
   return (
     <div className="flex flex-col gap-6 animate-fade-in-up">
+      {/* Cabeçalho */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-outline/60 pb-5">
-        <h1 className="text-3xl font-extrabold text-industrial-blue tracking-tight">Dashboard de Manutenção</h1>
+        <div>
+          <h1 className="text-3xl font-extrabold text-industrial-blue tracking-tight">Dashboard de Manutenção</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Visão geral e indicadores executivos da operação industrial.</p>
+        </div>
         <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
           <Link 
             href="/dashboard/tasks?status=pending,in_progress"
@@ -107,82 +167,135 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-        <Link href="/dashboard/tasks?status=pending,in_progress" className="block">
-          <div className="bg-white border border-outline rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-safety-orange/40 transition-all cursor-pointer group h-[125px]">
-            <div className="flex justify-between items-start">
-              <span className="font-mono text-[11px] font-bold text-industrial-blue-light uppercase tracking-wider group-hover:text-safety-orange transition-colors">Ordens Ativas</span>
-              <ClipboardList size={20} className="text-safety-orange group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-end gap-2 mt-2">
-              <span className="text-3xl font-extrabold text-industrial-blue">{normalActiveTasks.length}</span>
-              <span className="text-[11px] font-medium text-slate-500 mb-1">OTs</span>
-            </div>
-          </div>
+      {/* ── 1ª LINHA DE INDICADORES (ANEXO 1) ────────────────────────────────── */}
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Link href="/dashboard/tasks" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
+          <p className="text-4xl font-extrabold text-[#1B4F72] dark:text-blue-400 group-hover:scale-105 transition-transform">{totalOTs}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-industrial-blue">
+            <span>Total OTs</span> <span className="text-[10px]">↗</span>
+          </p>
         </Link>
+        <Link href="/dashboard/tasks?status=done" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
+          <p className="text-4xl font-extrabold text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">{doneOTs}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-emerald-600">
+            <span>Concluídas</span> <span className="text-[10px]">↗</span>
+          </p>
+        </Link>
+        <Link href="/dashboard/tasks?status=in_progress" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
+          <p className="text-4xl font-extrabold text-blue-500 dark:text-blue-400 group-hover:scale-105 transition-transform">{inProgressOTs}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-blue-500">
+            <span>Em curso</span> <span className="text-[10px]">↗</span>
+          </p>
+        </Link>
+        <Link href="/dashboard/tasks?status=pending" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
+          <p className="text-4xl font-extrabold text-amber-600 dark:text-amber-500 group-hover:scale-105 transition-transform">{pendingOTs}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-amber-600">
+            <span>Pendentes</span> <span className="text-[10px]">↗</span>
+          </p>
+        </Link>
+      </section>
 
+      {/* ── 2ª LINHA DE INDICADORES (ANEXO 2 — SEM AS OTs ATIVAS) ──────────── */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <Link href="/dashboard/projects" className="block">
-          <div className="bg-white border border-outline rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-industrial-blue/40 transition-all cursor-pointer group h-[125px]">
+          <div className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-industrial-blue/40 transition-all cursor-pointer group h-[125px]">
             <div className="flex justify-between items-start">
               <span className="font-mono text-[11px] font-bold text-industrial-blue-light uppercase tracking-wider group-hover:text-industrial-blue transition-colors">Projetos Ativos</span>
               <FolderKanban size={20} className="text-industrial-blue group-hover:scale-110 transition-transform" />
             </div>
             <div className="flex items-end gap-2 mt-2">
-              <span className="text-3xl font-extrabold text-industrial-blue">{projectActiveTasks.length}</span>
+              <span className="text-3xl font-extrabold text-industrial-blue dark:text-slate-100">{projectActiveTasks.length}</span>
               <span className="text-[11px] font-medium text-slate-500 mb-1">Em Curso</span>
             </div>
           </div>
         </Link>
 
         <Link href="/dashboard/users" className="block">
-          <div className="bg-white border border-outline rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-amber-500/40 transition-all cursor-pointer group h-[125px]">
+          <div className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-amber-500/40 transition-all cursor-pointer group h-[125px]">
             <div className="flex justify-between items-start">
               <span className="font-mono text-[11px] font-bold text-industrial-blue-light uppercase tracking-wider group-hover:text-amber-600 transition-colors">Técnicos Internos</span>
               <Users size={20} className="text-amber-500 group-hover:scale-110 transition-transform" />
             </div>
             <div className="flex items-end gap-2 mt-2">
-              <span className="text-3xl font-extrabold text-industrial-blue">{internalTechs.length}</span>
+              <span className="text-3xl font-extrabold text-industrial-blue dark:text-slate-100">{internalTechs.length}</span>
               <span className="text-[11px] font-medium text-slate-500 mb-1">Internos</span>
             </div>
           </div>
         </Link>
 
         <Link href="/dashboard/users" className="block">
-          <div className="bg-white border border-outline rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-blue-500/40 transition-all cursor-pointer group h-[125px]">
+          <div className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-blue-500/40 transition-all cursor-pointer group h-[125px]">
             <div className="flex justify-between items-start">
               <span className="font-mono text-[11px] font-bold text-industrial-blue-light uppercase tracking-wider group-hover:text-blue-600 transition-colors">Técnicos Externos</span>
               <Users size={20} className="text-blue-500 group-hover:scale-110 transition-transform" />
             </div>
             <div className="flex items-end gap-2 mt-2">
-              <span className="text-3xl font-extrabold text-industrial-blue">{externalTechs.length}</span>
+              <span className="text-3xl font-extrabold text-industrial-blue dark:text-slate-100">{externalTechs.length}</span>
               <span className="text-[11px] font-medium text-slate-500 mb-1">Prestadores</span>
             </div>
           </div>
         </Link>
 
         <Link href="/dashboard/history" className="block">
-          <div className="bg-white border border-outline rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-emerald-500/40 transition-all cursor-pointer group h-[125px]">
+          <div className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-emerald-500/40 transition-all cursor-pointer group h-[125px]">
             <div className="flex justify-between items-start">
               <span className="font-mono text-[11px] font-bold text-industrial-blue-light uppercase tracking-wider group-hover:text-emerald-600 transition-colors">Tempo Resolução</span>
               <Timer size={20} className="text-emerald-500 group-hover:scale-110 transition-transform" />
             </div>
             <div className="flex items-end gap-2 mt-2">
-              <span className="text-3xl font-extrabold text-industrial-blue">{avgResolutionHours}</span>
+              <span className="text-3xl font-extrabold text-industrial-blue dark:text-slate-100">{avgResolutionHours}</span>
               <span className="text-[11px] font-medium text-slate-500 mb-1">Horas</span>
             </div>
           </div>
         </Link>
       </section>
 
-      {/* Design Avançado de Estatísticas & KPIs com Filtros Estilo Excel */}
-      <ReportsChartsClient
-        tasks={tasks}
-        assets={assets}
-        interventions={interventions}
-      />
+      {/* ── 3ª LINHA DE INDICADORES (ANEXO 3) ────────────────────────────────── */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Cartão Cumprimento do Plano de Manutenção (PM) */}
+        <div className="bg-gradient-to-br from-slate-900 via-industrial-blue to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800 flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-[11px] font-extrabold uppercase tracking-widest text-amber-400">
+              Cumprimento do Plano de Manutenção (PM)
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-black text-white">{pmCompliancePct}%</span>
+              <span className="text-xs font-bold text-slate-300">
+                ({pmDone} de {pmTotal} OTs de PM Existentes)
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-300 font-medium">
+              Considera a totalidade de OTs de PM geradas no período selecionado ({pmTotal} OTs) vs Concluídas ({pmDone} OTs).
+            </p>
+          </div>
+          <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
+            {pmCompliancePct}%
+          </div>
+        </div>
+
+        {/* Cartão Pedidos de Intervenção (PI) — Resumo */}
+        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-[11px] font-extrabold uppercase tracking-widest text-industrial-blue dark:text-sky-400">
+              Pedidos de Intervenção (PI) — Resumo
+            </span>
+            <div className="flex items-baseline gap-3">
+              <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">
+                {piCompleted} / {piRequested}
+              </span>
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                PIs Concluídos
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+              Total de solicitações de intervenção criadas e tratadas na fábrica no período selecionado.
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* Análise dos Equipamentos Mais Críticos */}
-      <div className="mt-4">
+      <div className="mt-2">
         <h2 className="text-base font-bold text-gray-800 dark:text-slate-200 mb-3 flex items-center justify-between">
           <span>Análise dos Equipamentos Mais Críticos</span>
           <Link href="/dashboard/assets" className="text-xs font-bold text-purple-700 dark:text-purple-300 hover:underline">

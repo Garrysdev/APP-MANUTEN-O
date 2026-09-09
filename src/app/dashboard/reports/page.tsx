@@ -89,8 +89,8 @@ export default async function ReportsPage() {
         {/* Cabeçalho (ecrã) */}
         <div className="flex items-start justify-between mb-6 no-print">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Estatísticas & Relatórios</h1>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">{companyName} · gerado em {generatedAt}</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Estatísticas e Gráficos</h1>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">{companyName} · Análise de KPIs e gráficos gerado em {generatedAt}</p>
           </div>
           <div className="flex gap-2">
             <CSVExportButton
