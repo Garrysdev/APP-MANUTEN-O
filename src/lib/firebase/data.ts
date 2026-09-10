@@ -138,9 +138,9 @@ function getFallbackUsers(): User[] {
   const techs = [
     { id: 'MEGjjvqtGqv3Oosxvlrx', name: 'Leandro Maia', abbreviation: 'LM', email: 'lm@rgmaintenance.pt', role: 'technician', active: true, isExternal: false, specialty: 'Multidisciplinar' },
     { id: 'nAcCSm4E3tNnPLr72UPl', name: 'Marco Silva', abbreviation: 'MS', email: 'ms@rgmaintenance.pt', role: 'technician', active: true, isExternal: false, specialty: 'Mecânico' },
+    { id: 'zmDAeoGTzIWPavraKu0f', name: 'Carlos Branco', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician', active: true, isExternal: false, specialty: 'Eletricidade & Automação' },
     { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', name: 'RuiG', abbreviation: 'RU', email: 'tecnico@teste.rg', role: 'technician', active: true, isExternal: false, specialty: 'Eletromecânica' },
     { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', name: 'Rui Garrido', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false, specialty: 'Gestão de Manutenção' },
-    { id: 'CUodZKziOwo128GLK66i', name: 'Rui Garrido', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false, specialty: 'Gestão de Manutenção' },
     { id: 'q17h5HdG3R8dfjWiUZ6V', name: 'Eng. João Ramos', abbreviation: 'JR', email: 'jr@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_jr', externalCompanyName: 'João Ramos Engenharia', specialty: 'Engenharia Geral', phone: '910 000 000' },
     { id: 'twtQs1sAj0RFc9KI2S0n', name: 'Miguel', abbreviation: 'OX2', email: 'ox2@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_ox2', externalCompanyName: 'OX2 Especialista', specialty: 'Caldeiras & Sobreaquecimento', phone: '912 345 678' },
     { id: '2pL85QsrLpaNwYXZdVOP', name: 'Carrier (Ricardo)', abbreviation: 'CAR', email: 'carrier@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_car', externalCompanyName: 'Carrier Portugal', specialty: 'HVAC / Climatização', phone: '965 432 109' },
@@ -936,10 +936,11 @@ const listUsersCached = unstable_cache(
         'nAcCSm4E3tNnPLr72UPl', // Marco Silva
         'zmDAeoGTzIWPavraKu0f', // Carlos Branco
         'mWSsTRtgq5QcOHusTdVYgDVrwHt2', // RG - RuiG
-        'CUodZKziOwo128GLK66i', // Rui Garrido (RG)
+        'nLqzaMwMu1OR4CKZzatjTlNBWt82', // Rui Garrido (RG)
       ])
 
-      const isCorruptOrMock = (u: { email?: string | null; name?: string | null }) => {
+      const isCorruptOrMock = (u: { id?: string; email?: string | null; name?: string | null }) => {
+        if (u.id === 'CUodZKziOwo128GLK66i') return true // Duplicado removido a pedido do utilizador
         const email = String(u.email || '').toLowerCase().trim()
         const name = String(u.name || '').toLowerCase().trim()
         if (email.includes('@rg-maintenance.local')) return true
