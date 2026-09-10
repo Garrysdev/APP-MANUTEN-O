@@ -34,7 +34,7 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
           setNotifications(fresh)
         }
       } catch {}
-    }, 30000)
+    }, 120000)
 
     return () => {
       isMounted = false

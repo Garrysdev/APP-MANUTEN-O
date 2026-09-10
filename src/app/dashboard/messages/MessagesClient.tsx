@@ -63,10 +63,18 @@ export default function MessagesClient({
   const STORAGE_KEY = 'rg_internal_messages_cache'
   const [localMessages, setLocalMessages] = useState<InternalMessage[]>(messages)
 
+  const isSeedMessage = (m?: InternalMessage | null) => {
+    if (!m || !m.id) return true
+    if (m.id.startsWith('msg_seed_')) return true
+    if (m.id === 'msg_seed_1' || m.id === 'msg_seed_2' || m.id === 'msg_seed_3' || m.id === 'msg_seed_4' || m.id === 'msg_seed_5') return true
+    return false
+  }
+
   const persistMessages = (list: InternalMessage[]) => {
     try {
-      if (typeof window !== 'undefined' && list.length > 0) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, 100)))
+      if (typeof window !== 'undefined') {
+        const clean = list.filter((m) => !isSeedMessage(m))
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(clean.slice(0, 100)))
       }
     } catch {}
   }
@@ -76,23 +84,48 @@ export default function MessagesClient({
       const stored = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
       let storedList: InternalMessage[] = []
       if (stored) {
-        try { storedList = JSON.parse(stored) } catch {}
+        try {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed)) {
+            storedList = parsed.filter((m) => !isSeedMessage(m))
+          }
+        } catch {}
       }
 
-      // Merge: mensagens do servidor + mensagens locais guardadas no browser
+      // Merge: mensagens reais do servidor + mensagens locais guardadas no browser
       const map = new Map<string, InternalMessage>()
-      storedList.forEach((m) => { if (m?.id) map.set(m.id, m) })
-      messages.forEach((m) => { if (m?.id) map.set(m.id, m) })
+      storedList.forEach((m) => { if (m?.id && !isSeedMessage(m)) map.set(m.id, m) })
+      messages.forEach((m) => { if (m?.id && !isSeedMessage(m)) map.set(m.id, m) })
 
       const merged = Array.from(map.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      setLocalMessages(merged)
+      persistMessages(merged)
+
+      // Se houver mensagens locais reais, sincronizar com o servidor em background
       if (merged.length > 0) {
-        setLocalMessages(merged)
-        persistMessages(merged)
+        fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: merged }),
+        }).catch(() => {})
       } else {
-        setLocalMessages(messages)
+        // Tentar obter mensagens frescas do servidor se a lista estiver vazia
+        fetch('/api/messages')
+          .then((r) => r.json())
+          .then((data) => {
+            if (Array.isArray(data?.messages) && data.messages.length > 0) {
+              const fresh = data.messages.filter((m: any) => !isSeedMessage(m))
+              if (fresh.length > 0) {
+                setLocalMessages(fresh)
+                persistMessages(fresh)
+              }
+            }
+          })
+          .catch(() => {})
       }
     } catch {
-      setLocalMessages(messages)
+      const clean = messages.filter((m) => !isSeedMessage(m))
+      setLocalMessages(clean)
     }
   }, [messages])
   const [filter, setFilter] = useState<'all' | 'inbox' | 'sent'>('all')
@@ -524,19 +557,26 @@ export default function MessagesClient({
       formData.set('status', finalStatus)
       formData.set('requiresResponse', requiresResponse ? 'true' : 'false')
 
-      if (subject.trim()) formData.set('subject', subject.trim())
-      if (selectedTaskId) {
-        const t = tasks.find((tk) => tk.id === selectedTaskId)
-        formData.set('taskId', selectedTaskId)
-        if (t) formData.set('taskTitle', t.title)
-      }
-      if (photoUrl) formData.set('photoUrl', photoUrl)
-
       if (replyToMessage) {
         formData.set('replyToId', replyToMessage.id)
-        formData.set('replyToSubject', replyToMessage.subject || replyToMessage.taskTitle || 'Mensagem')
+        const replySubj = replyToMessage.subject
+          ? (replyToMessage.subject.startsWith('Re:') ? replyToMessage.subject : `Re: ${replyToMessage.subject}`)
+          : (replyToMessage.taskTitle ? `Re: OT ${replyToMessage.taskTitle}` : 'Resposta')
+        formData.set('replyToSubject', replySubj)
+        formData.set('subject', replySubj)
         formData.set('replyToSender', replyToMessage.senderName)
         formData.set('replyToContent', replyToMessage.content.slice(0, 150))
+        if (replyToMessage.taskId) {
+          formData.set('taskId', replyToMessage.taskId)
+          if (replyToMessage.taskTitle) formData.set('taskTitle', replyToMessage.taskTitle)
+        }
+      } else {
+        if (subject.trim()) formData.set('subject', subject.trim())
+        if (selectedTaskId) {
+          const t = tasks.find((tk) => tk.id === selectedTaskId)
+          formData.set('taskId', selectedTaskId)
+          if (t) formData.set('taskTitle', t.title)
+        }
       }
 
       const res = await sendInternalMessageAction({}, formData)
@@ -545,6 +585,10 @@ export default function MessagesClient({
       if (res.error) {
         setError(res.error)
       } else {
+        const replySubj = replyToMessage?.subject
+          ? (replyToMessage.subject.startsWith('Re:') ? replyToMessage.subject : `Re: ${replyToMessage.subject}`)
+          : (replyToMessage?.taskTitle ? `Re: OT ${replyToMessage.taskTitle}` : null)
+
         const newMsgObj: InternalMessage = {
           id: res.messageId || 'msg_' + Date.now(),
           companyId: '',
@@ -553,10 +597,10 @@ export default function MessagesClient({
           senderAbbr: currentUserAbbr,
           recipientIds: selectedTechIds,
           recipientNames: recipientNamesText,
-          subject: subject.trim() || null,
+          subject: replyToMessage ? replySubj : (subject.trim() || null),
           content: content.trim(),
-          taskId: selectedTaskId || null,
-          taskTitle: selectedTaskId ? (tasks.find((tk) => tk.id === selectedTaskId)?.title || null) : null,
+          taskId: replyToMessage ? (replyToMessage.taskId || null) : (selectedTaskId || null),
+          taskTitle: replyToMessage ? (replyToMessage.taskTitle || null) : (selectedTaskId ? (tasks.find((tk) => tk.id === selectedTaskId)?.title || null) : null),
           photoUrl: photoUrl || null,
           status: finalStatus,
           requiresResponse,
@@ -1182,7 +1226,7 @@ export default function MessagesClient({
                 {replyToMessage ? (
                   <>
                     <Reply className="h-5 w-5 text-industrial-blue dark:text-sky-400" />
-                    <span>Responder a {replyToMessage.senderName}</span>
+                    <span>Responder à Mensagem</span>
                   </>
                 ) : (
                   <>
@@ -1205,7 +1249,7 @@ export default function MessagesClient({
                 <div className="flex items-center justify-between text-blue-800 dark:text-sky-300 font-bold">
                   <span className="flex items-center gap-1.5">
                     <Reply className="h-3.5 w-3.5 text-industrial-blue dark:text-sky-400" />
-                    <span>Em resposta à mensagem de {replyToMessage.senderName}</span>
+                    <span>Contexto da Mensagem:</span>
                   </span>
                   <span className="text-[10px] font-mono text-slate-400">{formatDateTime(replyToMessage.createdAt)}</span>
                 </div>
@@ -1234,23 +1278,15 @@ export default function MessagesClient({
                 </div>
 
                 {replyToMessage ? (
-                  <div className="p-3 bg-blue-50/80 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-800 flex items-center justify-between shadow-2xs">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-extrabold text-xs shadow-2xs">
-                        {replyToMessage.senderAbbr || replyToMessage.senderName.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
-                          Destinatário Automático (Remetente)
-                        </span>
-                        <span className="text-xs font-extrabold text-blue-900 dark:text-sky-300">
-                          {replyToMessage.senderAbbr ? `[${replyToMessage.senderAbbr}] ` : ''}{replyToMessage.senderName}
-                        </span>
-                      </div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/70 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-2xs">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-bold text-slate-500 dark:text-slate-400">Destinatário:</span>
+                      <span className="font-extrabold text-industrial-blue dark:text-sky-300">
+                        {replyToMessage.senderAbbr ? `[${replyToMessage.senderAbbr}] ` : ''}{replyToMessage.senderName}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border border-blue-300 dark:border-blue-700 flex items-center gap-1">
-                      <Check className="h-3 w-3 text-blue-600 dark:text-sky-400" />
-                      <span>Automático</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-sky-300 border border-blue-200 dark:border-blue-800">
+                      Automático
                     </span>
                   </div>
                 ) : (
@@ -1354,39 +1390,41 @@ export default function MessagesClient({
                 </div>
               </div>
 
-              {/* Assunto e OT associada */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Assunto (Opcional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex.: Aviso sobre Bomba P-02"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    className="input text-xs"
-                  />
-                </div>
+              {/* Assunto e OT associada (Ocultos se for resposta a mensagem) */}
+              {!replyToMessage && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Assunto (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex.: Aviso sobre Bomba P-02"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      className="input text-xs"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Associar a OT (Opcional)
-                  </label>
-                  <select
-                    value={selectedTaskId}
-                    onChange={(e) => setSelectedTaskId(e.target.value)}
-                    className="input text-xs font-bold"
-                  >
-                    <option value="">-- Nenhuma OT selecionada --</option>
-                    {sortedTasksForSelect.map((t: TaskRef) => (
-                      <option key={t.id} value={t.id}>
-                        📍 [{t.area || 'Geral'}] 🏷️ [{t.tag || t.id}] — {t.title}
-                      </option>
-                    ))}
-                  </select>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Associar a OT (Opcional)
+                    </label>
+                    <select
+                      value={selectedTaskId}
+                      onChange={(e) => setSelectedTaskId(e.target.value)}
+                      className="input text-xs font-bold"
+                    >
+                      <option value="">-- Nenhuma OT selecionada --</option>
+                      {sortedTasksForSelect.map((t: TaskRef) => (
+                        <option key={t.id} value={t.id}>
+                          📍 [{t.area || 'Geral'}] 🏷️ [{t.tag || t.id}] — {t.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Texto da mensagem */}
               <div>

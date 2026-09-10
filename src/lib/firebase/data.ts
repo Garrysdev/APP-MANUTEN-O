@@ -2002,21 +2002,30 @@ let cachedInternalMessages: InternalMessage[] = []
 const listNotificationsCached = unstable_cache(
   async (companyId: string, userId: string): Promise<AppNotification[]> => {
     try {
-      const snap = await adminDb()
+      const uLower = String(userId || '').toLowerCase().trim()
+      const uClean = uLower.replace(/^(tech_|user_)/, '')
+      let snap = await adminDb()
         .collection('notifications')
         .where('companyId', '==', companyId)
+        .where('userId', '==', userId)
         .orderBy('createdAt', 'desc')
-        .limit(100)
+        .limit(15)
         .get()
-      const docs = snap.docs.map((d) => serialize<AppNotification>(d))
-      if (docs.length > 0) {
-        const uLower = String(userId || '').toLowerCase().trim()
-        const uClean = uLower.replace(/^(tech_|user_)/, '')
-        return docs.filter((n) => {
-          const target = String(n.userId || '').toLowerCase().trim()
-          const targetClean = target.replace(/^(tech_|user_)/, '')
-          return target === uLower || target === uClean || targetClean === uClean
-        })
+        .catch(() => null)
+
+      if (!snap || snap.empty) {
+        snap = await adminDb()
+          .collection('notifications')
+          .where('companyId', '==', companyId)
+          .where('userId', '==', uClean)
+          .orderBy('createdAt', 'desc')
+          .limit(15)
+          .get()
+          .catch(() => null)
+      }
+
+      if (snap && !snap.empty) {
+        return snap.docs.map((d) => serialize<AppNotification>(d))
       }
     } catch (err: any) {
       const isQuotaErr = String(err?.message || err).includes('Quota exceeded') || String(err?.message || err).includes('RESOURCE_EXHAUSTED')
@@ -2036,7 +2045,7 @@ const listNotificationsCached = unstable_cache(
     })
   },
   ['notifications'],
-  { revalidate: 15, tags: ['notifications'] }
+  { revalidate: 60, tags: ['notifications'] }
 )
 export const listNotifications = cache(async function(companyId: string, userId: string): Promise<AppNotification[]> {
   return listNotificationsCached(companyId, userId)
@@ -2129,91 +2138,16 @@ export async function markAllNotificationsRead(companyId: string, userId: string
   revalidateTag('notifications')
 }
 
-const SEED_INTERNAL_MESSAGES: InternalMessage[] = [
-  {
-    id: 'msg_seed_1',
-    companyId: 'demo_company',
-    senderId: 'CUodZKziOwo128GLK66i',
-    senderName: 'Rui Garrido',
-    senderAbbr: 'RG',
-    recipientIds: ['ALL'],
-    recipientNames: 'Todos os Técnicos',
-    subject: 'Plano de Manutenção e Intervenções Semanais',
-    content: 'Bom dia equipa. Por favor verifiquem as OTs pendentes atribuídas para esta semana, dando prioridade às de criticidade alta na Área 80 e Área 30. Bom trabalho a todos.',
-    createdAt: '2026-09-08T08:30:00.000Z',
-    status: 'info',
-    requiresResponse: false,
-    readBy: ['CUodZKziOwo128GLK66i', 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', 'MEGjjvqtGqv3Oosxvlrx'],
-  },
-  {
-    id: 'msg_seed_2',
-    companyId: 'demo_company',
-    senderId: 'MEGjjvqtGqv3Oosxvlrx',
-    senderName: 'Leandro Maia',
-    senderAbbr: 'LM',
-    recipientIds: ['CUodZKziOwo128GLK66i'],
-    recipientNames: 'Rui Garrido',
-    subject: 'Anomalia no Grupo Hidráulico - Área 80',
-    content: 'Detetada vibração excessiva e ruído anormal no grupo hidráulico principal durante a ronda da manhã. Solicito autorização para paragem preventiva de 30 minutos para inspeção.',
-    assetTag: 'GH-01',
-    assetName: 'Grupo Hidráulico Principal',
-    createdAt: '2026-09-09T10:15:00.000Z',
-    status: 'replied',
-    requiresResponse: true,
-    readBy: ['MEGjjvqtGqv3Oosxvlrx', 'CUodZKziOwo128GLK66i'],
-  },
-  {
-    id: 'msg_seed_3',
-    companyId: 'demo_company',
-    senderId: 'CUodZKziOwo128GLK66i',
-    senderName: 'Rui Garrido',
-    senderAbbr: 'RG',
-    recipientIds: ['MEGjjvqtGqv3Oosxvlrx'],
-    recipientNames: 'Leandro Maia',
-    subject: 'Re: Anomalia no Grupo Hidráulico - Área 80',
-    content: 'Autorizado. Já criei a OT de inspeção corretiva. Podes avançar com a paragem e verificar aperto dos apoios e nível de óleo.',
-    replyToId: 'msg_seed_2',
-    replyToSubject: 'Anomalia no Grupo Hidráulico - Área 80',
-    replyToSender: 'Leandro Maia',
-    replyToContent: 'Detetada vibração excessiva e ruído anormal no grupo hidráulico principal...',
-    createdAt: '2026-09-09T10:30:00.000Z',
-    status: 'info',
-    requiresResponse: false,
-    readBy: ['CUodZKziOwo128GLK66i', 'MEGjjvqtGqv3Oosxvlrx'],
-  },
-  {
-    id: 'msg_seed_4',
-    companyId: 'demo_company',
-    senderId: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2',
-    senderName: 'RG - RuiG',
-    senderAbbr: 'RG',
-    recipientIds: ['CUodZKziOwo128GLK66i'],
-    recipientNames: 'Gestor / Rui Garrido',
-    subject: 'Calibração dos Sensores de Pressão Concluída',
-    content: 'Calibração e testes de segurança dos transmissores de pressão da linha de enchimento concluídos com sucesso. Parâmetros dentro das tolerâncias especificadas.',
-    assetTag: 'SP-801',
-    assetName: 'Sensor de Pressão Linha Enchimento',
-    createdAt: '2026-09-09T16:45:00.000Z',
-    status: 'closed',
-    requiresResponse: false,
-    readBy: ['mWSsTRtgq5QcOHusTdVYgDVrwHt2', 'CUodZKziOwo128GLK66i'],
-  },
-  {
-    id: 'msg_seed_5',
-    companyId: 'demo_company',
-    senderId: 'nAcCSm4E3tNnPLr72UPl',
-    senderName: 'Marco Silva',
-    senderAbbr: 'MS',
-    recipientIds: ['CUodZKziOwo128GLK66i'],
-    recipientNames: 'Rui Garrido',
-    subject: 'Falta de rolamentos 6205-2RS em stock',
-    content: 'Durante a manutenção das bombas centrifugas verificámos que o stock físico de rolamentos 6205-2RS está a zero. É necessário fazer pedido urgente ao fornecedor.',
-    createdAt: '2026-09-10T09:00:00.000Z',
-    status: 'awaiting_reply',
-    requiresResponse: true,
-    readBy: ['nAcCSm4E3tNnPLr72UPl'],
-  },
-]
+export function syncInternalMessages(msgs: InternalMessage[]): void {
+  const map = new Map<string, InternalMessage>()
+  cachedInternalMessages.forEach((m) => {
+    if (m?.id && !m.id.startsWith('msg_seed_')) map.set(m.id, m)
+  })
+  msgs.forEach((m) => {
+    if (m?.id && !m.id.startsWith('msg_seed_')) map.set(m.id, m)
+  })
+  cachedInternalMessages = Array.from(map.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+}
 
 export const listInternalMessages = cache(async function(
   companyId: string,
@@ -2256,7 +2190,8 @@ export const listInternalMessages = cache(async function(
     const seen = new Set<string>()
     const allDocs: InternalMessage[] = []
     const rawCandidates = [...docs, ...cachedInternalMessages, ...fileMessages]
-    const candidates = rawCandidates.length > 0 ? rawCandidates : SEED_INTERNAL_MESSAGES
+    // Apenas mensagens reais criadas pelo utilizador — ZERO mensagens inventadas
+    const candidates = rawCandidates.filter((m) => m && m.id && !m.id.startsWith('msg_seed_'))
 
     for (const m of candidates) {
       if (m.id && !seen.has(m.id) && !deletedIds.has(m.id)) {
@@ -2300,12 +2235,13 @@ export const listInternalMessages = cache(async function(
       addToken(userRefOrId)
     } else if (typeof userRefOrId === 'object') {
       addToken(userRefOrId.id)
+      addToken(userRefOrId.uid)
       addToken(userRefOrId.abbreviation)
       addToken(userRefOrId.name)
       addToken(userRefOrId.email)
     }
 
-    // Alias explícito para o técnico RG - RuiG
+    // Mapeamento automático de siglas e IDs dos técnicos da empresa
     if (tokens.has('rg') || tokens.has('ruig') || tokens.has('mwsstrtgq5qcohusdtvygdvrwht2') || tokens.has('tecnico@teste.rg')) {
       tokens.add('rg')
       tokens.add('ruig')
@@ -2313,6 +2249,30 @@ export const listInternalMessages = cache(async function(
       tokens.add('mwsstrtgq5qcohusdtvygdvrwht2')
       tokens.add('tech_rg')
       tokens.add('tecnico@teste.rg')
+    }
+    if (tokens.has('lm') || tokens.has('megjjvqtgqv3oosxvlrx') || tokens.has('leandro maia') || tokens.has('lm@rgmaintenance.pt')) {
+      tokens.add('lm')
+      tokens.add('megjjvqtgqv3oosxvlrx')
+      tokens.add('leandro maia')
+      tokens.add('lm@rgmaintenance.pt')
+    }
+    if (tokens.has('ms') || tokens.has('naccsm4e3tnnplr72upl') || tokens.has('marco silva') || tokens.has('ms@rgmaintenance.pt')) {
+      tokens.add('ms')
+      tokens.add('naccsm4e3tnnplr72upl')
+      tokens.add('marco silva')
+      tokens.add('ms@rgmaintenance.pt')
+    }
+    if (tokens.has('cb') || tokens.has('zmdaeogtzwpavrakui0f') || tokens.has('carlos branco') || tokens.has('cb@rgmaintenance.pt')) {
+      tokens.add('cb')
+      tokens.add('zmdaeogtzwpavrakui0f')
+      tokens.add('carlos branco')
+      tokens.add('cb@rgmaintenance.pt')
+    }
+    if (tokens.has('tc') || tokens.has('xayuxy41dqsopyjxnnaov9vjpii3') || tokens.has('tc técnico') || tokens.has('tc@teste.rg')) {
+      tokens.add('tc')
+      tokens.add('xayuxy41dqsopyjxnnaov9vjpii3')
+      tokens.add('tc técnico')
+      tokens.add('tc@teste.rg')
     }
 
     return allDocs.filter((m) => {
