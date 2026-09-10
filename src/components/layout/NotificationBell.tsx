@@ -105,6 +105,9 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
     }
     setOpen(false)
     if (n.link) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('rg:open-notification', { detail: { link: n.link, notification: n } }))
+      }
       router.push(n.link)
     }
   }

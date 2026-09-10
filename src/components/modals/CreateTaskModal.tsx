@@ -154,10 +154,13 @@ function isInternalUser(u: any): boolean {
   if (u.role === 'external') return false
   if (u.externalCompanyName && u.externalCompanyName.trim()) return false
   if (u.externalCompanyId && u.externalCompanyId.trim()) return false
+  const r = (u.role || '').toLowerCase().trim()
+  if (r === 'manager' || r === 'admin' || r === 'gestor' || r === 'administrador') return false
   const n = (u.name || '').toLowerCase()
   const e = (u.email || '').toLowerCase()
   const a = (u.abbreviation || '').toLowerCase()
   const id = (u.id || '').toLowerCase()
+  if (n.includes('garrido') || e.includes('garrido.rui') || a === 'rg' || id === 'nlqzamwmu1or4ckzzatjtlnbwt82' || id === 'cuodzkziowo128glk66i') return false
   if (n.includes('carrier') || e.includes('carrier') || a.includes('carrier') || id.includes('carrier')) return false
   if (n.includes('schindler') || e.includes('schindler') || a.includes('schindler') || id.includes('schindler')) return false
   if (n.includes('ox2') || e.includes('ox2') || a.includes('ox2') || id.includes('ox2')) return false

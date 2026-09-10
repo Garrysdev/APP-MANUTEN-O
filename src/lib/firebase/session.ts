@@ -3,8 +3,8 @@
 import 'server-only'
 import { cache } from 'react'
 import { cookies } from 'next/headers'
-import { adminAuth, adminDb } from './admin'
-import type { UserProfile } from '@/types/models'
+import { adminAuth, adminDb, firestoreWithTimeout, isQuotaExhausted } from './admin'
+import type { UserProfile, UserRole } from '@/types/models'
 
 export const SESSION_COOKIE = '__session'
 export const DEMO_COMPANY_ID = 'rjHNaSUbLm4qTMyKP0oX'
@@ -30,47 +30,58 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
   const userEmail = (session.email || '').toLowerCase().trim()
   const isRGAdmin = userEmail === 'garrido.rui@gmail.com' || userEmail === 'admin@rgmaintenance.com'
 
+  const KNOWN_USERS = [
+    { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', email: 'tecnico@teste.rg', name: 'RuiG', abbreviation: 'RU', role: 'technician' },
+    { id: 'MEGjjvqtGqv3Oosxvlrx', email: 'lm@rgmaintenance.pt', name: 'Leandro Maia', abbreviation: 'LM', role: 'technician' },
+    { id: 'nAcCSm4E3tNnPLr72UPl', email: 'ms@rgmaintenance.pt', name: 'Marco Silva', abbreviation: 'MS', role: 'technician' },
+    { id: 'zmDAeoGTzIWPavraKu0f', email: 'cb@rgmaintenance.pt', name: 'Carlos Branco', abbreviation: 'CB', role: 'technician' },
+    { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', email: 'garrido.rui@gmail.com', name: 'Rui Garrido', abbreviation: 'RG', role: 'manager' },
+    { id: 'CUodZKziOwo128GLK66i', email: 'garrido.rui@gmail.com', name: 'Rui Garrido', abbreviation: 'RG', role: 'manager' },
+  ]
+  const matchedKnown = KNOWN_USERS.find((k) => k.id === session.uid || (userEmail && k.email.toLowerCase() === userEmail))
+
+  const buildFallbackProfile = (): UserProfile => ({
+    id: matchedKnown?.id || session.uid,
+    email: userEmail || matchedKnown?.email || '',
+    name: matchedKnown?.name || session.name || (isRGAdmin ? 'Rui Garrido' : 'Utilizador'),
+    abbreviation: matchedKnown?.abbreviation || (isRGAdmin ? 'RG' : null),
+    role: (isRGAdmin ? 'manager' : (matchedKnown?.role || 'technician')) as UserRole,
+    companyId: DEMO_COMPANY_ID,
+    active: true,
+    createdAt: new Date().toISOString(),
+    company: {
+      id: DEMO_COMPANY_ID,
+      name: 'Empresa UR',
+      plan: 'enterprise',
+      activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'messages'],
+      aiCredits: 100,
+    },
+  })
+
+  if (isQuotaExhausted()) {
+    return buildFallbackProfile()
+  }
+
   try {
     const db = adminDb()
-    let userSnap = await db.collection('users').doc(session.uid).get()
+    let userSnap = await firestoreWithTimeout(() => db.collection('users').doc(session.uid).get(), null, 800)
     
     // Se o documento por session.uid não existir no Firestore, procurar por email
-    if (!userSnap.exists && userEmail) {
-      const emailSnap = await db.collection('users').where('email', '==', userEmail).limit(1).get().catch(() => null)
+    if ((!userSnap || !userSnap.exists) && userEmail) {
+      const emailSnap = await firestoreWithTimeout(
+        () => db.collection('users').where('email', '==', userEmail).limit(1).get(),
+        null,
+        800
+      )
       if (emailSnap && !emailSnap.empty) {
         userSnap = emailSnap.docs[0]
       }
     }
 
     const docData = (userSnap && userSnap.exists) ? (userSnap.data() || {}) : {}
-    const KNOWN_USERS = [
-      { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', email: 'tecnico@teste.rg', name: 'RuiG', abbreviation: 'RU', role: 'technician' },
-      { id: 'MEGjjvqtGqv3Oosxvlrx', email: 'lm@rgmaintenance.pt', name: 'Leandro Maia', abbreviation: 'LM', role: 'technician' },
-      { id: 'nAcCSm4E3tNnPLr72UPl', email: 'ms@rgmaintenance.pt', name: 'Marco Silva', abbreviation: 'MS', role: 'technician' },
-      { id: 'zmDAeoGTzIWPavraKu0f', email: 'cb@rgmaintenance.pt', name: 'Carlos Branco', abbreviation: 'CB', role: 'technician' },
-      { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', email: 'garrido.rui@gmail.com', name: 'Rui Garrido', abbreviation: 'RG', role: 'manager' },
-      { id: 'CUodZKziOwo128GLK66i', email: 'garrido.rui@gmail.com', name: 'Rui Garrido', abbreviation: 'RG', role: 'manager' },
-    ]
-    const matchedKnown = KNOWN_USERS.find((k) => k.id === session.uid || (userEmail && k.email.toLowerCase() === userEmail))
 
     if (!userSnap || !userSnap.exists) {
-      const targetCompanyId = (session as any).companyId || DEMO_COMPANY_ID
-      const fallbackRole = isRGAdmin ? 'manager' : (matchedKnown?.role || 'technician')
-      return {
-        id: matchedKnown?.id || session.uid,
-        email: userEmail || matchedKnown?.email || '',
-        name: matchedKnown?.name || session.name || (isRGAdmin ? 'Rui Garrido' : 'Utilizador'),
-        abbreviation: matchedKnown?.abbreviation || (isRGAdmin ? 'RG' : null),
-        role: fallbackRole,
-        companyId: targetCompanyId,
-        company: {
-          id: targetCompanyId,
-          name: 'Empresa UR',
-          plan: 'enterprise',
-          activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'messages'],
-          aiCredits: 100,
-        },
-      } as UserProfile
+      return buildFallbackProfile()
     }
 
     const rawRole = (docData.role as string)?.toLowerCase()?.trim()
@@ -91,7 +102,11 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
 
     if (user.active === false) return null
 
-    const companySnap = await db.collection('companies').doc(companyId).get().catch(() => null)
+    const companySnap = await firestoreWithTimeout(
+      () => db.collection('companies').doc(companyId).get(),
+      null,
+      800
+    )
     if (companySnap?.exists) {
       const c = companySnap.data()!
       user.company = { 

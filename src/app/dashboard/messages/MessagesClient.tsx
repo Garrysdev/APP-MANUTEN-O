@@ -80,17 +80,67 @@ export default function MessagesClient({
     } catch {}
   }
 
-  // Limpeza de arranque solicitada pelo utilizador para remover todo o histórico e iniciar limpo
+  // Abertura automática de mensagem via notificação do sino ou URL (?msgId=...&open=true)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const alreadyReset = localStorage.getItem(STORAGE_RESET_KEY)
-      if (!alreadyReset) {
-        localStorage.removeItem(STORAGE_KEY)
-        localStorage.setItem(STORAGE_RESET_KEY, 'true')
-        setLocalMessages([])
+    function checkUrlForMessage() {
+      if (typeof window === 'undefined') return
+      const params = new URLSearchParams(window.location.search)
+      const msgId = params.get('msgId')
+      if (msgId) {
+        const found = localMessages.find((m) => m.id === msgId)
+        if (found) {
+          setSelectedMessage(found)
+        } else {
+          fetch('/api/messages')
+            .then((r) => r.json())
+            .then((data) => {
+              if (Array.isArray(data?.messages)) {
+                const target = data.messages.find((m: any) => m.id === msgId)
+                if (target) {
+                  setSelectedMessage(target)
+                  setLocalMessages((prev) => [target, ...prev.filter((p) => p.id !== target.id)])
+                }
+              }
+            })
+            .catch(() => {})
+        }
       }
     }
-  }, [])
+
+    checkUrlForMessage()
+
+    function handleOpenNotif(e: any) {
+      const link = e?.detail?.link || ''
+      if (link && link.includes('/dashboard/messages')) {
+        try {
+          const url = new URL(link, window.location.origin)
+          const msgId = url.searchParams.get('msgId')
+          if (msgId) {
+            const found = localMessages.find((m) => m.id === msgId)
+            if (found) {
+              setSelectedMessage(found)
+            } else {
+              fetch('/api/messages')
+                .then((r) => r.json())
+                .then((data) => {
+                  if (Array.isArray(data?.messages)) {
+                    const target = data.messages.find((m: any) => m.id === msgId)
+                    if (target) {
+                      setSelectedMessage(target)
+                      setLocalMessages((prev) => [target, ...prev.filter((p) => p.id !== target.id)])
+                    }
+                  }
+                })
+                .catch(() => {})
+            }
+          }
+        } catch {}
+      }
+    }
+
+    window.addEventListener('rg:open-notification', handleOpenNotif)
+    return () => window.removeEventListener('rg:open-notification', handleOpenNotif)
+  }, [localMessages])
 
   useEffect(() => {
     try {
@@ -195,20 +245,28 @@ export default function MessagesClient({
     return r === 'technician' || r === 'tecnico' || r === 'técnico' || r === 'tech'
   }
 
-  // Lista de técnicos e utilizadores disponíveis (com garantia de inclusão do técnico de teste RG - RuiG)
+  const isManagerRole = (role?: string | null) => {
+    if (!role) return false
+    const r = role.toLowerCase().trim()
+    return r === 'manager' || r === 'admin' || r === 'gestor' || r === 'administrador'
+  }
+
+  // Lista APENAS de técnicos e utilizadores disponíveis (Gestores NUNCA aparecem nos técnicos)
   const activeTechs = useMemo(() => {
     const list = users.filter((u) => {
       if (u.active === false) return false
       if (u.isExternal) return false
       const r = (u.role || '').toLowerCase().trim()
-      return isTechRole(r) || isManager || u.id === 'mWSsTRtgq5QcOHusTdVYgDVrwHt2'
+      if (isManagerRole(r)) return false
+      if (u.name?.toLowerCase().includes('garrido') || u.abbreviation === 'RG' || (u as any).email?.toLowerCase().includes('garrido.rui')) return false
+      return isTechRole(r) || u.id === 'mWSsTRtgq5QcOHusTdVYgDVrwHt2'
     })
 
-    if (!list.some((u) => u.id === 'mWSsTRtgq5QcOHusTdVYgDVrwHt2' || (u.abbreviation === 'RG' && u.name?.includes('RuiG')))) {
+    if (!list.some((u) => u.id === 'mWSsTRtgq5QcOHusTdVYgDVrwHt2' || u.name?.includes('RuiG'))) {
       list.push({
         id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2',
-        name: 'RG - RuiG',
-        abbreviation: 'RG',
+        name: 'RuiG',
+        abbreviation: 'RU',
         role: 'technician',
         active: true,
         isExternal: false,
@@ -216,7 +274,7 @@ export default function MessagesClient({
     }
 
     return list.sort((a, b) => a.name.localeCompare(b.name, 'pt'))
-  }, [users, isManager])
+  }, [users])
 
   // Equipamentos ordenados por ÁREA e TAG
   const sortedAssetsForSelect = useMemo(() => {

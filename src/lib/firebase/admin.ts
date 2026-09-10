@@ -39,3 +39,47 @@ export function adminAuth(): Auth {
 export function adminDb(): Firestore {
   return getFirestore(getAdminApp())
 }
+
+// ── CIRCUITO DE PROTEÇÃO CONTRA ESGOTAMENTO DE QUOTA (CIRCUIT BREAKER) ───────
+let quotaExhaustedUntil = 0
+
+export function isQuotaExhausted(): boolean {
+  return Date.now() < quotaExhaustedUntil
+}
+
+export function markQuotaExhausted(cooldownMinutes = 15) {
+  quotaExhaustedUntil = Date.now() + cooldownMinutes * 60 * 1000
+  console.warn(`[Firestore Circuit Breaker] Quota diária excedida. Modo offline/fallback ativo nos próximos ${cooldownMinutes} minutos.`)
+}
+
+export async function firestoreWithTimeout<T>(
+  fn: () => Promise<T>,
+  fallback: T,
+  timeoutMs = 1200
+): Promise<T> {
+  if (isQuotaExhausted()) {
+    return fallback
+  }
+
+  let timer: NodeJS.Timeout
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(`[Firestore Timeout] Operação demorou mais de ${timeoutMs}ms. Ativando fallback local.`)
+      resolve(fallback)
+    }, timeoutMs)
+  })
+
+  try {
+    const result = await Promise.race([fn(), timeoutPromise])
+    clearTimeout(timer!)
+    return result
+  } catch (err: any) {
+    clearTimeout(timer!)
+    const msg = String(err?.message || err)
+    if (msg.includes('Quota exceeded') || msg.includes('RESOURCE_EXHAUSTED')) {
+      markQuotaExhausted(15)
+    }
+    return fallback
+  }
+}
+

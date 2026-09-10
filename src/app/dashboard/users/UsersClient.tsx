@@ -28,7 +28,7 @@ export default function UsersClient({
 }) {
   const router = useRouter()
   const { dict } = useLanguage()
-  const [activeTab, setActiveTab] = useState<'internal' | 'external'>('internal')
+  const [activeTab, setActiveTab] = useState<'technicians' | 'managers' | 'external'>('technicians')
   const [selectedCompany, setSelectedCompany] = useState<ExternalCompany | null>(null)
   const [isExternalNew, setIsExternalNew] = useState(false)
   const [isExternalEdit, setIsExternalEdit] = useState(false)
@@ -76,16 +76,31 @@ export default function UsersClient({
 
   useEffect(() => { setCurrentPage(1) }, [searchName, searchAbbr, filterRole, filterSpecialty, filterActive, pageSize])
 
+  const isTechUser = (role?: string | null) => {
+    const r = String(role || '').toLowerCase().trim()
+    return r === 'technician' || r === 'tecnico' || r === 'técnico' || r === 'tech'
+  }
+
+  const isManagerUser = (role?: string | null) => {
+    const r = String(role || '').toLowerCase().trim()
+    return r === 'manager' || r === 'admin' || r === 'gestor' || r === 'administrador'
+  }
+
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      if (activeTab === 'internal' && u.isExternal) return false
-      if (activeTab === 'external' && !u.isExternal) return false
+      if (activeTab === 'technicians') {
+        if (u.isExternal) return false
+        if (!isTechUser(u.role)) return false
+      } else if (activeTab === 'managers') {
+        if (u.isExternal) return false
+        if (!isManagerUser(u.role)) return false
+      } else if (activeTab === 'external') {
+        if (!u.isExternal) return false
+      }
       if (filterActive === 'active' && !u.active) return false
       if (filterActive === 'inactive' && u.active) return false
-      const roleStr = String(u.role || '').toLowerCase().trim()
-      const isTechUser = roleStr === 'technician' || roleStr === 'tecnico' || roleStr === 'técnico' || roleStr === 'tech'
-      if (filterRole === 'technician' && !isTechUser) return false
-      if (filterRole === 'manager' && isTechUser) return false
+      if (filterRole === 'technician' && !isTechUser(u.role)) return false
+      if (filterRole === 'manager' && !isManagerUser(u.role)) return false
       if (filterSpecialty !== 'all' && (u.specialty || '') !== filterSpecialty) return false
       if (searchAbbr.trim() && !(u.abbreviation || '').toLowerCase().includes(searchAbbr.toLowerCase().trim())) return false
       if (searchName.trim()) {
@@ -272,18 +287,29 @@ export default function UsersClient({
 
   return (
     <div className="space-y-4">
-      {/* Navegação entre Técnicos Internos vs Prestadores Externos */}
+      {/* Navegação entre Técnicos Internos vs Gestores vs Prestadores Externos */}
       <div className="flex items-center gap-2 border-b border-gray-200 dark:border-slate-800 pb-2 flex-wrap sm:flex-nowrap">
         <button
-          onClick={() => setActiveTab('internal')}
+          onClick={() => setActiveTab('technicians')}
           className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-colors ${
-            activeTab === 'internal'
+            activeTab === 'technicians'
               ? 'bg-[#2E86C1] text-white shadow-sm'
               : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200'
           }`}
         >
           <Wrench className="h-4 w-4" />
-          Utilizadores & Técnicos Internos ({users.filter((u) => !u.isExternal).length})
+          Técnicos Internos ({users.filter((u) => !u.isExternal && isTechUser(u.role)).length})
+        </button>
+        <button
+          onClick={() => setActiveTab('managers')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-colors ${
+            activeTab === 'managers'
+              ? 'bg-[#2E86C1] text-white shadow-sm'
+              : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200'
+          }`}
+        >
+          <ShieldCheck className="h-4 w-4" />
+          Gestores & Administração ({users.filter((u) => !u.isExternal && isManagerUser(u.role)).length})
         </button>
         <button
           onClick={() => setActiveTab('external')}
@@ -314,7 +340,7 @@ export default function UsersClient({
                 onClick={() => {
                   setShowForm(true)
                   setIsExternalNew(true)
-                  setActiveTab('internal')
+                  setActiveTab('technicians')
                 }}
                 className="btn-primary flex items-center gap-1.5 text-xs font-bold"
               >
@@ -1225,7 +1251,7 @@ export default function UsersClient({
                       } else {
                         setShowForm(true)
                         setIsExternalNew(true)
-                        setActiveTab('internal')
+                        setActiveTab('technicians')
                         setSelectedCompany(null)
                       }
                     }}

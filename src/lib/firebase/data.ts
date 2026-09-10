@@ -5,7 +5,7 @@ import { unstable_cache, revalidateTag } from 'next/cache'
 import fs from 'fs'
 import path from 'path'
 import type { DocumentSnapshot } from 'firebase-admin/firestore'
-import { adminDb, adminAuth } from './admin'
+import { adminDb, adminAuth, firestoreWithTimeout, isQuotaExhausted, markQuotaExhausted } from './admin'
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
@@ -158,13 +158,19 @@ function getFallbackUsers(): User[] {
 
 const listExternalCompaniesCached = unstable_cache(
   async (companyId: string): Promise<ExternalCompany[]> => {
+    if (isQuotaExhausted()) {
+      return isDemoCompany(companyId) ? getFallbackExternalCompanies() : []
+    }
     try {
-      const snap = await adminDb()
-        .collection('external_companies')
-        .where('companyId', '==', companyId)
-        .get()
-      const docs = snap.docs.map((d) => serialize<ExternalCompany>(d))
-      if (docs.length > 0 || !isDemoCompany(companyId)) return docs
+      const snap = await firestoreWithTimeout(
+        () => adminDb().collection('external_companies').where('companyId', '==', companyId).get(),
+        null,
+        1000
+      )
+      if (snap && snap.docs) {
+        const docs = snap.docs.map((d) => serialize<ExternalCompany>(d))
+        if (docs.length > 0 || !isDemoCompany(companyId)) return docs
+      }
     } catch (err) {
       console.error('[listExternalCompanies] Error:', err)
     }
@@ -247,17 +253,20 @@ function getFallbackExternalCompanies(): ExternalCompany[] {
   ]
 }
 
-// ── ASSETS ──────────────────────────────────────────────────────────────────
+// // ── ASSETS ──────────────────────────────────────────────────────────────────
 const listAssetsCached = unstable_cache(
   async (companyId: string, limitCount: number): Promise<Asset[]> => {
+    if (isQuotaExhausted()) {
+      return isDemoCompany(companyId) ? getFallbackAssets() : []
+    }
     try {
-      const snap = await adminDb()
-        .collection('assets')
-        .where('companyId', '==', companyId)
-        .limit(limitCount)
-        .get()
-      const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
-      if (dbDocs.length > 0) {
+      const snap = await firestoreWithTimeout(
+        () => adminDb().collection('assets').where('companyId', '==', companyId).limit(limitCount).get(),
+        null,
+        1000
+      )
+      if (snap && snap.docs && snap.docs.length > 0) {
+        const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
         return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
       }
       return isDemoCompany(companyId) ? getFallbackAssets() : []
@@ -276,19 +285,22 @@ export const listAssets = cache(async function(companyId: string, limitCount = 2
 /** Versão LEVE: id + name + tag (para dropdowns e mapa id→nome/tag). */
 const listAssetRefsCached = unstable_cache(
   async (companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> => {
+    if (isQuotaExhausted()) {
+      return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
+    }
     try {
-      const snap = await adminDb()
-        .collection('assets')
-        .where('companyId', '==', companyId)
-        .select('name', 'tag', 'area')
-        .get()
-      const dbDocs = snap.docs.map((d) => ({
-        id: d.id,
-        name: (d.data().name as string) ?? '',
-        tag: (d.data().tag as string) ?? null,
-        area: (d.data().area as string) ?? null,
-      }))
-      if (dbDocs.length > 0) {
+      const snap = await firestoreWithTimeout(
+        () => adminDb().collection('assets').where('companyId', '==', companyId).select('name', 'tag', 'area').get(),
+        null,
+        800
+      )
+      if (snap && snap.docs && snap.docs.length > 0) {
+        const dbDocs = snap.docs.map((d) => ({
+          id: d.id,
+          name: (d.data().name as string) ?? '',
+          tag: (d.data().tag as string) ?? null,
+          area: (d.data().area as string) ?? null,
+        }))
         return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
       }
       return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
@@ -318,12 +330,14 @@ export type PlanTaskRef = {
   safetyRules: string[] | null
 }
 export const listPlanTaskRefs = cache(async function(companyId: string): Promise<PlanTaskRef[]> {
+  if (isQuotaExhausted()) return []
   try {
-    const snap = await adminDb()
-      .collection('maintenance_plans')
-      .where('companyId', '==', companyId)
-      .select('title', 'assetId', 'criticidade', 'periodicidade', 'periodicidadeLabel', 'executor', 'legal', 'months', 'safetyRules', 'active')
-      .get()
+    const snap = await firestoreWithTimeout(
+      () => adminDb().collection('maintenance_plans').where('companyId', '==', companyId).select('title', 'assetId', 'criticidade', 'periodicidade', 'periodicidadeLabel', 'executor', 'legal', 'months', 'safetyRules', 'active').get(),
+      null,
+      800
+    )
+    if (!snap || !snap.docs) return []
     return snap.docs
       .filter((d) => d.data().active !== false && d.data().assetId)
       .map((d) => {
@@ -426,9 +440,16 @@ export async function deleteAsset(companyId: string, id: string): Promise<void> 
   revalidateTag('assets')
 }
 
-// ── TASKS ───────────────────────────────────────────────────────────────────
+// // ── TASKS ───────────────────────────────────────────────────────────────────
 const listTasksCached = unstable_cache(
   async (companyId: string, limitCount: number, includeCompleted: boolean): Promise<Task[]> => {
+    if (isQuotaExhausted()) {
+      let fallbacks = getFallbackTasks()
+      if (!includeCompleted) {
+        fallbacks = fallbacks.filter((f) => f.source === 'excel_ur' || (f.status !== 'done' && f.status !== 'cancelled'))
+      }
+      return isDemoCompany(companyId) ? fallbacks : []
+    }
     try {
       let query = adminDb()
         .collection('tasks')
@@ -438,7 +459,19 @@ const listTasksCached = unstable_cache(
         query = query.where('status', 'in', ['pending', 'in_progress']) as any
       }
 
-      const snap = await query.limit(limitCount).get()
+      const snap = await firestoreWithTimeout(
+        () => query.limit(limitCount).get(),
+        null,
+        1200
+      )
+      if (!snap || !snap.docs) {
+        let fallbacks = getFallbackTasks()
+        if (!includeCompleted) {
+          fallbacks = fallbacks.filter((f) => f.source === 'excel_ur' || (f.status !== 'done' && f.status !== 'cancelled'))
+        }
+        return isDemoCompany(companyId) ? fallbacks : []
+      }
+
       const dbDocs = snap.docs
         .map((d) => serialize<Task>(d))
         .filter((t) => {
@@ -880,12 +913,22 @@ export async function deleteTasksByMaintenancePlan(companyId: string, planId: st
   }
 }
 
-// ── USERS (para atribuição de tarefas) ────────────────────────────────────────
+// // ── USERS (para atribuição de tarefas) ────────────────────────────────────────
 const listUsersCached = unstable_cache(
   async (companyId: string): Promise<User[]> => {
+    const finalCompanyId = companyId || DEMO_COMPANY_ID
+    if (isQuotaExhausted()) {
+      return isDemoCompany(finalCompanyId) ? getFallbackUsers() : []
+    }
     try {
-      const finalCompanyId = companyId || DEMO_COMPANY_ID
-      const snap = await adminDb().collection('users').get()
+      const snap = await firestoreWithTimeout(
+        () => adminDb().collection('users').get(),
+        null,
+        1000
+      )
+      if (!snap || !snap.docs) {
+        return isDemoCompany(finalCompanyId) ? getFallbackUsers() : []
+      }
       const allDbDocs = snap.docs.map((d) => serialize<User>(d))
 
       const PROTECTED_IDS = new Set([
@@ -916,14 +959,20 @@ const listUsersCached = unstable_cache(
       let deletedIds = new Set<string>()
       let deletedEmails = new Set<string>()
       try {
-        const delSnap = await adminDb().collection('deleted_users').get()
-        delSnap.docs.forEach((d) => {
-          if (!PROTECTED_IDS.has(d.id)) {
-            deletedIds.add(d.id)
-            const data = d.data()
-            if (data?.email) deletedEmails.add(String(data.email).toLowerCase().trim())
-          }
-        })
+        const delSnap = await firestoreWithTimeout(
+          () => adminDb().collection('deleted_users').get(),
+          null,
+          600
+        )
+        if (delSnap && delSnap.docs) {
+          delSnap.docs.forEach((d) => {
+            if (!PROTECTED_IDS.has(d.id)) {
+              deletedIds.add(d.id)
+              const data = d.data()
+              if (data?.email) deletedEmails.add(String(data.email).toLowerCase().trim())
+            }
+          })
+        }
       } catch { /* ignore */ }
 
       const isDeleted = (u: { id: string; email?: string | null }) => {
@@ -1505,27 +1554,35 @@ export const listInterventionsByTechnician = cache(async function(
 
 const listMaintenancePlansCached = unstable_cache(
   async (companyId: string): Promise<MaintenancePlan[]> => {
+    if (isQuotaExhausted()) {
+      return isDemoCompany(companyId)
+        ? getFallbackPlans().sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
+        : []
+    }
     try {
-      const snap = await adminDb()
-        .collection('maintenance_plans')
-        .where('companyId', '==', companyId)
-        .get()
-      const dbDocs = snap.docs
-        .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
-        .filter((p) => !p.deleted)
+      const snap = await firestoreWithTimeout(
+        () => adminDb().collection('maintenance_plans').where('companyId', '==', companyId).get(),
+        null,
+        1000
+      )
+      if (snap && snap.docs) {
+        const dbDocs = snap.docs
+          .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
+          .filter((p) => !p.deleted)
 
-      if (dbDocs.length > 0) {
-        const seen = new Set<string>()
-        const uniquePlans: MaintenancePlan[] = []
+        if (dbDocs.length > 0) {
+          const seen = new Set<string>()
+          const uniquePlans: MaintenancePlan[] = []
 
-        for (const p of dbDocs) {
-          const key = (p.code || `${p.area || ''}_${p.tag || ''}_${p.title}`).toLowerCase().trim()
-          if (!seen.has(key)) {
-            seen.add(key)
-            uniquePlans.push(p)
+          for (const p of dbDocs) {
+            const key = (p.code || `${p.area || ''}_${p.tag || ''}_${p.title}`).toLowerCase().trim()
+            if (!seen.has(key)) {
+              seen.add(key)
+              uniquePlans.push(p)
+            }
           }
+          return uniquePlans.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
         }
-        return uniquePlans.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
       }
 
       return isDemoCompany(companyId)
@@ -2074,27 +2131,41 @@ let cachedInternalMessages: InternalMessage[] = []
 
 const listNotificationsCached = unstable_cache(
   async (companyId: string, userId: string): Promise<AppNotification[]> => {
+    const uLower = String(userId || '').toLowerCase().trim()
+    const uClean = uLower.replace(/^(tech_|user_)/, '')
+    if (isQuotaExhausted()) {
+      return cachedNotifications.filter((n) => {
+        if (n.companyId !== companyId) return false
+        const target = String(n.userId || '').toLowerCase().trim()
+        const targetClean = target.replace(/^(tech_|user_)/, '')
+        return target === uLower || target === uClean || targetClean === uClean
+      })
+    }
     try {
-      const uLower = String(userId || '').toLowerCase().trim()
-      const uClean = uLower.replace(/^(tech_|user_)/, '')
-      let snap = await adminDb()
-        .collection('notifications')
-        .where('companyId', '==', companyId)
-        .where('userId', '==', userId)
-        .orderBy('createdAt', 'desc')
-        .limit(15)
-        .get()
-        .catch(() => null)
-
-      if (!snap || snap.empty) {
-        snap = await adminDb()
+      let snap = await firestoreWithTimeout(
+        () => adminDb()
           .collection('notifications')
           .where('companyId', '==', companyId)
-          .where('userId', '==', uClean)
+          .where('userId', '==', userId)
           .orderBy('createdAt', 'desc')
           .limit(15)
-          .get()
-          .catch(() => null)
+          .get(),
+        null,
+        800
+      )
+
+      if (!snap || snap.empty) {
+        snap = await firestoreWithTimeout(
+          () => adminDb()
+            .collection('notifications')
+            .where('companyId', '==', companyId)
+            .where('userId', '==', uClean)
+            .orderBy('createdAt', 'desc')
+            .limit(15)
+            .get(),
+          null,
+          800
+        )
       }
 
       if (snap && !snap.empty) {
@@ -2108,8 +2179,6 @@ const listNotificationsCached = unstable_cache(
         console.error('[listNotifications] Error:', err)
       }
     }
-    const uLower = String(userId || '').toLowerCase().trim()
-    const uClean = uLower.replace(/^(tech_|user_)/, '')
     return cachedNotifications.filter((n) => {
       if (n.companyId !== companyId) return false
       const target = String(n.userId || '').toLowerCase().trim()
@@ -2233,44 +2302,59 @@ export const listInternalMessages = cache(async function(
   try {
     let docs: InternalMessage[] = []
 
-    // 1. Tentar ler do feed sincronizado de documento único (consome apenas 1 leitura de quota!)
-    try {
-      const feedSnap = await adminDb().collection('system_sync').doc('internal_messages_feed').get().catch(() => null)
-      if (feedSnap && feedSnap.exists && Array.isArray(feedSnap.data()?.messages)) {
-        const feedList = feedSnap.data()!.messages as InternalMessage[]
-        feedList.forEach((m) => {
-          if (m && m.id && !m.id.startsWith('msg_seed_')) {
-            docs.push(m)
-          }
-        })
-      }
-    } catch { /* ignore */ }
-
-    // 2. Se o feed estiver vazio, tentar a coleção completa
-    if (docs.length === 0) {
+    if (!isQuotaExhausted()) {
+      // 1. Tentar ler do feed sincronizado de documento único (consome apenas 1 leitura de quota!)
       try {
-        const snap = await adminDb()
-          .collection('internal_messages')
-          .limit(50)
-          .get()
-        docs = snap.docs.map((d) => ({ ...serialize<InternalMessage>(d), id: d.id }))
-      } catch (dbErr: any) {
-        const isQuotaErr = String(dbErr?.message || dbErr).includes('Quota exceeded') || String(dbErr?.message || dbErr).includes('RESOURCE_EXHAUSTED')
-        if (isQuotaErr) {
-          console.warn('[listInternalMessages] Quota diária do Firestore atingida. A usar mensagens de fallback locais.')
-        } else {
-          console.error('[listInternalMessages Firestore read error]:', dbErr)
+        const feedSnap = await firestoreWithTimeout(
+          () => adminDb().collection('system_sync').doc('internal_messages_feed').get(),
+          null,
+          800
+        )
+        if (feedSnap && feedSnap.exists && Array.isArray(feedSnap.data()?.messages)) {
+          const feedList = feedSnap.data()!.messages as InternalMessage[]
+          feedList.forEach((m) => {
+            if (m && m.id && !m.id.startsWith('msg_seed_')) {
+              docs.push(m)
+            }
+          })
+        }
+      } catch { /* ignore */ }
+
+      // 2. Se o feed estiver vazio, tentar a coleção completa
+      if (docs.length === 0) {
+        try {
+          const snap = await firestoreWithTimeout(
+            () => adminDb().collection('internal_messages').limit(50).get(),
+            null,
+            800
+          )
+          if (snap && snap.docs) {
+            docs = snap.docs.map((d) => ({ ...serialize<InternalMessage>(d), id: d.id }))
+          }
+        } catch (dbErr: any) {
+          const isQuotaErr = String(dbErr?.message || dbErr).includes('Quota exceeded') || String(dbErr?.message || dbErr).includes('RESOURCE_EXHAUSTED')
+          if (isQuotaErr) {
+            console.warn('[listInternalMessages] Quota diária do Firestore atingida. A usar mensagens de fallback locais.')
+          } else {
+            console.error('[listInternalMessages Firestore read error]:', dbErr)
+          }
         }
       }
     }
 
     let deletedIds = new Set<string>()
-    try {
-      const delSnap = await adminDb().collection('deleted_internal_messages').limit(100).get().catch(() => null)
-      if (delSnap && !delSnap.empty) {
-        deletedIds = new Set<string>(delSnap.docs.map((d) => d.id))
-      }
-    } catch { /* ignore */ }
+    if (!isQuotaExhausted()) {
+      try {
+        const delSnap = await firestoreWithTimeout(
+          () => adminDb().collection('deleted_internal_messages').limit(100).get(),
+          null,
+          600
+        )
+        if (delSnap && !delSnap.empty) {
+          deletedIds = new Set<string>(delSnap.docs.map((d) => d.id))
+        }
+      } catch { /* ignore */ }
+    }
 
     // Carregar mensagens de fallback persistidas em disco (se existirem)
     let fileMessages: InternalMessage[] = []
@@ -2495,27 +2579,54 @@ export async function createInternalMessage(
     try {
       const companyUsers = getFallbackUsers()
 
+      const senderUser = companyUsers.find((u) => u.id === senderId || (u.email && senderId.includes(u.email)))
+      const senderEmail = (senderUser?.email || '').toLowerCase().trim()
+      const isSenderRG =
+        senderId === 'nLqzaMwMu1OR4CKZzatjTlNBWt82' ||
+        senderId === 'CUodZKziOwo128GLK66i' ||
+        senderEmail === 'garrido.rui@gmail.com' ||
+        (data.senderName && data.senderName.toLowerCase().includes('garrido'))
+
+      const isSenderAccount = (u: any) => {
+        if (!u) return false
+        if (u.id === senderId) return true
+        if (senderEmail && u.email && u.email.toLowerCase().trim() === senderEmail) return true
+        if (isSenderRG) {
+          if (u.id === 'nLqzaMwMu1OR4CKZzatjTlNBWt82' || u.id === 'CUodZKziOwo128GLK66i') return true
+          if (u.email && u.email.toLowerCase().trim() === 'garrido.rui@gmail.com') return true
+          if (u.role === 'manager' && (u.name?.toLowerCase().includes('garrido') || u.abbreviation === 'RG')) return true
+        }
+        return false
+      }
+
       const targetUserIds = new Set<string>()
       if (data.recipientIds.includes('ALL')) {
-        companyUsers.forEach((u) => { if (u.id !== senderId) targetUserIds.add(u.id) })
+        companyUsers.forEach((u) => {
+          const isTech = u.role === 'technician'
+          if (!isSenderAccount(u) && isTech) {
+            targetUserIds.add(u.id)
+          }
+        })
       } else {
         data.recipientIds.forEach((rec) => {
           const recClean = String(rec).toLowerCase().trim().replace(/^(tech_|user_)/, '')
           // Mapeamento especial de RuiG
           if (recClean === 'ruig' || recClean === 'ru' || recClean === 'mwsstrtgq5qcohusdtvygdvrwht2' || recClean === 'tecnico@teste.rg') {
-            targetUserIds.add('mWSsTRtgq5QcOHusTdVYgDVrwHt2')
+            if (!isSenderAccount({ id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2' })) {
+              targetUserIds.add('mWSsTRtgq5QcOHusTdVYgDVrwHt2')
+            }
           }
           companyUsers.forEach((u) => {
+            if (isSenderAccount(u)) return
             const uAbbr = String(u.abbreviation || '').toLowerCase().trim()
             const uName = String(u.name || '').toLowerCase().trim()
             const uId = String(u.id || '').toLowerCase().trim().replace(/^(tech_|user_)/, '')
             if (
-              u.id !== senderId &&
-              (uId === recClean ||
-               uAbbr === recClean ||
-               uName === recClean ||
-               recClean.includes(uAbbr) ||
-               recClean.includes(uName))
+              uId === recClean ||
+              uAbbr === recClean ||
+              uName === recClean ||
+              recClean.includes(uAbbr) ||
+              recClean.includes(uName)
             ) {
               targetUserIds.add(u.id)
             }
@@ -2535,7 +2646,7 @@ export async function createInternalMessage(
             type: 'internal_message',
             title: notifTitle,
             body: data.subject ? `[${data.subject}] ${data.content.slice(0, 100)}` : data.content.slice(0, 100),
-            link: '/dashboard/messages',
+            link: `/dashboard/messages?msgId=${msgObj.id}&open=true`,
           })
         )
       )

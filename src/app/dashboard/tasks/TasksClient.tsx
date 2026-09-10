@@ -666,16 +666,24 @@ export default function TasksClient({
   }, [assets, safeTasks, selectedAreas, areaFilter, assetAreaMap, assetTagMap])
 
   const uniqueTechnicians = useMemo(() => {
+    const isManagerUser = (u: any) => {
+      if (!u) return false
+      const r = String(u.role || '').toLowerCase().trim()
+      if (r === 'manager' || r === 'admin' || r === 'gestor' || r === 'administrador') return true
+      if (u.name?.toLowerCase().includes('garrido') || u.abbreviation === 'RG' || (u.email && u.email.toLowerCase().includes('garrido.rui'))) return true
+      return false
+    }
+
     if (!isManager) {
       const currentTech = users.find((u) => u.id === userId)
-      if (currentTech) {
+      if (currentTech && !isManagerUser(currentTech)) {
         return [[currentTech.abbreviation || currentTech.id, currentTech.abbreviation ? `${currentTech.abbreviation} - ${currentTech.name}` : currentTech.name] as [string, string]]
       }
       return []
     }
     const map = new Map<string, string>()
     users.forEach((u) => {
-      if ((u as any).active !== false) {
+      if ((u as any).active !== false && !isManagerUser(u)) {
         const isTech = u.role === 'technician' || u.role === 'tecnico' || u.role === 'tech'
         if (isTech) {
           const val = u.abbreviation || u.id
@@ -686,14 +694,16 @@ export default function TasksClient({
     })
     safeTasks.forEach((t) => {
       if (t.assignedTo) {
-        const u = users.find((usr) => usr.id === t.assignedTo || usr.abbreviation === t.assignedTo)
+        const raw = String(t.assignedTo).trim()
+        if (raw === 'RG' || raw === 'nLqzaMwMu1OR4CKZzatjTlNBWt82' || raw === 'CUodZKziOwo128GLK66i') return
+        const u = users.find((usr) => usr.id === raw || usr.abbreviation === raw)
         if (u) {
-          if ((u as any).active !== false) {
+          if ((u as any).active !== false && !isManagerUser(u)) {
             const val = u.abbreviation || u.id
             const label = u.abbreviation ? `${u.abbreviation} - ${u.name}` : u.name
             map.set(val, label)
           }
-        } else {
+        } else if (!raw.toLowerCase().includes('garrido') && !raw.toLowerCase().includes('admin')) {
           map.set(t.assignedTo, (t as any).assignedToText || t.assignedTo)
         }
       }
