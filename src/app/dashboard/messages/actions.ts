@@ -50,6 +50,10 @@ export async function sendInternalMessageAction(
   const replyToSender = String(formData.get('replyToSender') ?? '').trim() || null
   const replyToContent = String(formData.get('replyToContent') ?? '').trim() || null
 
+  const assetId = String(formData.get('assetId') ?? '').trim() || null
+  const assetTag = String(formData.get('assetTag') ?? '').trim() || null
+  const assetName = String(formData.get('assetName') ?? '').trim() || null
+
   try {
     const messageId = await createInternalMessage(profile.companyId, profile.id, {
       senderName: profile.name,
@@ -60,6 +64,9 @@ export async function sendInternalMessageAction(
       content,
       taskId,
       taskTitle,
+      assetId,
+      assetTag,
+      assetName,
       photoUrl,
       status,
       requiresResponse,

@@ -454,6 +454,9 @@ export interface InternalMessage {
   content: string
   taskId?: string | null
   taskTitle?: string | null
+  assetId?: string | null
+  assetTag?: string | null
+  assetName?: string | null
   photoUrl?: string | null
   createdAt: string
   readBy?: string[]

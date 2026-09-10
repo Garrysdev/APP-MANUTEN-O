@@ -161,7 +161,24 @@ export function resolveTechInitials(
       return (found.abbreviation || found.name.split(' ').map((n) => n[0]).join('')).toUpperCase()
     }
 
+    const KNOWN_MAP: Record<string, string> = {
+      'mwsstrtgq5qcohusdtvygdvrwht2': 'RG',
+      'megjjvqtgqv3oosxvlrx': 'LM',
+      'naccsm4e3tnnplr72upl': 'MS',
+      'zmdaeogtzjwpavraku0f': 'CB',
+      'cuodzkziowo128glk66i': 'RG',
+      'nlqzamwmu1or4ckzzatjtlnbwt82': 'ADM',
+      'q17h5hdg3r8dfjwiuz6v': 'JR',
+      'twtqs1saj0rfc9ki2s0n': 'OX2',
+      '2pl85qsrlpanwyxzdvop': 'CAR',
+      'tech_blockcontrol': 'BLK',
+      'tech_schindler': 'SCH',
+      'tech_helenos': 'HEL',
+    }
+    if (KNOWN_MAP[lower]) return KNOWN_MAP[lower]
+
     if (/^[A-Z]{2,4}$/i.test(clean)) return clean.toUpperCase()
+    if (clean.length > 10) return '—'
     return clean
   }
 

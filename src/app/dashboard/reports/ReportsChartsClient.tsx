@@ -40,46 +40,21 @@ function parseTaskDate(t: Task): { year: number; month: number } | null {
 }
 
 function isPITask(t: Task): boolean {
-  const tipoLow = String(t.tipo || '').toLowerCase().trim()
-  const tiLow = String((t as any).ti || (t as any).tipoText || '').toLowerCase().trim()
-  const titleLow = String(t.title || '').toLowerCase()
-  return (
-    tipoLow === 'pi' ||
-    tiLow === 'pi' ||
-    tipoLow === 'solicitacao' ||
-    (t as any).source === 'folha_ur_pi' ||
-    (t as any).source === 'pedidos_pi' ||
-    Boolean((t as any).requesterEmail) ||
-    titleLow.startsWith('pi ') ||
-    titleLow.startsWith('pi-') ||
-    titleLow.includes('pedido de intervenção') ||
-    titleLow.includes('pedido pi')
-  )
+  const ti = String((t as any).ti || (t as any).tipoText || t.tipo || '').toUpperCase().trim()
+  if (ti === 'PI') return true
+  const titleLow = String(t.title || '').toLowerCase().trim()
+  if (titleLow.startsWith('pi ') || titleLow.startsWith('pi-') || titleLow.startsWith('[pi]')) return true
+  if ((t as any).source === 'folha_ur_pi' || (t as any).source === 'pedidos_pi') return true
+  return false
 }
 
 function isPMTask(t: Task): boolean {
-  const tipoLow = String(t.tipo || '').toLowerCase().trim()
-  const tiLow = String((t as any).ti || (t as any).tipoText || '').toLowerCase().trim()
-  const titleLow = String(t.title || '').toLowerCase()
-  return (
-    tipoLow === 'mp' ||
-    tipoLow === 'pm' ||
-    tipoLow === 'preventiva' ||
-    tipoLow === 'plano' ||
-    tiLow === 'mp' ||
-    tiLow === 'pm' ||
-    tiLow === 'preventiva' ||
-    tiLow === 'plano' ||
-    Boolean((t as any).maintenancePlanId) ||
-    (t as any).source === 'plano_manutencao' ||
-    (t as any).source === 'folha_ur_planos' ||
-    String(t.id || '').startsWith('task_pm_') ||
-    titleLow.includes('plano de manutenção') ||
-    titleLow.startsWith('pm ') ||
-    titleLow.startsWith('pm-') ||
-    titleLow.startsWith('mp ') ||
-    titleLow.startsWith('mp-')
-  )
+  const ti = String((t as any).ti || (t as any).tipoText || t.tipo || '').toUpperCase().trim()
+  if (ti === 'PM' || ti === 'MP' || ti === 'PREVENTIVA' || ti === 'PLANO') return true
+  if (Boolean((t as any).maintenancePlanId) || (t as any).source === 'plano_manutencao' || (t as any).source === 'folha_ur_planos' || String(t.id || '').startsWith('task_pm_')) return true
+  const titleLow = String(t.title || '').toLowerCase().trim()
+  if (titleLow.startsWith('pm ') || titleLow.startsWith('pm-') || titleLow.startsWith('[pm]') || titleLow.startsWith('mp ') || titleLow.startsWith('[mp]')) return true
+  return false
 }
 
 export default function ReportsChartsClient({
@@ -255,6 +230,18 @@ export default function ReportsChartsClient({
     }
   }, [filteredTasks])
 
+  const annualPIStats = useMemo(() => {
+    const piTasks = filteredTasks.filter(isPITask)
+    const piRequested = piTasks.length
+    const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
+    const compliancePct = piRequested > 0 ? Math.round((piCompleted / piRequested) * 1000) / 10 : 0
+    return {
+      piRequested,
+      piCompleted,
+      compliancePct,
+    }
+  }, [filteredTasks])
+
   // 4. Distribuição por Tipo de Manutenção
   const tiposCounts = useMemo(() => {
     const map: Record<string, number> = {}
@@ -295,6 +282,53 @@ export default function ReportsChartsClient({
 
   return (
     <div className="space-y-6 my-6">
+      {/* ── 1ª LINHA: Cartões KPI Globais (PM e PI Gémeos com Gradiente e Dourado) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 no-print">
+        {/* Cartão Cumprimento Anual PM */}
+        <div className="bg-gradient-to-br from-slate-900 via-industrial-blue to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800 flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-[11px] font-extrabold uppercase tracking-widest text-amber-400">
+              Cumprimento do Plano de Manutenção (PM)
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-black text-white">{annualPMStats.compliancePct}%</span>
+              <span className="text-xs font-bold text-slate-300">
+                ({annualPMStats.concluidas} de {annualPMStats.totalExistentes} OTs de PM Existentes)
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-300 font-medium">
+              Considera a totalidade de OTs de PM geradas no período selecionado ({annualPMStats.totalExistentes} OTs) vs Concluídas ({annualPMStats.concluidas} OTs).
+            </p>
+          </div>
+          <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
+            {annualPMStats.compliancePct}%
+          </div>
+        </div>
+
+        {/* Cartão Resumo de PIs (Estilo Gémeo com Fundo Gradiente e Badge Âmbar) */}
+        <div className="bg-gradient-to-br from-slate-900 via-industrial-blue to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800 flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-[11px] font-extrabold uppercase tracking-widest text-amber-400">
+              Pedidos de Intervenção (PI) — Resumo
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-black text-white">
+                {annualPIStats.piCompleted} / {annualPIStats.piRequested}
+              </span>
+              <span className="text-xs font-bold text-slate-300">
+                ({annualPIStats.compliancePct}% PIs Concluídos)
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-300 font-medium">
+              Total de solicitações de intervenção criadas e tratadas na fábrica no período selecionado ({annualPIStats.piRequested} PIs).
+            </p>
+          </div>
+          <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
+            {annualPIStats.compliancePct}%
+          </div>
+        </div>
+      </div>
+
       {/* Filtro de Data Estilo Excel & Multi-Seleção */}
       <div className="no-print space-y-3">
         <ExcelDateFilter values={excelDateFilter} onChange={setExcelDateFilter} />
@@ -332,50 +366,6 @@ export default function ReportsChartsClient({
             onChange={setSelectedTIs}
             placeholder="TI (Todos)"
           />
-        </div>
-      </div>
-
-      {/* Cartões KPI Globais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 no-print">
-        {/* Cartão Cumprimento Anual PM */}
-        <div className="bg-gradient-to-br from-slate-900 via-industrial-blue to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800 flex items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-[11px] font-extrabold uppercase tracking-widest text-amber-400">
-              Cumprimento do Plano de Manutenção (PM)
-            </span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black text-white">{annualPMStats.compliancePct}%</span>
-              <span className="text-xs font-bold text-slate-300">
-                ({annualPMStats.concluidas} de {annualPMStats.totalExistentes} OTs de PM Existentes)
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-300 font-medium">
-              Considera a totalidade de OTs de PM geradas no período selecionado ({annualPMStats.totalExistentes} OTs) vs Concluídas ({annualPMStats.concluidas} OTs).
-            </p>
-          </div>
-          <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
-            {annualPMStats.compliancePct}%
-          </div>
-        </div>
-
-        {/* Cartão Resumo de PIs */}
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-[11px] font-extrabold uppercase tracking-widest text-industrial-blue dark:text-sky-400">
-              Pedidos de Intervenção (PI) — Resumo
-            </span>
-            <div className="flex items-baseline gap-3">
-              <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">
-                {monthlyData.reduce((acc, d) => acc + d.piCompleted, 0)} / {monthlyData.reduce((acc, d) => acc + d.piRequested, 0)}
-              </span>
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                PIs Concluídos
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-              Total de solicitações de intervenção criadas e tratadas na fábrica no período selecionado.
-            </p>
-          </div>
         </div>
       </div>
 

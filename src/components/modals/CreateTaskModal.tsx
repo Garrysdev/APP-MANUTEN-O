@@ -173,6 +173,10 @@ export interface CreateTaskModalProps {
   titleText?: string
   editingTask?: Task | any | null
   initialAssetId?: string | null
+  initialTitle?: string | null
+  initialDescription?: string | null
+  initialTipo?: TipoTarefa | null
+  initialPhotoUrl?: string | null
   assets: any[]
   users: any[]
   stockRefs?: StockMaterialRef[]
@@ -192,6 +196,10 @@ export default function CreateTaskModal({
   titleText,
   editingTask = null,
   initialAssetId = '',
+  initialTitle = '',
+  initialDescription = '',
+  initialTipo = null,
+  initialPhotoUrl = '',
   assets,
   users,
   stockRefs = [],
@@ -204,8 +212,8 @@ export default function CreateTaskModal({
   availableTasksForDependencies,
   showDependencies = false,
 }: CreateTaskModalProps) {
-  const [title, setTitle] = useState('')
-  const [tipo, setTipo] = useState<TipoTarefa>('preventiva')
+  const [title, setTitle] = useState(initialTitle || '')
+  const [tipo, setTipo] = useState<TipoTarefa>(initialTipo || 'preventiva')
   const [criticidade, setCriticidade] = useState<TaskCriticidade>('verde')
   const [assetId, setAssetId] = useState(initialAssetId || '')
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([])
@@ -213,7 +221,7 @@ export default function CreateTaskModal({
   const [dueDate, setDueDate] = useState('')
   const [startedAt, setStartedAt] = useState('')
   const [completedAt, setCompletedAt] = useState('')
-  const [description, setDescription] = useState('')
+  const [description, setDescription] = useState(initialDescription || '')
   const [observacoes, setObservacoes] = useState('')
   const [status, setStatus] = useState<'pending' | 'in_progress' | 'done' | 'cancelled'>('pending')
   const [legal, setLegal] = useState<boolean>(false)
@@ -284,12 +292,16 @@ export default function CreateTaskModal({
         setPeriodicidadeModal(editingTask.periodicidade || 'mensal')
       } else {
         if (initialAssetId) setAssetId(initialAssetId)
+        if (initialTitle) setTitle(initialTitle)
+        if (initialDescription) setDescription(initialDescription)
+        if (initialTipo) setTipo(initialTipo)
+        if (initialPhotoUrl) setPhotoPreview(initialPhotoUrl)
         setDependsOn([])
       }
     } else {
       // Reset form on close
-      setTitle('')
-      setTipo('preventiva')
+      setTitle(initialTitle || '')
+      setTipo(initialTipo || 'preventiva')
       setCriticidade('verde')
       setAssetId(initialAssetId || '')
       setSelectedTechIds([])
@@ -297,7 +309,7 @@ export default function CreateTaskModal({
       setDueDate('')
       setStartedAt('')
       setCompletedAt('')
-      setDescription('')
+      setDescription(initialDescription || '')
       setObservacoes('')
       setStatus('pending')
       setLegal(false)
@@ -307,13 +319,13 @@ export default function CreateTaskModal({
       setRequiredITs([])
       setDependsOn([])
       setPhotoFile(null)
-      setPhotoPreview(null)
+      setPhotoPreview(initialPhotoUrl || null)
       setAddToPmModal(false)
       setPeriodicidadeModal('mensal')
       setError('')
       setBusy(false)
     }
-  }, [isOpen, initialAssetId, editingTask])
+  }, [isOpen, initialAssetId, initialTitle, initialDescription, initialTipo, initialPhotoUrl, editingTask])
 
   // O modal é enviado para o <body> por portal. Sem isto, o `fixed inset-0` deixa de se
   // posicionar pelo ecrã: as páginas usam `animate-fade-in-up`, que acaba em

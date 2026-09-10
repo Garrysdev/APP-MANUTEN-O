@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   MessageSquare, Send, Plus, Search, Filter, Camera, Image as ImageIcon,
   CheckCheck, User, Users, ClipboardList, ShieldAlert, ArrowLeft, X, Paperclip,
-  Clock, Reply, CheckCircle2, Info, Check, RefreshCw, Trash2
+  Clock, Reply, CheckCircle2, Info, Check, RefreshCw, Trash2, Wrench, ChevronDown, ChevronUp
 } from 'lucide-react'
 import type { InternalMessage, MessageStatus } from '@/types/models'
 import { MESSAGE_STATUS_LABELS } from '@/types/models'
@@ -33,10 +33,18 @@ interface TaskRef {
   status: string
 }
 
+interface AssetRef {
+  id: string
+  name: string
+  tag?: string
+  area?: string
+}
+
 export default function MessagesClient({
   messages,
   users,
   tasks,
+  assets = [],
   currentUserId,
   currentUserName,
   currentUserAbbr,
@@ -45,6 +53,7 @@ export default function MessagesClient({
   messages: InternalMessage[]
   users: UserRef[]
   tasks: TaskRef[]
+  assets?: AssetRef[]
   currentUserId: string
   currentUserName: string
   currentUserAbbr: string
@@ -64,6 +73,10 @@ export default function MessagesClient({
   const [dateStart, setDateStart] = useState('')
   const [dateEnd, setDateEnd] = useState('')
   const [search, setSearch] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+
+  const hasActiveFilters = filter !== 'all' || statusFilter !== 'all' || Boolean(techFilter) || otFilter !== 'all' || photoFilter !== 'all' || Boolean(dateStart) || Boolean(dateEnd) || Boolean(search.trim())
+  const activeFiltersCount = (filter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0) + (techFilter ? 1 : 0) + (otFilter !== 'all' ? 1 : 0) + (photoFilter !== 'all' ? 1 : 0) + (dateStart ? 1 : 0) + (dateEnd ? 1 : 0) + (search.trim() ? 1 : 0)
 
   // Modal / Composer State
   const [modalOpen, setModalOpen] = useState(false)
@@ -75,6 +88,7 @@ export default function MessagesClient({
   const [subject, setSubject] = useState('')
   const [content, setContent] = useState('')
   const [selectedTaskId, setSelectedTaskId] = useState('')
+  const [selectedAssetId, setSelectedAssetId] = useState('')
   const [requiresResponse, setRequiresResponse] = useState<boolean>(true)
   const [messageStatus, setMessageStatus] = useState<MessageStatus>('awaiting_reply')
   const [photoFile, setPhotoFile] = useState<File | null>(null)
@@ -82,6 +96,14 @@ export default function MessagesClient({
   const [busy, setBusy] = useState(false)
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
   const [error, setError] = useState('')
+
+  // Resposta Rápida Direta (no detalhe da mensagem)
+  const [directReplyContent, setDirectReplyContent] = useState('')
+  const [directPhotoFile, setDirectPhotoFile] = useState<File | null>(null)
+  const [directPhotoPreview, setDirectPhotoPreview] = useState<string | null>(null)
+  const [directBusy, setDirectBusy] = useState(false)
+  const [directError, setDirectError] = useState('')
+  const directFileInputRef = useRef<HTMLInputElement>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -91,10 +113,39 @@ export default function MessagesClient({
     return r === 'technician' || r === 'tecnico' || r === 'técnico' || r === 'tech'
   }
 
-  // Lista de técnicos e utilizadores disponíveis
-  const activeTechs = users
-    .filter((u) => u.active !== false && !u.isExternal && u.role !== 'external' && u.role !== 'prestador' && (isTechRole(u.role) || isManager))
-    .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+  // Lista de técnicos e utilizadores disponíveis (com garantia de inclusão do técnico de teste RG - RuiG)
+  const activeTechs = useMemo(() => {
+    const list = users.filter((u) => {
+      if (u.active === false) return false
+      if (u.isExternal) return false
+      const r = (u.role || '').toLowerCase().trim()
+      return isTechRole(r) || isManager || u.id === 'mWSsTRtgq5QcOHusTdVYgDVrwHt2'
+    })
+
+    if (!list.some((u) => u.id === 'mWSsTRtgq5QcOHusTdVYgDVrwHt2' || (u.abbreviation === 'RG' && u.name?.includes('RuiG')))) {
+      list.push({
+        id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2',
+        name: 'RG - RuiG',
+        abbreviation: 'RG',
+        role: 'technician',
+        active: true,
+        isExternal: false,
+      })
+    }
+
+    return list.sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+  }, [users, isManager])
+
+  // Equipamentos ordenados por ÁREA e TAG
+  const sortedAssetsForSelect = useMemo(() => {
+    return [...assets].sort((a, b) => {
+      const areaA = (a.area || 'Geral').toLowerCase().trim()
+      const areaB = (b.area || 'Geral').toLowerCase().trim()
+      const comp = areaA.localeCompare(areaB, 'pt', { numeric: true })
+      if (comp !== 0) return comp
+      return (a.tag || a.name).localeCompare(b.tag || b.name, 'pt', { numeric: true })
+    })
+  }, [assets])
 
   // OTs ordenadas por ÁREA e TAG
   const sortedTasksForSelect = useMemo(() => {
@@ -110,11 +161,10 @@ export default function MessagesClient({
   }, [tasks])
 
   const filteredMessages = localMessages.filter((m) => {
-    // 1. Folder (Inbox / Sent)
+    // 1. Folder (Inbox / Sent) - estritamente por ID único de remetente
     const isSentByMe =
       m.senderId === currentUserId ||
-      (currentUserAbbr && m.senderAbbr?.toUpperCase() === currentUserAbbr.toUpperCase()) ||
-      (currentUserName && m.senderName?.toLowerCase() === currentUserName.toLowerCase())
+      (currentUserId && m.senderId?.toLowerCase() === currentUserId.toLowerCase())
 
     if (filter === 'inbox' && isSentByMe) return false
     if (filter === 'sent' && !isSentByMe) return false
@@ -172,6 +222,7 @@ export default function MessagesClient({
     setSubject('')
     setContent('')
     setSelectedTaskId('')
+    setSelectedAssetId('')
     setRequiresResponse(true)
     setMessageStatus('awaiting_reply')
     setPhotoFile(null)
@@ -199,8 +250,9 @@ export default function MessagesClient({
     const baseSubject = msg.subject || (msg.taskTitle ? `OT ${msg.taskTitle}` : 'Mensagem')
     setSubject(baseSubject.startsWith('Re:') ? baseSubject : `Re: ${baseSubject}`)
 
-    // Pre-definir OT
+    // Pre-definir OT e Equipamento se existirem
     setSelectedTaskId(msg.taskId || '')
+    setSelectedAssetId(msg.assetId || '')
 
     // Por defeito, uma resposta responde e pode pedir esclarecimento adicional ou fechar
     setRequiresResponse(false)
@@ -210,6 +262,114 @@ export default function MessagesClient({
     setPhotoPreview(null)
     setError('')
     setModalOpen(true)
+  }
+
+  async function handleDirectPhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const compressed = await compressImage(file)
+    setDirectPhotoFile(compressed)
+    setDirectPhotoPreview(URL.createObjectURL(compressed))
+  }
+
+  async function handleDirectReplySubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedMessage) return
+    if (!directReplyContent.trim()) {
+      setDirectError('Por favor escreva a sua resposta.')
+      return
+    }
+
+    setDirectBusy(true)
+    setDirectError('')
+
+    try {
+      let photoUrl: string | null = null
+      if (directPhotoFile) {
+        try {
+          photoUrl = await uploadImage(directPhotoFile, 'messages')
+        } catch (err) {
+          console.error('Erro no upload de foto da resposta rápida:', err)
+        }
+      }
+
+      const senderObj = users.find((u) => u.id === selectedMessage.senderId || (u.name && u.name.toLowerCase() === selectedMessage.senderName.toLowerCase()))
+      const targetRecipientIds = senderObj ? [senderObj.id] : (selectedMessage.senderId ? [selectedMessage.senderId] : [])
+      const recipientNamesText = senderObj ? (senderObj.abbreviation ? `[${senderObj.abbreviation}] ${senderObj.name}` : senderObj.name) : selectedMessage.senderName
+
+      const formData = new FormData()
+      formData.set('content', directReplyContent.trim())
+      formData.set('recipientIds', JSON.stringify(targetRecipientIds))
+      formData.set('recipientNames', recipientNamesText)
+      formData.set('status', 'replied')
+      formData.set('requiresResponse', 'false')
+
+      const baseSubject = selectedMessage.subject || (selectedMessage.taskTitle ? `OT ${selectedMessage.taskTitle}` : 'Mensagem')
+      formData.set('subject', baseSubject.startsWith('Re:') ? baseSubject : `Re: ${baseSubject}`)
+
+      if (selectedMessage.taskId) {
+        formData.set('taskId', selectedMessage.taskId)
+        if (selectedMessage.taskTitle) formData.set('taskTitle', selectedMessage.taskTitle)
+      }
+      if (selectedMessage.assetId) {
+        formData.set('assetId', selectedMessage.assetId)
+        if (selectedMessage.assetTag) formData.set('assetTag', selectedMessage.assetTag)
+        if (selectedMessage.assetName) formData.set('assetName', selectedMessage.assetName)
+      }
+      if (photoUrl) formData.set('photoUrl', photoUrl)
+
+      formData.set('replyToId', selectedMessage.id)
+      formData.set('replyToSubject', selectedMessage.subject || selectedMessage.taskTitle || 'Mensagem')
+      formData.set('replyToSender', selectedMessage.senderName)
+      formData.set('replyToContent', selectedMessage.content.slice(0, 150))
+
+      const res = await sendInternalMessageAction({}, formData)
+      setDirectBusy(false)
+
+      if (res.error) {
+        setDirectError(res.error)
+      } else {
+        const newMsgObj: InternalMessage = {
+          id: res.messageId || 'msg_' + Date.now(),
+          companyId: '',
+          senderId: currentUserId,
+          senderName: currentUserName,
+          senderAbbr: currentUserAbbr,
+          recipientIds: targetRecipientIds,
+          recipientNames: recipientNamesText,
+          subject: baseSubject.startsWith('Re:') ? baseSubject : `Re: ${baseSubject}`,
+          content: directReplyContent.trim(),
+          taskId: selectedMessage.taskId || null,
+          taskTitle: selectedMessage.taskTitle || null,
+          assetId: selectedMessage.assetId || null,
+          assetTag: selectedMessage.assetTag || null,
+          assetName: selectedMessage.assetName || null,
+          photoUrl: photoUrl || null,
+          status: 'replied',
+          requiresResponse: false,
+          replyToId: selectedMessage.id,
+          replyToSubject: selectedMessage.subject || null,
+          replyToSender: selectedMessage.senderName,
+          replyToContent: selectedMessage.content ? selectedMessage.content.slice(0, 150) : null,
+          createdAt: new Date().toISOString(),
+        }
+
+        // Atualizar estado da mensagem original para 'replied' e adicionar nova mensagem
+        setLocalMessages((prev) => [
+          newMsgObj,
+          ...prev.map((m) => (m.id === selectedMessage.id ? { ...m, status: 'replied' as MessageStatus } : m)),
+        ])
+        setSelectedMessage((prev) => (prev ? { ...prev, status: 'replied' } : null))
+
+        setDirectReplyContent('')
+        setDirectPhotoFile(null)
+        setDirectPhotoPreview(null)
+        router.refresh()
+      }
+    } catch (err) {
+      setDirectBusy(false)
+      setDirectError(err instanceof Error ? err.message : 'Erro ao enviar resposta.')
+    }
   }
 
   async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -284,7 +444,17 @@ export default function MessagesClient({
       setError('Escreva o conteúdo da mensagem.')
       return
     }
-    if (!selectedTechIds.length) {
+
+    let finalRecipientIds = [...selectedTechIds]
+    if (replyToMessage) {
+      if (finalRecipientIds.length === 0 || finalRecipientIds.includes('ALL')) {
+        const sObj = users.find((u) => u.id === replyToMessage.senderId || (u.name && u.name.toLowerCase() === replyToMessage.senderName.toLowerCase()))
+        if (sObj) finalRecipientIds = [sObj.id]
+        else if (replyToMessage.senderId) finalRecipientIds = [replyToMessage.senderId]
+      }
+    }
+
+    if (!finalRecipientIds.length) {
       setError('Selecione pelo menos um destinatário.')
       return
     }
@@ -452,32 +622,81 @@ export default function MessagesClient({
         </button>
       </div>
 
-      {/* Painel Completo de Filtros */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-          <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-            <Filter className="h-4 w-4 text-industrial-blue dark:text-sky-400" />
-            <span>Filtros de Mensagens</span>
-          </span>
-          {(filter !== 'all' || statusFilter !== 'all' || techFilter || otFilter !== 'all' || photoFilter !== 'all' || dateStart || dateEnd || search) && (
-            <button
-              onClick={() => {
-                setFilter('all')
-                setStatusFilter('all')
-                setTechFilter('')
-                setOtFilter('all')
-                setPhotoFilter('all')
-                setDateStart('')
-                setDateEnd('')
-                setSearch('')
-              }}
-              className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 hover:underline cursor-pointer"
-            >
-              <X className="h-3.5 w-3.5" />
-              <span>Limpar Filtros</span>
-            </button>
+      {/* Link / Botão Filtros */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen(!filtersOpen)}
+          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all border shadow-xs cursor-pointer ${
+            filtersOpen || activeFiltersCount > 0
+              ? 'bg-industrial-blue text-white border-industrial-blue'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Filter className="h-4 w-4" />
+          <span>Filtros</span>
+          {activeFiltersCount > 0 && (
+            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+              filtersOpen || activeFiltersCount > 0 ? 'bg-white text-industrial-blue' : 'bg-industrial-blue text-white'
+            }`}>
+              {activeFiltersCount}
+            </span>
           )}
-        </div>
+          {filtersOpen ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+        </button>
+
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              setFilter('all')
+              setStatusFilter('all')
+              setTechFilter('')
+              setOtFilter('all')
+              setPhotoFilter('all')
+              setDateStart('')
+              setDateEnd('')
+              setSearch('')
+            }}
+            className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 hover:underline cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+            <span>Limpar Filtros</span>
+          </button>
+        )}
+      </div>
+
+      {/* Painel Completo de Filtros (Apenas visível se o utilizador clicar em Filtros) */}
+      {filtersOpen && (
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+            <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <Filter className="h-4 w-4 text-industrial-blue dark:text-sky-400" />
+              <span>Painel de Filtros Avançados</span>
+            </span>
+            {hasActiveFilters && (
+              <button
+                onClick={() => {
+                  setFilter('all')
+                  setStatusFilter('all')
+                  setTechFilter('')
+                  setOtFilter('all')
+                  setPhotoFilter('all')
+                  setDateStart('')
+                  setDateEnd('')
+                  setSearch('')
+                }}
+                className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>Limpar</span>
+              </button>
+            )}
+          </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* 1. Pesquisa */}
@@ -613,6 +832,7 @@ export default function MessagesClient({
           <span>A mostrar <strong className="text-industrial-blue dark:text-sky-400">{filteredMessages.length}</strong> de <strong>{localMessages.length}</strong> mensagens</span>
         </div>
       </div>
+      )}
 
       {/* Listagem de Mensagens */}
       <div className="space-y-3">
@@ -981,8 +1201,28 @@ export default function MessagesClient({
                   )}
                 </div>
 
-                <div className="max-h-32 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-900/50 space-y-1.5">
-                  {!replyToMessage && (
+                {replyToMessage ? (
+                  <div className="p-3 bg-blue-50/80 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-800 flex items-center justify-between shadow-2xs">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-extrabold text-xs shadow-2xs">
+                        {replyToMessage.senderAbbr || replyToMessage.senderName.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                          Destinatário Automático (Remetente)
+                        </span>
+                        <span className="text-xs font-extrabold text-blue-900 dark:text-sky-300">
+                          {replyToMessage.senderAbbr ? `[${replyToMessage.senderAbbr}] ` : ''}{replyToMessage.senderName}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border border-blue-300 dark:border-blue-700 flex items-center gap-1">
+                      <Check className="h-3 w-3 text-blue-600 dark:text-sky-400" />
+                      <span>Automático</span>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="max-h-32 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-900/50 space-y-1.5">
                     <label className="flex items-center gap-2 text-xs font-bold text-blue-900 dark:text-blue-300 cursor-pointer p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800">
                       <input
                         type="checkbox"
@@ -992,36 +1232,36 @@ export default function MessagesClient({
                       />
                       <span>📢 TODOS OS TÉCNICOS (Mensagem Geral)</span>
                     </label>
-                  )}
 
-                  {!selectedTechIds.includes('ALL') && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
-                      {activeTechs.map((u) => {
-                        const checked = selectedTechIds.includes(u.id)
-                        return (
-                          <label
-                            key={u.id}
-                            className={`flex items-center gap-2 text-xs cursor-pointer p-1 rounded transition-colors ${
-                              checked
-                                ? 'bg-blue-100/70 dark:bg-blue-900/40 text-blue-900 dark:text-sky-200 font-bold'
-                                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleTech(u.id)}
-                              className="rounded accent-blue-600 h-3.5 w-3.5"
-                            />
-                            <span className="truncate">
-                              {u.abbreviation ? `[${u.abbreviation}] ` : ''}{u.name}
-                            </span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
+                    {!selectedTechIds.includes('ALL') && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                        {activeTechs.map((u) => {
+                          const checked = selectedTechIds.includes(u.id)
+                          return (
+                            <label
+                              key={u.id}
+                              className={`flex items-center gap-2 text-xs cursor-pointer p-1 rounded transition-colors ${
+                                checked
+                                  ? 'bg-blue-100/70 dark:bg-blue-900/40 text-blue-900 dark:text-sky-200 font-bold'
+                                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleTech(u.id)}
+                                className="rounded accent-blue-600 h-3.5 w-3.5"
+                              />
+                              <span className="truncate">
+                                {u.abbreviation ? `[${u.abbreviation}] ` : ''}{u.name}
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Tipo de Interação / Espera Resposta */}

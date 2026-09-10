@@ -8,11 +8,21 @@ export default function NewTaskPageClient({
   users,
   stockRefs,
   isManager,
+  initialAssetId,
+  initialTitle,
+  initialDescription,
+  initialTipo,
+  initialPhotoUrl,
 }: {
   assets: any[]
   users: any[]
   stockRefs: any[]
   isManager: boolean
+  initialAssetId?: string
+  initialTitle?: string
+  initialDescription?: string
+  initialTipo?: any
+  initialPhotoUrl?: string
 }) {
   const router = useRouter()
 
@@ -24,6 +34,11 @@ export default function NewTaskPageClient({
       users={users}
       stockRefs={stockRefs}
       isManager={isManager}
+      initialAssetId={initialAssetId}
+      initialTitle={initialTitle}
+      initialDescription={initialDescription}
+      initialTipo={initialTipo}
+      initialPhotoUrl={initialPhotoUrl}
       onSuccess={() => {
         router.push('/dashboard/tasks')
         router.refresh()

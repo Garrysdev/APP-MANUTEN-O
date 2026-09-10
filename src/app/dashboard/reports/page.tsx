@@ -114,23 +114,7 @@ export default async function ReportsPage() {
           </div>
         </div>
 
-        {/* KPIs principais */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {[
-            { label: 'Total OTs', value: tasks.length, color: 'text-[#1B4F72]', href: '/dashboard/tasks' },
-            { label: 'Concluídas', value: done, color: 'text-green-600', href: '/dashboard/tasks' },
-            { label: 'Em curso', value: inProgress, color: 'text-blue-500', href: '/dashboard/tasks' },
-            { label: urgentOpen > 0 ? '⚠ Urgentes abertas' : 'Pendentes', value: urgentOpen > 0 ? urgentOpen : pending, color: urgentOpen > 0 ? 'text-red-600' : 'text-orange-500', href: '/dashboard/tasks' },
-          ].map(({ label, value, color, href }) => (
-            <Link key={label} href={href} className="card p-4 text-center hover:border-purple-300 dark:hover:border-slate-700 transition-all hover:shadow-md group">
-              <p className={`text-3xl font-black ${color.includes('text-[#1B4F72]') ? 'text-[#1B4F72] dark:text-blue-400' : color} group-hover:scale-105 transition-transform`}>{value}</p>
-              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 flex items-center justify-center gap-1 group-hover:text-purple-600 dark:group-hover:text-purple-300">
-                <span>{label}</span>
-                <span className="text-[10px]">↗</span>
-              </p>
-            </Link>
-          ))}
-        </div>
+        {/* Seção Exclusiva de Gráficos e Valores de KPI com PM e PI no topo */}
 
         {/* Seção Exclusiva de Gráficos e Valores Mensais de KPI */}
         <ReportsChartsClient

@@ -136,13 +136,12 @@ function getFallbackUsers(): User[] {
   // gravados em assignedTo/assignedToIds nas tarefas, senão o nome não resolve durante
   // uma quebra de quota da Firestore e aparece o ID em bruto na UI.
   const techs = [
-    { id: 'MEGjjvqtGqv3Oosxvlrx', name: 'Leandro Maia', abbreviation: 'LM', email: 'lm@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
-    { id: 'nAcCSm4E3tNnPLr72UPl', name: 'Marco Silva', abbreviation: 'MS', email: 'ms@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
-    { id: 'zmDAeoGTzIWPavraKu0f', name: 'Carlos Branco', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician', active: true, isExternal: false },
-    { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', name: 'RG - RuiG', abbreviation: 'RG', email: 'tecnico@teste.rg', role: 'technician', active: true, isExternal: false },
-    { id: 'CUodZKziOwo128GLK66i', name: 'Rui Garrido (RG)', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false },
+    { id: 'MEGjjvqtGqv3Oosxvlrx', name: 'Leandro Maia', abbreviation: 'LM', email: 'lm@rgmaintenance.pt', role: 'technician', active: true, isExternal: false, specialty: 'Multidisciplinar' },
+    { id: 'nAcCSm4E3tNnPLr72UPl', name: 'Marco Silva', abbreviation: 'MS', email: 'ms@rgmaintenance.pt', role: 'technician', active: true, isExternal: false, specialty: 'Mecânico' },
+    { id: 'zmDAeoGTzIWPavraKu0f', name: 'Carlos Branco', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician', active: true, isExternal: false, specialty: 'Serralharia / Tubagem' },
+    { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', name: 'RG - RuiG', abbreviation: 'RG', email: 'tecnico@teste.rg', role: 'technician', active: true, isExternal: false, specialty: 'Eletromecânica' },
+    { id: 'CUodZKziOwo128GLK66i', name: 'Rui Garrido (RG)', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false, specialty: 'Gestão de Manutenção' },
     { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', name: 'Admin', abbreviation: 'ADM', email: 'demo@rgmaintenance.pt', role: 'manager', active: true, isExternal: false },
-    { id: 'ue15A4DcVMRbstIEhrkny5Be42G3', name: 'Rui Garrido', abbreviation: null, email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false },
     { id: 'q17h5HdG3R8dfjWiUZ6V', name: 'Eng. João Ramos', abbreviation: 'JR', email: 'jr@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_jr', externalCompanyName: 'João Ramos Engenharia', specialty: 'Engenharia Geral', phone: '910 000 000' },
     { id: 'twtQs1sAj0RFc9KI2S0n', name: 'Miguel', abbreviation: 'OX2', email: 'ox2@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_ox2', externalCompanyName: 'OX2 Especialista', specialty: 'Caldeiras & Sobreaquecimento', phone: '912 345 678' },
     { id: '2pL85QsrLpaNwYXZdVOP', name: 'Carrier (Ricardo)', abbreviation: 'CAR', email: 'carrier@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_car', externalCompanyName: 'Carrier Portugal', specialty: 'HVAC / Climatização', phone: '965 432 109' },
@@ -890,7 +889,25 @@ const listUsersCached = unstable_cache(
       const snap = await adminDb().collection('users').get()
       const allDbDocs = snap.docs.map((d) => serialize<User>(d))
 
+      const PROTECTED_IDS = new Set([
+        'MEGjjvqtGqv3Oosxvlrx', // Leandro Maia
+        'nAcCSm4E3tNnPLr72UPl', // Marco Silva
+        'zmDAeoGTzIWPavraKu0f', // Carlos Branco
+        'mWSsTRtgq5QcOHusTdVYgDVrwHt2', // RG - RuiG
+        'CUodZKziOwo128GLK66i', // Rui Garrido (RG)
+      ])
+
+      const isCorruptOrMock = (u: { email?: string | null; name?: string | null }) => {
+        const email = String(u.email || '').toLowerCase().trim()
+        const name = String(u.name || '').toLowerCase().trim()
+        if (email.includes('@rg-maintenance.local')) return true
+        if (name.includes('técnico ur') || email === 'ur@rgmaintenance.pt') return true
+        if (name === 'mário silva' || name.includes('mário s.')) return true
+        return false
+      }
+
       const dbDocs = allDbDocs.filter((u) => {
+        if (isCorruptOrMock(u)) return false
         if (!u.companyId) return true
         if (u.companyId === finalCompanyId) return true
         if (isDemoCompany(finalCompanyId) && isDemoCompany(u.companyId)) return true
@@ -899,21 +916,21 @@ const listUsersCached = unstable_cache(
 
       let deletedIds = new Set<string>()
       let deletedEmails = new Set<string>()
-      let deletedAbbrs = new Set<string>()
       try {
         const delSnap = await adminDb().collection('deleted_users').get()
         delSnap.docs.forEach((d) => {
-          deletedIds.add(d.id)
-          const data = d.data()
-          if (data?.email) deletedEmails.add(String(data.email).toLowerCase())
-          if (data?.abbreviation) deletedAbbrs.add(String(data.abbreviation).toUpperCase())
+          if (!PROTECTED_IDS.has(d.id)) {
+            deletedIds.add(d.id)
+            const data = d.data()
+            if (data?.email) deletedEmails.add(String(data.email).toLowerCase().trim())
+          }
         })
       } catch { /* ignore */ }
 
-      const isDeleted = (u: { id: string; email?: string | null; abbreviation?: string | null }) => {
+      const isDeleted = (u: { id: string; email?: string | null }) => {
+        if (PROTECTED_IDS.has(u.id)) return false
         if (deletedIds.has(u.id)) return true
-        if (u.email && deletedEmails.has(u.email.toLowerCase())) return true
-        if (u.abbreviation && deletedAbbrs.has(u.abbreviation.toUpperCase())) return true
+        if (u.email && deletedEmails.has(String(u.email).toLowerCase().trim())) return true
         return false
       }
 
@@ -922,14 +939,14 @@ const listUsersCached = unstable_cache(
       
       if (isDemoCompany(finalCompanyId)) {
         getFallbackUsers().forEach((f) => {
-          if (!isDeleted(f)) {
+          if (!isDeleted(f) && !isCorruptOrMock(f)) {
             userMap.set(f.id, { ...f, companyId: finalCompanyId })
           }
         })
       }
 
       dbDocs.forEach((u) => {
-        if (!isDeleted(u)) {
+        if (!isDeleted(u) && !isCorruptOrMock(u)) {
           // If a fallback has the same email or ID, remove the fallback key first
           for (const [key, existing] of userMap.entries()) {
             if (

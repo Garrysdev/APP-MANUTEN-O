@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { listInternalMessages, listUsers, listTasks } from '@/lib/firebase/data'
+import { listInternalMessages, listUsers, listTasks, listAssets } from '@/lib/firebase/data'
 import MessagesClient from './MessagesClient'
 
 export const dynamic = 'force-dynamic'
@@ -17,15 +17,22 @@ export default async function MessagesPage() {
     roleStr === 'administrador' ||
     profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
 
-  const [messages, users, tasks] = await Promise.all([
+  const [messages, users, tasks, assets] = await Promise.all([
     listInternalMessages(profile.companyId, isManager ? undefined : profile),
     listUsers(profile.companyId),
     listTasks(profile.companyId),
+    listAssets(profile.companyId),
   ])
 
   return (
     <MessagesClient
       messages={messages}
+      assets={assets.map((a) => ({
+        id: a.id,
+        name: a.name,
+        tag: a.tag || '',
+        area: a.area || 'Geral',
+      }))}
       users={users.map((u) => ({
         id: u.id,
         name: u.name,

@@ -7,7 +7,7 @@ import ExcelJS from 'exceljs'
 import {
   Plus, Pencil, Trash2, ClipboardList, X, Play, CheckCircle2,
   ShieldAlert, Package, CalendarClock, Building2, Scale, Eye,
-  FileSpreadsheet, Printer, Upload,
+  FileSpreadsheet, Printer, Upload, Filter, ChevronDown, ChevronUp, Clock,
 } from 'lucide-react'
 import { format3DigitId } from '../history/HistoryClient'
 import {
@@ -363,6 +363,7 @@ export default function TasksClient({
   }
 
   function openCreate() {
+    if (!isManager) return
     setSafetyRules([''])
     setMaterialsRequired([''])
     setTitle('')
@@ -459,6 +460,43 @@ export default function TasksClient({
   const setCol = (k: keyof typeof emptyCol, v: string) => {
     setCurrentPage(1)
     setColF((c) => ({ ...c, [k]: v }))
+  }
+
+  const [filtersOpen, setFiltersOpen] = useState(false)
+
+  const activeFiltersCount = useMemo(() => {
+    let cnt = 0
+    if (selectedAreas.length > 0) cnt += selectedAreas.length
+    if (selectedTags.length > 0) cnt += selectedTags.length
+    if (selectedTIs.length > 0) cnt += selectedTIs.length
+    if (selectedTechs.length > 0) cnt += selectedTechs.length
+    if (colF.id) cnt++
+    if (colF.data) cnt++
+    if (colF.area) cnt++
+    if (colF.tag) cnt++
+    if (colF.ti) cnt++
+    if (colF.avaria) cnt++
+    if (colF.tecnico) cnt++
+    if (colF.obs) cnt++
+    return cnt
+  }, [selectedAreas, selectedTags, selectedTIs, selectedTechs, colF])
+
+  const getTaskDisplayDateTime = (task: Task) => {
+    const d = task.plannedStartDate || task.createdAt
+    if (!d) return '—'
+    if (task.plannedStartDate && (task.plannedStartDate.includes('T') || task.plannedStartDate.includes(':'))) {
+      return formatDateTime(task.plannedStartDate)
+    }
+    if (task.createdAt && (task.createdAt.includes('T') || task.createdAt.includes(':'))) {
+      const dOnly = formatDate(task.plannedStartDate || task.createdAt)
+      const cObj = new Date(task.createdAt)
+      if (!isNaN(cObj.getTime())) {
+        const hh = String(cObj.getHours()).padStart(2, '0')
+        const mm = String(cObj.getMinutes()).padStart(2, '0')
+        return `${dOnly} ${hh}:${mm}`
+      }
+    }
+    return formatDateTime(d)
   }
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
@@ -717,6 +755,12 @@ export default function TasksClient({
   // Dentro de cada grupo, mantém a ordenação por data decrescente (mais recente primeiro).
   const defaultSortedFiltered = useMemo(() => {
     return [...filtered].sort((a, b) => {
+      if (!isManager) {
+        // Técnico vê as que lhe foram atribuídas estritamente ordenadas por data (mais recente primeiro)
+        const dateA = parseDateToTs(a.plannedStartDate || a.createdAt || (a as any).completedAt)
+        const dateB = parseDateToTs(b.plannedStartDate || b.createdAt || (b as any).completedAt)
+        return dateB - dateA
+      }
       const orderA = STATUS_DEFAULT_ORDER[a.status] ?? 99
       const orderB = STATUS_DEFAULT_ORDER[b.status] ?? 99
       if (orderA !== orderB) {
@@ -726,7 +770,7 @@ export default function TasksClient({
       const dateB = parseDateToTs(b.createdAt || b.plannedStartDate || (b as any).completedAt)
       return dateB - dateA
     })
-  }, [filtered])
+  }, [filtered, isManager])
 
   // Ordenação por coluna (quando sortKey !== null) ou por defeito (quando sortKey === null)
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Task>(
@@ -868,41 +912,43 @@ export default function TasksClient({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
-          <button
-            onClick={handleExportXLS}
-            className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
-            title="Exportar lista de OTs filtradas para ficheiro Excel (.xlsx)"
-          >
-            <FileSpreadsheet className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Exportar Excel</span>
-          </button>
+        {isManager && (
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <button
+              onClick={handleExportXLS}
+              className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Exportar lista de OTs filtradas para ficheiro Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">Exportar Excel</span>
+            </button>
 
-          <button
-            onClick={handlePrint}
-            className="px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
-            title="Imprimir / Exportar lista de OTs para PDF"
-          >
-            <Printer className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Imprimir (PDF)</span>
-          </button>
+            <button
+              onClick={handlePrint}
+              className="px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Imprimir / Exportar lista de OTs para PDF"
+            >
+              <Printer className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">Imprimir (PDF)</span>
+            </button>
 
-          <button
-            onClick={() => importInputRef.current?.click()}
-            disabled={importing}
-            className="px-3 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
-            title="Importar ficheiro Excel de OTs ou Plano de Manutenção (FR-MAN-09 / PL-MAN-01)"
-          >
-            <Upload className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">{importing ? 'A importar...' : 'Importar'}</span>
-          </button>
-          <input ref={importInputRef} type="file" accept=".xls,.xlsx,.xlsb" onChange={handleImportFile} className="hidden" />
+            <button
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing}
+              className="px-3 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Importar ficheiro Excel de OTs ou Plano de Manutenção (FR-MAN-09 / PL-MAN-01)"
+            >
+              <Upload className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">{importing ? 'A importar...' : 'Importar'}</span>
+            </button>
+            <input ref={importInputRef} type="file" accept=".xls,.xlsx,.xlsb" onChange={handleImportFile} className="hidden" />
 
-          <button onClick={openCreate} className="h-10 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
-            <Plus size={16} className="stroke-[2.5] shrink-0" />
-            <span>{dict.tasks.newTask}</span>
-          </button>
-        </div>
+            <button onClick={openCreate} className="h-10 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+              <Plus size={16} className="stroke-[2.5] shrink-0" />
+              <span>{dict.tasks.newTask}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filtros por estado, pesquisa e tamanho de página */}
@@ -969,29 +1015,27 @@ export default function TasksClient({
         </div>
 
         <div className="flex items-center gap-2.5 flex-nowrap overflow-x-auto py-1 w-full sm:w-auto">
-          {/* Seletor Multi-Seleção de Área */}
-          <div className="shrink-0 min-w-[180px] max-w-[240px]">
-            <MultiSelectPopoverFilter
-              label="Área"
-              options={uniqueAreas.map((area) => ({ value: area, label: `Área: ${area}` }))}
-              selectedValues={selectedAreas}
-              onChange={setSelectedAreas}
-              placeholder="-- Área: Todas --"
-              width="w-64"
-            />
-          </div>
-
-          {/* Seletor Multi-Seleção de TAG */}
-          <div className="shrink-0 min-w-[180px] max-w-[240px]">
-            <MultiSelectPopoverFilter
-              label="TAG"
-              options={uniqueTags.map((tag) => ({ value: tag, label: `TAG: ${tag}` }))}
-              selectedValues={selectedTags}
-              onChange={setSelectedTags}
-              placeholder="-- TAG: Todas --"
-              width="w-64"
-            />
-          </div>
+          {/* Botão/Link Filtros */}
+          <button
+            type="button"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 border cursor-pointer ${
+              filtersOpen || activeFiltersCount > 0
+                ? 'bg-industrial-blue text-white border-industrial-blue shadow-xs'
+                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            <span>Filtros</span>
+            {activeFiltersCount > 0 && (
+              <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                filtersOpen || activeFiltersCount > 0 ? 'bg-white text-industrial-blue' : 'bg-industrial-blue text-white'
+              }`}>
+                {activeFiltersCount}
+              </span>
+            )}
+            {filtersOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
 
           <input
             type="text"
@@ -1020,90 +1064,95 @@ export default function TasksClient({
 
       {/* Vista em cartões — telemóvel e tablet (a tabela completa fica só para ecrãs md+) */}
       <div className="md:hidden space-y-2.5">
-        {/* Filtros em Telemóvel (Área, TAG, TI, Técnico) — acessíveis e sem corte por overflow */}
-        <div className="bg-slate-50 dark:bg-slate-900/70 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                Filtros
-              </span>
-              {(selectedAreas.length > 0 || selectedTags.length > 0 || selectedTIs.length > 0 || selectedTechs.length > 0) && (
-                <span className="bg-industrial-blue text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                  {selectedAreas.length + selectedTags.length + selectedTIs.length + selectedTechs.length}
+        {/* Filtros em Telemóvel (Área, TAG, TI, Técnico) — só visíveis se filtersOpen === true */}
+        {filtersOpen && (
+          <div className="bg-slate-50 dark:bg-slate-900/70 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                  Filtros
                 </span>
+                {activeFiltersCount > 0 && (
+                  <span className="bg-industrial-blue text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </div>
+              {activeFiltersCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAreas([])
+                    setSelectedTags([])
+                    setSelectedTIs([])
+                    setSelectedTechs([])
+                    setAreaFilter('')
+                    setTagFilter('')
+                    setColF(emptyCol)
+                  }}
+                  className="text-[11px] text-red-500 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <X size={12} />
+                  <span>Limpar filtros</span>
+                </button>
               )}
             </div>
-            {(selectedAreas.length > 0 || selectedTags.length > 0 || selectedTIs.length > 0 || selectedTechs.length > 0) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedAreas([])
-                  setSelectedTags([])
-                  setSelectedTIs([])
-                  setSelectedTechs([])
-                }}
-                className="text-[11px] text-red-500 font-bold hover:underline cursor-pointer flex items-center gap-1"
-              >
-                <X size={12} />
-                <span>Limpar filtros</span>
-              </button>
-            )}
-          </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <MultiSelectPopoverFilter
-                label="Área"
-                options={uniqueAreas.map((a) => ({ value: a, label: a }))}
-                selectedValues={selectedAreas}
-                onChange={setSelectedAreas}
-                placeholder="Área (Todas)"
-                width="w-64 max-w-[85vw]"
-              />
-            </div>
-            <div>
-              <MultiSelectPopoverFilter
-                label="TAG"
-                options={uniqueTags.map((t) => ({ value: t, label: t }))}
-                selectedValues={selectedTags}
-                onChange={setSelectedTags}
-                placeholder="TAG (Todas)"
-                width="w-64 max-w-[85vw]"
-              />
-            </div>
-            <div>
-              <MultiSelectPopoverFilter
-                label="TI"
-                options={[
-                  { value: 'PI', label: 'PI - Pedido Intervenção' },
-                  { value: 'MC', label: 'MC - Curativa' },
-                  { value: 'MP', label: 'MP - Preventiva' },
-                  { value: 'PM', label: 'PM - Plano Manutenção' },
-                  { value: 'MI', label: 'MI - Investimento' },
-                  { value: 'STP', label: 'STP / PR - Projeto' },
-                  { value: 'INS', label: 'INS - Inspeção' },
-                  { value: 'LUB', label: 'LUB - Lubrificação' },
-                  { value: 'CAL', label: 'CAL - Calibração' },
-                  { value: 'OUT', label: 'OUT - Outro' },
-                ]}
-                selectedValues={selectedTIs}
-                onChange={setSelectedTIs}
-                placeholder="TI (Todos)"
-                width="w-64 max-w-[85vw]"
-              />
-            </div>
-            <div>
-              <MultiSelectPopoverFilter
-                label="Técnico"
-                options={uniqueTechnicians.map(([val, label]) => ({ value: val, label }))}
-                selectedValues={selectedTechs}
-                onChange={setSelectedTechs}
-                placeholder="Técnico (Todos)"
-                width="w-64 max-w-[85vw]"
-              />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <MultiSelectPopoverFilter
+                  label="Área"
+                  options={uniqueAreas.map((a) => ({ value: a, label: a }))}
+                  selectedValues={selectedAreas}
+                  onChange={setSelectedAreas}
+                  placeholder="Área (Todas)"
+                  width="w-64 max-w-[85vw]"
+                />
+              </div>
+              <div>
+                <MultiSelectPopoverFilter
+                  label="TAG"
+                  options={uniqueTags.map((t) => ({ value: t, label: t }))}
+                  selectedValues={selectedTags}
+                  onChange={setSelectedTags}
+                  placeholder="TAG (Todas)"
+                  width="w-64 max-w-[85vw]"
+                />
+              </div>
+              <div>
+                <MultiSelectPopoverFilter
+                  label="TI"
+                  options={[
+                    { value: 'PI', label: 'PI - Pedido Intervenção' },
+                    { value: 'MC', label: 'MC - Curativa' },
+                    { value: 'MP', label: 'MP - Preventiva' },
+                    { value: 'PM', label: 'PM - Plano Manutenção' },
+                    { value: 'MI', label: 'MI - Investimento' },
+                    { value: 'STP', label: 'STP / PR - Projeto' },
+                    { value: 'INS', label: 'INS - Inspeção' },
+                    { value: 'LUB', label: 'LUB - Lubrificação' },
+                    { value: 'CAL', label: 'CAL - Calibração' },
+                    { value: 'OUT', label: 'OUT - Outro' },
+                  ]}
+                  selectedValues={selectedTIs}
+                  onChange={setSelectedTIs}
+                  placeholder="TI (Todos)"
+                  width="w-64 max-w-[85vw]"
+                />
+              </div>
+              <div>
+                <MultiSelectPopoverFilter
+                  label="Técnico"
+                  options={uniqueTechnicians.map(([val, label]) => ({ value: val, label }))}
+                  selectedValues={selectedTechs}
+                  onChange={setSelectedTechs}
+                  placeholder="Técnico (Todos)"
+                  width="w-64 max-w-[85vw]"
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {currentShown.length === 0 ? (
           <div className="card px-5 py-12 text-center text-slate-400 border border-slate-200 dark:border-slate-800">
@@ -1163,7 +1212,7 @@ export default function TasksClient({
                   <span className={`badge-${t.status} shrink-0`}>{STATUS_LABELS[t.status]}</span>
                 </div>
                 <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-2">{t.title}</p>
-                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 dark:text-slate-400">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 text-[11px]">
                   <div className="flex flex-wrap gap-1">
                     {ids.length === 0 ? (
                       <span className="text-slate-400">Sem técnico</span>
@@ -1184,8 +1233,9 @@ export default function TasksClient({
                       })
                     )}
                   </div>
-                  <span className="font-mono whitespace-nowrap">
-                    {t.plannedStartDate ? formatDate(t.plannedStartDate) : '—'} → {t.completedAt ? formatDate(t.completedAt) : '—'}
+                  <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/90 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 shadow-2xs whitespace-nowrap">
+                    <Clock className="h-3 w-3 text-industrial-blue dark:text-sky-400" />
+                    <span>{getTaskDisplayDateTime(t)}</span>
                   </span>
                 </div>
               </button>
@@ -1211,67 +1261,69 @@ export default function TasksClient({
                 <SortableTh label="CAUSA / OBS" sortableKey="obs" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[110px] px-1.5 py-2" />
                 <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-1.5 py-2" />
               </tr>
-              {/* Linha de Filtro por Coluna */}
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
-                <td className="p-1 relative"><input value={colF.id} onChange={(e) => setCol('id', e.target.value)} placeholder="000..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
-                <td className="p-1 relative"><ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} /></td>
-                <td className="p-1 relative">
-                  <MultiSelectPopoverFilter
-                    label="Área"
-                    options={uniqueAreas.map((a) => ({ value: a, label: a }))}
-                    selectedValues={selectedAreas}
-                    onChange={setSelectedAreas}
-                    placeholder="Área (Todas)"
-                    width="w-56"
-                  />
-                </td>
-                <td className="p-1 relative">
-                  <MultiSelectPopoverFilter
-                    label="TAG"
-                    options={uniqueTags.map((t) => ({ value: t, label: t }))}
-                    selectedValues={selectedTags}
-                    onChange={setSelectedTags}
-                    placeholder="TAG (Todas)"
-                    width="w-64"
-                  />
-                </td>
-                <td className="p-1 relative">
-                  <MultiSelectPopoverFilter
-                    label="TI"
-                    options={[
-                      { value: 'PI', label: 'PI - Pedido Intervenção' },
-                      { value: 'MC', label: 'MC - Curativa' },
-                      { value: 'MP', label: 'MP - Preventiva' },
-                      { value: 'PM', label: 'PM - Plano Manutenção' },
-                      { value: 'MI', label: 'MI - Investimento' },
-                      { value: 'STP', label: 'STP / PR - Projeto' },
-                      { value: 'INS', label: 'INS - Inspeção' },
-                      { value: 'LUB', label: 'LUB - Lubrificação' },
-                      { value: 'CAL', label: 'CAL - Calibração' },
-                      { value: 'OUT', label: 'OUT - Outro' },
-                    ]}
-                    selectedValues={selectedTIs}
-                    onChange={setSelectedTIs}
-                    placeholder="TI (Todos)"
-                    width="w-56"
-                  />
-                </td>
-                <td className="p-1 relative"><input value={colF.avaria} onChange={(e) => setCol('avaria', e.target.value)} placeholder="Avaria..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
-                <td className="p-1 relative">
-                  <MultiSelectPopoverFilter
-                    label="Técnico"
-                    options={uniqueTechnicians.map(([val, label]) => ({ value: val, label }))}
-                    selectedValues={selectedTechs}
-                    onChange={setSelectedTechs}
-                    placeholder="Técnico (Todos)"
-                    width="w-56"
-                  />
-                </td>
-                <td className="p-1 relative"><ExcelColumnDateFilter values={excelInicioFilter} onChange={setExcelInicioFilter} /></td>
-                <td className="p-1 relative"><ExcelColumnDateFilter values={excelFimFilter} onChange={setExcelFimFilter} /></td>
-                <td className="p-1 relative"><input value={colF.obs} onChange={(e) => setCol('obs', e.target.value)} placeholder="Obs..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
-                <td className="p-1 relative" />
-              </tr>
+              {/* Linha de Filtro por Coluna (visível apenas quando o link Filtros é clicado) */}
+              {filtersOpen && (
+                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1 animate-in fade-in duration-150">
+                  <td className="p-1 relative"><input value={colF.id} onChange={(e) => setCol('id', e.target.value)} placeholder="000..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
+                  <td className="p-1 relative"><ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} /></td>
+                  <td className="p-1 relative">
+                    <MultiSelectPopoverFilter
+                      label="Área"
+                      options={uniqueAreas.map((a) => ({ value: a, label: a }))}
+                      selectedValues={selectedAreas}
+                      onChange={setSelectedAreas}
+                      placeholder="Área (Todas)"
+                      width="w-56"
+                    />
+                  </td>
+                  <td className="p-1 relative">
+                    <MultiSelectPopoverFilter
+                      label="TAG"
+                      options={uniqueTags.map((t) => ({ value: t, label: t }))}
+                      selectedValues={selectedTags}
+                      onChange={setSelectedTags}
+                      placeholder="TAG (Todas)"
+                      width="w-64"
+                    />
+                  </td>
+                  <td className="p-1 relative">
+                    <MultiSelectPopoverFilter
+                      label="TI"
+                      options={[
+                        { value: 'PI', label: 'PI - Pedido Intervenção' },
+                        { value: 'MC', label: 'MC - Curativa' },
+                        { value: 'MP', label: 'MP - Preventiva' },
+                        { value: 'PM', label: 'PM - Plano Manutenção' },
+                        { value: 'MI', label: 'MI - Investimento' },
+                        { value: 'STP', label: 'STP / PR - Projeto' },
+                        { value: 'INS', label: 'INS - Inspeção' },
+                        { value: 'LUB', label: 'LUB - Lubrificação' },
+                        { value: 'CAL', label: 'CAL - Calibração' },
+                        { value: 'OUT', label: 'OUT - Outro' },
+                      ]}
+                      selectedValues={selectedTIs}
+                      onChange={setSelectedTIs}
+                      placeholder="TI (Todos)"
+                      width="w-56"
+                    />
+                  </td>
+                  <td className="p-1 relative"><input value={colF.avaria} onChange={(e) => setCol('avaria', e.target.value)} placeholder="Avaria..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
+                  <td className="p-1 relative">
+                    <MultiSelectPopoverFilter
+                      label="Técnico"
+                      options={uniqueTechnicians.map(([val, label]) => ({ value: val, label }))}
+                      selectedValues={selectedTechs}
+                      onChange={setSelectedTechs}
+                      placeholder="Técnico (Todos)"
+                      width="w-56"
+                    />
+                  </td>
+                  <td className="p-1 relative"><ExcelColumnDateFilter values={excelInicioFilter} onChange={setExcelInicioFilter} /></td>
+                  <td className="p-1 relative"><ExcelColumnDateFilter values={excelFimFilter} onChange={setExcelFimFilter} /></td>
+                  <td className="p-1 relative"><input value={colF.obs} onChange={(e) => setCol('obs', e.target.value)} placeholder="Obs..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
+                  <td className="p-1 relative" />
+                </tr>
+              )}
             </thead>
             <tbody>
               {currentShown.length === 0 ? (

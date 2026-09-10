@@ -78,46 +78,21 @@ export default async function DashboardPage() {
     .slice(0, 10)
 
   const isPMTask = (t: any) => {
-    const tipoLow = String(t.tipo || '').toLowerCase().trim()
-    const tiLow = String(t.ti || t.tipoText || '').toLowerCase().trim()
-    const titleLow = String(t.title || '').toLowerCase()
-    return (
-      tipoLow === 'mp' ||
-      tipoLow === 'pm' ||
-      tipoLow === 'preventiva' ||
-      tipoLow === 'plano' ||
-      tiLow === 'mp' ||
-      tiLow === 'pm' ||
-      tiLow === 'preventiva' ||
-      tiLow === 'plano' ||
-      Boolean(t.maintenancePlanId) ||
-      t.source === 'plano_manutencao' ||
-      t.source === 'folha_ur_planos' ||
-      String(t.id || '').startsWith('task_pm_') ||
-      titleLow.includes('plano de manutenção') ||
-      titleLow.startsWith('pm ') ||
-      titleLow.startsWith('pm-') ||
-      titleLow.startsWith('mp ') ||
-      titleLow.startsWith('mp-')
-    )
+    const ti = String(t.ti || t.tipoText || t.tipo || '').toUpperCase().trim()
+    if (ti === 'PM' || ti === 'MP' || ti === 'PREVENTIVA' || ti === 'PLANO') return true
+    if (Boolean(t.maintenancePlanId) || t.source === 'plano_manutencao' || t.source === 'folha_ur_planos' || String(t.id || '').startsWith('task_pm_')) return true
+    const titleLow = String(t.title || '').toLowerCase().trim()
+    if (titleLow.startsWith('pm ') || titleLow.startsWith('pm-') || titleLow.startsWith('[pm]') || titleLow.startsWith('mp ') || titleLow.startsWith('[mp]')) return true
+    return false
   }
 
   const isPITask = (t: any) => {
-    const tipoLow = String(t.tipo || '').toLowerCase().trim()
-    const tiLow = String(t.ti || t.tipoText || '').toLowerCase().trim()
-    const titleLow = String(t.title || '').toLowerCase()
-    return (
-      tipoLow === 'pi' ||
-      tiLow === 'pi' ||
-      tipoLow === 'solicitacao' ||
-      t.source === 'folha_ur_pi' ||
-      t.source === 'pedidos_pi' ||
-      Boolean(t.requesterEmail) ||
-      titleLow.startsWith('pi ') ||
-      titleLow.startsWith('pi-') ||
-      titleLow.includes('pedido de intervenção') ||
-      titleLow.includes('pedido pi')
-    )
+    const ti = String(t.ti || t.tipoText || t.tipo || '').toUpperCase().trim()
+    if (ti === 'PI') return true
+    const titleLow = String(t.title || '').toLowerCase().trim()
+    if (titleLow.startsWith('pi ') || titleLow.startsWith('pi-') || titleLow.startsWith('[pi]')) return true
+    if (t.source === 'folha_ur_pi' || t.source === 'pedidos_pi') return true
+    return false
   }
 
   const totalOTs = tasks.length
@@ -133,6 +108,7 @@ export default async function DashboardPage() {
   const piTasks = tasks.filter(isPITask)
   const piRequested = piTasks.length
   const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
+  const piCompliancePct = piRequested > 0 ? Math.round((piCompleted / piRequested) * 100) : 100
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in-up">
@@ -274,22 +250,23 @@ export default async function DashboardPage() {
         </div>
 
         {/* Cartão Pedidos de Intervenção (PI) — Resumo */}
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+        <div className="bg-gradient-to-br from-slate-900 via-industrial-blue to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800 flex items-center justify-between gap-4">
           <div className="space-y-1">
-            <span className="text-[11px] font-extrabold uppercase tracking-widest text-industrial-blue dark:text-sky-400">
+            <span className="text-[11px] font-extrabold uppercase tracking-widest text-amber-400">
               Pedidos de Intervenção (PI) — Resumo
             </span>
-            <div className="flex items-baseline gap-3">
-              <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">
-                {piCompleted} / {piRequested}
-              </span>
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                PIs Concluídos
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-black text-white">{piCompleted} / {piRequested}</span>
+              <span className="text-xs font-bold text-slate-300">
+                ({piCompliancePct}% PIs Concluídos)
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-              Total de solicitações de intervenção criadas e tratadas na fábrica no período selecionado.
+            <p className="text-[11px] text-slate-300 font-medium">
+              Total de solicitações de intervenção criadas e tratadas na fábrica no período selecionado ({piRequested} PIs).
             </p>
+          </div>
+          <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
+            {piCompliancePct}%
           </div>
         </div>
       </section>
