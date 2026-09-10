@@ -329,3 +329,48 @@ export async function loadCompletedTasksAction(
   if (!profile) return { tasks: [], total: 0 }
   return listCompletedTasksPaged(profile.companyId, page, pageSize)
 }
+
+/** Permite ao técnico ou gestor atualizar observações, fotos e checklist de execução da OT */
+export async function updateTaskExecutionDetailsAction(
+  taskId: string,
+  data: {
+    observacoes?: string
+    photoUrl?: string
+    safetyRulesChecked?: string[]
+    frsChecked?: string[]
+  }
+): Promise<TaskFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+
+  try {
+    const task = await getTask(profile.companyId, taskId)
+    if (!task) return { error: 'Tarefa não encontrada.' }
+
+    const updateData: any = {}
+    if (data.observacoes !== undefined) {
+      updateData.observacoes = data.observacoes
+      updateData.description = data.observacoes || task.description
+    }
+    if (data.photoUrl) {
+      updateData.photoUrl = data.photoUrl
+      const existingPhotos = Array.isArray((task as any).photos) ? (task as any).photos : []
+      if (!existingPhotos.includes(data.photoUrl)) {
+        updateData.photos = [...existingPhotos, data.photoUrl]
+      }
+    }
+    if (data.safetyRulesChecked !== undefined) {
+      updateData.safetyRulesChecked = data.safetyRulesChecked
+    }
+    if (data.frsChecked !== undefined) {
+      updateData.frsChecked = data.frsChecked
+    }
+
+    await updateTask(profile.companyId, taskId, updateData)
+    revalidatePath('/dashboard/tasks')
+    revalidatePath(`/dashboard/tasks/${taskId}`)
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao guardar dados de execução.' }
+  }
+}

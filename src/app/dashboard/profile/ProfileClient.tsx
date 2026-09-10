@@ -16,6 +16,8 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
   const { dict } = useLanguage()
   const [name, setName] = useState(profile.name)
   const [abbreviation, setAbbreviation] = useState(profile.abbreviation || '')
+  const [email, setEmail] = useState(profile.email || '')
+  const [phone, setPhone] = useState((profile as any).phone || '')
   const [language, setLanguage] = useState(profile.language || 'pt')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -64,6 +66,8 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
       const fd = new FormData()
       fd.set('name', name)
       fd.set('abbreviation', abbreviation)
+      fd.set('email', email)
+      fd.set('phone', phone)
       fd.set('language', language)
       if (avatarUrl) fd.set('avatarUrl', avatarUrl)
       const result = await updateProfileAction({}, fd)
@@ -131,10 +135,10 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <p className="text-sm font-bold text-gray-800 dark:text-slate-200">{profile.name}</p>
-              {profile.abbreviation && (
+              <p className="text-sm font-bold text-gray-800 dark:text-slate-200">{name || profile.name}</p>
+              {abbreviation && (
                 <span className="font-mono font-bold text-xs bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600">
-                  {profile.abbreviation}
+                  {abbreviation}
                 </span>
               )}
             </div>
@@ -147,31 +151,24 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
 
         <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 p-4 mb-6">
           <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-bold mb-3 flex items-center gap-1.5">
-            <Lock className="h-3 w-3" /> Informação da conta · gerida pelo sistema
+            <Building2 className="h-3 w-3" /> Empresa e Permissões
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">E-mail</p>
-              <p className="flex items-center gap-1.5 text-gray-600 dark:text-slate-400">
-                <Mail className="h-3.5 w-3.5 text-gray-300 dark:text-slate-600 flex-shrink-0" />
-                {profile.email}
-              </p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
             <div>
               <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">Papel</p>
-              <p className="flex items-center gap-1.5 text-gray-600 dark:text-slate-400">
-                <Shield className="h-3.5 w-3.5 text-gray-300 dark:text-slate-600 flex-shrink-0" />
+              <p className="flex items-center gap-1.5 text-gray-700 dark:text-slate-300 font-bold">
+                <Shield className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                 {ROLE_LABELS[profile.role]}
               </p>
             </div>
             <div>
               <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">Empresa</p>
-              <p className="flex items-center gap-1.5 text-gray-600 dark:text-slate-400">
-                <Building2 className="h-3.5 w-3.5 text-gray-300 dark:text-slate-600 flex-shrink-0" />
-                {profile.company?.name ?? '—'}
+              <p className="flex items-center gap-1.5 text-gray-700 dark:text-slate-300 font-bold">
+                <Building2 className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                {profile.company?.name ?? 'Empresa UR'}
               </p>
             </div>
-            {profile.role === 'manager' && profile.company?.plan && (
+            {profile.company?.plan && (
               <div>
                 <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-1">Plano</p>
                 <p className="text-[#2E86C1] dark:text-blue-400 font-semibold capitalize">{profile.company.plan}</p>
@@ -181,7 +178,7 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
         </div>
 
         <form onSubmit={handleSave} className="space-y-4 border-t border-gray-100 dark:border-slate-800 pt-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Nome completo</label>
               <input
@@ -193,13 +190,33 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Abreviatura / Código (3 dígitos)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Abreviatura / Código (Sigla)</label>
               <input
                 value={abbreviation}
                 onChange={(e) => setAbbreviation(e.target.value.toUpperCase())}
                 className="input font-mono font-bold uppercase"
-                placeholder="Ex: RG, LM, MS"
+                placeholder="Ex: RG, LM, MS, CB"
                 maxLength={6}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">E-mail de Acesso</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Telemóvel / Telefone</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Ex: 912 345 678"
+                className="input font-mono"
               />
             </div>
           </div>

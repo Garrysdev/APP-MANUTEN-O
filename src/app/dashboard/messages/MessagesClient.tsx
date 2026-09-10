@@ -60,10 +60,40 @@ export default function MessagesClient({
   isManager: boolean
 }) {
   const router = useRouter()
+  const STORAGE_KEY = 'rg_internal_messages_cache'
   const [localMessages, setLocalMessages] = useState<InternalMessage[]>(messages)
 
+  const persistMessages = (list: InternalMessage[]) => {
+    try {
+      if (typeof window !== 'undefined' && list.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, 100)))
+      }
+    } catch {}
+  }
+
   useEffect(() => {
-    setLocalMessages(messages)
+    try {
+      const stored = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
+      let storedList: InternalMessage[] = []
+      if (stored) {
+        try { storedList = JSON.parse(stored) } catch {}
+      }
+
+      // Merge: mensagens do servidor + mensagens locais guardadas no browser
+      const map = new Map<string, InternalMessage>()
+      storedList.forEach((m) => { if (m?.id) map.set(m.id, m) })
+      messages.forEach((m) => { if (m?.id) map.set(m.id, m) })
+
+      const merged = Array.from(map.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      if (merged.length > 0) {
+        setLocalMessages(merged)
+        persistMessages(merged)
+      } else {
+        setLocalMessages(messages)
+      }
+    } catch {
+      setLocalMessages(messages)
+    }
   }, [messages])
   const [filter, setFilter] = useState<'all' | 'inbox' | 'sent'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | MessageStatus>('all')
@@ -355,10 +385,12 @@ export default function MessagesClient({
         }
 
         // Atualizar estado da mensagem original para 'replied' e adicionar nova mensagem
-        setLocalMessages((prev) => [
+        const updatedList = [
           newMsgObj,
-          ...prev.map((m) => (m.id === selectedMessage.id ? { ...m, status: 'replied' as MessageStatus } : m)),
-        ])
+          ...localMessages.map((m) => (m.id === selectedMessage.id ? { ...m, status: 'replied' as MessageStatus } : m)),
+        ]
+        setLocalMessages(updatedList)
+        persistMessages(updatedList)
         setSelectedMessage((prev) => (prev ? { ...prev, status: 'replied' } : null))
 
         setDirectReplyContent('')
@@ -404,9 +436,9 @@ export default function MessagesClient({
   async function handleUpdateStatus(messageId: string, newStatus: MessageStatus) {
     setStatusUpdatingId(messageId)
     // Atualização otimista local
-    setLocalMessages((prev) =>
-      prev.map((m) => (m.id === messageId ? { ...m, status: newStatus } : m))
-    )
+    const updated = localMessages.map((m) => (m.id === messageId ? { ...m, status: newStatus } : m))
+    setLocalMessages(updated)
+    persistMessages(updated)
     if (selectedMessage && selectedMessage.id === messageId) {
       setSelectedMessage((prev) => (prev ? { ...prev, status: newStatus } : null))
     }
@@ -425,7 +457,9 @@ export default function MessagesClient({
     if (!isManager) return
     if (!window.confirm('Tem a certeza que deseja apagar esta mensagem permanentemente?')) return
 
-    setLocalMessages((prev) => prev.filter((m) => m.id !== messageId))
+    const updated = localMessages.filter((m) => m.id !== messageId)
+    setLocalMessages(updated)
+    persistMessages(updated)
     if (selectedMessage && selectedMessage.id === messageId) {
       setSelectedMessage(null)
     }
@@ -534,13 +568,11 @@ export default function MessagesClient({
         }
 
         // Se for resposta, atualizar também a mensagem original para 'replied' localmente
-        if (replyToMessage) {
-          setLocalMessages((prev) =>
-            [newMsgObj, ...prev.map((m) => (m.id === replyToMessage.id ? { ...m, status: 'replied' as MessageStatus } : m))]
-          )
-        } else {
-          setLocalMessages((prev) => [newMsgObj, ...prev])
-        }
+        const updatedSubmitList = replyToMessage
+          ? [newMsgObj, ...localMessages.map((m) => (m.id === replyToMessage.id ? { ...m, status: 'replied' as MessageStatus } : m))]
+          : [newMsgObj, ...localMessages]
+        setLocalMessages(updatedSubmitList)
+        persistMessages(updatedSubmitList)
 
         setModalOpen(false)
         setReplyToMessage(null)

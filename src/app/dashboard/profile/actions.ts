@@ -27,10 +27,26 @@ export async function updateProfileAction(
   const languageRaw = formData.get('language')
   const language = languageRaw ? String(languageRaw) as 'pt' | 'en' | 'es' | 'fr' : undefined
 
+  const emailRaw = formData.get('email')
+  const email = emailRaw ? String(emailRaw).trim().toLowerCase() : undefined
+
+  const phoneRaw = formData.get('phone')
+  const phone = phoneRaw !== null ? String(phoneRaw).trim() || null : undefined
+
   try {
+    if (email && email !== profile.email) {
+      try {
+        await adminAuth().updateUser(profile.id, { email })
+      } catch (authErr) {
+        console.warn('[updateProfileAction] Auth email update fallback:', authErr)
+      }
+    }
+
     await updateUserProfile(profile.id, { 
       name, 
       companyId: profile.companyId || DEMO_COMPANY_ID,
+      ...(email ? { email } : {}),
+      ...(phone !== undefined ? { phone } : {}),
       ...(abbreviation !== undefined ? { abbreviation } : {}),
       ...(avatarUrl !== undefined ? { avatarUrl } : {}),
       ...(language !== undefined ? { language } : {})

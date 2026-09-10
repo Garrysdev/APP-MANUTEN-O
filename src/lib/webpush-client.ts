@@ -1,17 +1,52 @@
 import { updatePushSubscriptionAction } from '@/app/dashboard/profile/actions'
 
-// Converte a VAPID key para Uint8Array
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+// Converte a VAPID key para Uint8Array de forma robusta e compatível com todos os browsers (sem falhas de Latin1 no atob)
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+  // Remover aspas, espaços e quebras de linha que possam vir de variáveis de ambiente
+  const clean = String(base64String || '').replace(/^["'\s]+|["'\s]+$/g, '').trim()
+  const padding = '='.repeat((4 - (clean.length % 4)) % 4)
+  const base64 = (clean + padding).replace(/-/g, '+').replace(/_/g, '/')
 
-  const rawData = window.atob(base64)
-  const outputArray = new Uint8Array(rawData.length)
+  // Decodificação direta e segura via bitwise (sem dependência estrita de atob)
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  const buffer: number[] = []
+  let bufferLength = 0
+  let bits = 0
 
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i)
+  for (let i = 0; i < base64.length; i++) {
+    const c = base64[i]
+    if (c === '=') break
+    const idx = chars.indexOf(c)
+    if (idx === -1) continue
+    bits = (bits << 6) | idx
+    bufferLength += 6
+    if (bufferLength >= 8) {
+      bufferLength -= 8
+      buffer.push((bits >> bufferLength) & 0xff)
+    }
   }
-  return outputArray
+
+  if (buffer.length > 0) {
+    const arrayBuffer = new ArrayBuffer(buffer.length)
+    const uint8 = new Uint8Array(arrayBuffer)
+    for (let i = 0; i < buffer.length; i++) {
+      uint8[i] = buffer[i]
+    }
+    return uint8
+  }
+
+  // Fallback padrão se bitwise não capturar nada
+  try {
+    const rawData = window.atob(base64)
+    const arrayBuffer = new ArrayBuffer(rawData.length)
+    const outputArray = new Uint8Array(arrayBuffer)
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i)
+    }
+    return outputArray
+  } catch {
+    return new Uint8Array(new ArrayBuffer(0))
+  }
 }
 
 export async function subscribeToPushNotifications(_userId: string) {
@@ -52,7 +87,7 @@ export async function subscribeToPushNotifications(_userId: string) {
     if (!sub) {
       sub = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as unknown as BufferSource,
       })
     }
 

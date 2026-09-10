@@ -2,6 +2,7 @@
 
 import { Bell, Search, Settings, Menu } from 'lucide-react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import NotificationBell from './NotificationBell'
 
@@ -46,11 +47,12 @@ export default function TopHeader({ user, onMenuClick }: { user: any, onMenuClic
         >
           <Settings size={20} />
         </button>
-        <div 
-          onClick={() => router.push('/dashboard/profile')}
-          className="flex items-center gap-2 ml-1 sm:ml-2 pl-2 sm:pl-4 border-l border-outline cursor-pointer group"
+        <Link 
+          href="/dashboard/profile"
+          className="flex items-center gap-2 ml-1 sm:ml-2 pl-2 sm:pl-4 border-l border-outline cursor-pointer group active:opacity-75 transition-opacity"
+          title="Abrir Perfil do Utilizador"
         >
-          <div className="h-8 w-8 rounded-full bg-slate-200 border border-outline overflow-hidden group-hover:opacity-80 transition-opacity shrink-0">
+          <div className="h-8 w-8 rounded-full bg-slate-200 border border-outline overflow-hidden group-hover:ring-2 group-hover:ring-safety-orange transition-all shrink-0">
             {user?.avatarUrl ? (
               <Image 
                 src={user.avatarUrl} 
@@ -73,7 +75,7 @@ export default function TopHeader({ user, onMenuClick }: { user: any, onMenuClic
               {user?.role === 'manager' ? 'Gestor' : 'Técnico'}
             </p>
           </div>
-        </div>
+        </Link>
       </div>
     </header>
   )

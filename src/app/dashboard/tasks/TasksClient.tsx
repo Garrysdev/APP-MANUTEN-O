@@ -38,6 +38,7 @@ import {
 import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import { createMaintenancePlanAction, importMaintenancePlansAction } from '../maintenance-plan/actions'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
+import TaskSummaryModal from '@/components/modals/TaskSummaryModal'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 import { matchesTechFilter, isTaskAssignedToUser } from '@/lib/task-assignment'
 
@@ -229,6 +230,7 @@ export default function TasksClient({
   const [stockLoaded, setStockLoaded] = useState(false)
   const [stockLoading, setStockLoading] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
+  const [summaryTask, setSummaryTask] = useState<Task | null>(null)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -551,6 +553,63 @@ export default function TasksClient({
     return raw
   }
 
+  const resolveTechInitials = (idOrAbbr?: string | null): string => {
+    if (!idOrAbbr) return '—'
+    const raw = String(idOrAbbr).trim()
+    if (!raw || raw === '—' || raw === 'N/D') return '—'
+
+    const u = users.find(
+      (usr) =>
+        usr.id === raw ||
+        (usr.abbreviation && usr.abbreviation.toUpperCase() === raw.toUpperCase()) ||
+        usr.name.toLowerCase() === raw.toLowerCase()
+    )
+
+    if (u?.abbreviation) return u.abbreviation.toUpperCase()
+
+    const KNOWN_INITIALS: Record<string, string> = {
+      'mWSsTRtgq5QcOHusTdVYgDVrwHt2': 'RG',
+      'MEGjjvqtGqv3Oosxvlrx': 'LM',
+      'nAcCSm4E3tNnPLr72UPl': 'MS',
+      'zmDAeoGTzIWPavraKu0f': 'CB',
+      'CUodZKziOwo128GLK66i': 'RG',
+      'nLqzaMwMu1OR4CKZzatjTlNBWt82': 'ADM',
+      'q17h5HdG3R8dfjWiUZ6V': 'JR',
+      'twtQs1sAj0RFc9KI2S0n': 'OX2',
+      '2pL85QsrLpaNwYXZdVOP': 'CAR',
+      'tech_BlockControl': 'BLK',
+      'tech_Schindler': 'SCH',
+      'tech_Helenos': 'HEL',
+      'RG': 'RG',
+      'LM': 'LM',
+      'MS': 'MS',
+      'CB': 'CB',
+      'JR': 'JR',
+      'OX2': 'OX2',
+      'CAR': 'CAR',
+      'SCH': 'SCH',
+      'HEL': 'HEL',
+      'BLK': 'BLK',
+      'ADM': 'ADM',
+    }
+
+    if (KNOWN_INITIALS[raw]) return KNOWN_INITIALS[raw]
+    if (KNOWN_INITIALS[raw.toUpperCase()]) return KNOWN_INITIALS[raw.toUpperCase()]
+
+    if (u?.name) {
+      const parts = u.name.trim().split(/\s+/)
+      if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+      return u.name.slice(0, 3).toUpperCase()
+    }
+
+    if (/^[a-zA-Z0-9_-]{18,}$/.test(raw)) {
+      return 'TEC'
+    }
+
+    if (raw.length <= 4) return raw.toUpperCase()
+    return raw.slice(0, 3).toUpperCase()
+  }
+
   const assetName = (id?: string | null) => (id ? assetMap.get(id) ?? '—' : '—')
   const userName = (id?: string | null) => resolveTechLabel(id)
 
@@ -821,23 +880,30 @@ export default function TasksClient({
     })
   }, [filtered, isManager])
 
-  // Ordenação por coluna (quando sortKey !== null) ou por defeito (quando sortKey === null)
+  const parseTaskIdNum = (idStr: any): number => {
+    const s = String(idStr || '')
+    const match = s.match(/\d+/)
+    return match ? parseInt(match[0], 10) : 0
+  }
+
+  // Ordenação por coluna (por defeito pela coluna ID)
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Task>(
     defaultSortedFiltered,
     {
-      id: (t) => String((t as any).otNumber || t.id).toLowerCase(),
+      id: (t) => parseTaskIdNum((t as any).otNumber || t.id),
       data: (t) => parseDateToTs(t.createdAt || t.plannedStartDate || (t as any).completedAt),
       area: (t) => String((t as any).area || (t.assetId ? assetAreaMap.get(t.assetId) : '') || '').toLowerCase(),
       tag: (t) => String((t as any).tag || (t.assetId ? assetTagMap.get(t.assetId) : '') || '').toLowerCase(),
       ti: (t) => String(t.tipo || (t as any).ti || '').toLowerCase(),
       title: (t) => String(t.title || '').toLowerCase(),
-      assignee: (t) => String(userName(t.assignedTo) || '').toLowerCase(),
+      assignee: (t) => String(resolveTechInitials(t.assignedTo) || '').toLowerCase(),
       inicio: (t) => parseDateToTs(t.plannedStartDate || t.createdAt),
       fim: (t) => parseDateToTs(t.dueDate || t.completedAt),
       obs: (t) => String(t.observacoes || (t as any).causa || '').toLowerCase(),
       status: (t) => STATUS_LABELS[t.status] || t.status,
     },
-    null,
+    'id',
+    'desc',
   )
 
   const effectivePageSize = (!isManager || pageSize === -1) ? (shown.length || 1) : pageSize
@@ -1244,7 +1310,7 @@ export default function TasksClient({
               <button
                 key={t.id}
                 type="button"
-                onClick={() => openEdit(t)}
+                onClick={() => setSummaryTask(t)}
                 className="card w-full text-left border border-slate-200 dark:border-slate-800 p-3.5 space-y-2 active:bg-blue-50/70 dark:active:bg-slate-800/80 transition-colors cursor-pointer"
               >
                 <div className="flex items-center justify-between gap-2">
@@ -1276,15 +1342,17 @@ export default function TasksClient({
                     ) : (
                       ids.map((idOrAbbr) => {
                         const u = users.find((usr) => usr.id === idOrAbbr || usr.abbreviation === idOrAbbr)
-                        const label = resolveTechLabel(idOrAbbr)
+                        const initials = resolveTechInitials(idOrAbbr)
+                        const fullName = resolveTechLabel(idOrAbbr)
                         const isExt = u?.isExternal
                         return (
                           <span
                             key={idOrAbbr}
+                            title={fullName}
                             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${isExt ? 'bg-blue-100 text-blue-900 border border-blue-300' : 'bg-orange-100 text-orange-900 border border-orange-300'}`}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${isExt ? 'bg-blue-600' : 'bg-orange-600'} shrink-0`} />
-                            {label}
+                            {initials}
                           </span>
                         )
                       })
@@ -1412,9 +1480,9 @@ export default function TasksClient({
                   return (
                     <tr
                       key={t.id}
-                      onClick={() => openEdit(t)}
+                      onClick={() => setSummaryTask(t)}
                       className="border-b border-slate-100 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group"
-                      title="Clique para abrir e ver/editar a OT"
+                      title="Clique para abrir o resumo da OT"
                     >
                       <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
                         <span className="bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200 group-hover:border-blue-400 group-hover:bg-blue-100/80 transition-colors">{formattedId}</span>
@@ -1462,11 +1530,13 @@ export default function TasksClient({
                             <div className="flex flex-wrap gap-1">
                               {ids.map((idOrAbbr) => {
                                 const u = users.find((usr) => usr.id === idOrAbbr || usr.abbreviation === idOrAbbr)
-                                const label = resolveTechLabel(idOrAbbr)
+                                const initials = resolveTechInitials(idOrAbbr)
+                                const fullName = resolveTechLabel(idOrAbbr)
                                 const isExt = u?.isExternal
                                 return (
                                   <span
                                     key={idOrAbbr}
+                                    title={fullName}
                                     className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold ${
                                       isExt
                                         ? 'bg-blue-100 text-blue-900 border border-blue-300'
@@ -1474,7 +1544,7 @@ export default function TasksClient({
                                     }`}
                                   >
                                     <span className={`w-1.5 h-1.5 rounded-full ${isExt ? 'bg-blue-600' : 'bg-orange-600'} shrink-0`} />
-                                    {label}
+                                    {initials}
                                   </span>
                                 )
                               })}
@@ -1548,6 +1618,28 @@ export default function TasksClient({
           router.refresh()
         }}
       />
+
+      {/* Modal de Resumo Rápido de Execução da OT para o Técnico */}
+      {summaryTask && (
+        <TaskSummaryModal
+          task={summaryTask}
+          onClose={() => setSummaryTask(null)}
+          onStatusChanged={(id, newStatus) => {
+            handleStatusChange(id, newStatus)
+            setSummaryTask((prev) => prev ? { ...prev, status: newStatus } : null)
+          }}
+          onOpenFullEdit={isManager ? (t) => {
+            setSummaryTask(null)
+            openEdit(t)
+          } : undefined}
+          isManager={isManager}
+          resolveTechInitials={resolveTechInitials}
+          resolveTechLabel={resolveTechLabel}
+          assetTag={(assets.find((a) => a.id === summaryTask.assetId) as any)?.tag || (summaryTask as any).tag}
+          assetName={assets.find((a) => a.id === summaryTask.assetId)?.name}
+          area={(summaryTask as any).area || (assets.find((a) => a.id === summaryTask.assetId) as any)?.area}
+        />
+      )}
     </div>
   )
 }

@@ -47,7 +47,7 @@ const emptyCol = {
   causa: ''
 }
 
-export function format3DigitId(rawId: string | number | undefined | null, index: number): string {
+export function format3DigitId(rawId: string | number | undefined | null, index: number = 0): string {
   if (!rawId) return String(index + 1).padStart(3, '0')
   const str = String(rawId).trim()
   const numMatch = str.match(/\d+$/)
