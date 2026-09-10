@@ -238,7 +238,7 @@ export default function TasksClient({
       const list = pStatus.split(',').map((s) => s.trim() as TaskStatus).filter(Boolean)
       if (list.length > 0) return list
     }
-    return [] // DEFAULT: Mostrar todas as OTs por omissão (como na quinta-feira)
+    return ['pending', 'in_progress'] // DEFAULT: Mostrar apenas as OTs ATIVAS ao abrir a página
   })
   const [selectedTIs, setSelectedTIs] = useState<string[]>([])
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])
@@ -502,8 +502,57 @@ export default function TasksClient({
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
   const userMap = useMemo(() => new Map(users.map((u) => [u.id, (u as any).abbreviation || u.name])), [users])
 
+  const resolveTechLabel = (idOrAbbr?: string | null): string => {
+    if (!idOrAbbr) return '—'
+    const raw = String(idOrAbbr).trim()
+    if (!raw || raw === '—' || raw === 'N/D') return '—'
+
+    const u = users.find(
+      (usr) =>
+        usr.id === raw ||
+        (usr.abbreviation && usr.abbreviation.toUpperCase() === raw.toUpperCase()) ||
+        usr.name.toLowerCase() === raw.toLowerCase()
+    )
+
+    if (u) {
+      const clean = u.name.replace(/^([A-Z]{2,4}\s*[-–—]\s*)/i, '').replace(/\(.*?\)/g, '').trim() || u.name
+      if (u.abbreviation) {
+        return `${u.abbreviation} - ${clean}`
+      }
+      return clean
+    }
+
+    const KNOWN: Record<string, string> = {
+      'mWSsTRtgq5QcOHusTdVYgDVrwHt2': 'RG - RuiG',
+      'MEGjjvqtGqv3Oosxvlrx': 'LM - Leandro Maia',
+      'nAcCSm4E3tNnPLr72UPl': 'MS - Marco Silva',
+      'zmDAeoGTzIWPavraKu0f': 'CB - Carlos Branco',
+      'CUodZKziOwo128GLK66i': 'RG - Rui Garrido',
+      'nLqzaMwMu1OR4CKZzatjTlNBWt82': 'ADM - Admin',
+      'q17h5HdG3R8dfjWiUZ6V': 'JR - João Ramos',
+      'twtQs1sAj0RFc9KI2S0n': 'OX2 - Miguel',
+      '2pL85QsrLpaNwYXZdVOP': 'CAR - Carrier',
+      'tech_BlockControl': 'BLK - BlockControl',
+      'tech_Schindler': 'SCH - Schindler',
+      'tech_Helenos': 'HEL - Helenos',
+      'RG': 'RG - RuiG',
+      'LM': 'LM - Leandro Maia',
+      'MS': 'MS - Marco Silva',
+      'CB': 'CB - Carlos Branco',
+    }
+
+    if (KNOWN[raw]) return KNOWN[raw]
+    if (KNOWN[raw.toUpperCase()]) return KNOWN[raw.toUpperCase()]
+
+    if (/^[a-zA-Z0-9_-]{18,}$/.test(raw)) {
+      return 'Técnico'
+    }
+
+    return raw
+  }
+
   const assetName = (id?: string | null) => (id ? assetMap.get(id) ?? '—' : '—')
-  const userName = (id?: string | null) => (id ? userMap.get(id) ?? id ?? '—' : '—')
+  const userName = (id?: string | null) => resolveTechLabel(id)
 
   const combinedTasks = useMemo(() => {
     if (extraCompletedTasks.length === 0) return tasks
@@ -791,12 +840,12 @@ export default function TasksClient({
     null,
   )
 
-  const effectivePageSize = pageSize === -1 ? (shown.length || 1) : pageSize
+  const effectivePageSize = (!isManager || pageSize === -1) ? (shown.length || 1) : pageSize
   const totalPages = Math.ceil(shown.length / effectivePageSize) || 1
   const currentShown = useMemo(() => {
-    if (pageSize === -1) return shown
+    if (!isManager || pageSize === -1) return shown
     return shown.slice((currentPage - 1) * pageSize, currentPage * pageSize)
-  }, [shown, currentPage, pageSize])
+  }, [shown, currentPage, pageSize, isManager])
 
   const statuses: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
   const criticidades: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
@@ -901,14 +950,22 @@ export default function TasksClient({
     <div className="w-full max-w-[1500px] mx-auto animate-fade-in-up">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-industrial-blue dark:text-slate-100 tracking-tight flex items-center gap-2">
-            <span>{isManager ? dict.tasks.managerTasks : dict.tasks.myTasks}</span>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-              {shown.length} / {tasks.length}
-            </span>
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-industrial-blue dark:text-slate-100 tracking-tight flex items-center gap-2">
+              <span>{isManager ? dict.tasks.managerTasks : 'As minhas OTs'}</span>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                {shown.length} OTs
+              </span>
+            </h1>
+            {!isManager && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-industrial-blue dark:text-sky-300 font-extrabold text-xs border border-blue-200 dark:border-blue-800 shadow-2xs">
+                <span>👤</span>
+                <span>Técnico: {resolveTechLabel(userId)}</span>
+              </span>
+            )}
+          </div>
           <p className="text-xs sm:text-sm font-medium text-industrial-blue-light dark:text-slate-400 mt-1">
-            Ordens de Trabalho ativas e pendentes da equipa
+            {isManager ? 'Ordens de Trabalho ativas e planeadas da equipa' : 'Ordens de Trabalho ativas atribuídas'}
           </p>
         </div>
 
@@ -956,35 +1013,35 @@ export default function TasksClient({
         <div className="flex gap-2 flex-wrap items-center">
           <button
             onClick={() => setSelectedStatuses(['pending', 'in_progress'])}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
               selectedStatuses.length === 2 && selectedStatuses.includes('pending') && selectedStatuses.includes('in_progress')
-                ? 'bg-industrial-blue text-white shadow-industrial-blue/20'
+                ? 'bg-industrial-blue text-white shadow-industrial-blue/20 ring-2 ring-industrial-blue/30'
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            <span>⚡ Ativas (Pendente + Em Curso)</span>
+            <span>⚡ Ativas</span>
           </button>
 
           <button
             onClick={() => setSelectedStatuses(['done', 'cancelled'])}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
               selectedStatuses.length === 2 && selectedStatuses.includes('done') && selectedStatuses.includes('cancelled')
-                ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-slate-900/20'
+                ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-slate-900/20 ring-2 ring-slate-900/30'
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            <span>📜 Histórico (Concluídas + Canceladas)</span>
+            <span>📜 Histórico</span>
           </button>
 
           <button
             onClick={() => setSelectedStatuses(['pending', 'in_progress', 'done', 'cancelled'])}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
               selectedStatuses.length >= 4
-                ? 'bg-industrial-blue text-white shadow-industrial-blue/20'
+                ? 'bg-slate-800 text-white shadow-slate-800/20 ring-2 ring-slate-800/30'
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            <span>📋 Todas as OTs</span>
+            <span>📋 Todas</span>
           </button>
 
           <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 mx-1 hidden sm:block" />
@@ -1042,10 +1099,10 @@ export default function TasksClient({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Pesquisar OT..."
-            className="input !text-xs !py-1.5 !px-3 w-40 sm:w-48 shrink-0 font-medium rounded-xl"
+            className="input !text-xs !py-1.5 !px-3 w-36 sm:w-48 shrink-0 font-medium rounded-xl"
           />
 
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium shrink-0">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 font-medium shrink-0">
             <span>Por página:</span>
             <select
               value={pageSize}
@@ -1219,7 +1276,7 @@ export default function TasksClient({
                     ) : (
                       ids.map((idOrAbbr) => {
                         const u = users.find((usr) => usr.id === idOrAbbr || usr.abbreviation === idOrAbbr)
-                        const label = u ? (u.abbreviation || u.name) : (userName(idOrAbbr) !== '—' ? userName(idOrAbbr) : idOrAbbr)
+                        const label = resolveTechLabel(idOrAbbr)
                         const isExt = u?.isExternal
                         return (
                           <span
@@ -1405,7 +1462,7 @@ export default function TasksClient({
                             <div className="flex flex-wrap gap-1">
                               {ids.map((idOrAbbr) => {
                                 const u = users.find((usr) => usr.id === idOrAbbr || usr.abbreviation === idOrAbbr)
-                                const label = u ? (u.abbreviation || u.name) : (userName(idOrAbbr) !== '—' ? userName(idOrAbbr) : idOrAbbr)
+                                const label = resolveTechLabel(idOrAbbr)
                                 const isExt = u?.isExternal
                                 return (
                                   <span
@@ -1448,8 +1505,8 @@ export default function TasksClient({
         </div>
       </div>
 
-        {totalPages > 1 && pageSize !== -1 && (
-          <div className="flex items-center justify-between border-t border-gray-100 dark:border-slate-800 px-4 py-3 bg-gray-50/50 dark:bg-slate-900/50">
+        {isManager && totalPages > 1 && pageSize !== -1 && (
+          <div className="hidden md:flex items-center justify-between border-t border-gray-100 dark:border-slate-800 px-4 py-3 bg-gray-50/50 dark:bg-slate-900/50">
             <span className="text-xs text-gray-500 dark:text-slate-400">
               Página {currentPage} de {totalPages} ({shown.length} OTs)
             </span>

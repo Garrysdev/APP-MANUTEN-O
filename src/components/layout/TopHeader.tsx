@@ -48,26 +48,30 @@ export default function TopHeader({ user, onMenuClick }: { user: any, onMenuClic
         </button>
         <div 
           onClick={() => router.push('/dashboard/profile')}
-          className="flex items-center gap-2 ml-2 pl-4 border-l border-outline cursor-pointer group"
+          className="flex items-center gap-2 ml-1 sm:ml-2 pl-2 sm:pl-4 border-l border-outline cursor-pointer group"
         >
-          <div className="h-8 w-8 rounded-full bg-slate-200 border border-outline overflow-hidden group-hover:opacity-80 transition-opacity">
+          <div className="h-8 w-8 rounded-full bg-slate-200 border border-outline overflow-hidden group-hover:opacity-80 transition-opacity shrink-0">
             {user?.avatarUrl ? (
               <Image 
                 src={user.avatarUrl} 
                 alt="User" 
-                width={32}
-                height={32}
+                width={32} 
+                height={32} 
                 className="w-full h-full object-cover"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-industrial-blue text-white font-bold text-xs uppercase">
-                {user?.name?.split(' ').map((n: string) => n[0]).join('').substring(0,2) || 'U'}
+                {user?.abbreviation || user?.name?.split(' ').map((n: string) => n[0]).join('').substring(0,2) || 'U'}
               </div>
             )}
           </div>
-          <div className="hidden sm:block text-left">
-            <p className="text-xs font-bold text-industrial-blue group-hover:text-safety-orange transition-colors">{user?.name || 'Carregando...'}</p>
-            <p className="text-[10px] text-industrial-blue-light font-mono font-bold tracking-widest uppercase">{user?.role === 'manager' ? 'Gestor' : 'Técnico'}</p>
+          <div className="block text-left">
+            <p className="text-xs font-bold text-industrial-blue group-hover:text-safety-orange transition-colors truncate max-w-[110px] sm:max-w-[190px]">
+              {user?.abbreviation ? `[${user.abbreviation}] ` : ''}{user?.name ? user.name.replace(/^([A-Z]{2,4}\s*[-–—]\s*)/i, '').trim() : 'Carregando...'}
+            </p>
+            <p className="text-[9px] sm:text-[10px] text-industrial-blue-light font-mono font-bold tracking-wider uppercase">
+              {user?.role === 'manager' ? 'Gestor' : 'Técnico'}
+            </p>
           </div>
         </div>
       </div>
