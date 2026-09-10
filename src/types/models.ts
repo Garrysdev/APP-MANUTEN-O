@@ -90,6 +90,7 @@ export interface User {
   specialty?: string | null // Especialidade / Tipo de técnico
   active: boolean
   createdAt: string
+  updatedAt?: string
   hourlyRate?: number // Custo hora do técnico
   language?: 'pt' | 'en' | 'es' | 'fr'
   pushSubscription?: any // Token do Web Push
@@ -443,6 +444,7 @@ export const MESSAGE_STATUS_LABELS: Record<MessageStatus, string> = {
 }
 
 export interface InternalMessage {
+  updatedAt?: string | null
   id: string
   companyId: string
   senderId: string

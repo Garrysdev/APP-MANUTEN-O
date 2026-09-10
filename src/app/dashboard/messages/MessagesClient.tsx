@@ -61,6 +61,7 @@ export default function MessagesClient({
 }) {
   const router = useRouter()
   const STORAGE_KEY = 'rg_internal_messages_cache'
+  const STORAGE_RESET_KEY = 'rg_msgs_cleared_v3'
   const [localMessages, setLocalMessages] = useState<InternalMessage[]>(messages)
 
   const isSeedMessage = (m?: InternalMessage | null) => {
@@ -78,6 +79,18 @@ export default function MessagesClient({
       }
     } catch {}
   }
+
+  // Limpeza de arranque solicitada pelo utilizador para remover todo o histórico e iniciar limpo
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const alreadyReset = localStorage.getItem(STORAGE_RESET_KEY)
+      if (!alreadyReset) {
+        localStorage.removeItem(STORAGE_KEY)
+        localStorage.setItem(STORAGE_RESET_KEY, 'true')
+        setLocalMessages([])
+      }
+    }
+  }, [])
 
   useEffect(() => {
     try {
@@ -114,10 +127,16 @@ export default function MessagesClient({
           .then((r) => r.json())
           .then((data) => {
             if (Array.isArray(data?.messages) && data.messages.length > 0) {
-              const fresh = data.messages.filter((m: any) => !isSeedMessage(m))
+              const fresh: InternalMessage[] = data.messages.filter((m: any) => !isSeedMessage(m))
               if (fresh.length > 0) {
-                setLocalMessages(fresh)
-                persistMessages(fresh)
+                setLocalMessages((prev) => {
+                  const m = new Map<string, InternalMessage>()
+                  prev.forEach((item) => { if (item?.id && !isSeedMessage(item)) m.set(item.id, item) })
+                  fresh.forEach((item: InternalMessage) => { if (item?.id && !isSeedMessage(item)) m.set(item.id, item) })
+                  const res = Array.from(m.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+                  persistMessages(res)
+                  return res
+                })
               }
             }
           })
@@ -505,6 +524,26 @@ export default function MessagesClient({
     }
   }
 
+  async function handleClearAll() {
+    if (!isManager) return
+    if (!window.confirm('Tem a certeza que deseja apagar permanentemente todas as mensagens para reiniciar o histórico?')) return
+    setBusy(true)
+    try {
+      const { clearAllMessagesAction } = await import('./actions')
+      await clearAllMessagesAction()
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(STORAGE_KEY)
+      }
+      setLocalMessages([])
+      setSelectedMessage(null)
+      setBusy(false)
+      router.refresh()
+    } catch (err: any) {
+      setBusy(false)
+      alert(err?.message || 'Erro ao limpar mensagens.')
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!content.trim()) {
@@ -688,14 +727,29 @@ export default function MessagesClient({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleOpenCreate}
-          className="btn-primary flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl shadow-md text-sm font-bold cursor-pointer"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Nova Mensagem</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {isManager && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              disabled={busy}
+              className="px-3 py-2.5 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-red-200 dark:border-red-900/60 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Apagar todas as mensagens para reiniciar o histórico"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Limpar Mensagens</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            className="btn-primary flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl shadow-md text-sm font-bold cursor-pointer"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Nova Mensagem</span>
+          </button>
+        </div>
       </div>
 
       {/* Link / Botão Filtros */}

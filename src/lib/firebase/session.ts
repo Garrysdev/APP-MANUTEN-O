@@ -44,12 +44,12 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
 
     const docData = (userSnap && userSnap.exists) ? (userSnap.data() || {}) : {}
     const KNOWN_USERS = [
-      { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', email: 'tecnico@teste.rg', name: 'RG - RuiG', abbreviation: 'RG', role: 'technician' },
+      { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', email: 'tecnico@teste.rg', name: 'RuiG', abbreviation: 'RU', role: 'technician' },
       { id: 'MEGjjvqtGqv3Oosxvlrx', email: 'lm@rgmaintenance.pt', name: 'Leandro Maia', abbreviation: 'LM', role: 'technician' },
       { id: 'nAcCSm4E3tNnPLr72UPl', email: 'ms@rgmaintenance.pt', name: 'Marco Silva', abbreviation: 'MS', role: 'technician' },
       { id: 'zmDAeoGTzIWPavraKu0f', email: 'cb@rgmaintenance.pt', name: 'Carlos Branco', abbreviation: 'CB', role: 'technician' },
-      { id: 'CUodZKziOwo128GLK66i', email: 'garrido.rui@gmail.com', name: 'Rui Garrido (RG)', abbreviation: 'RG', role: 'manager' },
-      { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', email: 'demo@rgmaintenance.pt', name: 'Admin', abbreviation: 'ADM', role: 'manager' },
+      { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', email: 'garrido.rui@gmail.com', name: 'Rui Garrido', abbreviation: 'RG', role: 'manager' },
+      { id: 'CUodZKziOwo128GLK66i', email: 'garrido.rui@gmail.com', name: 'Rui Garrido', abbreviation: 'RG', role: 'manager' },
     ]
     const matchedKnown = KNOWN_USERS.find((k) => k.id === session.uid || (userEmail && k.email.toLowerCase() === userEmail))
 
@@ -115,12 +115,12 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
   } catch (err: any) {
     console.error('[getCurrentProfile Error]:', err)
     const KNOWN_USERS = [
-      { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', email: 'tecnico@teste.rg', name: 'RG - RuiG', abbreviation: 'RG', role: 'technician' },
+      { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', email: 'tecnico@teste.rg', name: 'RuiG', abbreviation: 'RU', role: 'technician' },
       { id: 'MEGjjvqtGqv3Oosxvlrx', email: 'lm@rgmaintenance.pt', name: 'Leandro Maia', abbreviation: 'LM', role: 'technician' },
       { id: 'nAcCSm4E3tNnPLr72UPl', email: 'ms@rgmaintenance.pt', name: 'Marco Silva', abbreviation: 'MS', role: 'technician' },
       { id: 'zmDAeoGTzIWPavraKu0f', email: 'cb@rgmaintenance.pt', name: 'Carlos Branco', abbreviation: 'CB', role: 'technician' },
-      { id: 'CUodZKziOwo128GLK66i', email: 'garrido.rui@gmail.com', name: 'Rui Garrido (RG)', abbreviation: 'RG', role: 'manager' },
-      { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', email: 'demo@rgmaintenance.pt', name: 'Admin', abbreviation: 'ADM', role: 'manager' },
+      { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', email: 'garrido.rui@gmail.com', name: 'Rui Garrido', abbreviation: 'RG', role: 'manager' },
+      { id: 'CUodZKziOwo128GLK66i', email: 'garrido.rui@gmail.com', name: 'Rui Garrido', abbreviation: 'RG', role: 'manager' },
     ]
     const matchedKnown = KNOWN_USERS.find((k) => k.id === session.uid || (userEmail && k.email.toLowerCase() === userEmail))
     return {

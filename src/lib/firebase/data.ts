@@ -138,10 +138,9 @@ function getFallbackUsers(): User[] {
   const techs = [
     { id: 'MEGjjvqtGqv3Oosxvlrx', name: 'Leandro Maia', abbreviation: 'LM', email: 'lm@rgmaintenance.pt', role: 'technician', active: true, isExternal: false, specialty: 'Multidisciplinar' },
     { id: 'nAcCSm4E3tNnPLr72UPl', name: 'Marco Silva', abbreviation: 'MS', email: 'ms@rgmaintenance.pt', role: 'technician', active: true, isExternal: false, specialty: 'Mecânico' },
-    { id: 'zmDAeoGTzIWPavraKu0f', name: 'Carlos Branco', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician', active: true, isExternal: false, specialty: 'Serralharia / Tubagem' },
-    { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', name: 'RG - RuiG', abbreviation: 'RG', email: 'tecnico@teste.rg', role: 'technician', active: true, isExternal: false, specialty: 'Eletromecânica' },
-    { id: 'CUodZKziOwo128GLK66i', name: 'Rui Garrido (RG)', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false, specialty: 'Gestão de Manutenção' },
-    { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', name: 'Admin', abbreviation: 'ADM', email: 'demo@rgmaintenance.pt', role: 'manager', active: true, isExternal: false },
+    { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', name: 'RuiG', abbreviation: 'RU', email: 'tecnico@teste.rg', role: 'technician', active: true, isExternal: false, specialty: 'Eletromecânica' },
+    { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', name: 'Rui Garrido', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false, specialty: 'Gestão de Manutenção' },
+    { id: 'CUodZKziOwo128GLK66i', name: 'Rui Garrido', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false, specialty: 'Gestão de Manutenção' },
     { id: 'q17h5HdG3R8dfjWiUZ6V', name: 'Eng. João Ramos', abbreviation: 'JR', email: 'jr@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_jr', externalCompanyName: 'João Ramos Engenharia', specialty: 'Engenharia Geral', phone: '910 000 000' },
     { id: 'twtQs1sAj0RFc9KI2S0n', name: 'Miguel', abbreviation: 'OX2', email: 'ox2@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_ox2', externalCompanyName: 'OX2 Especialista', specialty: 'Caldeiras & Sobreaquecimento', phone: '912 345 678' },
     { id: '2pL85QsrLpaNwYXZdVOP', name: 'Carrier (Ricardo)', abbreviation: 'CAR', email: 'carrier@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_car', externalCompanyName: 'Carrier Portugal', specialty: 'HVAC / Climatização', phone: '965 432 109' },
@@ -1352,12 +1351,13 @@ export async function updateUserProfile(
     companyId?: string
   }
 ): Promise<void> {
+  const finalCompanyId = data.companyId || DEMO_COMPANY_ID
   const update: Record<string, unknown> = {
     updatedAt: new Date().toISOString(),
-    companyId: data.companyId || DEMO_COMPANY_ID,
+    companyId: finalCompanyId,
   }
   if (data.name !== undefined) update.name = data.name.trim()
-  if (data.email !== undefined) update.email = data.email
+  if (data.email !== undefined) update.email = data.email.trim().toLowerCase()
   if (data.abbreviation !== undefined) update.abbreviation = data.abbreviation ? data.abbreviation.trim().toUpperCase() : null
   if (data.mustChangePassword !== undefined) update.mustChangePassword = data.mustChangePassword
   if (data.avatarUrl !== undefined) update.avatarUrl = data.avatarUrl
@@ -1372,7 +1372,7 @@ export async function updateUserProfile(
   if (data.phone !== undefined) update.phone = data.phone
   if (data.hourlyRate !== undefined) update.hourlyRate = data.hourlyRate
 
-  // Atualizar também na cache em memória de fallbacks
+  // 1. Atualizar na cache em memória de fallbacks
   if (cachedFallbackUsers) {
     const idx = cachedFallbackUsers.findIndex(
       (u) => u.id === userId || (data.email && u.email?.toLowerCase() === data.email.toLowerCase())
@@ -1384,13 +1384,86 @@ export async function updateUserProfile(
     }
   }
 
+  // 2. Gravar no Firestore users pelo ID principal
   try {
     const sanitized = JSON.parse(JSON.stringify(update))
     await adminDb().collection('users').doc(userId).set(sanitized, { merge: true })
+
+    // Se houver email, atualizar também qualquer outro documento legado com o mesmo email
+    if (data.email) {
+      const emailQuery = await adminDb().collection('users').where('email', '==', data.email.trim().toLowerCase()).get().catch(() => null)
+      if (emailQuery && !emailQuery.empty) {
+        for (const doc of emailQuery.docs) {
+          if (doc.id !== userId) {
+            await doc.ref.set(sanitized, { merge: true }).catch(() => {})
+          }
+        }
+      }
+    }
   } catch (err) {
     console.warn('[updateUserProfile] Firestore write failed / quota exceeded, updated in cache:', err)
   }
+
+  // 3. Propagar alterações de Nome e Abreviatura às tarefas e aos ficheiros locais da BD
+  if (data.name !== undefined || data.abbreviation !== undefined) {
+    const newName = data.name ? data.name.trim() : undefined
+    const newAbbr = data.abbreviation ? data.abbreviation.trim().toUpperCase() : undefined
+
+    try {
+      // Atualizar no Firestore tasks
+      const taskBatch = adminDb().batch()
+      const tSnap = await adminDb().collection('tasks').where('companyId', '==', finalCompanyId).get().catch(() => null)
+      if (tSnap && !tSnap.empty) {
+        let batchCount = 0
+        tSnap.docs.forEach((d) => {
+          const tData = d.data()
+          const ids = (tData.assignedToIds || []) as string[]
+          const isAssigned = tData.assignedTo === userId || ids.includes(userId)
+          if (isAssigned) {
+            const taskUpdate: any = { updatedAt: new Date().toISOString() }
+            if (newName) taskUpdate.assignedTechnicianName = newName
+            if (newAbbr) taskUpdate.assignedTechnicianAbbr = newAbbr
+            taskBatch.update(d.ref, taskUpdate)
+            batchCount++
+          }
+        })
+        if (batchCount > 0) {
+          await taskBatch.commit().catch(() => {})
+        }
+      }
+    } catch {}
+
+    // Atualizar também nos ficheiros locais de tasks se existirem
+    try {
+      const taskFiles = ['tasks.json', 'tasks_ur.json']
+      for (const tf of taskFiles) {
+        const p = path.join(process.cwd(), 'scripts', 'import', tf)
+        if (fs.existsSync(p)) {
+          const list = JSON.parse(fs.readFileSync(p, 'utf-8'))
+          if (Array.isArray(list)) {
+            let mod = false
+            list.forEach((t: any) => {
+              const ids = (t.assignedToIds || []) as string[]
+              if (t.assignedTo === userId || ids.includes(userId)) {
+                if (newName) t.assignedTechnicianName = newName
+                if (newAbbr) t.assignedTechnicianAbbr = newAbbr
+                mod = true
+              }
+            })
+            if (mod) {
+              fs.writeFileSync(p, JSON.stringify(list, null, 2))
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 4. Invalidar todos os tags de cache para refletir em toda a BD imediatamente
   revalidateTag('users')
+  revalidateTag('tasks')
+  revalidateTag('messages')
+  revalidateTag('notifications')
 }
 
 export const countActiveUsers = cache(async function(companyId: string): Promise<number> {
@@ -2147,6 +2220,10 @@ export function syncInternalMessages(msgs: InternalMessage[]): void {
     if (m?.id && !m.id.startsWith('msg_seed_')) map.set(m.id, m)
   })
   cachedInternalMessages = Array.from(map.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+  try {
+    const feedRef = adminDb().collection('system_sync').doc('internal_messages_feed')
+    void feedRef.set({ messages: JSON.parse(JSON.stringify(cachedInternalMessages.slice(0, 100))), updatedAt: new Date().toISOString() }, { merge: true })
+  } catch {}
 }
 
 export const listInternalMessages = cache(async function(
@@ -2155,18 +2232,35 @@ export const listInternalMessages = cache(async function(
 ): Promise<InternalMessage[]> {
   try {
     let docs: InternalMessage[] = []
+
+    // 1. Tentar ler do feed sincronizado de documento único (consome apenas 1 leitura de quota!)
     try {
-      const snap = await adminDb()
-        .collection('internal_messages')
-        .limit(100)
-        .get()
-      docs = snap.docs.map((d) => ({ ...serialize<InternalMessage>(d), id: d.id }))
-    } catch (dbErr: any) {
-      const isQuotaErr = String(dbErr?.message || dbErr).includes('Quota exceeded') || String(dbErr?.message || dbErr).includes('RESOURCE_EXHAUSTED')
-      if (isQuotaErr) {
-        console.warn('[listInternalMessages] Quota diária do Firestore atingida. A usar mensagens de fallback locais.')
-      } else {
-        console.error('[listInternalMessages Firestore read error]:', dbErr)
+      const feedSnap = await adminDb().collection('system_sync').doc('internal_messages_feed').get().catch(() => null)
+      if (feedSnap && feedSnap.exists && Array.isArray(feedSnap.data()?.messages)) {
+        const feedList = feedSnap.data()!.messages as InternalMessage[]
+        feedList.forEach((m) => {
+          if (m && m.id && !m.id.startsWith('msg_seed_')) {
+            docs.push(m)
+          }
+        })
+      }
+    } catch { /* ignore */ }
+
+    // 2. Se o feed estiver vazio, tentar a coleção completa
+    if (docs.length === 0) {
+      try {
+        const snap = await adminDb()
+          .collection('internal_messages')
+          .limit(50)
+          .get()
+        docs = snap.docs.map((d) => ({ ...serialize<InternalMessage>(d), id: d.id }))
+      } catch (dbErr: any) {
+        const isQuotaErr = String(dbErr?.message || dbErr).includes('Quota exceeded') || String(dbErr?.message || dbErr).includes('RESOURCE_EXHAUSTED')
+        if (isQuotaErr) {
+          console.warn('[listInternalMessages] Quota diária do Firestore atingida. A usar mensagens de fallback locais.')
+        } else {
+          console.error('[listInternalMessages Firestore read error]:', dbErr)
+        }
       }
     }
 
@@ -2242,13 +2336,21 @@ export const listInternalMessages = cache(async function(
     }
 
     // Mapeamento automático de siglas e IDs dos técnicos da empresa
-    if (tokens.has('rg') || tokens.has('ruig') || tokens.has('mwsstrtgq5qcohusdtvygdvrwht2') || tokens.has('tecnico@teste.rg')) {
-      tokens.add('rg')
-      tokens.add('ruig')
-      tokens.add('rg - ruig')
+    if (tokens.has('mwsstrtgq5qcohusdtvygdvrwht2') || tokens.has('tecnico@teste.rg') || tokens.has('ruig') || tokens.has('ru') || tokens.has('tech_ruig')) {
       tokens.add('mwsstrtgq5qcohusdtvygdvrwht2')
-      tokens.add('tech_rg')
       tokens.add('tecnico@teste.rg')
+      tokens.add('ruig')
+      tokens.add('ru')
+      tokens.add('rg - ruig')
+      tokens.add('tech_ruig')
+      tokens.add('tech_rg')
+    }
+    if (tokens.has('nlqzamwmu1or4ckzzatjtlnbwt82') || tokens.has('cuodzkziowo128glk66i') || tokens.has('garrido.rui@gmail.com') || tokens.has('rui garrido')) {
+      tokens.add('nlqzamwmu1or4ckzzatjtlnbwt82')
+      tokens.add('cuodzkziowo128glk66i')
+      tokens.add('garrido.rui@gmail.com')
+      tokens.add('rui garrido')
+      tokens.add('rg')
     }
     if (tokens.has('lm') || tokens.has('megjjvqtgqv3oosxvlrx') || tokens.has('leandro maia') || tokens.has('lm@rgmaintenance.pt')) {
       tokens.add('lm')
@@ -2347,6 +2449,18 @@ export async function createInternalMessage(
   }
   cachedInternalMessages.unshift(msgObj)
 
+  // Atualizar o feed centralizado (apenas 1 documento - sem consumo excessivo de quota)
+  try {
+    const feedRef = adminDb().collection('system_sync').doc('internal_messages_feed')
+    const feedSnap = await feedRef.get().catch(() => null)
+    let currentFeed: InternalMessage[] = []
+    if (feedSnap && feedSnap.exists && Array.isArray(feedSnap.data()?.messages)) {
+      currentFeed = feedSnap.data()!.messages
+    }
+    const merged = [msgObj, ...currentFeed.filter((m) => m?.id !== msgObj.id && !m?.id?.startsWith('msg_seed_'))].slice(0, 100)
+    await feedRef.set({ messages: JSON.parse(JSON.stringify(merged)), updatedAt: now }, { merge: true })
+  } catch {}
+
   try {
     const filePath = path.join(process.cwd(), 'scripts', 'import', 'messages.json')
     let current: InternalMessage[] = []
@@ -2387,8 +2501,8 @@ export async function createInternalMessage(
       } else {
         data.recipientIds.forEach((rec) => {
           const recClean = String(rec).toLowerCase().trim().replace(/^(tech_|user_)/, '')
-          // Mapeamento especial de RG
-          if (recClean === 'rg' || recClean === 'ruig' || recClean === 'mwsstrtgq5qcohusdtvygdvrwht2') {
+          // Mapeamento especial de RuiG
+          if (recClean === 'ruig' || recClean === 'ru' || recClean === 'mwsstrtgq5qcohusdtvygdvrwht2' || recClean === 'tecnico@teste.rg') {
             targetUserIds.add('mWSsTRtgq5QcOHusTdVYgDVrwHt2')
           }
           companyUsers.forEach((u) => {
@@ -2409,27 +2523,24 @@ export async function createInternalMessage(
         })
       }
 
+      const senderName = data.senderName || 'Colega'
       const notifTitle = data.replyToId
-        ? `↩️ Resposta de ${data.senderName}`
-        : (data.requiresResponse || data.status === 'awaiting_reply'
-            ? `⏳ Mensagem (Aguarda Resposta) de ${data.senderName}`
-            : `💬 Nova Mensagem de ${data.senderName}`)
+        ? `Resposta de ${senderName}`
+        : `Nova mensagem de ${senderName}`
 
       await Promise.allSettled(
-        Array.from(targetUserIds).map((uId) =>
-          createNotification(companyId, {
-            userId: uId,
-            title: notifTitle,
-            body: data.content.slice(0, 80) + (data.content.length > 80 ? '...' : ''),
+        Array.from(targetUserIds).map((targetId) =>
+          createNotification(finalCompanyId, {
+            userId: targetId,
             type: 'internal_message',
+            title: notifTitle,
+            body: data.subject ? `[${data.subject}] ${data.content.slice(0, 100)}` : data.content.slice(0, 100),
             link: '/dashboard/messages',
-            senderName: data.senderName,
-            senderAbbr: data.senderAbbr,
           })
         )
       )
-    } catch (err) {
-      console.error('[createInternalMessage notifications] Error:', err)
+    } catch (notifErr) {
+      console.warn('[createInternalMessage] Erro ao criar notificações:', notifErr)
     }
   })()
 
@@ -2451,6 +2562,19 @@ export async function updateInternalMessageStatus(
       .collection('internal_messages')
       .doc(messageId)
       .update({ status, updatedAt: now })
+
+    // Atualizar no feed centralizado
+    const feedRef = adminDb().collection('system_sync').doc('internal_messages_feed')
+    const feedSnap = await feedRef.get().catch(() => null)
+    if (feedSnap && feedSnap.exists && Array.isArray(feedSnap.data()?.messages)) {
+      const feedList = feedSnap.data()!.messages as InternalMessage[]
+      const target = feedList.find((m) => m.id === messageId)
+      if (target) {
+        target.status = status
+        target.updatedAt = now
+        await feedRef.set({ messages: feedList, updatedAt: now }, { merge: true }).catch(() => {})
+      }
+    }
   } catch (err) {
     console.error('[updateInternalMessageStatus] Error:', err)
   }
@@ -2469,11 +2593,40 @@ export async function deleteInternalMessage(
       deletedAt: new Date().toISOString(),
       companyId: finalCompanyId,
     }).catch(() => {})
+
+    // Remover do feed centralizado
+    const feedRef = adminDb().collection('system_sync').doc('internal_messages_feed')
+    const feedSnap = await feedRef.get().catch(() => null)
+    if (feedSnap && feedSnap.exists && Array.isArray(feedSnap.data()?.messages)) {
+      const remaining = feedSnap.data()!.messages.filter((m: any) => m?.id !== messageId)
+      await feedRef.set({ messages: remaining, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {})
+    }
   } catch (err) {
     console.error('[deleteInternalMessage] Error:', err)
   }
   revalidateTag('messages')
 }
 
+export async function clearAllInternalMessages(companyId: string): Promise<void> {
+  cachedInternalMessages = []
+  try {
+    const feedRef = adminDb().collection('system_sync').doc('internal_messages_feed')
+    await feedRef.set({ messages: [], updatedAt: new Date().toISOString() })
+  } catch {}
 
+  try {
+    const snap = await adminDb().collection('internal_messages').limit(300).get().catch(() => null)
+    if (snap && !snap.empty) {
+      const batch = adminDb().batch()
+      snap.docs.forEach((doc) => batch.delete(doc.ref))
+      await batch.commit().catch(() => {})
+    }
+  } catch {}
 
+  try {
+    const filePath = path.join(process.cwd(), 'scripts', 'import', 'messages.json')
+    fs.writeFileSync(filePath, '[]', 'utf-8')
+  } catch {}
+
+  revalidateTag('messages')
+}

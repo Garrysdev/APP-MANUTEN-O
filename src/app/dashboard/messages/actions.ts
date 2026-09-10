@@ -148,3 +148,30 @@ export async function getLatestNotificationsAction() {
   const { listNotifications } = await import('@/lib/firebase/data')
   return listNotifications(profile.companyId, profile.id)
 }
+
+export async function clearAllMessagesAction(): Promise<{ ok: boolean; error?: string }> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { ok: false, error: 'Sessão expirada.' }
+
+  const roleStr = String(profile.role || '').toLowerCase().trim()
+  const isManagerOrAdmin =
+    roleStr === 'manager' ||
+    roleStr === 'admin' ||
+    roleStr === 'gestor' ||
+    roleStr === 'administrador' ||
+    profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
+
+  if (!isManagerOrAdmin) {
+    return { ok: false, error: 'Apenas Gestores podem apagar todas as mensagens.' }
+  }
+
+  try {
+    const { clearAllInternalMessages } = await import('@/lib/firebase/data')
+    await clearAllInternalMessages(profile.companyId)
+    revalidatePath('/dashboard/messages')
+    revalidatePath('/dashboard')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Erro ao limpar mensagens.' }
+  }
+}

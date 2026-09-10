@@ -47,7 +47,7 @@ export default function TaskSummaryModal({
   area?: string
 }) {
   const [status, setStatus] = useState<TaskStatus>(task.status)
-  const [observacoes, setObservacoes] = useState(task.observacoes || task.description || '')
+  const [observacoes, setObservacoes] = useState(task.observacoes || '')
   const [savingObs, setSavingObs] = useState(false)
   const [obsSaved, setObsSaved] = useState(false)
   const [changingStatus, setChangingStatus] = useState(false)
@@ -163,7 +163,7 @@ export default function TaskSummaryModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
         
         {/* Cabecalho */}
         <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-start justify-between gap-3 shrink-0">
@@ -204,8 +204,21 @@ export default function TaskSummaryModal({
         </div>
 
         {/* Corpo do Resumo */}
-        <div className="p-5 overflow-y-auto space-y-5 custom-scrollbar flex-1 text-slate-800 dark:text-slate-200 text-sm">
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 custom-scrollbar min-h-0 flex-1 text-slate-800 dark:text-slate-200 text-sm">
           
+          {/* Instrucoes / Descricao dos Trabalhos */}
+          {task.description && (
+            <div className="bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 rounded-xl p-3.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-industrial-blue dark:text-sky-400 mb-1 flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5" />
+                <span>Instruções Técnicas & Descrição dos Trabalhos:</span>
+              </p>
+              <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium whitespace-pre-line">
+                {task.description}
+              </p>
+            </div>
+          )}
+
           {/* Painel de Execucao: Inicio e Fim da OT */}
           <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl p-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
