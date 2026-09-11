@@ -379,11 +379,15 @@ export default function StocksClient({ items, assets = [], warehouses = [], plan
 
   const availableTags = useMemo(() => {
     const set = new Set<string>()
-    const poolAssets = selectedAreas.length > 0
-      ? assets.filter(a => selectedAreas.some((sel) => sel.toLowerCase() === (a.area || '').trim().toLowerCase()))
+    const activeAreas = selectedAreas.map((sel) => sel.trim().toLowerCase())
+    const poolAssets = activeAreas.length > 0
+      ? assets.filter((a) => activeAreas.includes((a.area || '').trim().toLowerCase()))
       : assets
+    const poolItems = activeAreas.length > 0
+      ? items.filter((i) => activeAreas.includes((i.area || '').trim().toLowerCase()))
+      : items
     poolAssets.forEach((a) => { if (a.tag) set.add(a.tag.trim()) })
-    items.forEach((i) => { if (i.tag) set.add(i.tag.trim()) })
+    poolItems.forEach((i) => { if (i.tag) set.add(i.tag.trim()) })
     return Array.from(set).sort()
   }, [items, assets, selectedAreas])
 

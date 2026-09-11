@@ -486,10 +486,14 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
   }, [assets])
 
   const uniqueTags = useMemo(() => {
-    return Array.from(new Set(assets.map((a) => a.tag).filter(Boolean))).sort((a, b) =>
+    const activeAreas = selectedAreas.map((a) => a.trim().toLowerCase())
+    const pool = activeAreas.length > 0
+      ? assets.filter((a) => activeAreas.includes((a.area || '').trim().toLowerCase()))
+      : assets
+    return Array.from(new Set(pool.map((a) => a.tag).filter(Boolean))).sort((a, b) =>
       String(a).localeCompare(String(b), 'pt', { numeric: true })
     )
-  }, [assets])
+  }, [assets, selectedAreas])
 
   const uniqueNames = useMemo(() => {
     return Array.from(new Set(assets.map((a) => a.name).filter(Boolean))).sort((a, b) =>

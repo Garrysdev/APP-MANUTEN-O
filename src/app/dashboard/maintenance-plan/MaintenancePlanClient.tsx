@@ -157,6 +157,12 @@ export default function MaintenancePlanClient({
   const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
   const getPlanTag = (p: MaintenancePlan) => p.tag || (p.assetId ? assetTagMap.get(p.assetId) || '' : '')
 
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedTipos, setSelectedTipos] = useState<string[]>([])
+  const [selectedPeriods, setSelectedPeriods] = useState<string[]>([])
+  const [selectedCrits, setSelectedCrits] = useState<string[]>([])
+
   // Áreas únicas dos planos
   const uniqueAreas = useMemo(() => {
     const set = new Set<string>()
@@ -169,15 +175,16 @@ export default function MaintenancePlanClient({
   // TAGs únicas em cascata com a ÁREA selecionada
   const availableTags = useMemo(() => {
     const set = new Set<string>()
+    const activeAreas = selectedAreas.map((a) => a.trim().toLowerCase())
     plans.forEach((p) => {
-      if (colF.area && p.area && p.area.trim().toLowerCase() !== colF.area.trim().toLowerCase()) {
+      if (activeAreas.length > 0 && !(p.area && activeAreas.includes(p.area.trim().toLowerCase()))) {
         return
       }
       const t = getPlanTag(p)
       if (t && t.trim()) set.add(t.trim())
     })
     return Array.from(set).sort()
-  }, [plans, colF.area, assetTagMap])
+  }, [plans, selectedAreas, assetTagMap])
 
   const assetName = (id?: string | null) => (id ? assetMap.get(id) ?? '—' : '—')
   const userName = (id?: string | null) => (id ? users.find((u) => u.id === id)?.name ?? '—' : '—')
@@ -575,12 +582,6 @@ export default function MaintenancePlanClient({
     !f || norm(val).includes(norm(f))
 
   const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
-
-  const [selectedAreas, setSelectedAreas] = useState<string[]>([])
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [selectedTipos, setSelectedTipos] = useState<string[]>([])
-  const [selectedPeriods, setSelectedPeriods] = useState<string[]>([])
-  const [selectedCrits, setSelectedCrits] = useState<string[]>([])
 
   const filtered = useMemo(() => {
     return plans.filter((p) => {
