@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import {
   X, Play, CheckCircle2, RotateCcw, Clock, ShieldAlert,
@@ -161,7 +162,7 @@ export default function TaskSummaryModal({
     void updateTaskExecutionDetailsAction(task.id, { frsChecked: next })
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fade-in">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl overflow-hidden my-auto max-h-[90dvh] flex flex-col">
         
@@ -525,6 +526,7 @@ export default function TaskSummaryModal({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
