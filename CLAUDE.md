@@ -35,6 +35,15 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   Empresa UR (`companyId rjHNaSUbLm4qTMyKP0oX`). É a conta usada para
   testar notificações/push no telemóvel — tem de aparecer nas listas
   de técnicos internos e continuar ligada à Empresa UR.
+- Existiam 10 registos "fantasma" duplicados `tech_RuiG_<companyId>` na
+  coleção `users` (criados em lote a 13/08/2026, um por empresa de
+  demo), todos com abreviatura errada "RG" e o da Empresa UR estava
+  inativo — sobrepunham-se ao registo real na função `listUsers()`
+  (mesmo email, ID diferente) e faziam a RuiG desaparecer das listas
+  mesmo com o registo certo correto. Já apagados (11/09/2026). Se
+  voltar a aparecer um utilizador "fantasma"/duplicado, verificar
+  primeiro se há mais que um documento com o mesmo email em `users`
+  antes de mexer no código de filtragem.
 - **Nunca identificar "é o gestor real" por abreviatura sozinha**
   (ex.: `abbreviation === 'RG'`). Uma conta de técnico pode
   legitimamente ter essa sigla por engano e fica escondida das listas
