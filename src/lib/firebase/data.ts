@@ -679,7 +679,7 @@ export async function notifyAssignedTechnicians(
         if (
           (u.id.toLowerCase() === aLower ||
             (u.abbreviation && u.abbreviation.toLowerCase() === aLower) ||
-            u.name.toLowerCase() === aLower ||
+            (u.name || '').toLowerCase() === aLower ||
             aLower.replace(/^(tech_|user_)/, '') === (u.abbreviation || '').toLowerCase()) &&
           u.id !== createdBy
         ) {
@@ -696,7 +696,7 @@ export async function notifyAssignedTechnicians(
           if (
             (u.id.toLowerCase() === idLower ||
               (u.abbreviation && u.abbreviation.toLowerCase() === idLower) ||
-              u.name.toLowerCase() === idLower) &&
+              (u.name || '').toLowerCase() === idLower) &&
             u.id !== createdBy
           ) {
             targetUserIds.add(u.id)

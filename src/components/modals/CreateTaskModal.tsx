@@ -160,7 +160,11 @@ function isInternalUser(u: any): boolean {
   const e = (u.email || '').toLowerCase()
   const a = (u.abbreviation || '').toLowerCase()
   const id = (u.id || '').toLowerCase()
-  if (n.includes('garrido') || e.includes('garrido.rui') || a === 'rg' || id === 'nlqzamwmu1or4ckzzatjtlnbwt82' || id === 'cuodzkziowo128glk66i') return false
+  // Nota: não excluir por abreviatura "RG" sozinha — uma conta de técnico pode
+  // legitimamente ter essa sigla e ficaria sempre escondida da lista por engano
+  // (já aconteceu com a conta de teste RuiG). Excluir apenas por nome/email/ID
+  // que identificam mesmo o gestor Rui Garrido.
+  if (n.includes('garrido') || e.includes('garrido.rui') || id === 'nlqzamwmu1or4ckzzatjtlnbwt82' || id === 'cuodzkziowo128glk66i') return false
   if (n.includes('carrier') || e.includes('carrier') || a.includes('carrier') || id.includes('carrier')) return false
   if (n.includes('schindler') || e.includes('schindler') || a.includes('schindler') || id.includes('schindler')) return false
   if (n.includes('ox2') || e.includes('ox2') || a.includes('ox2') || id.includes('ox2')) return false

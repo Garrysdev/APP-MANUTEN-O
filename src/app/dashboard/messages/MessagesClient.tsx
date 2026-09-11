@@ -261,7 +261,7 @@ export default function MessagesClient({
       if (u.isExternal) return false
       const r = (u.role || '').toLowerCase().trim()
       if (isManagerRole(r)) return false
-      if (u.name?.toLowerCase().includes('garrido') || u.abbreviation === 'RG' || (u as any).email?.toLowerCase().includes('garrido.rui')) return false
+      if (u.name?.toLowerCase().includes('garrido') || (u as any).email?.toLowerCase().includes('garrido.rui')) return false
       return isTechRole(r) || u.id === 'mWSsTRtgq5QcOHusTdVYgDVrwHt2'
     })
 

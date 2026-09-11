@@ -513,7 +513,7 @@ export default function TasksClient({
       (usr) =>
         usr.id === raw ||
         (usr.abbreviation && usr.abbreviation.toUpperCase() === raw.toUpperCase()) ||
-        usr.name.toLowerCase() === raw.toLowerCase()
+        (usr.name || '').toLowerCase() === raw.toLowerCase()
     )
 
     if (u) {
@@ -561,7 +561,7 @@ export default function TasksClient({
       (usr) =>
         usr.id === raw ||
         (usr.abbreviation && usr.abbreviation.toUpperCase() === raw.toUpperCase()) ||
-        usr.name.toLowerCase() === raw.toLowerCase()
+        (usr.name || '').toLowerCase() === raw.toLowerCase()
     )
 
     if (u?.abbreviation) return u.abbreviation.toUpperCase()
@@ -669,7 +669,7 @@ export default function TasksClient({
       if (!u) return false
       const r = String(u.role || '').toLowerCase().trim()
       if (r === 'manager' || r === 'admin' || r === 'gestor' || r === 'administrador') return true
-      if (u.name?.toLowerCase().includes('garrido') || u.abbreviation === 'RG' || (u.email && u.email.toLowerCase().includes('garrido.rui'))) return true
+      if (u.name?.toLowerCase().includes('garrido') || (u.email && u.email.toLowerCase().includes('garrido.rui'))) return true
       return false
     }
 

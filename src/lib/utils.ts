@@ -143,9 +143,10 @@ export function resolveTechInitials(
 ): string {
   const userMap = new Map<string, string>()
   users.forEach((u) => {
-    const abbr = (u.abbreviation || u.name.split(' ').map((n) => n[0]).join('')).toUpperCase()
+    const safeName = u.name || ''
+    const abbr = (u.abbreviation || safeName.split(' ').map((n) => n[0]).join('')).toUpperCase()
     userMap.set(u.id.toLowerCase(), abbr)
-    userMap.set(u.name.toLowerCase(), abbr)
+    if (safeName) userMap.set(safeName.toLowerCase(), abbr)
     if (u.abbreviation) userMap.set(u.abbreviation.toLowerCase(), u.abbreviation.toUpperCase())
   })
 
@@ -156,9 +157,10 @@ export function resolveTechInitials(
     const lower = clean.toLowerCase()
     if (userMap.has(lower)) return userMap.get(lower)!
 
-    const found = users.find((u) => u.name.toLowerCase().includes(lower) || u.id.toLowerCase() === lower)
+    const found = users.find((u) => (u.name || '').toLowerCase().includes(lower) || u.id.toLowerCase() === lower)
     if (found) {
-      return (found.abbreviation || found.name.split(' ').map((n) => n[0]).join('')).toUpperCase()
+      const safeFoundName = found.name || ''
+      return (found.abbreviation || safeFoundName.split(' ').map((n) => n[0]).join('')).toUpperCase()
     }
 
     const KNOWN_MAP: Record<string, string> = {

@@ -136,7 +136,7 @@ export default function HistoryClient({
   const resolveTechName = (techStr?: string | null) => {
     if (!techStr) return 'N/D'
     if (userMap[techStr]) return userMap[techStr]
-    const u = users.find((usr) => usr.name.toLowerCase().includes(techStr.toLowerCase()) || usr.id === techStr)
+    const u = users.find((usr) => (usr.name || '').toLowerCase().includes(techStr.toLowerCase()) || usr.id === techStr)
     return u ? u.name : techStr
   }
 
