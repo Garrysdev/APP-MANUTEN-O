@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -1399,7 +1400,7 @@ export default function MessagesClient({
       </div>
 
       {/* Modal UNIFICADO: Criar Nova Mensagem & Responder à Mensagem */}
-      {modalOpen && (
+      {modalOpen && createPortal(
         <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-6 space-y-4 my-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -1691,7 +1692,8 @@ export default function MessagesClient({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

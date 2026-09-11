@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useRef, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { UserPlus, UserX, ShieldCheck, Wrench, X, Eye, EyeOff, Link2, Copy, Check, Camera, Filter, KeyRound } from 'lucide-react'
@@ -880,7 +881,7 @@ export default function UsersClient({
       )}
 
       {/* Modal Editar Utilizador */}
-      {editingUser && isManager && (
+      {editingUser && isManager && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={closeEditModal} />
           <div className="card relative w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1042,11 +1043,12 @@ export default function UsersClient({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Gerir Tipos de Técnico */}
-      {showTypesModal && (
+      {showTypesModal && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setShowTypesModal(false)} />
           <div className="card relative w-full max-w-md p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1102,11 +1104,12 @@ export default function UsersClient({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Ficha Completa da Empresa Prestadora de Serviços & Técnicos */}
-      {selectedCompany && (
+      {selectedCompany && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedCompany(null)} />
           <div className="card relative w-full max-w-2xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
@@ -1282,7 +1285,8 @@ export default function UsersClient({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

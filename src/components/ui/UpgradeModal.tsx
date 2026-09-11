@@ -1,5 +1,6 @@
 'use client'
 
+import { createPortal } from 'react-dom'
 import { X, Zap } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { PLAN_LABELS, type FeatureKey, minPlanFor } from '@/lib/plans'
@@ -36,7 +37,7 @@ export default function UpgradeModal({ feature, onClose, isTeaser = false }: Upg
     router.push('/dashboard/billing')
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
@@ -75,6 +76,7 @@ export default function UpgradeModal({ feature, onClose, isTeaser = false }: Upg
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

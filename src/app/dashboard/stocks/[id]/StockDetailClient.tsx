@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Package, Plus, History, Activity, CalendarDays, Boxes, Info, CreditCard } from 'lucide-react'
@@ -184,7 +185,7 @@ export default function StockDetailClient({
       </div>
 
       {/* MODAL COMPRA */}
-      {modalOpen && (
+      {modalOpen && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setModalOpen(false)} />
           <div className="card relative w-full max-w-md p-6 shadow-2xl">
@@ -222,7 +223,8 @@ export default function StockDetailClient({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

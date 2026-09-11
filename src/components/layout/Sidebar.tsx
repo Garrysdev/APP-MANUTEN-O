@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -251,7 +252,7 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
       </aside>
 
       {/* Mobile drawer */}
-      {open && (
+      {open && createPortal(
         <div className="lg:hidden fixed inset-0 z-[60] flex">
           <div className="absolute inset-0 bg-industrial-blue/50 backdrop-blur-sm transition-opacity" onClick={() => setOpen(false)} />
           <aside className="relative flex w-64 flex-col bg-slate-50 h-full shadow-2xl border-r border-outline transition-transform duration-300 ease-in-out py-6 gap-4">
@@ -285,9 +286,10 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
               </button>
             </div>
           </aside>
-        </div>
+        </div>,
+        document.body
       )}
-      
+
     </>
   )
 }

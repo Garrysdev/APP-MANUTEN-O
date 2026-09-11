@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { Warehouse as WarehouseIcon, Plus, Trash2, Edit2, MapPin } from 'lucide-react'
 import type { Warehouse } from '@/types/models'
@@ -169,7 +170,7 @@ export default function WarehousesClient({ initialWarehouses }: { initialWarehou
         </div>
       )}
 
-      {modalOpen && (
+      {modalOpen && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl animate-scale-up">
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">
@@ -240,7 +241,8 @@ export default function WarehousesClient({ initialWarehouses }: { initialWarehou
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

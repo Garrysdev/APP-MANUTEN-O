@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, X, AlertTriangle, Boxes, Search, Filter, ChevronLeft, ChevronRight, Tag, Layers, CheckSquare } from 'lucide-react'
@@ -861,7 +862,7 @@ export default function StocksClient({ items, assets = [], warehouses = [], plan
       )}
 
       {/* Modal Criar / Editar */}
-      {modal && (
+      {modal && createPortal(
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-slate-800 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 relative animate-in fade-in zoom-in duration-150">
             <button
@@ -886,11 +887,12 @@ export default function StocksClient({ items, assets = [], warehouses = [], plan
               dict={dict}
             />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Atribuição em Lote por Área/TAG */}
-      {showBulkAssignModal && (
+      {showBulkAssignModal && createPortal(
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-slate-800 w-full max-w-2xl p-6 relative max-h-[90vh] flex flex-col">
             <button
@@ -1040,7 +1042,8 @@ export default function StocksClient({ items, assets = [], warehouses = [], plan
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

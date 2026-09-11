@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { Lock, Eye, EyeOff } from 'lucide-react'
 import { changeUserPasswordAction } from '@/app/dashboard/profile/actions'
@@ -37,7 +38,7 @@ export default function MustChangePasswordBanner({ mustChange }: { mustChange?: 
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/60 rounded-2xl p-6 max-w-md w-full shadow-2xl animate-fade-in-up">
         <div className="flex items-center gap-3 mb-4 text-amber-800 dark:text-amber-300">
@@ -95,6 +96,7 @@ export default function MustChangePasswordBanner({ mustChange }: { mustChange?: 
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { FileText, CheckCircle2, AlertCircle, Eye, Edit3, X, Check, Lock, ShieldCheck, ClipboardList } from 'lucide-react'
 import { updateTaskFRsAndITsAction } from '@/app/dashboard/tasks/actions'
 import { useRouter } from 'next/navigation'
@@ -381,7 +382,7 @@ export function TaskDocRequirementsTechnician({
       )}
 
       {/* Popup Modal para Preenchimento de Folha de Registo (FR) */}
-      {activeFRPopup && (
+      {activeFRPopup && createPortal(
         <div className="fixed inset-0 z-[300] flex items-start justify-center p-4 pt-6 sm:pt-10 overflow-y-auto">
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setActiveFRPopup(null)} />
           <div className="card relative w-full max-w-lg p-6 shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-auto sm:my-4">
@@ -440,11 +441,12 @@ export function TaskDocRequirementsTechnician({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Popup Modal para Leitura e Aprovação de Instrução de Trabalho (IT) */}
-      {activeITPopup && (
+      {activeITPopup && createPortal(
         <div className="fixed inset-0 z-[300] flex items-start justify-center p-4 pt-6 sm:pt-10 overflow-y-auto">
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setActiveITPopup(null)} />
           <div className="card relative w-full max-w-lg p-6 shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-auto sm:my-4">
@@ -478,7 +480,8 @@ export function TaskDocRequirementsTechnician({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

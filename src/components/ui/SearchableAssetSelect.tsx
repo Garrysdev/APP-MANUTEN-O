@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Tag, MapPin, Wrench, QrCode, Camera, X, CheckCircle2, Upload } from 'lucide-react'
 import jsQR from 'jsqr'
 
@@ -438,7 +439,7 @@ const DEFAULT_FALLBACK_ASSETS: AssetOption[] = [
       </div>
 
       {/* MODAL SCANNER DE QR CODE */}
-      {showQRScanner && (
+      {showQRScanner && createPortal(
         <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-5 space-y-4 text-center">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
@@ -497,7 +498,8 @@ const DEFAULT_FALLBACK_ASSETS: AssetOption[] = [
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

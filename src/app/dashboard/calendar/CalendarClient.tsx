@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useTransition, useId } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Wrench, ClipboardList, ShieldAlert, X, Plus, Minus, Package, RefreshCw, Copy, Check, CheckCircle2, ExternalLink, Share2, Calendar as CalendarIcon, GripVertical, Printer, CheckSquare, Square, Pencil } from 'lucide-react'
 import type { Task, MaintenancePlan, TaskCriticidade, TipoTarefa, TaskStatus, RecurrenceType, UserRole } from '@/types/models'
@@ -1265,7 +1266,7 @@ export default function CalendarClient({
       />
 
       {/* New task modal */}
-      {newTaskOpen && selectedDate && (
+      {newTaskOpen && selectedDate && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setNewTaskOpen(false)} />
           <div className="card relative w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1397,11 +1398,12 @@ export default function CalendarClient({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Create task from plan modal */}
-      {selectedPlan && (
+      {selectedPlan && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setSelectedPlan(null)} />
           <div className="card relative w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1459,11 +1461,12 @@ export default function CalendarClient({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Sincronização Calendário Gmail / Outlook */}
-      {showSyncModal && (
+      {showSyncModal && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowSyncModal(false)} />
           <div className="card relative w-full max-w-xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1569,11 +1572,12 @@ export default function CalendarClient({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal de Impressão de Agendamentos */}
-      {showPrintModal && (
+      {showPrintModal && createPortal(
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
             {/* Header do Modal */}
@@ -1699,7 +1703,8 @@ export default function CalendarClient({
               })()}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

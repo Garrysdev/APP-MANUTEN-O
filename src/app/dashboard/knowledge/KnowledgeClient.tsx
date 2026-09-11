@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   FileText, UploadCloud, Trash2, CheckCircle2, Eye,
   Sparkles, Send, X, ToggleLeft, ToggleRight, FolderPlus, Download
@@ -390,7 +391,7 @@ export default function KnowledgeClient({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {/* Modal de Pré-visualização do Ficheiro */}
-      {selectedFile && (
+      {selectedFile && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="card relative w-full max-w-3xl p-6 shadow-2xl max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-4">
@@ -417,7 +418,8 @@ export default function KnowledgeClient({ isAdmin }: { isAdmin: boolean }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

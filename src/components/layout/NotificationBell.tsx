@@ -13,7 +13,8 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
   const dropdownRef = useRef<HTMLDivElement>(null)
   const prevCountRef = useRef(initialNotifications.filter((n) => !n.read).length)
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadNotifications = notifications.filter((n) => !n.read)
+  const unreadCount = unreadNotifications.length
 
   // Tocar som se chegarem novas notificações não lidas
   useEffect(() => {
@@ -152,7 +153,7 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
             <div className="flex items-center gap-2">
               <Bell className="h-4 w-4 text-industrial-blue dark:text-sky-400" />
               <span className="text-xs font-extrabold text-slate-900 dark:text-slate-100">
-                Notificações ({unreadCount} não lidas)
+                Notificações Novas ({unreadCount})
               </span>
             </div>
             {unreadCount > 0 && (
@@ -168,18 +169,16 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
           </div>
 
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-            {notifications.length === 0 ? (
+            {unreadNotifications.length === 0 ? (
               <div className="p-8 text-center text-xs text-slate-400">
-                Sem notificações recentes
+                Sem notificações novas
               </div>
             ) : (
-              notifications.map((n) => (
+              unreadNotifications.map((n) => (
                 <div
                   key={n.id}
                   onClick={() => handleMarkRead(n)}
-                  className={`p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors cursor-pointer flex items-start gap-3 ${
-                    !n.read ? 'bg-blue-50/50 dark:bg-blue-950/30' : ''
-                  }`}
+                  className="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors cursor-pointer flex items-start gap-3 bg-blue-50/50 dark:bg-blue-950/30"
                 >
                   <div className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 text-industrial-blue dark:text-sky-400">
                     {n.type === 'internal_message' ? (
@@ -194,7 +193,7 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
                       <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                         {n.title}
                       </h4>
-                      {!n.read && <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />}
+                      <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
                     </div>
                     <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 mt-0.5">
                       {n.body}

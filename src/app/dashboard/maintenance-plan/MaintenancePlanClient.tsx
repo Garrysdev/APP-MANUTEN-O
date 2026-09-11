@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef, useTransition, useId } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -1200,7 +1201,7 @@ export default function MaintenancePlanClient({
       )}
 
       {/* Modal Perguntar Datas do Calendário */}
-      {calendarModalPlan && (
+      {calendarModalPlan && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setCalendarModalPlan(null)} />
           <div className="card relative w-full max-w-lg p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1281,10 +1282,11 @@ export default function MaintenancePlanClient({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* Modal Gerador Anual de PMs */}
-      {showAnnualGeneratorModal && (
+      {showAnnualGeneratorModal && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !generatingPMs && setShowAnnualGeneratorModal(false)} />
           <div className="card relative w-full max-w-lg p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1374,7 +1376,8 @@ export default function MaintenancePlanClient({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

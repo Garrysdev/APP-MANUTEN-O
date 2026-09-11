@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -918,7 +919,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
         </div>
       )}
 
-      {showForm && (
+      {showForm && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={closeModal} />
           <div className="card relative w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1075,10 +1076,11 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {printQRAsset && (
+      {printQRAsset && createPortal(
         <div className="print-qr-container fixed inset-0 z-[200] flex items-center justify-center p-4 print:p-0 print:bg-white bg-black/40 dark:bg-black/60 backdrop-blur-sm print:backdrop-blur-none">
           <div className="absolute inset-0 print:hidden" onClick={() => setPrintQRAsset(null)} />
           <div className="card relative w-full max-w-sm p-8 shadow-2xl bg-white dark:bg-slate-900 print:shadow-none print:border-none print:p-0 text-center text-gray-900 dark:text-slate-100">
@@ -1109,9 +1111,10 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-      
+
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           body * {
@@ -1168,7 +1171,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
       `}} />
       
       {/* MODAL DE IMPRESSÃO EM LOTE DE QR CODES */}
-      {showBatchQRModal && (
+      {showBatchQRModal && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 backdrop-blur-sm overflow-y-auto print:hidden">
           <div className="absolute inset-0" onClick={() => setShowBatchQRModal(false)} />
           <div className="card relative w-full max-w-4xl p-6 shadow-2xl bg-white dark:bg-slate-900 overflow-hidden my-8 max-h-[90vh] flex flex-col">
@@ -1284,7 +1287,8 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ÁREA DE IMPRESSÃO EM LOTE (GRID DE ETIQUETAS A4: 8 POR PÁGINA) */}
@@ -1318,7 +1322,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
         </div>
       )}
 
-      {showQRScanner && (
+      {showQRScanner && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 dark:bg-black/70 backdrop-blur-sm">
           <div className="absolute inset-0" onClick={() => setShowQRScanner(false)} />
           <div className="card relative w-full max-w-md p-6 shadow-2xl bg-white dark:bg-slate-900 overflow-hidden">
@@ -1402,7 +1406,8 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

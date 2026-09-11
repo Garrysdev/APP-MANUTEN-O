@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Printer, Download, X, Eye, FileSpreadsheet, ArrowLeft, Filter } from 'lucide-react'
 import ExcelJS from 'exceljs'
 import type { Intervention, Material, Task } from '@/types/models'
@@ -276,7 +277,7 @@ export default function HistoryExportModal({
 
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm no-print">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
@@ -552,6 +553,7 @@ export default function HistoryExportModal({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
