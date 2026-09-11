@@ -9,7 +9,7 @@ import { adminDb, adminAuth, firestoreWithTimeout, isQuotaExhausted, markQuotaEx
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
-import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus } from '@/types/models'
+import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus, type TaskStatus } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
   return { id: doc.id, ...doc.data() } as T
@@ -1689,6 +1689,75 @@ export async function updateMaintenancePlan(
     const baseObj = fallback ? { ...fallback, ...data, companyId, updatedAt: now } : { ...data, companyId, createdAt: now, updatedAt: now }
     await ref.set(baseObj, { merge: true })
   }
+  revalidateTag('plans')
+}
+
+/**
+ * Define o estado (Pendente / Em Curso / Concluída) da ocorrência atual de um
+ * Plano de Manutenção — é o botão dinâmico da coluna TAREFA. Encontra a tarefa
+ * ligada ao plano (por maintenancePlanId) e atualiza-lhe o status; se não
+ * existir nenhuma, cria uma. Ao marcar como concluída, regista também a
+ * intervenção no histórico e atualiza lastGeneratedAt do plano (mesmo
+ * comportamento que "Concluir PM" já tinha).
+ */
+export async function setMaintenancePlanOccurrenceStatus(
+  companyId: string,
+  plan: MaintenancePlan,
+  status: TaskStatus,
+  userId: string
+): Promise<void> {
+  const now = new Date().toISOString()
+  const todayStr = now.slice(0, 10)
+
+  const snap = await adminDb()
+    .collection('tasks')
+    .where('companyId', '==', companyId)
+    .where('maintenancePlanId', '==', plan.id)
+    .get()
+    .catch(() => null)
+
+  const openDocs = (snap?.docs || []).filter((d) => d.data().status !== 'cancelled')
+  const existing = openDocs.sort((a, b) => (String(b.data().updatedAt || '')).localeCompare(String(a.data().updatedAt || '')))[0]
+
+  if (existing) {
+    await existing.ref.update({
+      status,
+      updatedAt: now,
+      ...(status === 'done' ? { completedAt: now } : {}),
+    })
+  } else {
+    await createTask(companyId, userId, {
+      title: plan.title,
+      description: plan.description || null,
+      area: plan.area || null,
+      tag: plan.tag || null,
+      assetId: plan.assetId || null,
+      tipo: plan.tipo || 'preventiva',
+      criticidade: plan.criticidade || 'verde',
+      status,
+      dueDate: todayStr,
+      maintenancePlanId: plan.id,
+      source: 'plano_manutencao',
+    } as any)
+  }
+
+  if (status === 'done') {
+    try {
+      await createIntervention(companyId, {
+        taskId: `pm_${plan.id}_${Date.now()}`,
+        technicianId: userId,
+        observations: `[PM Concluída] ${plan.title}`,
+        startedAt: `${todayStr}T09:00:00.000Z`,
+        endedAt: `${todayStr}T10:00:00.000Z`,
+        checklist: [],
+      })
+    } catch (err) {
+      console.error('[setMaintenancePlanOccurrenceStatus] Erro ao registar intervenção:', err)
+    }
+    await updateMaintenancePlan(companyId, plan.id, { lastGeneratedAt: todayStr, updatedAt: now })
+  }
+
+  revalidateTag('tasks')
   revalidateTag('plans')
 }
 

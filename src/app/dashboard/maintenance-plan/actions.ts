@@ -12,9 +12,10 @@ import {
   createTask,
   deleteTasksByMaintenancePlan,
   listAssets,
+  setMaintenancePlanOccurrenceStatus,
 } from '@/lib/firebase/data'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
-import type { TaskCriticidade, TipoTarefa, Periodicidade, Executor } from '@/types/models'
+import type { TaskCriticidade, TipoTarefa, Periodicidade, Executor, TaskStatus } from '@/types/models'
 import { periodicidadeToRecurrence, CRITICIDADE_LABELS, PERIODICIDADE_LABELS, TIPOS_TAREFA } from '@/types/models'
 
 export type PlanFormState = { error?: string; ok?: boolean; id?: string }
@@ -101,6 +102,37 @@ export async function concludePMAction(
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao concluir Manutenção Preventiva.' }
+  }
+}
+
+/**
+ * Botão dinâmico da coluna TAREFA: Pendente -> Em Curso -> Concluída.
+ * Substitui o antigo "Concluir PM" — define diretamente o estado da
+ * ocorrência atual do plano, que é o mesmo estado usado pelo filtro
+ * "Estado da Tarefa" na tabela.
+ */
+export async function setPmOccurrenceStatusAction(
+  planId: string,
+  status: TaskStatus
+): Promise<PlanFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+
+  try {
+    const plan = await getMaintenancePlan(profile.companyId, planId)
+    if (!plan) return { error: 'Plano de manutenção não encontrado.' }
+
+    await setMaintenancePlanOccurrenceStatus(profile.companyId, plan, status, profile.id)
+
+    revalidatePath('/dashboard/maintenance-plan')
+    revalidatePath('/dashboard/calendar')
+    revalidatePath('/dashboard/tasks')
+    revalidatePath('/dashboard/history')
+    revalidatePath('/dashboard')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao atualizar estado da tarefa.' }
   }
 }
 

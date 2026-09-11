@@ -5,10 +5,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Plus, Pencil, Trash2, X, ShieldAlert, Power, PowerOff, Check, CheckCircle2,
-  CalendarClock, Building2, Scale, ClipboardList, Upload, Download, ChevronLeft, ChevronRight, FileSpreadsheet
+  CalendarClock, Building2, Scale, ClipboardList, Upload, Download, ChevronLeft, ChevronRight, FileSpreadsheet, ChevronDown, Clock, PlayCircle
 } from 'lucide-react'
 import type {
-  MaintenancePlan, TaskCriticidade, TipoTarefa, Periodicidade, PlanName, Task
+  MaintenancePlan, TaskCriticidade, TipoTarefa, Periodicidade, PlanName, Task, TaskStatus
 } from '@/types/models'
 import {
   CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS,
@@ -25,7 +25,7 @@ import {
   importMaintenancePlansAction,
   togglePlanCalendarAction,
   generateAnnualPMScheduleAction,
-  concludePMAction,
+  setPmOccurrenceStatusAction,
 } from './actions'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 import { updateTaskStatusAction, updateTaskAction, loadStockRefsAction, type StockMaterialRef } from '../tasks/actions'
@@ -264,19 +264,92 @@ export default function MaintenancePlanClient({
     openEdit(p)
   }
 
-  // Concluir diretamente na tabela, registando a execução da PM sem duplicar tarefas
+  // Botão dinâmico da coluna TAREFA: Pendente -> Em Curso -> Concluída
   const [concludingPlanId, setConcludingPlanId] = useState<string | null>(null)
-  async function handleQuickConcludePlan(planId: string) {
+  const [statusMenuPlanId, setStatusMenuPlanId] = useState<string | null>(null)
+  async function handleSetPmStatus(planId: string, status: TaskStatus) {
+    setStatusMenuPlanId(null)
     setConcludingPlanId(planId)
-    const res = await concludePMAction(planId, {
-      executedAt: new Date().toISOString().slice(0, 10),
-    })
+    const res = await setPmOccurrenceStatusAction(planId, status)
     setConcludingPlanId(null)
     if (res?.error) {
       alert(res.error)
     } else {
       router.refresh()
     }
+  }
+
+  const PM_STATUS_STYLES: Record<'pending' | 'in_progress' | 'done', { label: string; cls: string; Icon: typeof Clock }> = {
+    pending: { label: 'Pendente', cls: 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700', Icon: Clock },
+    in_progress: { label: 'Em Curso', cls: 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800', Icon: PlayCircle },
+    done: { label: 'Concluída', cls: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800', Icon: CheckCircle2 },
+  }
+
+  // Botão dinâmico de estado da tarefa: mostra o estado atual e, ao clicar,
+  // revela só as transições válidas a partir daí (Pendente -> Em Curso | Concluída;
+  // Em Curso -> Concluir). É este estado que também alimenta o filtro "Estado da Tarefa".
+  function renderPmStatusButton(p: MaintenancePlan) {
+    const linkedTask = findPlanTask(p)
+    const rawStatus = linkedTask?.status
+    const status: 'pending' | 'in_progress' | 'done' = (rawStatus === 'in_progress' || rawStatus === 'done') ? rawStatus : 'pending'
+    const isOpen = statusMenuPlanId === p.id
+    const isBusy = concludingPlanId === p.id
+    const { label, cls, Icon } = PM_STATUS_STYLES[status]
+
+    if (status === 'done') {
+      return (
+        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-bold text-[9px] ${cls}`}>
+          <Icon className="h-3 w-3" /> {label}
+        </span>
+      )
+    }
+
+    return (
+      <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          disabled={isBusy}
+          onClick={() => setStatusMenuPlanId(isOpen ? null : p.id)}
+          title="Alterar estado desta ocorrência"
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-bold text-[9px] transition-colors disabled:opacity-50 cursor-pointer ${cls}`}
+        >
+          <Icon className="h-3 w-3" />
+          {isBusy ? 'A atualizar…' : label}
+          <ChevronDown className="h-2.5 w-2.5" />
+        </button>
+        {isOpen && (
+          <div className="absolute z-20 top-full left-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[112px] overflow-hidden">
+            {status === 'pending' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleSetPmStatus(p.id, 'in_progress')}
+                  className="w-full text-left px-2.5 py-1.5 text-[10px] font-bold text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Em Curso
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetPmStatus(p.id, 'done')}
+                  className="w-full text-left px-2.5 py-1.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Concluída
+                </button>
+              </>
+            )}
+            {status === 'in_progress' && (
+              <button
+                type="button"
+                onClick={() => handleSetPmStatus(p.id, 'done')}
+                className="w-full text-left px-2.5 py-1.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Concluir
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
   }
   function addRule() { setSafetyRules((r) => [...r, '']) }
   function removeRule(i: number) { setSafetyRules((r) => r.filter((_, idx) => idx !== i)) }
@@ -847,18 +920,9 @@ export default function MaintenancePlanClient({
                     )}
                   </div>
                   <span onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickConcludePlan(p.id)}
-                      disabled={concludingPlanId === p.id}
-                      title="Marcar esta Manutenção Preventiva como executada/concluída"
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 font-bold text-[9px] transition-colors disabled:opacity-50 cursor-pointer"
-                    >
-                      <CheckCircle2 className="h-3 w-3" />
-                      {concludingPlanId === p.id ? 'A concluir…' : 'Concluir PM'}
-                    </button>
+                    {renderPmStatusButton(p)}
                     {p.lastGeneratedAt && (
-                      <span className="text-[9px] text-slate-500 ml-1">
+                      <span className="text-[9px] text-slate-500 ml-1 block">
                         Últ: {formatDate(p.lastGeneratedAt)}
                       </span>
                     )}
@@ -1051,16 +1115,7 @@ export default function MaintenancePlanClient({
                     </span>
                   </td>
                   <td className="px-1 py-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickConcludePlan(p.id)}
-                      disabled={concludingPlanId === p.id}
-                      title="Marcar esta Manutenção Preventiva como executada/concluída"
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 font-bold text-[9px] transition-colors disabled:opacity-50 cursor-pointer"
-                    >
-                      <CheckCircle2 className="h-3 w-3" />
-                      {concludingPlanId === p.id ? 'A concluir…' : 'Concluir PM'}
-                    </button>
+                    {renderPmStatusButton(p)}
                     {p.lastGeneratedAt && (
                       <div className="text-[9px] text-slate-500 mt-0.5">
                         Últ: {formatDate(p.lastGeneratedAt)}
