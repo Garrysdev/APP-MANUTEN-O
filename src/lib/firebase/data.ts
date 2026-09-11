@@ -2143,13 +2143,17 @@ const listNotificationsCached = unstable_cache(
       })
     }
     try {
+      // Sem orderBy() de propósito: um where() com dois campos de igualdade
+      // (companyId + userId) não precisa de índice composto no Firestore,
+      // mas combinado com orderBy(createdAt) precisa — e esse índice nunca
+      // foi criado, pelo que a query falhava sempre em silêncio e caía no
+      // fallback vazio. Ordena-se aqui em memória em vez de no Firestore.
       let snap = await firestoreWithTimeout(
         () => adminDb()
           .collection('notifications')
           .where('companyId', '==', companyId)
           .where('userId', '==', userId)
-          .orderBy('createdAt', 'desc')
-          .limit(15)
+          .limit(50)
           .get(),
         null,
         800
@@ -2161,8 +2165,7 @@ const listNotificationsCached = unstable_cache(
             .collection('notifications')
             .where('companyId', '==', companyId)
             .where('userId', '==', uClean)
-            .orderBy('createdAt', 'desc')
-            .limit(15)
+            .limit(50)
             .get(),
           null,
           800
@@ -2170,7 +2173,10 @@ const listNotificationsCached = unstable_cache(
       }
 
       if (snap && !snap.empty) {
-        return snap.docs.map((d) => serialize<AppNotification>(d))
+        return snap.docs
+          .map((d) => serialize<AppNotification>(d))
+          .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+          .slice(0, 15)
       }
     } catch (err: any) {
       const isQuotaErr = String(err?.message || err).includes('Quota exceeded') || String(err?.message || err).includes('RESOURCE_EXHAUSTED')
