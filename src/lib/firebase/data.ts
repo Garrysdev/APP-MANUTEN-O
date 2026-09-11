@@ -2654,6 +2654,7 @@ export async function createInternalMessage(
             title: notifTitle,
             body: data.subject ? `[${data.subject}] ${data.content.slice(0, 100)}` : data.content.slice(0, 100),
             link: `/dashboard/messages?msgId=${msgObj.id}&open=true`,
+            messageId: msgObj.id,
           })
         )
       )
@@ -2663,6 +2664,74 @@ export async function createInternalMessage(
   })()
 
   return msgObj.id
+}
+
+/**
+ * Marca um conjunto de mensagens como lidas por um utilizador (adiciona o
+ * userId ao readBy de cada uma) e marca as notificações do sino ligadas a
+ * essas mensagens como lidas também, para que o sino e a lista de mensagens
+ * fiquem sempre em sincronia.
+ */
+export async function markMessagesRead(
+  companyId: string,
+  messageIds: string[],
+  userId: string
+): Promise<void> {
+  const ids = Array.from(new Set(messageIds.filter(Boolean)))
+  if (!ids.length) return
+  const now = new Date().toISOString()
+
+  cachedInternalMessages.forEach((m) => {
+    if (ids.includes(m.id)) {
+      m.readBy = Array.from(new Set([...(m.readBy || []), userId]))
+    }
+  })
+
+  try {
+    const { FieldValue } = await import('firebase-admin/firestore')
+    const batch = adminDb().batch()
+    ids.forEach((id) => {
+      batch.set(
+        adminDb().collection('internal_messages').doc(id),
+        { readBy: FieldValue.arrayUnion(userId), updatedAt: now },
+        { merge: true }
+      )
+    })
+    await batch.commit()
+  } catch (err) {
+    console.error('[markMessagesRead] Error:', err)
+  }
+
+  // Marcar notificações do sino ligadas a estas mensagens como lidas
+  try {
+    const snap = await adminDb()
+      .collection('notifications')
+      .where('companyId', '==', companyId)
+      .where('userId', '==', userId)
+      .limit(100)
+      .get()
+
+    const notifBatch = adminDb().batch()
+    let any = false
+    snap.docs.forEach((doc) => {
+      const d = doc.data()
+      if (d.read) return
+      const matchesById = d.messageId && ids.includes(d.messageId)
+      const matchesByLink = typeof d.link === 'string' && ids.some((id) => d.link.includes(`msgId=${id}`))
+      if (matchesById || matchesByLink) {
+        notifBatch.update(doc.ref, { read: true })
+        any = true
+        const cached = cachedNotifications.find((n) => n.id === doc.id)
+        if (cached) cached.read = true
+      }
+    })
+    if (any) await notifBatch.commit()
+  } catch (err) {
+    console.error('[markMessagesRead notifications] Error:', err)
+  }
+
+  revalidateTag('messages')
+  revalidateTag('notifications')
 }
 
 export async function updateInternalMessageStatus(

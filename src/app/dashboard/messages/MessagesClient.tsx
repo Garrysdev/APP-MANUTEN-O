@@ -11,7 +11,7 @@ import {
 import type { InternalMessage, MessageStatus } from '@/types/models'
 import { MESSAGE_STATUS_LABELS } from '@/types/models'
 import { formatDateTime } from '@/lib/utils'
-import { sendInternalMessageAction, updateMessageStatusAction, deleteInternalMessageAction } from './actions'
+import { sendInternalMessageAction, updateMessageStatusAction, deleteInternalMessageAction, markMessagesReadAction } from './actions'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
 
@@ -206,6 +206,9 @@ export default function MessagesClient({
   const [dateEnd, setDateEnd] = useState('')
   const [search, setSearch] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // 'active' = por defeito: só conversas não lidas ou a aguardar resposta ("Ativas")
+  const [viewTab, setViewTab] = useState<'active' | 'all'>('active')
+  const markedReadRef = useRef<Set<string>>(new Set())
 
   const hasActiveFilters = filter !== 'all' || statusFilter !== 'all' || Boolean(techFilter) || otFilter !== 'all' || photoFilter !== 'all' || Boolean(dateStart) || Boolean(dateEnd) || Boolean(search.trim())
   const activeFiltersCount = (filter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0) + (techFilter ? 1 : 0) + (otFilter !== 'all' ? 1 : 0) + (photoFilter !== 'all' ? 1 : 0) + (dateStart ? 1 : 0) + (dateEnd ? 1 : 0) + (search.trim() ? 1 : 0)
@@ -300,20 +303,21 @@ export default function MessagesClient({
     })
   }, [tasks])
 
-  const filteredMessages = localMessages.filter((m) => {
-    // 1. Folder (Inbox / Sent) - estritamente por ID único de remetente
-    const isSentByMe =
-      m.senderId === currentUserId ||
-      (currentUserId && m.senderId?.toLowerCase() === currentUserId.toLowerCase())
+  const isSenderMe = (m: InternalMessage) =>
+    m.senderId === currentUserId ||
+    Boolean(currentUserId && m.senderId?.toLowerCase() === currentUserId.toLowerCase())
 
+  // "Não lida" = mensagem que não fui eu que enviei e o meu ID ainda não está em readBy
+  const isMsgUnreadForMe = (m: InternalMessage) => !isSenderMe(m) && !(m.readBy || []).includes(currentUserId)
+
+  const matchesFilters = (m: InternalMessage) => {
+    const isSentByMe = isSenderMe(m)
     if (filter === 'inbox' && isSentByMe) return false
     if (filter === 'sent' && !isSentByMe) return false
 
-    // 2. Status filter
     const effectiveStatus = m.status || (m.requiresResponse ? 'awaiting_reply' : 'info')
     if (statusFilter !== 'all' && effectiveStatus !== statusFilter) return false
 
-    // 3. Tech filter (sender or recipient)
     if (techFilter) {
       const selectedUserObj = users.find((u) => u.id === techFilter || u.abbreviation === techFilter)
       const matchesSender = m.senderId === techFilter || (selectedUserObj && (m.senderName === selectedUserObj.name || m.senderAbbr === selectedUserObj.abbreviation))
@@ -321,24 +325,13 @@ export default function MessagesClient({
       if (!matchesSender && !matchesRecipient) return false
     }
 
-    // 4. OT filter
     if (otFilter === 'with_ot' && !m.taskId) return false
     if (otFilter === 'no_ot' && m.taskId) return false
-
-    // 5. Photo filter
     if (photoFilter === 'with_photo' && !m.photoUrl) return false
 
-    // 6. Date filter
-    if (dateStart && m.createdAt) {
-      const msgDate = m.createdAt.slice(0, 10)
-      if (msgDate < dateStart) return false
-    }
-    if (dateEnd && m.createdAt) {
-      const msgDate = m.createdAt.slice(0, 10)
-      if (msgDate > dateEnd) return false
-    }
+    if (dateStart && m.createdAt && m.createdAt.slice(0, 10) < dateStart) return false
+    if (dateEnd && m.createdAt && m.createdAt.slice(0, 10) > dateEnd) return false
 
-    // 7. Text Search
     if (search.trim()) {
       const q = search.toLowerCase()
       const matchText = (
@@ -353,7 +346,103 @@ export default function MessagesClient({
     }
 
     return true
-  })
+  }
+
+  const filteredMessages = localMessages.filter(matchesFilters)
+
+  // ── Agrupamento em conversas (thread), estilo Outlook ──────────────────────
+  const messagesById = useMemo(() => {
+    const map = new Map<string, InternalMessage>()
+    localMessages.forEach((m) => map.set(m.id, m))
+    return map
+  }, [localMessages])
+
+  const getThreadRootId = (m: InternalMessage): string => {
+    let cur = m
+    const seen = new Set<string>()
+    while (cur.replyToId && messagesById.has(cur.replyToId) && !seen.has(cur.id)) {
+      seen.add(cur.id)
+      cur = messagesById.get(cur.replyToId)!
+    }
+    return cur.id
+  }
+
+  interface MsgThread {
+    rootId: string
+    messages: InternalMessage[] // ordem cronológica ascendente
+    last: InternalMessage
+    hasUnread: boolean
+    isAwaiting: boolean
+  }
+
+  const threads: MsgThread[] = useMemo(() => {
+    const groups = new Map<string, InternalMessage[]>()
+    localMessages.forEach((m) => {
+      const rootId = getThreadRootId(m)
+      const arr = groups.get(rootId) || []
+      arr.push(m)
+      groups.set(rootId, arr)
+    })
+
+    const list: MsgThread[] = []
+    groups.forEach((msgs, rootId) => {
+      const sorted = [...msgs].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
+      const last = sorted[sorted.length - 1]
+      const hasUnread = sorted.some(isMsgUnreadForMe)
+      const lastStatus = last.status || (last.requiresResponse ? 'awaiting_reply' : 'info')
+      list.push({ rootId, messages: sorted, last, hasUnread, isAwaiting: lastStatus === 'awaiting_reply' })
+    })
+
+    list.sort((a, b) => (b.last.createdAt || '').localeCompare(a.last.createdAt || ''))
+    return list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localMessages, messagesById, currentUserId])
+
+  const visibleThreads = useMemo(() => {
+    return threads.filter((t) => {
+      if (!t.messages.some(matchesFilters)) return false
+      if (viewTab === 'active') return t.hasUnread || t.isAwaiting
+      return true
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threads, viewTab, filter, statusFilter, techFilter, otFilter, photoFilter, dateStart, dateEnd, search])
+
+  const activeThreadsCount = useMemo(() => threads.filter((t) => t.hasUnread || t.isAwaiting).length, [threads])
+
+  const selectedThread = useMemo(() => {
+    if (!selectedMessage) return null
+    const rootId = getThreadRootId(selectedMessage)
+    return threads.find((t) => t.rootId === rootId) || null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMessage, threads])
+
+  // Marcar como lidas as mensagens da conversa aberta (persiste no servidor + sincroniza o sino)
+  useEffect(() => {
+    if (!selectedThread) return
+    const unreadIds = selectedThread.messages
+      .filter(isMsgUnreadForMe)
+      .map((m) => m.id)
+      .filter((id) => !markedReadRef.current.has(id))
+    if (!unreadIds.length) return
+    unreadIds.forEach((id) => markedReadRef.current.add(id))
+
+    setLocalMessages((prev) => {
+      const next = prev.map((m) =>
+        unreadIds.includes(m.id) ? { ...m, readBy: [...(m.readBy || []), currentUserId] } : m
+      )
+      persistMessages(next)
+      return next
+    })
+
+    markMessagesReadAction(unreadIds)
+      .then(() => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('rg:refresh-notifications'))
+        }
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedThread?.rootId, selectedThread?.messages.length])
 
   // Abrir modal de Nova Mensagem
   function handleOpenCreate() {
@@ -768,7 +857,7 @@ export default function MessagesClient({
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
         <div className="flex items-center gap-3">
@@ -1022,312 +1111,292 @@ export default function MessagesClient({
       </div>
       )}
 
-      {/* Listagem de Mensagens */}
-      <div className="space-y-3">
-        {filteredMessages.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center">
-            <MessageSquare className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">Nenhuma mensagem encontrada</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Envie uma mensagem aos técnicos para iniciar a comunicação.
-            </p>
-          </div>
-        ) : (
-          filteredMessages.map((msg) => {
-            const isSentByMe = msg.senderId === currentUserId
-            const isAwaitingReply = (msg.status === 'awaiting_reply' || msg.requiresResponse) && msg.status !== 'closed' && msg.status !== 'replied'
-
-            return (
-              <div
-                key={msg.id}
-                className={`bg-white dark:bg-slate-900 p-4 rounded-xl border transition-all shadow-xs space-y-2.5 ${
-                  isAwaitingReply
-                    ? 'border-amber-300 dark:border-amber-700/80 ring-1 ring-amber-400/20 bg-amber-50/10'
-                    : 'border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600'
-                }`}
-              >
-                {/* Header do Cartão */}
-                <div className="flex items-start justify-between gap-3">
-                  <div
-                    onClick={() => setSelectedMessage(msg)}
-                    className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0"
-                  >
-                    <span className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/60 text-industrial-blue dark:text-sky-400 font-black text-xs flex items-center justify-center border border-blue-200 dark:border-blue-700 shrink-0">
-                      {msg.senderAbbr || 'RG'}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-extrabold text-slate-900 dark:text-slate-100">
-                          {msg.senderName}
-                        </span>
-                        {isSentByMe && (
-                          <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded font-semibold">
-                            Você
-                          </span>
-                        )}
-                        {renderStatusBadge(msg)}
-                      </div>
-                      <span className="text-[11px] text-slate-500 truncate block">
-                        Para: <strong className="text-slate-700 dark:text-slate-300">{msg.recipientNames || 'Técnicos'}</strong>
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] font-mono text-slate-400 whitespace-nowrap">
-                      {formatDateTime(msg.createdAt)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenReply(msg)}
-                      className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900 text-industrial-blue dark:text-sky-300 text-xs font-bold rounded-lg border border-blue-200 dark:border-blue-800 transition-colors flex items-center gap-1 cursor-pointer"
-                      title="Responder a esta mensagem no mesmo menu"
-                    >
-                      <Reply className="h-3 w-3" />
-                      <span>Responder</span>
-                    </button>
-                    {isManager && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDeleteMessage(msg.id)
-                        }}
-                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors cursor-pointer"
-                        title="Apagar Mensagem (Admin)"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Bloco de Contexto se responde a outra mensagem */}
-                {msg.replyToSender && (
-                  <div className="text-[11px] bg-slate-50 dark:bg-slate-800/60 border-l-2 border-industrial-blue dark:border-sky-400 px-2.5 py-1 rounded-r text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                    <Reply className="h-3 w-3 text-slate-400" />
-                    <span>Em resposta a <strong>{msg.replyToSender}</strong>{msg.replyToSubject ? `: "${msg.replyToSubject}"` : ''}</span>
-                  </div>
-                )}
-
-                {/* Assunto e Conteúdo */}
-                <div onClick={() => setSelectedMessage(msg)} className="cursor-pointer space-y-1">
-                  {msg.subject && (
-                    <h4 className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
-                      {msg.subject}
-                    </h4>
-                  )}
-                  <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
-                    {msg.content}
-                  </p>
-                </div>
-
-                {/* Footer do Cartão */}
-                <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800/60">
-                  <div className="flex items-center gap-2">
-                    {msg.taskTitle && (
-                      <span className="inline-flex items-center gap-1 text-industrial-blue dark:text-sky-400 font-semibold bg-blue-50 dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-slate-700">
-                        <ClipboardList className="h-3 w-3" /> OT: {msg.taskTitle}
-                      </span>
-                    )}
-
-                    {msg.photoUrl && (
-                      <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
-                        <ImageIcon className="h-3.5 w-3.5" /> Foto Anexa
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Seletor Rápido de Estado Inline */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-slate-400">Estado:</span>
-                    <select
-                      value={msg.status || (msg.requiresResponse ? 'awaiting_reply' : 'info')}
-                      disabled={statusUpdatingId === msg.id}
-                      onChange={(e) => handleUpdateStatus(msg.id, e.target.value as MessageStatus)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-[10px] font-bold py-0.5 px-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer"
-                    >
-                      <option value="awaiting_reply">⏳ Aguarda Resposta</option>
-                      <option value="replied">💬 Respondida</option>
-                      <option value="info">ℹ️ Informativa</option>
-                      <option value="closed">✅ Fechada</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )
-          })
-        )}
+      {/* Abas Ativas / Todas */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setViewTab('active')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all border cursor-pointer ${
+            viewTab === 'active'
+              ? 'bg-industrial-blue text-white border-industrial-blue shadow-xs'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          <span>Ativas</span>
+          {activeThreadsCount > 0 && (
+            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${viewTab === 'active' ? 'bg-white text-industrial-blue' : 'bg-industrial-blue text-white'}`}>
+              {activeThreadsCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewTab('all')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all border cursor-pointer ${
+            viewTab === 'all'
+              ? 'bg-industrial-blue text-white border-industrial-blue shadow-xs'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          Todas ({threads.length})
+        </button>
+        <span className="text-[11px] text-slate-400 hidden sm:inline">
+          {viewTab === 'active' ? 'Não lidas ou a aguardar resposta' : 'Inclui conversas já lidas e respondidas'}
+        </span>
       </div>
 
-      {/* Modal de Detalhe da Mensagem */}
-      {selectedMessage && (
-        <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2.5">
-                <span className="w-9 h-9 rounded-full bg-industrial-blue text-white font-black text-xs flex items-center justify-center">
-                  {selectedMessage.senderAbbr || 'RG'}
-                </span>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                      {selectedMessage.senderName}
-                    </h3>
-                    {renderStatusBadge(selectedMessage)}
+      {/* Vista tipo Outlook: lista de conversas + painel de leitura */}
+      <div className="flex flex-col lg:flex-row bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden lg:h-[68vh] lg:min-h-[520px]">
+        {/* Lista de conversas (esquerda) */}
+        <div className="w-full lg:w-[340px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 flex flex-col max-h-[50vh] lg:max-h-none overflow-y-auto custom-scrollbar">
+          {visibleThreads.length === 0 ? (
+            <div className="p-8 text-center flex-1 flex flex-col items-center justify-center">
+              <MessageSquare className="h-9 w-9 text-slate-300 mx-auto mb-3" />
+              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                {viewTab === 'active' ? 'Sem conversas ativas' : 'Nenhuma conversa encontrada'}
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-1">
+                {viewTab === 'active'
+                  ? 'Tudo lido e sem pedidos de resposta pendentes.'
+                  : 'Envie uma mensagem para iniciar a comunicação.'}
+              </p>
+            </div>
+          ) : (
+            visibleThreads.map((t) => {
+              const last = t.last
+              const isSelected = selectedThread?.rootId === t.rootId
+              const isUnread = t.hasUnread
+              return (
+                <button
+                  key={t.rootId}
+                  type="button"
+                  onClick={() => setSelectedMessage(last)}
+                  className={`w-full text-left p-3.5 border-b border-slate-100 dark:border-slate-800/60 transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-blue-50 dark:bg-blue-950/40'
+                      : isUnread
+                        ? 'bg-blue-50/40 dark:bg-blue-950/20 hover:bg-blue-50 dark:hover:bg-blue-950/30'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  }`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <span className="relative w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/60 text-industrial-blue dark:text-sky-400 font-black text-[11px] flex items-center justify-center border border-blue-200 dark:border-blue-700 shrink-0">
+                      {last.senderAbbr || 'RG'}
+                      {isUnread && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-blue-600 border-2 border-white dark:border-slate-900" />
+                      )}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className={`text-xs truncate ${isUnread ? 'font-extrabold text-slate-900 dark:text-slate-100' : 'font-semibold text-slate-700 dark:text-slate-300'}`}>
+                          {isSenderMe(last) ? 'Você' : last.senderName}
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                          {formatDateTime(last.createdAt).split(' ')[0]}
+                        </span>
+                      </div>
+                      <p className={`text-[11px] truncate ${isUnread ? 'font-bold text-slate-800 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {last.subject || last.taskTitle || 'Mensagem'}
+                      </p>
+                      <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                        {last.content}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {renderStatusBadge(last)}
+                        {t.messages.length > 1 && (
+                          <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full">
+                            {t.messages.length} msgs
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-[11px] text-slate-500 font-mono">
-                    {formatDateTime(selectedMessage.createdAt)}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedMessage(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full"
-              >
-                <X className="h-5 w-5" />
-              </button>
+                </button>
+              )
+            })
+          )}
+        </div>
+
+        {/* Painel de leitura (direita) */}
+        <div className="flex-1 flex flex-col min-w-0 min-h-[50vh] lg:min-h-0">
+          {!selectedThread ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-10 text-slate-400">
+              <MessageSquare className="h-12 w-12 mb-3 opacity-30" />
+              <p className="text-xs font-semibold">Selecione uma conversa à esquerda para ver o histórico</p>
             </div>
-
-            <div className="space-y-3">
-              <div className="text-xs text-slate-500">
-                Para: <strong className="text-slate-800 dark:text-slate-200">{selectedMessage.recipientNames || 'Técnicos'}</strong>
-              </div>
-
-              {selectedMessage.replyToSender && (
-                <div className="text-xs bg-slate-50 dark:bg-slate-800/80 border-l-3 border-industrial-blue p-2.5 rounded-r text-slate-600 dark:text-slate-300">
-                  <span className="font-bold flex items-center gap-1 text-industrial-blue dark:text-sky-400">
-                    <Reply className="h-3.5 w-3.5" /> Em resposta a {selectedMessage.replyToSender}:
-                  </span>
-                  {selectedMessage.replyToContent && (
-                    <p className="mt-1 italic text-[11px] text-slate-500 dark:text-slate-400">
-                      &quot;{selectedMessage.replyToContent}&quot;
-                    </p>
+          ) : (
+            <>
+              {/* Cabeçalho da conversa */}
+              <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-3 shrink-0">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-extrabold text-slate-900 dark:text-slate-100 truncate">
+                      {selectedThread.last.subject || selectedThread.last.taskTitle || 'Conversa'}
+                    </h3>
+                    {renderStatusBadge(selectedThread.last)}
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                    Com: <strong className="text-slate-700 dark:text-slate-300">{isSenderMe(selectedThread.last) ? (selectedThread.last.recipientNames || 'Técnicos') : selectedThread.last.senderName}</strong>
+                    {selectedThread.last.taskTitle && (
+                      <span className="ml-2 inline-flex items-center gap-1 text-industrial-blue dark:text-sky-400">
+                        <ClipboardList className="h-3 w-3" /> OT: {selectedThread.last.taskTitle}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <select
+                    value={selectedThread.last.status || (selectedThread.last.requiresResponse ? 'awaiting_reply' : 'info')}
+                    disabled={statusUpdatingId === selectedThread.last.id}
+                    onChange={(e) => handleUpdateStatus(selectedThread.last.id, e.target.value as MessageStatus)}
+                    className="text-[10px] font-bold py-1 px-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer"
+                    title="Alterar estado da conversa"
+                  >
+                    <option value="awaiting_reply">⏳ Aguarda Resposta</option>
+                    <option value="replied">💬 Respondida</option>
+                    <option value="info">ℹ️ Informativa</option>
+                    <option value="closed">✅ Fechada</option>
+                  </select>
+                  {isManager && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteMessage(selectedThread.last.id)}
+                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors cursor-pointer"
+                      title="Apagar última mensagem (Admin)"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMessage(null)}
+                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer lg:hidden"
+                    title="Fechar"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
                 </div>
-              )}
-
-              {selectedMessage.subject && (
-                <div className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
-                  {selectedMessage.subject}
-                </div>
-              )}
-
-              <div className="text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                {selectedMessage.content}
               </div>
 
-              {selectedMessage.taskTitle && (
-                <div className="text-xs bg-blue-50 dark:bg-blue-950/40 p-2.5 rounded-xl border border-blue-200 dark:border-blue-900 flex items-center gap-2 text-industrial-blue dark:text-sky-300 font-semibold">
-                  <ClipboardList className="h-4 w-4" />
-                  <span>Associada à OT: {selectedMessage.taskTitle}</span>
-                </div>
-              )}
+              {/* Histórico cronológico da conversa */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-slate-50/50 dark:bg-slate-950/20">
+                {selectedThread.messages.map((m) => {
+                  const mine = isSenderMe(m)
+                  const showReplyContext = Boolean(m.replyToId) && !messagesById.has(m.replyToId as string)
+                  return (
+                    <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-3.5 space-y-1.5 shadow-xs border ${
+                        mine
+                          ? 'bg-industrial-blue text-white border-industrial-blue rounded-tr-sm'
+                          : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-slate-200 dark:border-slate-800 rounded-tl-sm'
+                      }`}>
+                        <div className={`flex items-center justify-between gap-3 text-[10px] font-bold ${mine ? 'text-blue-100' : 'text-slate-400'}`}>
+                          <span>{mine ? 'Você' : m.senderName}</span>
+                          <span className="font-mono">{formatDateTime(m.createdAt)}</span>
+                        </div>
 
-              {selectedMessage.photoUrl && (
-                <div className="mt-3">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
-                    Imagem Anexada:
-                  </span>
-                  <a href={selectedMessage.photoUrl} target="_blank" rel="noopener noreferrer">
-                    <img
-                      src={selectedMessage.photoUrl}
-                      alt="Anexo"
-                      className="max-h-60 rounded-xl border border-slate-200 shadow-sm object-cover hover:opacity-95 transition-opacity"
+                        {showReplyContext && m.replyToSender && (
+                          <div className={`text-[11px] italic border-l-2 pl-2 ${mine ? 'border-blue-300 text-blue-100' : 'border-slate-300 text-slate-500'}`}>
+                            Em resposta a {m.replyToSender}{m.replyToContent ? `: "${m.replyToContent}"` : ''}
+                          </div>
+                        )}
+
+                        <p className="text-xs whitespace-pre-wrap leading-relaxed">{m.content}</p>
+
+                        {m.photoUrl && (
+                          <a href={m.photoUrl} target="_blank" rel="noopener noreferrer" className="block pt-1">
+                            <img
+                              src={m.photoUrl}
+                              alt="Anexo"
+                              className="max-h-48 rounded-xl border border-white/30 object-cover hover:opacity-95 transition-opacity"
+                            />
+                          </a>
+                        )}
+
+                        {isManager && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteMessage(m.id)}
+                            className={`text-[10px] font-bold flex items-center gap-1 pt-0.5 cursor-pointer ${mine ? 'text-blue-200 hover:text-white' : 'text-slate-400 hover:text-red-600'}`}
+                            title="Apagar esta mensagem"
+                          >
+                            <Trash2 className="h-3 w-3" /> Apagar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Resposta rápida */}
+              <div className="border-t border-slate-100 dark:border-slate-800 p-3 shrink-0 space-y-2">
+                {directError && (
+                  <div className="p-2 rounded-lg bg-red-50 text-red-700 text-[11px] border border-red-200">
+                    {directError}
+                  </div>
+                )}
+                <form onSubmit={handleDirectReplySubmit} className="flex items-end gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={directFileInputRef}
+                    onChange={handleDirectPhotoSelect}
+                    className="hidden"
+                  />
+                  <div className="flex-1 space-y-1.5">
+                    {directPhotoPreview && (
+                      <div className="relative inline-block">
+                        <img src={directPhotoPreview} alt="Preview" className="h-10 w-10 object-cover rounded-lg border border-slate-300" />
+                        <button
+                          type="button"
+                          onClick={() => { setDirectPhotoFile(null); setDirectPhotoPreview(null) }}
+                          className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
+                    <textarea
+                      rows={2}
+                      value={directReplyContent}
+                      onChange={(e) => setDirectReplyContent(e.target.value)}
+                      placeholder="Escreva uma resposta rápida..."
+                      className="input text-xs w-full resize-none"
                     />
-                  </a>
-                </div>
-              )}
-
-              {/* Ações de Estado */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                  Alterar Estado da Mensagem:
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateStatus(selectedMessage.id, 'awaiting_reply')}
-                    className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all border text-center ${
-                      selectedMessage.status === 'awaiting_reply'
-                        ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
-                        : 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 border-amber-300 hover:bg-amber-50'
-                    }`}
-                  >
-                    ⏳ Aguarda
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateStatus(selectedMessage.id, 'replied')}
-                    className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all border text-center ${
-                      selectedMessage.status === 'replied'
-                        ? 'bg-blue-600 text-white border-blue-700 shadow-xs'
-                        : 'bg-white dark:bg-slate-800 text-blue-700 dark:text-sky-400 border-blue-300 hover:bg-blue-50'
-                    }`}
-                  >
-                    💬 Respondida
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateStatus(selectedMessage.id, 'info')}
-                    className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all border text-center ${
-                      selectedMessage.status === 'info'
-                        ? 'bg-slate-600 text-white border-slate-700 shadow-xs'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 hover:bg-slate-100'
-                    }`}
-                  >
-                    ℹ️ Info
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateStatus(selectedMessage.id, 'closed')}
-                    className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all border text-center ${
-                      selectedMessage.status === 'closed'
-                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
-                        : 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 border-emerald-300 hover:bg-emerald-50'
-                    }`}
-                  >
-                    ✅ Fechada
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
+                  </div>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => directFileInputRef.current?.click()}
+                      className="btn-secondary p-2.5 rounded-xl cursor-pointer"
+                      title="Anexar foto"
+                    >
+                      <Camera className="h-4 w-4 text-safety-orange" />
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={directBusy || !directReplyContent.trim()}
+                      className="btn-primary p-2.5 rounded-xl shadow-md cursor-pointer disabled:opacity-50"
+                      title="Enviar resposta"
+                    >
+                      <Send className="h-4 w-4" />
+                    </button>
+                  </div>
+                </form>
                 <button
                   type="button"
-                  onClick={() => handleOpenReply(selectedMessage)}
-                  className="btn-primary px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md cursor-pointer"
+                  onClick={() => handleOpenReply(selectedThread.last)}
+                  className="text-[11px] font-bold text-slate-500 hover:text-industrial-blue dark:hover:text-sky-400 hover:underline cursor-pointer flex items-center gap-1"
                 >
-                  <Reply className="h-4 w-4" />
-                  <span>Responder no Menu</span>
+                  <Reply className="h-3 w-3" />
+                  <span>Responder com formulário completo (mudar destinatários, assunto ou OT)</span>
                 </button>
-
-                {isManager && (
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteMessage(selectedMessage.id)}
-                    className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:hover:bg-red-900 text-xs font-bold rounded-xl border border-red-200 dark:border-red-800 transition-colors flex items-center gap-1.5 cursor-pointer"
-                    title="Apagar Mensagem Permanentemente"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span>Apagar</span>
-                  </button>
-                )}
               </div>
-
-              <button
-                onClick={() => setSelectedMessage(null)}
-                className="btn-secondary px-4 py-2 text-xs font-bold rounded-xl cursor-pointer"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Modal UNIFICADO: Criar Nova Mensagem & Responder à Mensagem */}
       {modalOpen && (

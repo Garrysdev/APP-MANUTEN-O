@@ -42,6 +42,19 @@ export default function NotificationBell({ initialNotifications = [] }: { initia
     }
   }, [])
 
+  // Atualizar de imediato quando a página de Mensagens marca mensagens como lidas,
+  // em vez de esperar pelo polling periódico (até 2 minutos de atraso)
+  useEffect(() => {
+    async function handleRefresh() {
+      try {
+        const fresh = await getLatestNotificationsAction()
+        if (Array.isArray(fresh)) setNotifications(fresh)
+      } catch {}
+    }
+    window.addEventListener('rg:refresh-notifications', handleRefresh)
+    return () => window.removeEventListener('rg:refresh-notifications', handleRefresh)
+  }, [])
+
   // Fechar dropdown ao clicar fora
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

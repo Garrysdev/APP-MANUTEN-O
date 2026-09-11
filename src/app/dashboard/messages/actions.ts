@@ -7,6 +7,7 @@ import {
   updateInternalMessageStatus,
   markNotificationRead,
   markAllNotificationsRead,
+  markMessagesRead,
 } from '@/lib/firebase/data'
 import type { MessageStatus } from '@/types/models'
 
@@ -126,6 +127,15 @@ export async function deleteInternalMessageAction(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Erro ao apagar mensagem.' }
   }
+}
+
+export async function markMessagesReadAction(messageIds: string[]): Promise<{ ok: boolean }> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { ok: false }
+  await markMessagesRead(profile.companyId, messageIds, profile.id)
+  revalidatePath('/dashboard/messages')
+  revalidatePath('/dashboard')
+  return { ok: true }
 }
 
 export async function markNotificationReadAction(notificationId: string) {

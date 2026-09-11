@@ -428,6 +428,7 @@ export interface AppNotification {
   body: string
   type: 'task_assigned' | 'internal_message' | 'task_status' | 'system'
   link?: string | null
+  messageId?: string | null
   read: boolean
   createdAt: string
   senderName?: string | null
