@@ -1395,9 +1395,9 @@ export default function TasksClient({
                 <SortableTh label="CAUSA / OBS" sortableKey="obs" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[110px] px-1.5 py-2" />
                 <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-1.5 py-2" />
               </tr>
-              {/* Linha de Filtro por Coluna (visível apenas quando o link Filtros é clicado) */}
-              {filtersOpen && (
-                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1 animate-in fade-in duration-150">
+              {/* Linha de Filtro por Coluna (sempre visível, tal como em Plano de Manutenção / Inventário / Equipamentos) */}
+              {(
+                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
                   <td className="p-1 relative"><input value={colF.id} onChange={(e) => setCol('id', e.target.value)} placeholder="000..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
                   <td className="p-1 relative"><ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} /></td>
                   <td className="p-1 relative">

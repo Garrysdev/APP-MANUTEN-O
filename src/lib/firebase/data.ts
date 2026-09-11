@@ -1566,29 +1566,31 @@ const listMaintenancePlansCached = unstable_cache(
         null,
         1000
       )
-      if (snap && snap.docs) {
-        const dbDocs = snap.docs
-          .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
-          .filter((p) => !p.deleted)
+      const dbDocs = (snap && snap.docs)
+        ? snap.docs
+            .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
+            .filter((p) => !p.deleted)
+        : []
 
-        if (dbDocs.length > 0) {
-          const seen = new Set<string>()
-          const uniquePlans: MaintenancePlan[] = []
+      // Mesclar com os planos de reserva (JSON) em vez de os ignorar assim que
+      // exista QUALQUER documento no Firestore — um único "Concluir PM" grava
+      // só esse plano no Firestore e não deve fazer desaparecer os restantes
+      // que ainda só existem no ficheiro de reserva.
+      const fallbackPlans = isDemoCompany(companyId) ? getFallbackPlans() : []
+      const byId = new Map<string, MaintenancePlan>()
+      fallbackPlans.forEach((p) => byId.set(p.id, p))
+      dbDocs.forEach((p) => byId.set(p.id, p)) // Firestore substitui a versão de reserva quando existe
 
-          for (const p of dbDocs) {
-            const key = (p.code || `${p.area || ''}_${p.tag || ''}_${p.title}`).toLowerCase().trim()
-            if (!seen.has(key)) {
-              seen.add(key)
-              uniquePlans.push(p)
-            }
-          }
-          return uniquePlans.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
+      const seen = new Set<string>()
+      const uniquePlans: MaintenancePlan[] = []
+      for (const p of byId.values()) {
+        const key = ((p as any).code || `${p.area || ''}_${p.tag || ''}_${p.title}`).toLowerCase().trim()
+        if (!seen.has(key)) {
+          seen.add(key)
+          uniquePlans.push(p)
         }
       }
-
-      return isDemoCompany(companyId)
-        ? getFallbackPlans().sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
-        : []
+      return uniquePlans.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
     } catch (err) {
       console.error('[listMaintenancePlans] Error:', err)
     }

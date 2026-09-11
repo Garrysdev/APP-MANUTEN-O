@@ -24,7 +24,6 @@ import {
   toggleMaintenancePlanActiveAction,
   importMaintenancePlansAction,
   togglePlanCalendarAction,
-  togglePlanGanttAction,
   generateAnnualPMScheduleAction,
   concludePMAction,
 } from './actions'
@@ -151,9 +150,8 @@ export default function MaintenancePlanClient({
   const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
   const [fLegal, setFLegal] = useState(false)
   const [fCalendar, setFCalendar] = useState<'' | 'yes' | 'no'>('')
-  const [fGantt, setFGantt] = useState<'' | 'yes' | 'no'>('')
-  const anyFilter = fLegal || Boolean(fCalendar) || Boolean(fGantt) || Object.values(colF).some(Boolean)
-  function clearFilters() { setColF(emptyCol); setFLegal(false); setFCalendar(''); setFGantt(''); }
+  const anyFilter = fLegal || Boolean(fCalendar) || Object.values(colF).some(Boolean)
+  function clearFilters() { setColF(emptyCol); setFLegal(false); setFCalendar(''); }
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
   const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
@@ -442,7 +440,7 @@ export default function MaintenancePlanClient({
     titleCell.alignment = { vertical: 'middle', horizontal: 'center' }
     sheet.getRow(1).height = 32
 
-    const headers = ['ÁREA', 'TAG', 'SISTEMA', 'EQUIPAMENTO', 'AÇÃO / TAREFA', 'DESCRIÇÃO', 'PERIODICIDADE', 'CRITICIDADE', 'EXECUTOR', 'OBRIGATÓRIA (LEGAL)', 'REGRAS DE SEGURANÇA', 'PRÓXIMA DATA / AGENDAMENTO', 'ESTADO']
+    const headers = ['ÁREA', 'TAG', 'SISTEMA', 'EQUIPAMENTO', 'AÇÃO / TAREFA', 'DESCRIÇÃO', 'PERIODICIDADE', 'CRITICIDADE', 'TÉCNICO', 'OBRIGATÓRIA (LEGAL)', 'REGRAS DE SEGURANÇA', 'PRÓXIMA DATA / AGENDAMENTO', 'ESTADO']
     const headerRow = sheet.getRow(3)
     headerRow.values = headers
     headerRow.height = 26
@@ -557,13 +555,9 @@ export default function MaintenancePlanClient({
       if (fCalendar === 'yes' && !isCal) return false
       if (fCalendar === 'no' && isCal) return false
 
-      const isGantt = isPlanGanttActive(p)
-      if (fGantt === 'yes' && !isGantt) return false
-      if (fGantt === 'no' && isGantt) return false
-
       return true
     })
-  }, [plans, tasks, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, fCalendar, fGantt, assetMap, assetTagMap, excelDateFilter, selectedYear])
+  }, [plans, tasks, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, fCalendar, assetMap, assetTagMap, excelDateFilter, selectedYear])
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
@@ -766,36 +760,6 @@ export default function MaintenancePlanClient({
           </button>
         </div>
 
-        {/* Filtro Gantt */}
-        <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs">
-          <span className="px-2 font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-            <Building2 size={14} className="text-teal-600" /> Gantt:
-          </span>
-          <button
-            onClick={() => setFGantt('')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-              !fGantt ? 'bg-[#1B4F72] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-            }`}
-          >
-            Todos
-          </button>
-          <button
-            onClick={() => setFGantt('yes')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-              fGantt === 'yes' ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-            }`}
-          >
-            ✓ No Gantt
-          </button>
-          <button
-            onClick={() => setFGantt('no')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-              fGantt === 'no' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-            }`}
-          >
-            Fora do Gantt
-          </button>
-        </div>
       </div>
 
       {/* Barra de filtros: checkbox legais + limpar */}
@@ -921,10 +885,10 @@ export default function MaintenancePlanClient({
                 <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[70px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[110px] px-1 py-1.5 text-left" />
                 <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[140px] px-1 py-1.5 text-left" />
-                <SortableTh label="TIPO / MARCADOR" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[115px] px-1 py-1.5 text-left" />
+                <SortableTh label="TIPO" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[115px] px-1 py-1.5 text-left" />
                 <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[100px] px-1 py-1.5 text-left" />
                 <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[45px] px-1 py-1.5 whitespace-nowrap text-left" />
-                <SortableTh label="EXECUTOR" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1 py-1.5 whitespace-nowrap text-left" />
+                <SortableTh label="TÉCNICO" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[50px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <th className="w-[85px] px-1 py-1.5 whitespace-nowrap text-left">TAREFA</th>
               </tr>
@@ -1057,50 +1021,7 @@ export default function MaintenancePlanClient({
                     </div>
                   </td>
                   <td className="px-1 py-1.5">
-                    <div className="flex flex-col gap-0.5 items-start">
-                      <TipoBadge tipo={p.tipo || 'plano'} codeOnly={true} />
-                      <div className="flex items-center gap-1 flex-wrap text-[9px]">
-                        {(() => {
-                          const isCalActive = Boolean(p.showInCalendar || (p.calendarDates && p.calendarDates.length > 0) || p.active !== false)
-                          return (
-                            <label className="inline-flex items-center gap-0.5 cursor-pointer select-none font-bold" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                checked={isCalActive}
-                                onChange={async (e) => {
-                                  e.stopPropagation()
-                                  if (!e.target.checked) {
-                                    await togglePlanCalendarAction(p.id, false)
-                                    router.refresh()
-                                  } else {
-                                    openCalendarModal(p)
-                                  }
-                                }}
-                                className="rounded border-slate-300 text-safety-orange focus:ring-safety-orange h-3 w-3"
-                              />
-                              <span className={isCalActive ? "text-blue-800 dark:text-blue-300 font-bold" : "text-slate-500"}>
-                                Cal.
-                              </span>
-                            </label>
-                          )
-                        })()}
-                        <label className="inline-flex items-center gap-0.5 cursor-pointer select-none font-bold" title="Incluir tarefa no Gráfico de Gantt da página de Projetos" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={isPlanGanttActive(p)}
-                            onChange={async (e) => {
-                              e.stopPropagation()
-                              await togglePlanGanttAction(p.id, e.target.checked)
-                              router.refresh()
-                            }}
-                            className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-3 w-3"
-                          />
-                          <span className={isPlanGanttActive(p) ? "text-teal-700 dark:text-teal-300 font-bold" : "text-slate-400"}>
-                            Gantt
-                          </span>
-                        </label>
-                      </div>
-                    </div>
+                    <TipoBadge tipo={p.tipo || 'plano'} codeOnly={true} />
                   </td>
                   <td className="px-1 py-1.5 text-slate-800 dark:text-slate-200">
                     <span className="inline-flex items-start gap-1 text-[11px] font-semibold leading-tight">
