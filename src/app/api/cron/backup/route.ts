@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     const payload = JSON.stringify({ generatedAt: new Date().toISOString(), counts, collections: backup })
 
     const blob = await put(`backups/${dateStr}.json`, payload, {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: false,
       contentType: 'application/json',
       allowOverwrite: true,
