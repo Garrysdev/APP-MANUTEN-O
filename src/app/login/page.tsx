@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { signInWithEmailAndPassword } from 'firebase/auth'
@@ -8,12 +8,12 @@ import { getFirebaseAuth } from '@/lib/firebase/client'
 import { Eye, EyeOff } from 'lucide-react'
 
 const TEST_ACCOUNTS = [
-  { label: 'Free',       email: 'free@teste.rg',       password: 'Teste123!', role: 'Gestor' },
-  { label: 'Starter',    email: 'starter@teste.rg',    password: 'Teste123!', role: 'Gestor' },
-  { label: 'Pro',        email: 'pro@teste.rg',        password: 'Teste123!', role: 'Gestor' },
-  { label: 'Business',   email: 'business@teste.rg',   password: 'Teste123!', role: 'Gestor' },
-  { label: 'Enterprise', email: 'enterprise@teste.rg', password: 'Teste123!', role: 'Gestor' },
-  { label: 'Técnico (RG - RuiG)', email: 'tecnico@teste.rg', password: 'Teste123!', role: 'Técnico' },
+  { label: 'Free',       email: 'free@teste.rg',       role: 'Gestor' },
+  { label: 'Starter',    email: 'starter@teste.rg',    role: 'Gestor' },
+  { label: 'Pro',        email: 'pro@teste.rg',        role: 'Gestor' },
+  { label: 'Business',   email: 'business@teste.rg',   role: 'Gestor' },
+  { label: 'Enterprise', email: 'garrido.rui@gmail.com', role: 'Gestor' },
+  { label: 'Técnico (RG - RuiG)', email: 'tecnico@teste.rg', role: 'Técnico' },
 ]
 
 export default function LoginPage() {
@@ -24,6 +24,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const passwordInputRef = useRef<HTMLInputElement>(null)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -103,6 +104,7 @@ export default function LoginPage() {
               <div className="relative">
                 <input
                   id="password"
+                  ref={passwordInputRef}
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -165,7 +167,7 @@ export default function LoginPage() {
               <button
                 key={acc.email}
                 type="button"
-                onClick={() => { setUsernameInput(acc.email); setPassword(acc.password); setError('') }}
+                onClick={() => { setUsernameInput(acc.email); setPassword(''); setError(''); passwordInputRef.current?.focus() }}
                 className="text-center rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-2 py-2 transition-all shadow-sm"
               >
                 <p className="text-xs font-bold text-slate-900">{acc.label}</p>
