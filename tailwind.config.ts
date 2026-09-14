@@ -11,7 +11,7 @@ const config: Config = {
   // string literal no código — o scanner de conteúdo do Tailwind não as deteta e a regra
   // definida em globals.css acaba por ser removida do CSS final. "badge-in_progress" foi
   // o único caso sem nenhuma ocorrência literal, daí o badge "Em curso" aparecer sem estilo.
-  safelist: ['badge-pending', 'badge-in_progress', 'badge-done', 'badge-cancelled'],
+  safelist: ['badge-pending', 'badge-in_progress', 'badge-done', 'badge-cancelled', 'badge-neutral'],
   theme: {
     extend: {
       colors: {

@@ -415,6 +415,7 @@ export default function AssetDetailClient({
                       <SortableTh label="Data" sortableKey="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-4 py-3" />
                       <SortableTh label="Ordem de Trabalho (OT)" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-4 py-3" />
                       <SortableTh label="Tipo" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-4 py-3" />
+                      <th className="px-4 py-3">Ação / Observações</th>
                       <SortableTh label="Estado" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-4 py-3" />
                     </tr>
                   </thead>
@@ -437,10 +438,20 @@ export default function AssetDetailClient({
                         <td className="px-4 py-3 text-gray-500 dark:text-slate-400">
                           {TIPO_LABELS[t.tipo] || t.tipo}
                         </td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-slate-300 max-w-[280px]">
+                          {(() => {
+                            const actionText = (t.observacoes && !t.observacoes.startsWith('Origem:'))
+                              ? t.observacoes
+                              : (t.description || t.observacoes || '—')
+                            return (
+                              <span className="line-clamp-2" title={actionText}>{actionText}</span>
+                            )
+                          })()}
+                        </td>
                         <td className="px-4 py-3">
                           <span className={
-                            t.status === 'done' ? 'badge-done' : 
-                            t.status === 'in_progress' ? 'badge-pending' : 
+                            t.status === 'done' ? 'badge-done' :
+                            t.status === 'in_progress' ? 'badge-pending' :
                             t.status === 'cancelled' ? 'badge-cancelled' : 'badge-neutral'
                           }>
                             {STATUS_LABELS[t.status] || t.status}
