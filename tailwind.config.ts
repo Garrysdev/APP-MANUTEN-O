@@ -7,6 +7,11 @@ const config: Config = {
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  // Classes de estado construídas dinamicamente (`badge-${status}`) nunca aparecem como
+  // string literal no código — o scanner de conteúdo do Tailwind não as deteta e a regra
+  // definida em globals.css acaba por ser removida do CSS final. "badge-in_progress" foi
+  // o único caso sem nenhuma ocorrência literal, daí o badge "Em curso" aparecer sem estilo.
+  safelist: ['badge-pending', 'badge-in_progress', 'badge-done', 'badge-cancelled'],
   theme: {
     extend: {
       colors: {
