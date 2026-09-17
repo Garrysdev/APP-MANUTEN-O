@@ -459,10 +459,14 @@ const listTasksCached = unstable_cache(
         query = query.where('status', 'in', ['pending', 'in_progress']) as any
       }
 
+      // Timeout alargado (vs. o padrão de 1.2s usado noutras queries pequenas): com o
+      // histórico importado esta query pode devolver milhares de documentos, e um
+      // timeout curto aqui cai para o fallback vazio (empresas reais não usam o JSON
+      // de reserva), pior do que esperar mais um pouco.
       const snap = await firestoreWithTimeout(
         () => query.limit(limitCount).get(),
         null,
-        1200
+        8000
       )
       if (!snap || !snap.docs) {
         let fallbacks = getFallbackTasks()
@@ -521,9 +525,13 @@ const listTasksCached = unstable_cache(
   { revalidate: 30, tags: ['tasks'] }
 )
 
+// O limite por omissão tem de cobrir o histórico real da empresa (as 6000+ OTs
+// recuperadas do FR-MAN-09 2017-2026 para a UR) — um valor baixo aqui não dá erro,
+// simplesmente corta a query num subconjunto arbitrário do Firestore (sem orderBy),
+// dando totais/percentagens incoerentes em todas as páginas que usam listTasks().
 export const listTasks = cache(async function(
   companyId: string,
-  limitCount = 2000,
+  limitCount = 20000,
   includeCompleted = true
 ): Promise<Task[]> {
   return listTasksCached(companyId, limitCount, includeCompleted)

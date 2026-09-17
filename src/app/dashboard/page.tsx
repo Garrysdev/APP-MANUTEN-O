@@ -14,7 +14,7 @@ export default async function DashboardPage() {
   if (profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const [tasks, usersList, assets, interventions] = await Promise.all([
-    listTasks(profile.companyId, 20000),
+    listTasks(profile.companyId),
     listUsers(profile.companyId),
     listAssets(profile.companyId),
     listInterventions(profile.companyId),
