@@ -1,9 +1,12 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import type { Task } from '@/types/models'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { getYearTasksAction } from './actions'
+
+const EARLIEST_YEAR = 2017
 
 function isPMTask(t: Task): boolean {
   const ti = String((t as any).ti || (t as any).tipoText || t.tipo || '').toUpperCase().trim()
@@ -23,63 +26,55 @@ function isPITask(t: Task): boolean {
   return false
 }
 
-// Mesma ordem de prioridade de campos de data usada em ReportsChartsClient.parseTaskDate,
-// para os dois ecrãs concordarem sempre no mesmo ano por tarefa.
-function taskYear(t: Task): number | null {
-  const dStr = t.plannedStartDate || t.createdAt || t.dueDate || t.completedAt
-  if (!dStr) return null
-  const s = String(dStr).trim()
-  const isoMatch = s.match(/^(\d{4})-(\d{1,2})/)
-  if (isoMatch) {
-    const yr = parseInt(isoMatch[1], 10)
-    if (yr >= 2000 && yr <= 2100) return yr
-  }
-  const ptMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/)
-  if (ptMatch) {
-    const yr = parseInt(ptMatch[3], 10)
-    if (yr >= 2000 && yr <= 2100) return yr
-  }
-  const d = new Date(s)
-  if (!isNaN(d.getTime())) return d.getFullYear()
-  return null
-}
-
-export default function DashboardKpiCards({ tasks }: { tasks: Task[] }) {
+export default function DashboardKpiCards({
+  openTasks,
+  initialYear,
+  initialYearTasks,
+}: {
+  openTasks: Task[]
+  initialYear: number
+  initialYearTasks: Task[]
+}) {
   const currentYear = new Date().getFullYear()
-  const [year, setYear] = useState(currentYear)
+  const [year, setYear] = useState(initialYear)
+  const [yearTasks, setYearTasks] = useState(initialYearTasks)
+  const [isPending, startTransition] = useTransition()
 
   const availableYears = useMemo(() => {
-    const years = new Set<number>([currentYear])
-    tasks.forEach((t) => {
-      const y = taskYear(t)
-      if (y) years.add(y)
-    })
-    return Array.from(years).sort((a, b) => b - a)
-  }, [tasks, currentYear])
+    const years: number[] = []
+    for (let y = currentYear + 1; y >= EARLIEST_YEAR; y--) years.push(y)
+    return years
+  }, [currentYear])
 
-  const tasksInYear = useMemo(() => tasks.filter((t) => taskYear(t) === year), [tasks, year])
+  function changeYear(newYear: number) {
+    setYear(newYear)
+    startTransition(async () => {
+      const data = await getYearTasksAction(newYear)
+      setYearTasks(data)
+    })
+  }
 
   // "Em curso" e "Pendentes" são um retrato do trabalho atual em aberto — não faz
   // sentido filtrar por ano, uma OT pendente criada em 2024 continua pendente hoje.
-  const inProgressOTs = useMemo(() => tasks.filter((t) => t.status === 'in_progress').length, [tasks])
-  const pendingOTs = useMemo(() => tasks.filter((t) => t.status === 'pending').length, [tasks])
+  const inProgressOTs = useMemo(() => openTasks.filter((t) => t.status === 'in_progress').length, [openTasks])
+  const pendingOTs = useMemo(() => openTasks.filter((t) => t.status === 'pending').length, [openTasks])
 
-  const totalOTs = tasksInYear.length
-  const doneOTs = tasksInYear.filter((t) => t.status === 'done').length
+  const totalOTs = yearTasks.length
+  const doneOTs = yearTasks.filter((t) => t.status === 'done').length
 
-  const pmTasks = useMemo(() => tasksInYear.filter(isPMTask), [tasksInYear])
+  const pmTasks = useMemo(() => yearTasks.filter(isPMTask), [yearTasks])
   const pmTotal = pmTasks.length
   const pmDone = pmTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
   const pmCompliancePct = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : 0
 
-  const piTasks = useMemo(() => tasksInYear.filter(isPITask), [tasksInYear])
+  const piTasks = useMemo(() => yearTasks.filter(isPITask), [yearTasks])
   const piRequested = piTasks.length
   const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
   const piCompliancePct = piRequested > 0 ? Math.round((piCompleted / piRequested) * 100) : 0
 
   const yearIdx = availableYears.indexOf(year)
-  const goPrevYear = () => { if (yearIdx < availableYears.length - 1) setYear(availableYears[yearIdx + 1]) }
-  const goNextYear = () => { if (yearIdx > 0) setYear(availableYears[yearIdx - 1]) }
+  const goPrevYear = () => { if (yearIdx < availableYears.length - 1) changeYear(availableYears[yearIdx + 1]) }
+  const goNextYear = () => { if (yearIdx > 0) changeYear(availableYears[yearIdx - 1]) }
 
   return (
     <>
@@ -98,7 +93,7 @@ export default function DashboardKpiCards({ tasks }: { tasks: Task[] }) {
           </button>
           <select
             value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
+            onChange={(e) => changeYear(Number(e.target.value))}
             className="text-sm font-bold text-industrial-blue dark:text-blue-400 bg-transparent px-1 py-0.5 cursor-pointer focus:outline-none"
           >
             {availableYears.map((y) => (
@@ -114,11 +109,12 @@ export default function DashboardKpiCards({ tasks }: { tasks: Task[] }) {
           >
             <ChevronRight size={14} />
           </button>
+          {isPending && <Loader2 size={14} className="animate-spin text-slate-400 mx-1" />}
         </div>
         {year !== currentYear && (
           <button
             type="button"
-            onClick={() => setYear(currentYear)}
+            onClick={() => changeYear(currentYear)}
             className="text-[11px] font-bold text-safety-orange hover:underline cursor-pointer"
           >
             Voltar ao ano atual

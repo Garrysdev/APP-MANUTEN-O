@@ -525,17 +525,80 @@ const listTasksCached = unstable_cache(
   { revalidate: 30, tags: ['tasks'] }
 )
 
-// O limite por omissão tem de cobrir o histórico real da empresa (as 6000+ OTs
-// recuperadas do FR-MAN-09 2017-2026 para a UR) — um valor baixo aqui não dá erro,
-// simplesmente corta a query num subconjunto arbitrário do Firestore (sem orderBy),
-// dando totais/percentagens incoerentes em todas as páginas que usam listTasks().
+// NOTA: não subir este limite às cegas. Com o histórico importado (~6700 OTs na
+// UR), um limite alto tenta trazer ~5MB de documentos de uma só vez — excede o
+// tecto de 2MB da Data Cache do Next.js (fica sempre por cachear) e esgota a quota
+// diária do Firestore em poucos carregamentos de página. Para estatísticas por ano
+// (Dashboard, Estatísticas) usar getTasksForYearStats(), que faz queries pequenas
+// e cacheáveis por ano em vez de trazer o histórico completo de uma vez.
 export const listTasks = cache(async function(
   companyId: string,
-  limitCount = 20000,
+  limitCount = 2000,
   includeCompleted = true
 ): Promise<Task[]> {
   return listTasksCached(companyId, limitCount, includeCompleted)
 })
+
+// Extrai uma data "efetiva" de uma tarefa, mesma prioridade de campos usada nos
+// ecrãs de Dashboard/Estatísticas (plannedStartDate > createdAt > dueDate > completedAt).
+function effectiveTaskDate(t: Pick<Task, 'plannedStartDate' | 'createdAt' | 'dueDate' | 'completedAt'>): string | null {
+  return t.plannedStartDate || t.createdAt || t.dueDate || (t as any).completedAt || null
+}
+
+// Estatísticas de um único ano, sem trazer o histórico completo da empresa. Faz uma
+// query Firestore limitada a esse ano (por createdAt, campo sempre preenchido) em vez
+// de listTasks() com um limite alto — para 6000+ OTs isso excede o tecto de 2MB da
+// Data Cache do Next.js (fica sempre por cachear) e esgota a quota diária do Firestore
+// em poucos carregamentos de página. Cada ano fica pequeno e cacheável (revalidate 60s).
+const getTasksForYearCached = unstable_cache(
+  async (companyId: string, year: number): Promise<Task[]> => {
+    const startIso = `${year}-01-01`
+    const endIso = `${year + 1}-01-01`
+    let dbDocs: Task[] = []
+    try {
+      const snap = await firestoreWithTimeout(
+        () => adminDb()
+          .collection('tasks')
+          .where('companyId', '==', companyId)
+          .where('createdAt', '>=', startIso)
+          .where('createdAt', '<', endIso)
+          .limit(5000)
+          .get(),
+        null,
+        5000
+      )
+      if (snap && snap.docs) {
+        dbDocs = snap.docs.map((d) => serialize<Task>(d))
+      }
+    } catch (err) {
+      console.error('[getTasksForYearStats] Error:', err)
+    }
+
+    // A camada de reserva (só para a UR) guarda datas próprias (dueDate/plannedStartDate)
+    // que não batem certo com o createdAt genérico de alguns registos — filtrar pela
+    // data efetiva de cada item em vez de por createdAt.
+    if (isDemoCompany(companyId)) {
+      const fallbackForYear = getFallbackTasks().filter((f) => {
+        const d = effectiveTaskDate(f)
+        if (!d) return false
+        const y = parseInt(String(d).slice(0, 4), 10)
+        return y === year
+      })
+      if (dbDocs.length === 0) return fallbackForYear
+      const dbIds = new Set(dbDocs.map((d) => d.id))
+      const extraFallback = fallbackForYear.filter((f) => !dbIds.has(f.id))
+      return [...dbDocs, ...extraFallback]
+    }
+
+    return dbDocs
+  },
+  ['tasks-by-year'],
+  { revalidate: 60, tags: ['tasks'] }
+)
+
+export async function getTasksForYearStats(companyId: string, year: number): Promise<Task[]> {
+  return getTasksForYearCached(companyId, year)
+}
 
 export const listCompletedTasksPaged = cache(async function(
   companyId: string,

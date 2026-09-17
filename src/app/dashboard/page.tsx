@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { listTasks, listUsers, listAssets, listInterventions } from '@/lib/firebase/data'
+import { listTasks, listUsers, listAssets, listInterventions, getTasksForYearStats } from '@/lib/firebase/data'
 import { formatDate } from '@/lib/utils'
 import { ClipboardList, Users, Timer, ArrowUp, ArrowDown, Plus, AlertCircle, FolderKanban } from 'lucide-react'
 import DashboardKpiCards from './DashboardKpiCards'
@@ -13,8 +13,14 @@ export default async function DashboardPage() {
   if (!profile) redirect('/login')
   if (profile.role !== 'manager') redirect('/dashboard/tasks')
 
-  const [tasks, usersList, assets, interventions] = await Promise.all([
+  const currentYear = new Date().getFullYear()
+
+  const [tasks, openTasks, yearTasks, usersList, assets, interventions] = await Promise.all([
     listTasks(profile.companyId),
+    // Trabalho em aberto (Em curso/Pendentes) — fotografia atual, independente do ano.
+    listTasks(profile.companyId, 2000, false),
+    // Ano de referência do seletor — query pequena e cacheável, nunca o histórico todo.
+    getTasksForYearStats(profile.companyId, currentYear),
     listUsers(profile.companyId),
     listAssets(profile.companyId),
     listInterventions(profile.companyId),
@@ -111,7 +117,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <DashboardKpiCards tasks={tasks} />
+      <DashboardKpiCards openTasks={openTasks} initialYear={currentYear} initialYearTasks={yearTasks} />
 
       {/* ── 2ª LINHA DE INDICADORES (ANEXO 2 — SEM AS OTs ATIVAS) ──────────── */}
       <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">

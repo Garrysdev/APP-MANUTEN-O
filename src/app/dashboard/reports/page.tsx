@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { listTasks, listAssets, listInterventions, listUsers } from '@/lib/firebase/data'
+import { listAssets, listInterventions, listUsers, getTasksForYearStats } from '@/lib/firebase/data'
 import { STATUS_LABELS, CRITICIDADE_LABELS, TIPO_LABELS, type TipoTarefa } from '@/types/models'
 import { formatDate, formatDateTime, formatDuration } from '@/lib/utils'
 import PrintButton from './PrintButton'
@@ -11,6 +11,8 @@ import { planHas } from '@/lib/plans'
 
 export const dynamic = 'force-dynamic'
 
+const EARLIEST_YEAR = 2017
+
 export default async function ReportsPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
@@ -19,12 +21,21 @@ export default async function ReportsPage() {
   const plan = profile.company?.plan ?? 'free'
   if (!planHas(plan, 'reports')) redirect('/dashboard/billing?feature=reports')
 
-  const [tasks, assets, interventions, users] = await Promise.all([
-    listTasks(profile.companyId),
+  // Histórico completo montado a partir de queries pequenas por ano (cada uma
+  // cacheável e barata), em vez de um único listTasks() sem limite — que com o
+  // histórico da UR (~6700 OTs) excede o tecto de 2MB da Data Cache do Next.js e
+  // esgota a quota diária do Firestore a cada carregamento desta página.
+  const currentYear = new Date().getFullYear()
+  const years: number[] = []
+  for (let y = currentYear + 1; y >= EARLIEST_YEAR; y--) years.push(y)
+
+  const [yearlyTasks, assets, interventions, users] = await Promise.all([
+    Promise.all(years.map((y) => getTasksForYearStats(profile.companyId, y))),
     listAssets(profile.companyId),
     listInterventions(profile.companyId),
     listUsers(profile.companyId),
   ])
+  const tasks = yearlyTasks.flat()
 
   const companyName = profile.company?.name ?? 'Empresa'
   const generatedAt = new Date().toLocaleString('pt-PT')
