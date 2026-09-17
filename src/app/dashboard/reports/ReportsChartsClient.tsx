@@ -23,6 +23,7 @@ const TIPO_DISPLAY_GROUPS: { code: string; label: string; keys: string[] }[] = [
   { code: 'CAL', label: 'CALIBRAÇÃO', keys: ['calibracao'] },
   { code: 'OUT', label: 'OUTRO', keys: ['outro'] },
 ]
+const TIPO_DISPLAY_GROUPS_SORTED = [...TIPO_DISPLAY_GROUPS].sort((a, b) => a.code.localeCompare(b.code))
 
 function parseTaskDate(t: Task): { year: number; month: number } | null {
   const dStr = t.plannedStartDate || t.createdAt || t.dueDate || t.completedAt
@@ -722,7 +723,7 @@ export default function ReportsChartsClient({
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Proporção entre MC, MP, PM, PI e outras intervenções</p>
 
           <div className="space-y-3">
-            {TIPO_DISPLAY_GROUPS.map(({ code, label, keys }) => {
+            {TIPO_DISPLAY_GROUPS_SORTED.map(({ code, label, keys }) => {
               const count = keys.reduce((sum, k) => sum + (tiposCounts[k] || 0), 0)
               const pct = Math.round((count / totalTasks) * 100)
               return (
