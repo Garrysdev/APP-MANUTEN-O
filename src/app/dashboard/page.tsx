@@ -4,6 +4,7 @@ import { getCurrentProfile } from '@/lib/firebase/session'
 import { listTasks, listUsers, listAssets, listInterventions } from '@/lib/firebase/data'
 import { formatDate } from '@/lib/utils'
 import { ClipboardList, Users, Timer, ArrowUp, ArrowDown, Plus, AlertCircle, FolderKanban } from 'lucide-react'
+import DashboardKpiCards from './DashboardKpiCards'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +14,7 @@ export default async function DashboardPage() {
   if (profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const [tasks, usersList, assets, interventions] = await Promise.all([
-    listTasks(profile.companyId),
+    listTasks(profile.companyId, 20000),
     listUsers(profile.companyId),
     listAssets(profile.companyId),
     listInterventions(profile.companyId),
@@ -77,39 +78,6 @@ export default async function DashboardPage() {
     })
     .slice(0, 10)
 
-  const isPMTask = (t: any) => {
-    const ti = String(t.ti || t.tipoText || t.tipo || '').toUpperCase().trim()
-    if (ti === 'PM' || ti === 'MP' || ti === 'PREVENTIVA' || ti === 'PLANO') return true
-    if (Boolean(t.maintenancePlanId) || t.source === 'plano_manutencao' || t.source === 'folha_ur_planos' || String(t.id || '').startsWith('task_pm_')) return true
-    const titleLow = String(t.title || '').toLowerCase().trim()
-    if (titleLow.startsWith('pm ') || titleLow.startsWith('pm-') || titleLow.startsWith('[pm]') || titleLow.startsWith('mp ') || titleLow.startsWith('[mp]')) return true
-    return false
-  }
-
-  const isPITask = (t: any) => {
-    const ti = String(t.ti || t.tipoText || t.tipo || '').toUpperCase().trim()
-    if (ti === 'PI') return true
-    const titleLow = String(t.title || '').toLowerCase().trim()
-    if (titleLow.startsWith('pi ') || titleLow.startsWith('pi-') || titleLow.startsWith('[pi]')) return true
-    if (t.source === 'folha_ur_pi' || t.source === 'pedidos_pi') return true
-    return false
-  }
-
-  const totalOTs = tasks.length
-  const doneOTs = tasks.filter((t) => t.status === 'done').length
-  const inProgressOTs = tasks.filter((t) => t.status === 'in_progress').length
-  const pendingOTs = tasks.filter((t) => t.status === 'pending').length
-
-  const pmTasks = tasks.filter(isPMTask)
-  const pmTotal = pmTasks.length
-  const pmDone = pmTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
-  const pmCompliancePct = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : 100
-
-  const piTasks = tasks.filter(isPITask)
-  const piRequested = piTasks.length
-  const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
-  const piCompliancePct = piRequested > 0 ? Math.round((piCompleted / piRequested) * 100) : 100
-
   return (
     <div className="flex flex-col gap-6 animate-fade-in-up">
       {/* Cabeçalho */}
@@ -143,33 +111,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* ── 1ª LINHA DE INDICADORES (ANEXO 1) ────────────────────────────────── */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Link href="/dashboard/tasks" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
-          <p className="text-4xl font-extrabold text-[#1B4F72] dark:text-blue-400 group-hover:scale-105 transition-transform">{totalOTs}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-industrial-blue">
-            <span>Total OTs</span> <span className="text-[10px]">↗</span>
-          </p>
-        </Link>
-        <Link href="/dashboard/tasks?status=done" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
-          <p className="text-4xl font-extrabold text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">{doneOTs}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-emerald-600">
-            <span>Concluídas</span> <span className="text-[10px]">↗</span>
-          </p>
-        </Link>
-        <Link href="/dashboard/tasks?status=in_progress" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
-          <p className="text-4xl font-extrabold text-blue-500 dark:text-blue-400 group-hover:scale-105 transition-transform">{inProgressOTs}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-blue-500">
-            <span>Em curso</span> <span className="text-[10px]">↗</span>
-          </p>
-        </Link>
-        <Link href="/dashboard/tasks?status=pending" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
-          <p className="text-4xl font-extrabold text-amber-600 dark:text-amber-500 group-hover:scale-105 transition-transform">{pendingOTs}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-amber-600">
-            <span>Pendentes</span> <span className="text-[10px]">↗</span>
-          </p>
-        </Link>
-      </section>
+      <DashboardKpiCards tasks={tasks} />
 
       {/* ── 2ª LINHA DE INDICADORES (ANEXO 2 — SEM AS OTs ATIVAS) ──────────── */}
       <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -224,51 +166,6 @@ export default async function DashboardPage() {
             </div>
           </div>
         </Link>
-      </section>
-
-      {/* ── 3ª LINHA DE INDICADORES (ANEXO 3) ────────────────────────────────── */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Cartão Cumprimento do Plano de Manutenção (PM) */}
-        <div className="bg-gradient-to-br from-slate-900 via-industrial-blue to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800 flex items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-[11px] font-extrabold uppercase tracking-widest text-amber-400">
-              Cumprimento do Plano de Manutenção (PM)
-            </span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black text-white">{pmCompliancePct}%</span>
-              <span className="text-xs font-bold text-slate-300">
-                ({pmDone} de {pmTotal} OTs de PM Existentes)
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-300 font-medium">
-              Considera a totalidade de OTs de PM geradas no período selecionado ({pmTotal} OTs) vs Concluídas ({pmDone} OTs).
-            </p>
-          </div>
-          <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
-            {pmCompliancePct}%
-          </div>
-        </div>
-
-        {/* Cartão Pedidos de Intervenção (PI) — Resumo */}
-        <div className="bg-gradient-to-br from-slate-900 via-industrial-blue to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800 flex items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-[11px] font-extrabold uppercase tracking-widest text-amber-400">
-              Pedidos de Intervenção (PI) — Resumo
-            </span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black text-white">{piCompleted} / {piRequested}</span>
-              <span className="text-xs font-bold text-slate-300">
-                ({piCompliancePct}% PIs Concluídos)
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-300 font-medium">
-              Total de solicitações de intervenção criadas e tratadas na fábrica no período selecionado ({piRequested} PIs).
-            </p>
-          </div>
-          <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
-            {piCompliancePct}%
-          </div>
-        </div>
       </section>
 
       {/* Análise dos Equipamentos Mais Críticos */}

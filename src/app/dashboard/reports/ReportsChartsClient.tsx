@@ -17,7 +17,7 @@ function parseTaskDate(t: Task): { year: number; month: number } | null {
   if (isoMatch) {
     const yr = parseInt(isoMatch[1], 10)
     const mo = parseInt(isoMatch[2], 10)
-    if (yr >= 2020 && yr <= 2030 && mo >= 1 && mo <= 12) {
+    if (yr >= 2010 && yr <= 2040 && mo >= 1 && mo <= 12) {
       return { year: yr, month: mo }
     }
   }
@@ -27,7 +27,7 @@ function parseTaskDate(t: Task): { year: number; month: number } | null {
   if (ptMatch) {
     const mo = parseInt(ptMatch[2], 10)
     const yr = parseInt(ptMatch[3], 10)
-    if (yr >= 2020 && yr <= 2030 && mo >= 1 && mo <= 12) {
+    if (yr >= 2010 && yr <= 2040 && mo >= 1 && mo <= 12) {
       return { year: yr, month: mo }
     }
   }
@@ -66,7 +66,11 @@ export default function ReportsChartsClient({
   assets: Asset[]
   interventions: Intervention[]
 }) {
-  const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const currentYear = new Date().getFullYear()
+  const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>({
+    ...DEFAULT_EXCEL_DATE_FILTER,
+    selectedYear: String(currentYear),
+  })
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedTIs, setSelectedTIs] = useState<string[]>([])
@@ -83,12 +87,12 @@ export default function ReportsChartsClient({
     return Array.from(set).sort()
   }, [assets])
 
-  // Filtragem estrita de tarefas pela data e filtros multi-seleção
-  const filteredTasks = useMemo(() => {
+  // Filtro comum de área/tag/TI, sem a data — partilhado pela vista de um ano (com
+  // filtro de data aplicado) e pelos gráficos de comparação entre anos (sem ele, para
+  // não ficarem presos ao ano por omissão selecionado no resto da página).
+  const matchesNonDateFilters = useMemo(() => {
     const assetMap = new Map(assets.map((a) => [a.id, a]))
-    return tasks.filter((t) => {
-      if (!filterByExcelDate(t.plannedStartDate || t.createdAt, excelDateFilter)) return false
-
+    return (t: Task) => {
       const assetObj = t.assetId ? assetMap.get(t.assetId) : null
       const aArea = ((t as any).area || assetObj?.area || '').trim().toLowerCase()
       const aTag = ((t as any).tag || assetObj?.tag || '').trim().toLowerCase()
@@ -119,18 +123,33 @@ export default function ReportsChartsClient({
         if (!matchesAny) return false
       }
       return true
+    }
+  }, [assets, selectedAreas, selectedTags, selectedTIs])
+
+  // Filtragem estrita de tarefas pela data (ano selecionado) e filtros multi-seleção —
+  // usada na vista mensal e nos cartões de KPI globais do topo.
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      if (!filterByExcelDate(t.plannedStartDate || t.createdAt, excelDateFilter)) return false
+      return matchesNonDateFilters(t)
     })
-  }, [tasks, assets, excelDateFilter, selectedAreas, selectedTags, selectedTIs])
+  }, [tasks, excelDateFilter, matchesNonDateFilters])
+
+  // Mesmos filtros de área/tag/TI mas sem restringir o ano — para os gráficos de
+  // comparação entre anos poderem sempre mostrar todo o histórico disponível.
+  const filteredTasksAllYears = useMemo(() => {
+    return tasks.filter(matchesNonDateFilters)
+  }, [tasks, matchesNonDateFilters])
 
   // Filtragem de intervenções
   const filteredInterventions = useMemo(() => {
     return interventions.filter((iv) => filterByExcelDate(iv.startedAt || iv.createdAt, excelDateFilter))
   }, [interventions, excelDateFilter])
 
-  // 1. Dados Mensais para o Ano Selecionado (ou 2026 por omissão)
+  // 1. Dados Mensais para o Ano Selecionado (ou o ano atual por omissão)
   const monthlyData = useMemo(() => {
     const monthNamesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-    const targetYear = excelDateFilter.selectedYear ? parseInt(excelDateFilter.selectedYear, 10) : 2026
+    const targetYear = excelDateFilter.selectedYear ? parseInt(excelDateFilter.selectedYear, 10) : currentYear
 
     return monthNamesShort.map((monthLabel, i) => {
       const monthNum = i + 1
@@ -173,19 +192,20 @@ export default function ReportsChartsClient({
     return Math.max(1, ...monthlyData.map((d) => Math.max(d.pmTotal, d.pmDone)))
   }, [monthlyData])
 
-  // 2. Dados Anuais (Comparação de Anos)
+  // 2. Dados Anuais (Comparação de Anos) — sempre o histórico completo disponível,
+  // independentemente do ano selecionado no resto da página.
   const yearlyStats = useMemo(() => {
-    const yearsSet = new Set<number>([2024, 2025, 2026])
-    filteredTasks.forEach((t) => {
+    const yearsSet = new Set<number>([currentYear])
+    filteredTasksAllYears.forEach((t) => {
       const parsed = parseTaskDate(t)
-      if (parsed && parsed.year >= 2020 && parsed.year <= 2030) {
+      if (parsed && parsed.year >= 2010 && parsed.year <= 2040) {
         yearsSet.add(parsed.year)
       }
     })
     const years = Array.from(yearsSet).sort((a, b) => a - b)
 
     return years.map((yr) => {
-      const tasksInYr = filteredTasks.filter((t) => {
+      const tasksInYr = filteredTasksAllYears.filter((t) => {
         const parsed = parseTaskDate(t)
         return parsed && parsed.year === yr
       })
@@ -210,7 +230,7 @@ export default function ReportsChartsClient({
         pmCompliance,
       }
     })
-  }, [filteredTasks])
+  }, [filteredTasksAllYears, currentYear])
 
   const maxYrPI = useMemo(() => {
     return Math.max(1, ...yearlyStats.map((y) => Math.max(y.piRequested, y.piCompleted)))

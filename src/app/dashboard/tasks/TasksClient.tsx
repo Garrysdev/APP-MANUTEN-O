@@ -1455,7 +1455,16 @@ export default function TasksClient({
                   <td className="p-1 relative"><ExcelColumnDateFilter values={excelInicioFilter} onChange={setExcelInicioFilter} /></td>
                   <td className="p-1 relative"><ExcelColumnDateFilter values={excelFimFilter} onChange={setExcelFimFilter} /></td>
                   <td className="p-1 relative"><input value={colF.obs} onChange={(e) => setCol('obs', e.target.value)} placeholder="Obs..." className="input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold" /></td>
-                  <td className="p-1 relative" />
+                  <td className="p-1 relative">
+                    <MultiSelectPopoverFilter
+                      label="Estado"
+                      options={(['pending', 'in_progress', 'done', 'cancelled'] as TaskStatus[]).map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
+                      selectedValues={selectedStatuses}
+                      onChange={(vals) => setSelectedStatuses(vals as TaskStatus[])}
+                      placeholder="Estado (Todos)"
+                      width="w-48"
+                    />
+                  </td>
                 </tr>
               )}
             </thead>

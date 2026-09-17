@@ -20,7 +20,7 @@ export default async function ReportsPage() {
   if (!planHas(plan, 'reports')) redirect('/dashboard/billing?feature=reports')
 
   const [tasks, assets, interventions, users] = await Promise.all([
-    listTasks(profile.companyId),
+    listTasks(profile.companyId, 20000),
     listAssets(profile.companyId),
     listInterventions(profile.companyId),
     listUsers(profile.companyId),
