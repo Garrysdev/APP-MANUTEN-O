@@ -3,9 +3,26 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import type { Task, Asset, Intervention } from '@/types/models'
-import { TIPO_LABELS } from '@/types/models'
 import ExcelDateFilter, { ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
+
+// Grupos de exibição para "Distribuição por Tipo de Manutenção" — 'plano'/'pm' e
+// 'preventiva'/'mp' são o mesmo tipo guardado com chaves diferentes consoante a
+// origem do registo (import histórico vs. criado na app); mostrar como uma linha
+// só, somando as contagens, em vez de duplicado.
+const TIPO_DISPLAY_GROUPS: { code: string; label: string; keys: string[] }[] = [
+  { code: 'PI', label: 'PEDIDOS DE INTERVENÇÃO', keys: ['pi'] },
+  { code: 'MC', label: 'CURATIVA', keys: ['curativa'] },
+  { code: 'MI', label: 'MANUTENÇÃO INVESTIMENTO', keys: ['mi'] },
+  { code: 'PM', label: 'PLANO MANUTENÇÃO', keys: ['plano', 'pm'] },
+  { code: 'MP', label: 'MANUTENÇÃO PREVENTIVA', keys: ['preventiva', 'mp'] },
+  { code: 'PR', label: 'PROJETO', keys: ['projeto'] },
+  { code: 'STP', label: 'STP', keys: ['stp'] },
+  { code: 'INS', label: 'INSPEÇÃO', keys: ['inspecao'] },
+  { code: 'LUB', label: 'LUBRIFICAÇÃO', keys: ['lubrificacao'] },
+  { code: 'CAL', label: 'CALIBRAÇÃO', keys: ['calibracao'] },
+  { code: 'OUT', label: 'OUTRO', keys: ['outro'] },
+]
 
 function parseTaskDate(t: Task): { year: number; month: number } | null {
   const dStr = t.plannedStartDate || t.createdAt || t.dueDate || t.completedAt
@@ -705,14 +722,14 @@ export default function ReportsChartsClient({
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Proporção entre MC, MP, PM, PI e outras intervenções</p>
 
           <div className="space-y-3">
-            {Object.entries(TIPO_LABELS).map(([tipo, label]) => {
-              const count = tiposCounts[tipo] || 0
+            {TIPO_DISPLAY_GROUPS.map(({ code, label, keys }) => {
+              const count = keys.reduce((sum, k) => sum + (tiposCounts[k] || 0), 0)
               const pct = Math.round((count / totalTasks) * 100)
               return (
-                <Link key={tipo} href={`/dashboard/tasks?tipo=${tipo}`} className="block space-y-1 group">
+                <Link key={code} href={`/dashboard/tasks?tipo=${keys[0]}`} className="block space-y-1 group">
                   <div className="flex justify-between text-xs font-bold">
                     <span className="text-slate-800 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                      {label} ({tipo.toUpperCase()}) ↗
+                      {code} ({label}) ↗
                     </span>
                     <span className="text-slate-500">{count} OTs ({pct}%)</span>
                   </div>
@@ -720,11 +737,11 @@ export default function ReportsChartsClient({
                     <div
                       style={{ width: `${Math.max(4, pct)}%` }}
                       className={`h-full transition-all rounded-full ${
-                        tipo === 'curativa' || tipo === 'mc' ? 'bg-amber-600' :
-                        tipo === 'preventiva' || tipo === 'mp' ? 'bg-purple-600' :
-                        tipo === 'plano' || tipo === 'pm' ? 'bg-blue-900' :
-                        tipo === 'pi' ? 'bg-red-900' :
-                        tipo === 'stp' ? 'bg-lime-500' : 'bg-slate-400'
+                        code === 'MC' ? 'bg-amber-600' :
+                        code === 'MP' ? 'bg-purple-600' :
+                        code === 'PM' ? 'bg-blue-900' :
+                        code === 'PI' ? 'bg-red-900' :
+                        code === 'STP' ? 'bg-lime-500' : 'bg-slate-400'
                       }`}
                     />
                   </div>
