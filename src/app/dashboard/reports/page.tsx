@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { listAssets, listInterventions, listUsers, getTasksForYearStats } from '@/lib/firebase/data'
+import { listAssets, listInterventions, listUsers, getTasksForYearStats, listMaintenancePlans } from '@/lib/firebase/data'
 import { STATUS_LABELS, CRITICIDADE_LABELS, TIPO_LABELS, type TipoTarefa } from '@/types/models'
 import { formatDate, formatDateTime, formatDuration } from '@/lib/utils'
 import PrintButton from './PrintButton'
@@ -29,11 +29,12 @@ export default async function ReportsPage() {
   const years: number[] = []
   for (let y = currentYear + 1; y >= EARLIEST_YEAR; y--) years.push(y)
 
-  const [yearlyTasks, assets, interventions, users] = await Promise.all([
+  const [yearlyTasks, assets, interventions, users, plans] = await Promise.all([
     Promise.all(years.map((y) => getTasksForYearStats(profile.companyId, y))),
     listAssets(profile.companyId),
     listInterventions(profile.companyId),
     listUsers(profile.companyId),
+    listMaintenancePlans(profile.companyId),
   ])
   const tasks = yearlyTasks.flat()
 
@@ -132,6 +133,7 @@ export default async function ReportsPage() {
           tasks={tasks}
           assets={assets}
           interventions={interventions}
+          plans={plans}
         />
 
         {/* Análise dos Equipamentos Mais Críticos */}

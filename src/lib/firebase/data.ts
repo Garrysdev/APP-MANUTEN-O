@@ -9,7 +9,6 @@ import { adminDb, adminAuth, firestoreWithTimeout, isQuotaExhausted, markQuotaEx
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
-import { calculatePlanAnnualDates } from '../pm-generator'
 import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus, type TaskStatus } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
@@ -477,8 +476,15 @@ const listTasksCached = unstable_cache(
         return isDemoCompany(companyId) ? fallbacks : []
       }
 
-      const dbDocs = snap.docs
-        .map((d) => serialize<Task>(d))
+      const rawDocs = snap.docs.map((d) => serialize<Task & { deleted?: boolean }>(d))
+      // Tarefas só existentes na camada de reserva (scripts/import/tasks.json) não têm
+      // documento no Firestore para apagar — deleteTask() grava aqui um "marcador de
+      // eliminado" em vez de falhar; tem de ser excluído do resultado E impedir que o
+      // merge com a reserva mais abaixo faça a tarefa reaparecer.
+      const deletedIds = new Set(rawDocs.filter((d) => d.deleted).map((d) => d.id))
+
+      const dbDocs = rawDocs
+        .filter((t) => !t.deleted)
         .filter((t) => {
           // Manter SEMPRE todas as tarefas da folha UR
           if (t.source === 'excel_ur' || t.source === 'folha_ur_historico' || t.id.startsWith('task_excel_ur_') || t.id.includes('t-ur-')) {
@@ -498,7 +504,7 @@ const listTasksCached = unstable_cache(
       if (!isDemoCompany(companyId)) {
         return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
       }
-      let fallbacks = getFallbackTasks()
+      let fallbacks = getFallbackTasks().filter((f) => !deletedIds.has(f.id))
       if (!includeCompleted) {
         fallbacks = fallbacks.filter((f) => f.source === 'excel_ur' || (f.status !== 'done' && f.status !== 'cancelled'))
       }
@@ -602,35 +608,26 @@ export async function getTasksForYearStats(companyId: string, year: number): Pro
 }
 
 /**
- * Cumprimento do Plano de Manutenção (PM) de um ano: ocorrências PREVISTAS
- * (calculatePlanAnnualDates, por periodicidade de cada plano ativo) vs
- * ocorrências CONCLUÍDAS (intervenções "[PM Concluída]" registadas nesse ano).
- * Não usa a coleção `tasks` como total — um plano recorrente reutiliza sempre
- * a mesma OT (setMaintenancePlanOccurrenceStatus), por isso contar OTs
- * existentes subestima o total real de ocorrências e infla a % para perto de
- * 100% sempre que a última OT do plano está fechada.
+ * Cumprimento do Plano de Manutenção (PM) de um ano: replica exatamente a
+ * contagem já usada na tabela "Plano de Manutenção" (coluna TAREFA) — total
+ * = nº de planos existentes (companyId, `plans.length` nessa página); feitos
+ * = nº de planos cuja OT ligada nesse ano (findPlanLinkedTask, por
+ * maintenancePlanId ou TAG+título) está "Concluída". Os dois ecrãs têm de
+ * mostrar sempre o mesmo número — daí usar a mesma função partilhada
+ * (src/lib/pm-status.ts) em vez de uma fórmula própria por ocorrências.
  */
 export async function getPMComplianceForYear(
   companyId: string,
   year: number
 ): Promise<{ total: number; done: number; pct: number }> {
-  const [plans, interventions] = await Promise.all([
+  const { findPlanLinkedTask } = await import('../pm-status')
+  const [plans, tasks] = await Promise.all([
     listMaintenancePlans(companyId),
-    listInterventions(companyId),
+    listTasks(companyId),
   ])
 
-  const total = plans
-    .filter((p) => p.active !== false && (!p.createdAt || p.createdAt.slice(0, 4) <= String(year)))
-    .reduce((sum, p) => sum + calculatePlanAnnualDates(p, year).length, 0)
-
-  const startIso = `${year}-01-01`
-  const endIso = `${year + 1}-01-01`
-  const done = interventions.filter((iv) => {
-    if (!(iv.observations || '').startsWith('[PM Concluída]')) return false
-    const d = iv.startedAt || iv.createdAt
-    return !!d && d >= startIso && d < endIso
-  }).length
-
+  const total = plans.length
+  const done = plans.filter((p) => findPlanLinkedTask(p, tasks, year)?.status === 'done').length
   const pct = total > 0 ? Math.round((done / total) * 100) : 0
   return { total, done, pct }
 }
@@ -750,7 +747,9 @@ export const listTasksByAsset = cache(async function(companyId: string, assetId:
 export const getTask = cache(async function(companyId: string, id: string): Promise<Task | null> {
   try {
     const doc = await adminDb().collection('tasks').doc(id).get()
-    if (doc.exists && doc.data()?.companyId === companyId) {
+    if (doc.exists) {
+      if (doc.data()?.companyId !== companyId) return null
+      if (doc.data()?.deleted) return null // marcador de eliminado (ver deleteTask)
       return serialize<Task>(doc)
     }
   } catch (err) {
@@ -997,8 +996,17 @@ export async function updateTask(
 export async function deleteTask(companyId: string, id: string): Promise<void> {
   const ref = adminDb().collection('tasks').doc(id)
   const doc = await ref.get()
-  if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Tarefa não encontrada')
-  await ref.delete()
+  if (doc.exists) {
+    if (doc.data()?.companyId !== companyId) throw new Error('Tarefa não encontrada')
+    await ref.delete()
+  } else {
+    // Tarefa só existe na camada de reserva (scripts/import/tasks.json) — nunca foi
+    // escrita no Firestore, por isso não há nada para apagar ali. Grava um marcador
+    // de eliminado (mesmo padrão já usado em deleteMaintenancePlan) para a suprimir
+    // do merge em listTasksCached; sem isto o "delete" falhava sempre com "Tarefa
+    // não encontrada" e a OT reaparecia na lista.
+    await ref.set({ id, companyId, deleted: true, updatedAt: new Date().toISOString() })
+  }
   revalidateTag('tasks')
 }
 

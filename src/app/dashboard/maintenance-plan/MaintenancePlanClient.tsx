@@ -29,6 +29,7 @@ import {
   setPmOccurrenceStatusAction,
 } from './actions'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
+import { findPlanLinkedTask } from '@/lib/pm-status'
 import { updateTaskStatusAction, updateTaskAction, loadStockRefsAction, type StockMaterialRef } from '../tasks/actions'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
@@ -248,25 +249,7 @@ export default function MaintenancePlanClient({
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
 
   function findPlanTask(p: MaintenancePlan, year: number = selectedYear): Task | null {
-    const linkedTasks = tasks.filter((t) => {
-      const matches =
-        (t.maintenancePlanId && (t.maintenancePlanId === p.id || t.maintenancePlanId === (p as any).code)) ||
-        (t.tag && p.tag && t.tag.trim().toLowerCase() === p.tag.trim().toLowerCase() && (() => {
-          const tTitle = (t.title || '').trim().toLowerCase()
-          const pTitle = (p.title || '').trim().toLowerCase()
-          const pAcao = (p.description || '').trim().toLowerCase()
-          return tTitle === pTitle || (pAcao && tTitle.includes(pAcao)) || (pTitle && tTitle.includes(pTitle))
-        })())
-      if (!matches) return false
-      const d = t.dueDate || t.plannedStartDate || t.completedAt
-      return d ? new Date(d).getFullYear() === year : false
-    })
-    if (linkedTasks.length === 0) return null
-    const pending = linkedTasks
-      .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
-      .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
-    const mostRecent = linkedTasks.slice().sort((a, b) => (b.dueDate || '').localeCompare(a.dueDate || ''))[0]
-    return pending[0] || mostRecent
+    return findPlanLinkedTask(p, tasks, year)
   }
   function openPlanRow(p: MaintenancePlan) {
     openEdit(p)

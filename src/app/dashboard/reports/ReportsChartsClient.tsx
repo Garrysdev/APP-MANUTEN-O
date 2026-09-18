@@ -2,9 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import type { Task, Asset, Intervention } from '@/types/models'
+import type { Task, Asset, Intervention, MaintenancePlan } from '@/types/models'
 import ExcelDateFilter, { ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
+import { findPlanLinkedTask } from '@/lib/pm-status'
 
 // Grupos de exibição para "Distribuição por Tipo de Manutenção" — 'plano'/'pm' e
 // 'preventiva'/'mp' são o mesmo tipo guardado com chaves diferentes consoante a
@@ -79,10 +80,12 @@ export default function ReportsChartsClient({
   tasks,
   assets,
   interventions,
+  plans,
 }: {
   tasks: Task[]
   assets: Asset[]
   interventions: Intervention[]
+  plans: MaintenancePlan[]
 }) {
   const currentYear = new Date().getFullYear()
   const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>({
@@ -254,11 +257,23 @@ export default function ReportsChartsClient({
     return Math.max(1, ...yearlyStats.map((y) => Math.max(y.piRequested, y.piCompleted)))
   }, [yearlyStats])
 
-  // 3. Cumprimento Global do PM (Preventivas)
+  // 3. Cumprimento Global do PM (Preventivas) — mesma lógica da tabela "Plano de
+  // Manutenção" e do cartão do Dashboard: total = nº de Planos de Manutenção
+  // (filtrados por Área/TAG quando aplicável), concluídas = planos cuja OT do ano
+  // selecionado está "Concluída" (findPlanLinkedTask). Um plano recorrente reutiliza
+  // sempre a mesma OT, por isso contar OTs existentes na coleção tasks inflava a %
+  // para perto de 100% assim que a última OT do plano fechava.
   const annualPMStats = useMemo(() => {
-    const pmTasks = filteredTasks.filter(isPMTask)
-    const totalExistentes = pmTasks.length
-    const concluidas = pmTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
+    const targetYear = excelDateFilter.selectedYear ? parseInt(excelDateFilter.selectedYear, 10) : currentYear
+    const filteredPlans = plans.filter((p) => {
+      const pArea = (p.area || '').trim().toLowerCase()
+      const pTag = (p.tag || '').trim().toLowerCase()
+      if (selectedAreas.length > 0 && !selectedAreas.some((a) => pArea === a.toLowerCase() || pArea.startsWith(a.toLowerCase()))) return false
+      if (selectedTags.length > 0 && !selectedTags.some((t) => pTag === t.toLowerCase() || pTag.startsWith(t.toLowerCase()))) return false
+      return true
+    })
+    const totalExistentes = filteredPlans.length
+    const concluidas = filteredPlans.filter((p) => findPlanLinkedTask(p, tasks, targetYear)?.status === 'done').length
     const compliancePct = totalExistentes > 0 ? Math.round((concluidas / totalExistentes) * 1000) / 10 : 0
 
     return {
@@ -266,7 +281,7 @@ export default function ReportsChartsClient({
       concluidas,
       compliancePct,
     }
-  }, [filteredTasks])
+  }, [plans, tasks, selectedAreas, selectedTags, excelDateFilter.selectedYear, currentYear])
 
   const annualPIStats = useMemo(() => {
     const piTasks = filteredTasks.filter(isPITask)
@@ -331,11 +346,11 @@ export default function ReportsChartsClient({
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-black text-white">{annualPMStats.compliancePct}%</span>
               <span className="text-xs font-bold text-slate-300">
-                ({annualPMStats.concluidas} de {annualPMStats.totalExistentes} OTs de PM Existentes)
+                ({annualPMStats.concluidas} de {annualPMStats.totalExistentes} Planos de Manutenção)
               </span>
             </div>
             <p className="text-[11px] text-slate-300 font-medium">
-              Considera a totalidade de OTs de PM geradas no período selecionado ({annualPMStats.totalExistentes} OTs) vs Concluídas ({annualPMStats.concluidas} OTs).
+              Planos de Manutenção com a OT do ano selecionado concluída, do total de planos existentes ({annualPMStats.totalExistentes}).
             </p>
           </div>
           <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">

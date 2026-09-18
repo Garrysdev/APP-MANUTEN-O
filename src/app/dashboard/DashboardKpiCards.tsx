@@ -157,11 +157,11 @@ export default function DashboardKpiCards({
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-black text-white">{pmCompliancePct}%</span>
               <span className="text-xs font-bold text-slate-300">
-                ({pmDone} de {pmTotal} Ocorrências Previstas)
+                ({pmDone} de {pmTotal} Planos de Manutenção)
               </span>
             </div>
             <p className="text-[11px] text-slate-300 font-medium">
-              Relação entre ocorrências de PM concluídas e previstas pelo plano anual em {year} ({pmTotal} ocorrências).
+              Planos de Manutenção com a OT de {year} concluída, do total de planos existentes ({pmTotal}).
             </p>
           </div>
           <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">

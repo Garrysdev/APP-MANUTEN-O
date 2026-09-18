@@ -434,7 +434,11 @@ export default function TasksClient({
 
   async function handleDelete(task: Task) {
     if (!confirm(`Eliminar "${task.title}"?`)) return
-    await deleteTaskAction(task.id)
+    const res = await deleteTaskAction(task.id)
+    if (res?.error) {
+      alert(res.error)
+      return
+    }
     router.refresh()
   }
 
