@@ -7,6 +7,7 @@ import { formatDate, formatDateTime, formatDuration } from '@/lib/utils'
 import PrintButton from './PrintButton'
 import CSVExportButton from './CSVExportButton'
 import ReportsChartsClient from './ReportsChartsClient'
+import CriticalAssetsTable from './CriticalAssetsTable'
 import { planHas } from '@/lib/plans'
 
 export const dynamic = 'force-dynamic'
@@ -57,31 +58,20 @@ export default async function ReportsPage() {
   const assetMap = Object.fromEntries(assets.map((a) => [a.id, a.name]))
   const userMap = Object.fromEntries(users.map((u) => [u.id, u.name]))
 
-  const criticalAssets = assets
-    .map((asset) => {
-      const assetTasks = tasks.filter((t) => t.assetId === asset.id || t.tag === asset.tag)
-      const openUrgent = assetTasks.filter((t) => t.criticidade === 'vermelho' && t.status !== 'done' && t.status !== 'cancelled').length
-      const totalInterventions = interventions.filter((iv) => {
-        const t = tasks.find((tk) => tk.id === iv.taskId)
-        return t && (t.assetId === asset.id || t.tag === asset.tag)
-      }).length + assetTasks.length
-
-      return {
-        asset,
-        totalTasks: assetTasks.length,
-        totalInterventions,
-        openUrgent,
-        criticidadeABC: asset.criticidadeABC || 'C',
-      }
-    })
-    .sort((a, b) => {
-      const rank: Record<string, number> = { A: 1, B: 2, C: 3 }
-      const rA = rank[a.criticidadeABC] || 4
-      const rB = rank[b.criticidadeABC] || 4
-      if (rA !== rB) return rA - rB
-      return b.totalTasks - a.totalTasks
-    })
-    .slice(0, 15)
+  const criticalAssets = assets.map((asset) => {
+    const assetTasks = tasks.filter((t) => t.assetId === asset.id || t.tag === asset.tag)
+    const openUrgent = assetTasks.filter((t) => t.criticidade === 'vermelho' && t.status !== 'done' && t.status !== 'cancelled').length
+    return {
+      id: asset.id,
+      area: asset.area ?? null,
+      tag: asset.tag ?? null,
+      name: asset.name,
+      active: asset.active !== false,
+      criticidadeABC: asset.criticidadeABC || 'C',
+      totalTasks: assetTasks.length,
+      openUrgent,
+    }
+  })
 
   return (
     <>
@@ -149,70 +139,7 @@ export default async function ReportsPage() {
               Sem equipamentos cadastrados.
             </div>
           ) : (
-            <div className="card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs min-w-[650px] md:min-w-0">
-                  <thead>
-                    <tr className="bg-slate-100/90 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider">
-                      <th className="text-left px-3 py-2.5">ÁREA</th>
-                      <th className="text-left px-3 py-2.5">TAG</th>
-                      <th className="text-left px-3 py-2.5">EQUIPAMENTO</th>
-                      <th className="text-center px-3 py-2.5">CRITICIDADE ABC</th>
-                      <th className="text-center px-3 py-2.5">TOTAL OTs</th>
-                      <th className="text-center px-3 py-2.5">URGENTES EM ABERTO</th>
-                      <th className="text-center px-3 py-2.5">ESTADO</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                    {criticalAssets.map(({ asset, totalTasks, openUrgent, criticidadeABC }) => (
-                      <tr key={asset.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                        <td className="px-3 py-2.5 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                          {asset.area || '—'}
-                        </td>
-                        <td className="px-3 py-2.5 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                          <Link href={`/dashboard/assets/${asset.id}`} className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 hover:border-purple-400 hover:text-purple-600 transition-colors">
-                            {asset.tag || '—'}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100">
-                          <Link href={`/dashboard/assets/${asset.id}`} className="hover:text-purple-600 dark:hover:text-purple-400 hover:underline transition-colors">
-                            {asset.name}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[11px] font-extrabold ${
-                            criticidadeABC === 'A' ? 'bg-red-100 text-red-800 border border-red-300' :
-                            criticidadeABC === 'B' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                            'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                          }`}>
-                            Classe {criticidadeABC}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-center font-bold font-mono text-slate-800 dark:text-slate-200">
-                          <Link href={`/dashboard/tasks?search=${encodeURIComponent(asset.tag || asset.name)}`} className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors">
-                            {totalTasks} OT(s) ↗
-                          </Link>
-                        </td>
-                        <td className="px-3 py-2.5 text-center font-mono">
-                          {openUrgent > 0 ? (
-                            <Link href={`/dashboard/tasks?search=${encodeURIComponent(asset.tag || asset.name)}`} className="bg-red-50 text-red-700 font-extrabold px-2 py-0.5 rounded border border-red-200 hover:bg-red-100 transition-colors">
-                              ⚠️ {openUrgent}
-                            </Link>
-                          ) : (
-                            <span className="text-slate-400">0</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${asset.active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-300'}`}>
-                            {asset.active ? 'Ativo' : 'Inativo'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <CriticalAssetsTable rows={criticalAssets} />
           )}
         </div>
 

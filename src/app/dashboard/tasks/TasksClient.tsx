@@ -240,9 +240,21 @@ export default function TasksClient({
       const list = pStatus.split(',').map((s) => s.trim() as TaskStatus).filter(Boolean)
       if (list.length > 0) return list
     }
+    // Vindo de um link de "Distribuição por Tipo de Manutenção" (Estatísticas): esse
+    // total conta OTs de todos os estados, por isso mostrar também todos aqui — senão
+    // o filtro por omissão (só ativas) faz parecer que o link não filtrou nada.
+    if (searchParams.get('tipo')) return ['pending', 'in_progress', 'done', 'cancelled']
     return ['pending', 'in_progress'] // DEFAULT: Mostrar apenas as OTs ATIVAS ao abrir a página
   })
-  const [selectedTIs, setSelectedTIs] = useState<string[]>([])
+  const [selectedTIs, setSelectedTIs] = useState<string[]>(() => {
+    // Vem de links "Ver OTs" nas Estatísticas (Distribuição por Tipo de Manutenção).
+    const pTipo = searchParams.get('tipo')
+    if (pTipo) {
+      const list = pTipo.split(',').map((s) => s.trim()).filter(Boolean)
+      if (list.length > 0) return list
+    }
+    return []
+  })
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedTechs, setSelectedTechs] = useState<string[]>([])
