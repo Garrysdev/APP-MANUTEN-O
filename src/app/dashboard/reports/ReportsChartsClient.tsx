@@ -6,7 +6,6 @@ import type { Task, Asset, Intervention, MaintenancePlan } from '@/types/models'
 import ExcelDateFilter, { ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 import { findPlanLinkedTask } from '@/lib/pm-status'
-import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 
 // Grupos de exibição para "Distribuição por Tipo de Manutenção" — 'plano'/'pm' e
 // 'preventiva'/'mp' são o mesmo tipo guardado com chaves diferentes consoante a
@@ -168,31 +167,10 @@ export default function ReportsChartsClient({
     return interventions.filter((iv) => filterByExcelDate(iv.startedAt || iv.createdAt, excelDateFilter))
   }, [interventions, excelDateFilter])
 
-  // 1. Dados Mensais para o Ano Selecionado (ou o ano atual por omissão). PM
-  // "Agendadas" usa as ocorrências do calendário anual de cada plano
-  // (calculatePlanAnnualDates) em vez de contar OTs existentes: um plano
-  // recorrente reutiliza sempre a mesma OT, por isso ela só aparece num único
-  // mês (o da última vez que foi tocada) — contar OTs subestimava quase todos
-  // os meses. "Concluídas" continua a refletir as OTs de PM realmente fechadas
-  // nesse mês.
+  // 1. Dados Mensais para o Ano Selecionado (ou o ano atual por omissão).
   const monthlyData = useMemo(() => {
     const monthNamesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
     const targetYear = excelDateFilter.selectedYear ? parseInt(excelDateFilter.selectedYear, 10) : currentYear
-
-    const filteredPlansForPM = plans.filter((p) => {
-      const pArea = (p.area || '').trim().toLowerCase()
-      const pTag = (p.tag || '').trim().toLowerCase()
-      if (selectedAreas.length > 0 && !selectedAreas.some((a) => pArea === a.toLowerCase() || pArea.startsWith(a.toLowerCase()))) return false
-      if (selectedTags.length > 0 && !selectedTags.some((t) => pTag === t.toLowerCase() || pTag.startsWith(t.toLowerCase()))) return false
-      return true
-    })
-    const pmScheduledByMonth = Array(13).fill(0) // índice 1..12
-    filteredPlansForPM.forEach((p) => {
-      calculatePlanAnnualDates(p, targetYear).forEach((dateStr) => {
-        const m = parseInt(String(dateStr).slice(5, 7), 10)
-        if (m >= 1 && m <= 12) pmScheduledByMonth[m]++
-      })
-    })
 
     return monthNamesShort.map((monthLabel, i) => {
       const monthNum = i + 1
@@ -208,30 +186,18 @@ export default function ReportsChartsClient({
       const piRequested = piTasks.length
       const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
 
-      // PMs (Preventivas / Planos de Manutenção)
-      const pmTotal = pmScheduledByMonth[monthNum]
-      const pmDone = tasksInMonth.filter((t) => isPMTask(t) && (t.status === 'done' || !!t.completedAt)).length
-      const pmCompliance = pmTotal > 0 ? Math.min(100, Math.round((pmDone / pmTotal) * 100)) : 0
-
       return {
         month: monthLabel,
         yearMonth: `${targetYear}-${String(monthNum).padStart(2, '0')}`,
         piRequested,
         piCompleted,
-        pmTotal,
-        pmDone,
-        pmCompliance,
       }
     })
-  }, [filteredTasks, excelDateFilter.selectedYear, plans, selectedAreas, selectedTags, currentYear])
+  }, [filteredTasks, excelDateFilter.selectedYear, currentYear])
 
   // Máximo para escala dos gráficos mensais
   const maxPIVal = useMemo(() => {
     return Math.max(1, ...monthlyData.map((d) => Math.max(d.piRequested, d.piCompleted)))
-  }, [monthlyData])
-
-  const maxPMVal = useMemo(() => {
-    return Math.max(1, ...monthlyData.map((d) => Math.max(d.pmTotal, d.pmDone)))
   }, [monthlyData])
 
   // 2. Dados Anuais (Comparação de Anos) — sempre o histórico completo disponível,
@@ -690,73 +656,6 @@ export default function ReportsChartsClient({
           </div>
         </div>
 
-        {/* Gráfico 4: Cumprimento do Plano de Manutenção (KPI por Mês) */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
-            <div>
-              <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100">
-                Cumprimento do Plano de Manutenção (KPI por Mês)
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Evolução mensal de ocorrências de PM Agendadas (plano anual) vs OTs Concluídas</p>
-            </div>
-            <div className="flex items-center gap-3 text-xs font-bold shrink-0">
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500" /> Agendadas</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-500" /> Concluídas</span>
-            </div>
-          </div>
-
-          <div className="h-64 flex items-end justify-between gap-2 pt-8 pb-2 px-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
-            {monthlyData.map((d) => {
-              const hTotal = d.pmTotal > 0 ? Math.max(16, Math.round((d.pmTotal / maxPMVal) * 100)) : 0
-              const hDone = d.pmDone > 0 ? Math.max(16, Math.round((d.pmDone / maxPMVal) * 100)) : 0
-              return (
-                <div key={d.month} className="flex-1 min-w-[36px] flex flex-col items-center gap-1.5 h-full justify-end group">
-                  {/* Badge de % Cumprimento */}
-                  {d.pmTotal > 0 && (
-                    <span className={`text-[10px] font-extrabold px-1 py-0.5 rounded shadow-xs mb-1 ${
-                      d.pmCompliance >= 95 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
-                      d.pmCompliance >= 80 ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                    }`}>
-                      {d.pmCompliance}%
-                    </span>
-                  )}
-                  <div className="w-full flex items-end justify-center gap-1.5 h-full max-w-[48px]">
-                    {/* Barra PM Agendadas */}
-                    <div
-                      style={{ height: hTotal > 0 ? `${hTotal}%` : '4px' }}
-                      className={`w-1/2 rounded-t-md transition-all relative flex items-start justify-center pt-0.5 ${
-                        hTotal > 0 ? 'bg-amber-500 group-hover:bg-amber-600' : 'bg-slate-200 dark:bg-slate-800'
-                      }`}
-                      title={`${d.month} - PMs Agendadas: ${d.pmTotal}`}
-                    >
-                      {d.pmTotal > 0 && (
-                        <span className="text-[10px] font-extrabold text-white">
-                          {d.pmTotal}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Barra PM Concluídas */}
-                    <div
-                      style={{ height: hDone > 0 ? `${hDone}%` : '4px' }}
-                      className={`w-1/2 rounded-t-md transition-all relative flex items-start justify-center pt-0.5 ${
-                        hDone > 0 ? 'bg-emerald-500 group-hover:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-800'
-                      }`}
-                      title={`${d.month} - PMs Concluídas: ${d.pmDone}`}
-                    >
-                      {d.pmDone > 0 && (
-                        <span className="text-[10px] font-extrabold text-white">
-                          {d.pmDone}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-1">{d.month}</span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
       </div>
 
       {/* Distribuição por Tipo de Manutenção + Fiabilidade */}
