@@ -2003,8 +2003,15 @@ export async function deleteStockItem(companyId: string, id: string): Promise<vo
 }
 
 // ── WAREHOUSES (ARMAZÉNS) ───────────────────────────────────────────────────
+// NOTA: isto usava um array `let cachedWarehouses` guardado em memória do
+// processo como "cache" — em ambiente serverless (Vercel) essa memória não é
+// durável: qualquer cold start (novo deploy, instância nova, período de
+// inatividade) repunha os 2 armazéns por omissão codificados abaixo, mesmo
+// depois de apagados. Substituído por leitura direta ao Firestore + marcador
+// "deleted" (mesmo padrão de deleteTask/deleteMaintenancePlan) para os
+// armazéns por omissão, que nunca tiveram documento próprio no Firestore.
 
-let cachedWarehouses: Warehouse[] = [
+const DEFAULT_WAREHOUSES: Warehouse[] = [
   {
     id: 'wh_central',
     companyId: DEMO_COMPANY_ID,
@@ -2027,25 +2034,26 @@ let cachedWarehouses: Warehouse[] = [
 
 export const listWarehouses = cache(async function(companyId: string): Promise<Warehouse[]> {
   const finalCompanyId = companyId || DEMO_COMPANY_ID
+  let docs: (Warehouse & { deleted?: boolean })[] = []
   try {
     const snap = await adminDb().collection('warehouses').get()
-    const docs = snap.docs.map((d) => serialize<Warehouse>(d))
-    
-    const map = new Map<string, Warehouse>()
-    cachedWarehouses.forEach((w) => map.set(w.id, w))
-    docs.forEach((w) => map.set(w.id, w))
-    cachedWarehouses = Array.from(map.values())
+    docs = snap.docs.map((d) => serialize<Warehouse & { deleted?: boolean }>(d))
   } catch (err) {
-    console.warn('[listWarehouses] Firestore query failed / quota exceeded, using cache:', err)
+    console.warn('[listWarehouses] Firestore query failed / quota exceeded, using só os por omissão:', err)
   }
-  
-  const filtered = cachedWarehouses.filter((w) => {
+
+  const deletedIds = new Set(docs.filter((w) => w.deleted).map((w) => w.id))
+  const map = new Map<string, Warehouse>()
+  DEFAULT_WAREHOUSES.filter((w) => !deletedIds.has(w.id)).forEach((w) => map.set(w.id, w))
+  docs.filter((w) => !w.deleted).forEach((w) => map.set(w.id, w))
+
+  const filtered = Array.from(map.values()).filter((w) => {
     if (!w.companyId) return true
     if (w.companyId === finalCompanyId) return true
     if (isDemoCompany(finalCompanyId) && isDemoCompany(w.companyId)) return true
     return false
   })
-  
+
   return filtered.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'))
 })
 
@@ -2055,9 +2063,7 @@ export async function createWarehouse(
 ): Promise<string> {
   const now = new Date().toISOString()
   const finalCompanyId = companyId || DEMO_COMPANY_ID
-  const generatedId = `wh_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-  const newWh: Warehouse = {
-    id: generatedId,
+  const newWh: Omit<Warehouse, 'id'> = {
     name: (data.name || '').trim(),
     address: data.address ? String(data.address).trim() : null,
     notes: data.notes ? String(data.notes).trim() : null,
@@ -2065,18 +2071,9 @@ export async function createWarehouse(
     createdAt: now,
     updatedAt: now,
   }
-  cachedWarehouses.unshift(newWh)
-
-  try {
-    const cleanObj = JSON.parse(JSON.stringify(newWh))
-    const ref = await adminDb().collection('warehouses').add(cleanObj)
-    newWh.id = ref.id
-  } catch (err) {
-    console.warn('[createWarehouse] Firestore add failed / quota exceeded, saved to cache:', err)
-  }
-
+  const ref = await adminDb().collection('warehouses').add(JSON.parse(JSON.stringify(newWh)))
   revalidateTag('warehouses')
-  return newWh.id
+  return ref.id
 }
 
 export async function updateWarehouse(
@@ -2084,33 +2081,31 @@ export async function updateWarehouse(
   id: string,
   data: Partial<Omit<Warehouse, 'id' | 'companyId' | 'createdAt'>>
 ): Promise<void> {
-  const item = cachedWarehouses.find((w) => w.id === id)
-  if (item) {
-    if (data.name !== undefined) item.name = data.name.trim()
-    if (data.address !== undefined) item.address = data.address ? String(data.address).trim() : null
-    if (data.notes !== undefined) item.notes = data.notes ? String(data.notes).trim() : null
-    item.updatedAt = new Date().toISOString()
-  }
-  try {
-    const cleanObj = JSON.parse(
-      JSON.stringify({
-        ...data,
-        updatedAt: new Date().toISOString(),
-      })
-    )
-    await adminDb().collection('warehouses').doc(id).update(cleanObj).catch(() => {})
-  } catch (err) {
-    console.warn('[updateWarehouse] Firestore update failed / quota exceeded:', err)
-  }
+  const cleanObj = JSON.parse(
+    JSON.stringify({
+      ...(data.name !== undefined ? { name: data.name.trim() } : {}),
+      ...(data.address !== undefined ? { address: data.address ? String(data.address).trim() : null } : {}),
+      ...(data.notes !== undefined ? { notes: data.notes ? String(data.notes).trim() : null } : {}),
+      companyId,
+      updatedAt: new Date().toISOString(),
+    })
+  )
+  // set({merge:true}) em vez de update() — os armazéns por omissão não têm
+  // documento no Firestore até serem editados ou apagados pela 1ª vez.
+  await adminDb().collection('warehouses').doc(id).set(cleanObj, { merge: true })
   revalidateTag('warehouses')
 }
 
 export async function deleteWarehouse(companyId: string, id: string): Promise<void> {
-  cachedWarehouses = cachedWarehouses.filter((w) => w.id !== id)
-  try {
-    await adminDb().collection('warehouses').doc(id).delete().catch(() => {})
-  } catch (err) {
-    console.warn('[deleteWarehouse] Firestore delete failed / quota exceeded:', err)
+  const ref = adminDb().collection('warehouses').doc(id)
+  const doc = await ref.get()
+  if (doc.exists) {
+    await ref.delete()
+  } else {
+    // Armazém por omissão (wh_central / wh_ur) sem documento próprio — grava um
+    // marcador de eliminado em vez de nada, senão reaparecia sempre que a
+    // instância serverless reiniciasse (ver nota no topo desta secção).
+    await ref.set({ id, companyId, deleted: true, updatedAt: new Date().toISOString() })
   }
   revalidateTag('warehouses')
 }

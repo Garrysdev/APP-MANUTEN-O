@@ -13,7 +13,7 @@ import { findPlanLinkedTask } from '@/lib/pm-status'
 // só, somando as contagens, em vez de duplicado.
 const TIPO_DISPLAY_GROUPS: { code: string; label: string; keys: string[] }[] = [
   { code: 'PI', label: 'PEDIDOS DE INTERVENÇÃO', keys: ['pi'] },
-  { code: 'MC', label: 'CURATIVA', keys: ['curativa'] },
+  { code: 'MC', label: 'MANUTENÇÃO CURATIVA', keys: ['curativa'] },
   { code: 'MI', label: 'MANUTENÇÃO INVESTIMENTO', keys: ['mi'] },
   { code: 'PM', label: 'PLANO MANUTENÇÃO', keys: ['plano', 'pm'] },
   { code: 'MP', label: 'MANUTENÇÃO PREVENTIVA', keys: ['preventiva', 'mp'] },

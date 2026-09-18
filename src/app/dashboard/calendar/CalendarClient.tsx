@@ -270,6 +270,7 @@ export default function CalendarClient({
 
   React.useEffect(() => { setTaskList(tasks) }, [tasks])
   React.useEffect(() => { setPlanList(plans) }, [plans])
+  React.useEffect(() => { setDayPage(1) }, [selectedDate, dayPageSize])
 
   // Month view state
   const [year, setYear] = useState(today.getFullYear())
@@ -287,6 +288,11 @@ export default function CalendarClient({
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showSyncModal, setShowSyncModal] = useState(false)
   const [copiedFeed, setCopiedFeed] = useState(false)
+
+  // Paginação da lista de tarefas da Vista Diária — um dia com um plano recorrente
+  // "arrastado" pode acumular dezenas/centenas de ocorrências.
+  const [dayPageSize, setDayPageSize] = useState(20)
+  const [dayPage, setDayPage] = useState(1)
 
   // Create from plan
   const [selectedPlan, setSelectedPlan] = useState<MaintenancePlan | null>(null)
@@ -714,23 +720,23 @@ export default function CalendarClient({
       {/* Header com botões e navegadores */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 gap-3 bg-slate-50/80 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800">
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Navegação Prev / Hoje / Next */}
+          {/* Hoje */}
+          <button onClick={goToToday} className="px-2.5 py-1 bg-slate-200/80 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors border border-slate-300/60 dark:border-slate-700 cursor-pointer">
+            Hoje
+          </button>
+
+          {/* Anterior / Mês-Semana-Dia / Seguinte */}
           <div className="flex items-center gap-1">
             <button onClick={prevPeriod} className="p-1.5 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer" title="Anterior">
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <button onClick={goToToday} className="px-2.5 py-1 bg-slate-200/80 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors border border-slate-300/60 dark:border-slate-700 cursor-pointer">
-              Hoje
-            </button>
+            <h2 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-slate-100 capitalize min-w-[130px] text-center">
+              {headerLabel}
+            </h2>
             <button onClick={nextPeriod} className="p-1.5 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer" title="Seguinte">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-
-          {/* Mês/Ano */}
-          <h2 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-slate-100 capitalize min-w-[130px]">
-            {headerLabel}
-          </h2>
 
           {/* Vista Mês/Semana/Dia */}
           <div className="flex rounded-lg border border-gray-300 dark:border-slate-700 overflow-hidden text-xs font-bold">
@@ -1052,16 +1058,33 @@ export default function CalendarClient({
 
           {/* Lista de OTs do Dia com opção de Concluir Tarefa */}
           <div>
-            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2.5">
-              Tarefas Agendadas para este dia ({selectedEvents.length})
-            </h4>
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-2.5">
+              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Tarefas Agendadas para este dia ({selectedEvents.length})
+              </h4>
+              {selectedEvents.length > 0 && (
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                  <span>Por página:</span>
+                  <select
+                    value={dayPageSize}
+                    onChange={(e) => setDayPageSize(Number(e.target.value))}
+                    className="input text-xs py-1 px-2 w-auto"
+                  >
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              )}
+            </div>
             {selectedEvents.length === 0 ? (
               <div className="p-8 text-center bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                 <p className="text-xs text-slate-400">Sem ordens de trabalho agendadas para este dia.</p>
               </div>
             ) : (
               <div className="space-y-2.5">
-                {selectedEvents.map((ev, idx) => {
+                {selectedEvents.slice((dayPage - 1) * dayPageSize, dayPage * dayPageSize).map((ev, idxOnPage) => {
+                  const idx = (dayPage - 1) * dayPageSize + idxOnPage
                   const isTaskDone = ev.type === 'task' && ev.task && (ev.task.status === 'done' || (ev.task.status as string) === 'completed')
                   const assetTag = eventTag(ev)
                   const targetAssetId = (ev.type === 'task' ? ev.task?.assetId : ev.plan?.assetId) || assetTag
@@ -1152,6 +1175,31 @@ export default function CalendarClient({
                     </div>
                   )
                 })}
+              </div>
+            )}
+            {selectedEvents.length > dayPageSize && (
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {Math.min((dayPage - 1) * dayPageSize + 1, selectedEvents.length)}–{Math.min(dayPage * dayPageSize, selectedEvents.length)} de {selectedEvents.length}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setDayPage((p) => Math.max(1, p - 1))}
+                    disabled={dayPage === 1}
+                    className="btn-secondary text-xs py-1 px-2.5 disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDayPage((p) => (p * dayPageSize < selectedEvents.length ? p + 1 : p))}
+                    disabled={dayPage * dayPageSize >= selectedEvents.length}
+                    className="btn-secondary text-xs py-1 px-2.5 disabled:opacity-40"
+                  >
+                    Seguinte
+                  </button>
+                </div>
               </div>
             )}
           </div>

@@ -8,14 +8,18 @@ import DashboardKpiCards from './DashboardKpiCards'
 
 export const dynamic = 'force-dynamic'
 
+const EARLIEST_YEAR = 2017
+
 export default async function DashboardPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
   if (profile.role !== 'manager') redirect('/dashboard/tasks')
 
   const currentYear = new Date().getFullYear()
+  const years: number[] = []
+  for (let y = currentYear + 1; y >= EARLIEST_YEAR; y--) years.push(y)
 
-  const [tasks, openTasks, yearTasks, pmCompliance, usersList, assets, interventions] = await Promise.all([
+  const [tasks, openTasks, yearTasks, pmCompliance, usersList, assets, interventions, yearlyTasksForAssets] = await Promise.all([
     listTasks(profile.companyId),
     // Trabalho em aberto (Em curso/Pendentes) — fotografia atual, independente do ano.
     listTasks(profile.companyId, 2000, false),
@@ -25,7 +29,13 @@ export default async function DashboardPage() {
     listUsers(profile.companyId),
     listAssets(profile.companyId),
     listInterventions(profile.companyId),
+    // Histórico completo (todos os anos com registo) para a Análise dos Equipamentos
+    // Mais Críticos — `tasks` acima está limitado a 2000 documentos e não reflete o
+    // total real de ~6700+ OTs da UR; queries pequenas por ano (já cacheadas) evitam
+    // repetir o problema de quota/cache que isso causava.
+    Promise.all(years.map((y) => getTasksForYearStats(profile.companyId, y))),
   ])
+  const allYearsTasks = yearlyTasksForAssets.flat()
 
   const isTech = (role?: string | null) => {
     const r = (role || '').toLowerCase().trim()
@@ -61,10 +71,10 @@ export default async function DashboardPage() {
 
   const criticalAssets = assets
     .map((asset) => {
-      const assetTasks = tasks.filter((t) => t.assetId === asset.id || t.tag === asset.tag)
+      const assetTasks = allYearsTasks.filter((t) => t.assetId === asset.id || t.tag === asset.tag)
       const openUrgent = assetTasks.filter((t) => t.criticidade === 'vermelho' && t.status !== 'done' && t.status !== 'cancelled').length
       const totalInterventions = interventions.filter((iv) => {
-        const t = tasks.find((tk) => tk.id === iv.taskId)
+        const t = allYearsTasks.find((tk) => tk.id === iv.taskId)
         return t && (t.assetId === asset.id || t.tag === asset.tag)
       }).length + assetTasks.length
 
