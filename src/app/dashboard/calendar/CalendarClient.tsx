@@ -270,7 +270,6 @@ export default function CalendarClient({
 
   React.useEffect(() => { setTaskList(tasks) }, [tasks])
   React.useEffect(() => { setPlanList(plans) }, [plans])
-  React.useEffect(() => { setDayPage(1) }, [selectedDate, dayPageSize])
 
   // Month view state
   const [year, setYear] = useState(today.getFullYear())
@@ -293,6 +292,7 @@ export default function CalendarClient({
   // "arrastado" pode acumular dezenas/centenas de ocorrências.
   const [dayPageSize, setDayPageSize] = useState(20)
   const [dayPage, setDayPage] = useState(1)
+  React.useEffect(() => { setDayPage(1) }, [selectedDate, dayPageSize])
 
   // Create from plan
   const [selectedPlan, setSelectedPlan] = useState<MaintenancePlan | null>(null)

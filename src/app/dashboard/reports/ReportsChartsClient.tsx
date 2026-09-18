@@ -214,7 +214,10 @@ export default function ReportsChartsClient({
   }, [monthlyData])
 
   // 2. Dados Anuais (Comparação de Anos) — sempre o histórico completo disponível,
-  // independentemente do ano selecionado no resto da página.
+  // independentemente do ano selecionado no resto da página. PM usa a mesma
+  // contagem por Plano (não por OT) do cartão anual acima, só que recalculada
+  // para cada ano da tabela — o total de planos é o mesmo em todas as colunas
+  // (é o universo atual de planos), só "concluídas" varia por ano.
   const yearlyStats = useMemo(() => {
     const yearsSet = new Set<number>([currentYear])
     filteredTasksAllYears.forEach((t) => {
@@ -224,6 +227,14 @@ export default function ReportsChartsClient({
       }
     })
     const years = Array.from(yearsSet).sort((a, b) => a - b)
+
+    const filteredPlans = plans.filter((p) => {
+      const pArea = (p.area || '').trim().toLowerCase()
+      const pTag = (p.tag || '').trim().toLowerCase()
+      if (selectedAreas.length > 0 && !selectedAreas.some((a) => pArea === a.toLowerCase() || pArea.startsWith(a.toLowerCase()))) return false
+      if (selectedTags.length > 0 && !selectedTags.some((t) => pTag === t.toLowerCase() || pTag.startsWith(t.toLowerCase()))) return false
+      return true
+    })
 
     return years.map((yr) => {
       const tasksInYr = filteredTasksAllYears.filter((t) => {
@@ -236,9 +247,8 @@ export default function ReportsChartsClient({
       const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
       const resolutionRate = piRequested > 0 ? Math.round((piCompleted / piRequested) * 100) : 0
 
-      const pmTasks = tasksInYr.filter(isPMTask)
-      const pmTotal = pmTasks.length
-      const pmDone = pmTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
+      const pmTotal = filteredPlans.length
+      const pmDone = filteredPlans.filter((p) => findPlanLinkedTask(p, tasks, yr)?.status === 'done').length
       const pmCompliance = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : 0
 
       return {
@@ -251,7 +261,7 @@ export default function ReportsChartsClient({
         pmCompliance,
       }
     })
-  }, [filteredTasksAllYears, currentYear])
+  }, [filteredTasksAllYears, currentYear, plans, tasks, selectedAreas, selectedTags])
 
   const maxYrPI = useMemo(() => {
     return Math.max(1, ...yearlyStats.map((y) => Math.max(y.piRequested, y.piCompleted)))
