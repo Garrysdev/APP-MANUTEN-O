@@ -470,7 +470,15 @@ export default function TasksClient({
   const [currentPage, setCurrentPage] = useState(1)
   const [areaFilter, setAreaFilter] = useState('')
   const [tagFilter, setTagFilter] = useState('')
-  const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(() => {
+    // Vem de links "Ver OTs" nas Estatísticas — leva o ano/mês que lá estava selecionado.
+    const pYear = searchParams.get('year')
+    const pMonth = searchParams.get('month')
+    if (pYear || pMonth) {
+      return { ...DEFAULT_EXCEL_DATE_FILTER, selectedYear: pYear || '', selectedMonth: pMonth || '' }
+    }
+    return DEFAULT_EXCEL_DATE_FILTER
+  })
   const [excelInicioFilter, setExcelInicioFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
   const [excelFimFilter, setExcelFimFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
   const emptyCol = { id: '', data: '', area: '', tag: '', ti: '', avaria: '', tecnico: '', obs: '' }

@@ -6,6 +6,7 @@ import type { Task, Asset, Intervention, MaintenancePlan } from '@/types/models'
 import ExcelDateFilter, { ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 import { findPlanLinkedTask } from '@/lib/pm-status'
+import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 
 // Grupos de exibição para "Distribuição por Tipo de Manutenção" — 'plano'/'pm' e
 // 'preventiva'/'mp' são o mesmo tipo guardado com chaves diferentes consoante a
@@ -167,10 +168,31 @@ export default function ReportsChartsClient({
     return interventions.filter((iv) => filterByExcelDate(iv.startedAt || iv.createdAt, excelDateFilter))
   }, [interventions, excelDateFilter])
 
-  // 1. Dados Mensais para o Ano Selecionado (ou o ano atual por omissão)
+  // 1. Dados Mensais para o Ano Selecionado (ou o ano atual por omissão). PM
+  // "Agendadas" usa as ocorrências do calendário anual de cada plano
+  // (calculatePlanAnnualDates) em vez de contar OTs existentes: um plano
+  // recorrente reutiliza sempre a mesma OT, por isso ela só aparece num único
+  // mês (o da última vez que foi tocada) — contar OTs subestimava quase todos
+  // os meses. "Concluídas" continua a refletir as OTs de PM realmente fechadas
+  // nesse mês.
   const monthlyData = useMemo(() => {
     const monthNamesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
     const targetYear = excelDateFilter.selectedYear ? parseInt(excelDateFilter.selectedYear, 10) : currentYear
+
+    const filteredPlansForPM = plans.filter((p) => {
+      const pArea = (p.area || '').trim().toLowerCase()
+      const pTag = (p.tag || '').trim().toLowerCase()
+      if (selectedAreas.length > 0 && !selectedAreas.some((a) => pArea === a.toLowerCase() || pArea.startsWith(a.toLowerCase()))) return false
+      if (selectedTags.length > 0 && !selectedTags.some((t) => pTag === t.toLowerCase() || pTag.startsWith(t.toLowerCase()))) return false
+      return true
+    })
+    const pmScheduledByMonth = Array(13).fill(0) // índice 1..12
+    filteredPlansForPM.forEach((p) => {
+      calculatePlanAnnualDates(p, targetYear).forEach((dateStr) => {
+        const m = parseInt(String(dateStr).slice(5, 7), 10)
+        if (m >= 1 && m <= 12) pmScheduledByMonth[m]++
+      })
+    })
 
     return monthNamesShort.map((monthLabel, i) => {
       const monthNum = i + 1
@@ -187,10 +209,9 @@ export default function ReportsChartsClient({
       const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
 
       // PMs (Preventivas / Planos de Manutenção)
-      const pmTasks = tasksInMonth.filter(isPMTask)
-      const pmTotal = pmTasks.length
-      const pmDone = pmTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
-      const pmCompliance = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : 0
+      const pmTotal = pmScheduledByMonth[monthNum]
+      const pmDone = tasksInMonth.filter((t) => isPMTask(t) && (t.status === 'done' || !!t.completedAt)).length
+      const pmCompliance = pmTotal > 0 ? Math.min(100, Math.round((pmDone / pmTotal) * 100)) : 0
 
       return {
         month: monthLabel,
@@ -202,7 +223,7 @@ export default function ReportsChartsClient({
         pmCompliance,
       }
     })
-  }, [filteredTasks, excelDateFilter.selectedYear])
+  }, [filteredTasks, excelDateFilter.selectedYear, plans, selectedAreas, selectedTags, currentYear])
 
   // Máximo para escala dos gráficos mensais
   const maxPIVal = useMemo(() => {
@@ -676,7 +697,7 @@ export default function ReportsChartsClient({
               <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100">
                 Cumprimento do Plano de Manutenção (KPI por Mês)
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Evolução mensal de OTs de PM Agendadas vs Concluídas</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Evolução mensal de ocorrências de PM Agendadas (plano anual) vs OTs Concluídas</p>
             </div>
             <div className="flex items-center gap-3 text-xs font-bold shrink-0">
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500" /> Agendadas</span>
@@ -751,8 +772,11 @@ export default function ReportsChartsClient({
             {TIPO_DISPLAY_GROUPS_SORTED.map(({ code, label, keys }) => {
               const count = keys.reduce((sum, k) => sum + (tiposCounts[k] || 0), 0)
               const pct = Math.round((count / totalTasks) * 100)
+              const params = new URLSearchParams({ tipo: keys[0] })
+              if (excelDateFilter.selectedYear) params.set('year', excelDateFilter.selectedYear)
+              if (excelDateFilter.selectedMonth) params.set('month', excelDateFilter.selectedMonth)
               return (
-                <Link key={code} href={`/dashboard/tasks?tipo=${keys[0]}`} className="block space-y-1 group">
+                <Link key={code} href={`/dashboard/tasks?${params.toString()}`} className="block space-y-1 group">
                   <div className="flex justify-between text-xs font-bold">
                     <span className="text-slate-800 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                       {code} ({label}) ↗
