@@ -4,18 +4,9 @@ import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import type { Task } from '@/types/models'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
-import { getYearTasksAction } from './actions'
+import { getYearTasksAction, getPMComplianceAction } from './actions'
 
 const EARLIEST_YEAR = 2017
-
-function isPMTask(t: Task): boolean {
-  const ti = String((t as any).ti || (t as any).tipoText || t.tipo || '').toUpperCase().trim()
-  if (ti === 'PM' || ti === 'MP' || ti === 'PREVENTIVA' || ti === 'PLANO') return true
-  if (Boolean((t as any).maintenancePlanId) || (t as any).source === 'plano_manutencao' || (t as any).source === 'folha_ur_planos' || String(t.id || '').startsWith('task_pm_')) return true
-  const titleLow = String(t.title || '').toLowerCase().trim()
-  if (titleLow.startsWith('pm ') || titleLow.startsWith('pm-') || titleLow.startsWith('[pm]') || titleLow.startsWith('mp ') || titleLow.startsWith('[mp]')) return true
-  return false
-}
 
 function isPITask(t: Task): boolean {
   const ti = String((t as any).ti || (t as any).tipoText || t.tipo || '').toUpperCase().trim()
@@ -30,14 +21,17 @@ export default function DashboardKpiCards({
   openTasks,
   initialYear,
   initialYearTasks,
+  initialPMCompliance,
 }: {
   openTasks: Task[]
   initialYear: number
   initialYearTasks: Task[]
+  initialPMCompliance: { total: number; done: number; pct: number }
 }) {
   const currentYear = new Date().getFullYear()
   const [year, setYear] = useState(initialYear)
   const [yearTasks, setYearTasks] = useState(initialYearTasks)
+  const [pmCompliance, setPmCompliance] = useState(initialPMCompliance)
   const [isPending, startTransition] = useTransition()
 
   const availableYears = useMemo(() => {
@@ -49,8 +43,12 @@ export default function DashboardKpiCards({
   function changeYear(newYear: number) {
     setYear(newYear)
     startTransition(async () => {
-      const data = await getYearTasksAction(newYear)
-      setYearTasks(data)
+      const [tasks, pm] = await Promise.all([
+        getYearTasksAction(newYear),
+        getPMComplianceAction(newYear),
+      ])
+      setYearTasks(tasks)
+      setPmCompliance(pm)
     })
   }
 
@@ -62,10 +60,9 @@ export default function DashboardKpiCards({
   const totalOTs = yearTasks.length
   const doneOTs = yearTasks.filter((t) => t.status === 'done').length
 
-  const pmTasks = useMemo(() => yearTasks.filter(isPMTask), [yearTasks])
-  const pmTotal = pmTasks.length
-  const pmDone = pmTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
-  const pmCompliancePct = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : 0
+  const pmTotal = pmCompliance.total
+  const pmDone = pmCompliance.done
+  const pmCompliancePct = pmCompliance.pct
 
   const piTasks = useMemo(() => yearTasks.filter(isPITask), [yearTasks])
   const piRequested = piTasks.length
@@ -160,11 +157,11 @@ export default function DashboardKpiCards({
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-black text-white">{pmCompliancePct}%</span>
               <span className="text-xs font-bold text-slate-300">
-                ({pmDone} de {pmTotal} OTs de PM Existentes)
+                ({pmDone} de {pmTotal} Ocorrências Previstas)
               </span>
             </div>
             <p className="text-[11px] text-slate-300 font-medium">
-              Relação entre OTs de PM concluídas e existentes em {year} ({pmTotal} OTs).
+              Relação entre ocorrências de PM concluídas e previstas pelo plano anual em {year} ({pmTotal} ocorrências).
             </p>
           </div>
           <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">

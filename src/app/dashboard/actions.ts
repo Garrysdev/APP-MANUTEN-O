@@ -1,7 +1,7 @@
 'use server'
 
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { getTasksForYearStats } from '@/lib/firebase/data'
+import { getTasksForYearStats, getPMComplianceForYear } from '@/lib/firebase/data'
 import type { Task } from '@/types/models'
 
 /** Busca as tarefas de um único ano (query pequena, cacheável) para os cartões de KPI
@@ -10,4 +10,11 @@ export async function getYearTasksAction(year: number): Promise<Task[]> {
   const profile = await getCurrentProfile()
   if (!profile) return []
   return getTasksForYearStats(profile.companyId, year)
+}
+
+/** Cumprimento do PM do ano selecionado — ocorrências previstas vs concluídas. */
+export async function getPMComplianceAction(year: number): Promise<{ total: number; done: number; pct: number }> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { total: 0, done: 0, pct: 0 }
+  return getPMComplianceForYear(profile.companyId, year)
 }

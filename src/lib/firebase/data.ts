@@ -9,6 +9,7 @@ import { adminDb, adminAuth, firestoreWithTimeout, isQuotaExhausted, markQuotaEx
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
+import { calculatePlanAnnualDates } from '../pm-generator'
 import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus, type TaskStatus } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
@@ -598,6 +599,40 @@ const getTasksForYearCached = unstable_cache(
 
 export async function getTasksForYearStats(companyId: string, year: number): Promise<Task[]> {
   return getTasksForYearCached(companyId, year)
+}
+
+/**
+ * Cumprimento do Plano de Manutenção (PM) de um ano: ocorrências PREVISTAS
+ * (calculatePlanAnnualDates, por periodicidade de cada plano ativo) vs
+ * ocorrências CONCLUÍDAS (intervenções "[PM Concluída]" registadas nesse ano).
+ * Não usa a coleção `tasks` como total — um plano recorrente reutiliza sempre
+ * a mesma OT (setMaintenancePlanOccurrenceStatus), por isso contar OTs
+ * existentes subestima o total real de ocorrências e infla a % para perto de
+ * 100% sempre que a última OT do plano está fechada.
+ */
+export async function getPMComplianceForYear(
+  companyId: string,
+  year: number
+): Promise<{ total: number; done: number; pct: number }> {
+  const [plans, interventions] = await Promise.all([
+    listMaintenancePlans(companyId),
+    listInterventions(companyId),
+  ])
+
+  const total = plans
+    .filter((p) => p.active !== false && (!p.createdAt || p.createdAt.slice(0, 4) <= String(year)))
+    .reduce((sum, p) => sum + calculatePlanAnnualDates(p, year).length, 0)
+
+  const startIso = `${year}-01-01`
+  const endIso = `${year + 1}-01-01`
+  const done = interventions.filter((iv) => {
+    if (!(iv.observations || '').startsWith('[PM Concluída]')) return false
+    const d = iv.startedAt || iv.createdAt
+    return !!d && d >= startIso && d < endIso
+  }).length
+
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0
+  return { total, done, pct }
 }
 
 export const listCompletedTasksPaged = cache(async function(
