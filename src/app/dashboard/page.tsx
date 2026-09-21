@@ -116,14 +116,14 @@ export default async function DashboardPage() {
             className="flex-1 sm:flex-initial h-11 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-sm shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
           >
             <Plus size={18} className="stroke-[2.5]" />
-            <span>+ Nova OT</span>
+            <span>Nova OT</span>
           </Link>
-          <Link 
+          <Link
             href="/dashboard/projects?create=true"
             className="flex-1 sm:flex-initial h-11 px-4 bg-industrial-blue hover:bg-industrial-blue/90 text-white rounded-xl font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
           >
             <FolderKanban size={18} />
-            <span>+ Novo Projeto</span>
+            <span>Novo Projeto</span>
           </Link>
         </div>
       </div>

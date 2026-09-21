@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { UserPlus, UserX, ShieldCheck, Wrench, X, Eye, EyeOff, Link2, Copy, Check, Camera, Filter, KeyRound } from 'lucide-react'
 import { DEFAULT_TECHNICIAN_TYPES, type User, type ExternalCompany } from '@/types/models'
-import { createUserDirectAction, deactivateUserAction, deleteUserAction, deleteExternalCompanyAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction, toggleUserActiveAction, resetUserPasswordAction } from './actions'
+import { createUserDirectAction, deactivateUserAction, deleteUserAction, deleteExternalCompanyAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction, toggleUserActiveAction, resetUserPasswordAction, createExternalCompanyAction, updateExternalCompanyAction } from './actions'
 import Avatar from '@/components/ui/Avatar'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
@@ -33,6 +33,10 @@ export default function UsersClient({
   const [selectedCompany, setSelectedCompany] = useState<ExternalCompany | null>(null)
   const [isExternalNew, setIsExternalNew] = useState(false)
   const [isExternalEdit, setIsExternalEdit] = useState(false)
+  const [editingCompany, setEditingCompany] = useState<ExternalCompany | null>(null)
+  const [companyBusy, setCompanyBusy] = useState(false)
+  const [companyError, setCompanyError] = useState('')
+  const [presetTechCompanyId, setPresetTechCompanyId] = useState('')
   const [isPending, startTransition] = useTransition()
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -199,6 +203,23 @@ export default function UsersClient({
     setSuccess(false)
     setNewAvatarFile(null)
     setNewAvatarPreview(null)
+    setIsExternalNew(false)
+    setPresetTechCompanyId('')
+  }
+
+  async function handleCompanySubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setCompanyBusy(true)
+    setCompanyError('')
+    const fd = new FormData(e.currentTarget)
+    const result = editingCompany
+      ? await updateExternalCompanyAction(editingCompany.id, fd)
+      : await createExternalCompanyAction(fd)
+    setCompanyBusy(false)
+    if (result?.error) { setCompanyError(result.error); return }
+    setIsExternalEdit(false)
+    setEditingCompany(null)
+    router.refresh()
   }
 
   async function handleGenerateInvite(e: React.FormEvent<HTMLFormElement>) {
@@ -337,16 +358,28 @@ export default function UsersClient({
               </p>
             </div>
             {isManager && (
-              <button
-                onClick={() => {
-                  setShowForm(true)
-                  setIsExternalNew(true)
-                  setActiveTab('technicians')
-                }}
-                className="btn-primary flex items-center gap-1.5 text-xs font-bold"
-              >
-                <UserPlusIcon className="h-4 w-4" /> Adicionar Técnico Externo
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setEditingCompany(null)
+                    setCompanyError('')
+                    setIsExternalEdit(true)
+                  }}
+                  className="btn-outline flex items-center gap-1.5 text-xs font-bold"
+                >
+                  <Building2 className="h-4 w-4" /> Nova Empresa
+                </button>
+                <button
+                  onClick={() => {
+                    setShowForm(true)
+                    setIsExternalNew(true)
+                    setActiveTab('technicians')
+                  }}
+                  className="btn-primary flex items-center gap-1.5 text-xs font-bold"
+                >
+                  <UserPlusIcon className="h-4 w-4" /> Adicionar Técnico Externo
+                </button>
+              </div>
             )}
           </div>
 
@@ -540,7 +573,7 @@ export default function UsersClient({
                   <div className="pt-2 grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <label className="block text-gray-600 dark:text-slate-400 mb-1 font-medium">Empresa Prestadora de Serviços</label>
-                      <select name="externalCompanyId" className="input text-xs">
+                      <select name="externalCompanyId" defaultValue={presetTechCompanyId} className="input text-xs">
                         <option value="">— Selecionar Empresa —</option>
                         {externalCompanies.map((c) => (
                           <option key={c.id} value={c.id}>{c.name}</option>
@@ -1108,6 +1141,78 @@ export default function UsersClient({
         document.body
       )}
 
+      {/* Modal Criar / Editar Empresa Prestadora de Serviços */}
+      {isExternalEdit && createPortal(
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setIsExternalEdit(false); setEditingCompany(null) }} />
+          <div className="card relative w-full max-w-lg p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800 pb-3">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-[#2E86C1]" />
+                {editingCompany ? 'Editar Empresa Prestadora de Serviços' : 'Nova Empresa Prestadora de Serviços'}
+              </h2>
+              <button onClick={() => { setIsExternalEdit(false); setEditingCompany(null) }} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {companyError && (
+              <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5 font-medium">
+                {companyError}
+              </div>
+            )}
+
+            <form onSubmit={handleCompanySubmit} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Nome da Empresa *</label>
+                <input name="name" defaultValue={editingCompany?.name || ''} className="input text-sm" required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Especialidade / Ramo</label>
+                  <input name="specialty" defaultValue={editingCompany?.specialty || ''} className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">NIF</label>
+                  <input name="nif" defaultValue={editingCompany?.nif || ''} className="input text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Pessoa de Contacto</label>
+                  <input name="contactPerson" defaultValue={editingCompany?.contactPerson || ''} className="input text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Telefone Directo</label>
+                  <input name="phone" defaultValue={editingCompany?.phone || ''} className="input text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">E-mail Oficial</label>
+                <input name="email" type="email" defaultValue={editingCompany?.email || ''} className="input text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Sede / Morada</label>
+                <input name="address" defaultValue={editingCompany?.address || ''} className="input text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Observações & Âmbito do Contrato</label>
+                <textarea name="notes" defaultValue={editingCompany?.notes || ''} rows={3} className="input text-sm" />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => { setIsExternalEdit(false); setEditingCompany(null) }} className="btn-secondary flex-1">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={companyBusy} className="btn-primary flex-1">
+                  {companyBusy ? 'A guardar…' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Modal Ficha Completa da Empresa Prestadora de Serviços & Técnicos */}
       {selectedCompany && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -1164,14 +1269,31 @@ export default function UsersClient({
 
             {/* Técnicos Pertencentes a esta Empresa */}
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-1.5">
                   <Wrench className="h-4 w-4 text-[#2E86C1]" />
                   Técnicos Associados a esta Empresa
                 </h3>
-                <span className="text-xs text-gray-500 font-semibold">
-                  Total: {users.filter((u) => u.isExternal && (u.externalCompanyId === selectedCompany.id || (u.externalCompanyName || '').toLowerCase().includes(selectedCompany.name.toLowerCase()))).length} técnico(s)
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 font-semibold">
+                    Total: {users.filter((u) => u.isExternal && (u.externalCompanyId === selectedCompany.id || (u.externalCompanyName || '').toLowerCase().includes(selectedCompany.name.toLowerCase()))).length} técnico(s)
+                  </span>
+                  {isManager && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPresetTechCompanyId(selectedCompany.id)
+                        setIsExternalNew(true)
+                        setShowForm(true)
+                        setActiveTab('technicians')
+                        setSelectedCompany(null)
+                      }}
+                      className="btn-outline text-[11px] px-2 py-1 flex items-center gap-1 font-bold"
+                    >
+                      <UserPlusIcon className="h-3.5 w-3.5" /> Adicionar Técnico
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -1247,20 +1369,14 @@ export default function UsersClient({
                   <button
                     type="button"
                     onClick={() => {
-                      const compTechs = users.filter((u) => u.isExternal && (u.externalCompanyId === selectedCompany.id || (u.externalCompanyName || '').toLowerCase().includes(selectedCompany.name.toLowerCase())))
-                      if (compTechs.length > 0) {
-                        setEditingUser(compTechs[0])
-                        setSelectedCompany(null)
-                      } else {
-                        setShowForm(true)
-                        setIsExternalNew(true)
-                        setActiveTab('technicians')
-                        setSelectedCompany(null)
-                      }
+                      setEditingCompany(selectedCompany)
+                      setCompanyError('')
+                      setIsExternalEdit(true)
+                      setSelectedCompany(null)
                     }}
                     className="btn-outline text-xs px-3 py-1.5 flex items-center gap-1.5 font-bold"
                   >
-                    <Pencil className="h-3.5 w-3.5 text-blue-600" /> Editar Dados da Empresa / Técnico
+                    <Pencil className="h-3.5 w-3.5 text-blue-600" /> Editar Dados da Empresa
                   </button>
                   <button
                     type="button"

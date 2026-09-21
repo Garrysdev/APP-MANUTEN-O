@@ -220,7 +220,7 @@ export default function CreateTaskModal({
   showDependencies = false,
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState(initialTitle || '')
-  const [tipo, setTipo] = useState<TipoTarefa>(initialTipo || 'preventiva')
+  const [tipo, setTipo] = useState<TipoTarefa>(initialTipo || 'curativa')
   const [criticidade, setCriticidade] = useState<TaskCriticidade>('verde')
   const [assetId, setAssetId] = useState(initialAssetId || '')
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([])
@@ -308,7 +308,7 @@ export default function CreateTaskModal({
     } else {
       // Reset form on close
       setTitle(initialTitle || '')
-      setTipo(initialTipo || 'preventiva')
+      setTipo(initialTipo || 'curativa')
       setCriticidade('verde')
       setAssetId(initialAssetId || '')
       setSelectedTechIds([])

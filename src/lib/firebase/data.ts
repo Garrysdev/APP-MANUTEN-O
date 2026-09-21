@@ -168,8 +168,14 @@ const listExternalCompaniesCached = unstable_cache(
         1000
       )
       if (snap && snap.docs) {
-        const docs = snap.docs.map((d) => serialize<ExternalCompany>(d))
-        if (docs.length > 0 || !isDemoCompany(companyId)) return docs
+        const rawDocs = snap.docs.map((d) => serialize<ExternalCompany & { deleted?: boolean }>(d))
+        const deletedIds = new Set(rawDocs.filter((d) => d.deleted).map((d) => d.id))
+        const realDocs = rawDocs.filter((d) => !d.deleted)
+        if (realDocs.length > 0) return realDocs
+        if (!isDemoCompany(companyId)) return []
+        // Sem empresas reais ainda — mostra as empresas de exemplo, exceto as que
+        // já foram eliminadas (marcador "deleted", ver deleteExternalCompanyAction).
+        return getFallbackExternalCompanies().filter((f) => !deletedIds.has(f.id))
       }
     } catch (err) {
       console.error('[listExternalCompanies] Error:', err)
@@ -182,6 +188,47 @@ const listExternalCompaniesCached = unstable_cache(
 export const listExternalCompanies = cache(async function(companyId: string): Promise<ExternalCompany[]> {
   return listExternalCompaniesCached(companyId)
 })
+
+const FALLBACK_EXTERNAL_COMPANY_IDS = new Set(['comp_ox2', 'comp_blk', 'comp_car', 'comp_sch', 'comp_hel'])
+
+export async function createExternalCompany(
+  companyId: string,
+  data: Omit<ExternalCompany, 'id' | 'companyId' | 'active' | 'createdAt'>
+): Promise<string> {
+  const now = new Date().toISOString()
+  const ref = await adminDb().collection('external_companies').add(
+    JSON.parse(JSON.stringify({ ...data, companyId, active: true, createdAt: now }))
+  )
+  revalidateTag('external-companies')
+  return ref.id
+}
+
+export async function updateExternalCompany(
+  companyId: string,
+  id: string,
+  data: Partial<Omit<ExternalCompany, 'id' | 'companyId' | 'createdAt'>>
+): Promise<void> {
+  const cleanObj = JSON.parse(JSON.stringify({ ...data, companyId, updatedAt: new Date().toISOString() }))
+  // set({merge:true}) em vez de update() — as empresas de exemplo não têm
+  // documento próprio no Firestore até serem editadas ou apagadas pela 1ª vez.
+  await adminDb().collection('external_companies').doc(id).set(cleanObj, { merge: true })
+  revalidateTag('external-companies')
+}
+
+export async function deleteExternalCompany(companyId: string, id: string): Promise<void> {
+  const ref = adminDb().collection('external_companies').doc(id)
+  const doc = await ref.get()
+  if (doc.exists) {
+    if (doc.data()?.companyId !== companyId) throw new Error('Empresa não encontrada')
+    await ref.delete()
+  } else {
+    // Empresa de exemplo sem documento próprio — grava um marcador de eliminado
+    // em vez de nada, senão reaparecia sempre que a lista voltasse a cair no
+    // fallback (ex.: depois de apagar as outras empresas reais).
+    await ref.set({ id, companyId, deleted: true, updatedAt: new Date().toISOString() })
+  }
+  revalidateTag('external-companies')
+}
 
 function getFallbackExternalCompanies(): ExternalCompany[] {
   return [
@@ -1097,11 +1144,30 @@ const listUsersCached = unstable_cache(
         return false
       }
 
+      // Assim que existir pelo menos uma Empresa Externa real (não de exemplo,
+      // não eliminada), os técnicos externos de exemplo deixam de ser inventados
+      // — o utilizador já está a gerir prestadores reais, por isso a lista de
+      // técnicos que aparece ao atribuir uma OT tem de vir só das fichas reais.
+      let hasRealExternalCompany = false
+      if (isDemoCompany(finalCompanyId)) {
+        try {
+          const compSnap = await firestoreWithTimeout(
+            () => adminDb().collection('external_companies').where('companyId', '==', finalCompanyId).get(),
+            null,
+            600
+          )
+          if (compSnap && compSnap.docs) {
+            hasRealExternalCompany = compSnap.docs.some((d) => !d.data()?.deleted)
+          }
+        } catch { /* ignore */ }
+      }
+
       // Merge fallback users with DB users: DB doc with matching ID or email takes precedence
       const userMap = new Map<string, User>()
-      
+
       if (isDemoCompany(finalCompanyId)) {
         getFallbackUsers().forEach((f) => {
+          if (f.isExternal && hasRealExternalCompany) return
           if (!isDeleted(f) && !isCorruptOrMock(f)) {
             userMap.set(f.id, { ...f, companyId: finalCompanyId })
           }

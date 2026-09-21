@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { getCurrentProfile, DEMO_COMPANY_ID } from '@/lib/firebase/session'
-import { createUserDirect, deactivateUser, deleteUserPermanent, checkUserHasHistory, countActiveUsers, countPendingInvites, createInviteToken, updateUserRate } from '@/lib/firebase/data'
+import { createUserDirect, deactivateUser, deleteUserPermanent, checkUserHasHistory, countActiveUsers, countPendingInvites, createInviteToken, updateUserRate, createExternalCompany, updateExternalCompany, deleteExternalCompany } from '@/lib/firebase/data'
 import { adminDb } from '@/lib/firebase/admin'
 import { LIMITS } from '@/lib/plans'
 import type { UserRole, PlanName } from '@/types/models'
@@ -320,10 +320,7 @@ export async function deleteExternalCompanyAction(companyId: string): Promise<Us
 
   try {
     const db = adminDb()
-    const compDoc = await db.collection('external_companies').doc(companyId).get()
-    if (compDoc.exists && compDoc.data()?.companyId === profile.companyId) {
-      await compDoc.ref.delete()
-    }
+    await deleteExternalCompany(profile.companyId, companyId)
 
     const usersSnap = await db.collection('users')
       .where('companyId', '==', profile.companyId)
@@ -340,5 +337,48 @@ export async function deleteExternalCompanyAction(companyId: string): Promise<Us
     return { ok: true }
   } catch (e) {
     return { error: formatActionError(e, 'Erro ao eliminar empresa externa.') }
+  }
+}
+
+export type ExternalCompanyFormState = { error?: string; ok?: boolean; id?: string }
+
+function parseExternalCompanyForm(formData: FormData) {
+  const name = String(formData.get('name') ?? '').trim()
+  if (!name) throw new Error('O nome da empresa é obrigatório.')
+  return {
+    name,
+    specialty: String(formData.get('specialty') ?? '').trim() || null,
+    nif: String(formData.get('nif') ?? '').trim() || null,
+    contactPerson: String(formData.get('contactPerson') ?? '').trim() || null,
+    phone: String(formData.get('phone') ?? '').trim() || null,
+    email: String(formData.get('email') ?? '').trim() || null,
+    address: String(formData.get('address') ?? '').trim() || null,
+    notes: String(formData.get('notes') ?? '').trim() || null,
+  }
+}
+
+export async function createExternalCompanyAction(formData: FormData): Promise<ExternalCompanyFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  try {
+    const id = await createExternalCompany(profile.companyId, parseExternalCompanyForm(formData))
+    revalidateUserRelatedPaths()
+    return { ok: true, id }
+  } catch (e) {
+    return { error: formatActionError(e, 'Erro ao criar empresa externa.') }
+  }
+}
+
+export async function updateExternalCompanyAction(id: string, formData: FormData): Promise<ExternalCompanyFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  try {
+    await updateExternalCompany(profile.companyId, id, parseExternalCompanyForm(formData))
+    revalidateUserRelatedPaths()
+    return { ok: true }
+  } catch (e) {
+    return { error: formatActionError(e, 'Erro ao atualizar empresa externa.') }
   }
 }
