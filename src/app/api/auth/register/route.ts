@@ -15,7 +15,8 @@ import { SESSION_COOKIE } from '@/lib/firebase/session'
 
 export const runtime = 'nodejs'
 
-const FIVE_DAYS_MS = 60 * 60 * 24 * 5 * 1000
+// 14 dias é o máximo permitido pelo Firebase Admin SDK para session cookies.
+const FOURTEEN_DAYS_MS = 60 * 60 * 24 * 14 * 1000
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
 const RATE_WINDOW_MS = 60 * 60 * 1000 // 1 hora
@@ -73,11 +74,11 @@ export async function POST(request: NextRequest) {
     }
 
     const sessionCookie = await adminAuth().createSessionCookie(idToken, {
-      expiresIn: FIVE_DAYS_MS,
+      expiresIn: FOURTEEN_DAYS_MS,
     })
     const store = await cookies()
     store.set(SESSION_COOKIE, sessionCookie, {
-      maxAge: FIVE_DAYS_MS / 1000,
+      maxAge: FOURTEEN_DAYS_MS / 1000,
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       path: '/',
