@@ -1102,6 +1102,7 @@ const listUsersCached = unstable_cache(
 
       const isCorruptOrMock = (u: { id?: string; email?: string | null; name?: string | null }) => {
         if (u.id === 'CUodZKziOwo128GLK66i') return true // Duplicado removido a pedido do utilizador
+        if (u.id === 'ue15A4DcVMRbstIEhrkny5Be42G3') return true // Conta de seed "Enterprise" (seed-test.js, enterprise@teste.rg) com companyId da UR por engano — contava como 2º Gestor
         const email = String(u.email || '').toLowerCase().trim()
         const name = String(u.name || '').toLowerCase().trim()
         if (email.includes('@rg-maintenance.local')) return true

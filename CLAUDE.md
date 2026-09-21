@@ -54,6 +54,15 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   pode reatribuir a técnica RuiG para a empresa de demo "Pro" como
   efeito secundário — se isso acontecer, repor `companyId` para
   `rjHNaSUbLm4qTMyKP0oX`.
+- A mesma seed criou uma conta de gestor "Enterprise" (uid
+  `ue15A4DcVMRbstIEhrkny5Be42G3`, email `enterprise@teste.rg`, criada
+  11/07/2026, inativa) com `companyId` da Empresa UR por engano em vez
+  do seu próprio companyId de demo — o campo `name` está gravado como
+  "Rui Garrido", fazendo a contagem de Gestores mostrar 2 em vez de 1.
+  Excluída em `isCorruptOrMock` (`src/lib/firebase/data.ts`,
+  18/09/2026) — não apagar o documento, só está oculta do `listUsers()`.
+  Se aparecer uma 3ª conta "fantasma" de gestor, procurar outros
+  registos `*@teste.rg` com `companyId: rjHNaSUbLm4qTMyKP0oX`.
 
 ## Padrões de dados a respeitar
 
