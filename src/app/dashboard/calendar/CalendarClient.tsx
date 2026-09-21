@@ -294,6 +294,17 @@ export default function CalendarClient({
   const [dayPage, setDayPage] = useState(1)
   React.useEffect(() => { setDayPage(1) }, [selectedDate, dayPageSize])
 
+  // O eventMap das vistas Semana/Dia é construído a partir de [weekStart, weekEnd]
+  // (ver mais abaixo). Um clique num dia na vista Mês só faz setSelectedDate — sem
+  // isto, weekStart ficava preso na semana da última navegação (ex.: "hoje"), o dia
+  // clicado caía fora do intervalo, e a Vista Diária mostrava "0 tarefas" mesmo
+  // quando a célula do mês mostrava dezenas de ocorrências para esse mesmo dia.
+  React.useEffect(() => {
+    if (selectedDate) {
+      setWeekStart(getWeekStart(new Date(selectedDate + 'T12:00:00')))
+    }
+  }, [selectedDate])
+
   // Create from plan
   const [selectedPlan, setSelectedPlan] = useState<MaintenancePlan | null>(null)
   const [assignTo, setAssignTo] = useState('')
