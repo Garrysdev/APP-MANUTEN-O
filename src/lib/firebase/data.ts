@@ -1356,14 +1356,19 @@ export async function createInviteToken(
 }
 
 export async function countPendingInvites(companyId: string): Promise<number> {
+  // Um único where() evita exigir um índice composto no Firestore (companyId +
+  // used + expiresAt-range combinados precisam de um índice dedicado que não
+  // existe neste projeto) — a coleção invites é pequena, por isso filtrar
+  // used/expiresAt em memória é mais barato do que gerir mais um índice.
   const now = new Date().toISOString()
   const snap = await adminDb()
     .collection('invites')
     .where('companyId', '==', companyId)
-    .where('used', '==', false)
-    .where('expiresAt', '>', now)
     .get()
-  return snap.size
+  return snap.docs.filter((d) => {
+    const data = d.data()
+    return data.used === false && typeof data.expiresAt === 'string' && data.expiresAt > now
+  }).length
 }
 
 export const getInviteByToken = cache(async function(token: string, callerEmail?: string): Promise<Invite | null> {
