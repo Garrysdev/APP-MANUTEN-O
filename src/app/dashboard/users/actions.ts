@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { getCurrentProfile, DEMO_COMPANY_ID } from '@/lib/firebase/session'
-import { createUserDirect, deactivateUser, deleteUserPermanent, checkUserHasHistory, countActiveUsers, countPendingInvites, createInviteToken, updateUserRate, createExternalCompany, updateExternalCompany, deleteExternalCompany } from '@/lib/firebase/data'
+import { createUserDirect, deactivateUser, deleteUserPermanent, checkUserHasHistory, countActiveUsers, countPendingInvites, createInviteToken, updateUserRate, createExternalCompany, updateExternalCompany, deleteExternalCompany, createExternalTechnician, updateExternalTechnician, listExternalCompanies } from '@/lib/firebase/data'
 import { adminDb } from '@/lib/firebase/admin'
 import { LIMITS } from '@/lib/plans'
 import type { UserRole, PlanName } from '@/types/models'
@@ -380,5 +380,71 @@ export async function updateExternalCompanyAction(id: string, formData: FormData
     return { ok: true }
   } catch (e) {
     return { error: formatActionError(e, 'Erro ao atualizar empresa externa.') }
+  }
+}
+
+async function resolveExternalCompanyName(companyId: string, externalCompanyId: string | null): Promise<string | null> {
+  if (!externalCompanyId) return null
+  const companies = await listExternalCompanies(companyId)
+  return companies.find((c) => c.id === externalCompanyId)?.name || null
+}
+
+export async function createExternalTechnicianAction(formData: FormData): Promise<UserActionState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+
+  const name = String(formData.get('name') ?? '').trim()
+  if (!name) return { error: 'O nome é obrigatório.' }
+
+  const plan = (profile.company?.plan ?? 'free') as PlanName
+  const activeCount = await countActiveUsers(profile.companyId)
+  const pendingCount = await countPendingInvites(profile.companyId)
+  const { maxUsers } = LIMITS[plan]
+  if (activeCount + pendingCount >= maxUsers) {
+    return {
+      error: `Limite de ${maxUsers} utilizador(es) atingido no plano ${plan} (Ativos: ${activeCount}, Convites pendentes: ${pendingCount}). Faz upgrade para adicionar mais.`,
+    }
+  }
+
+  try {
+    const externalCompanyId = String(formData.get('externalCompanyId') ?? '').trim() || null
+    const externalCompanyName = await resolveExternalCompanyName(profile.companyId, externalCompanyId)
+    await createExternalTechnician(profile.companyId, {
+      name,
+      phone: String(formData.get('phone') ?? '').trim() || null,
+      email: String(formData.get('email') ?? '').trim() || null,
+      externalCompanyId,
+      externalCompanyName,
+    })
+    revalidateUserRelatedPaths()
+    return { ok: true }
+  } catch (e) {
+    return { error: formatActionError(e, 'Erro ao criar técnico externo.') }
+  }
+}
+
+export async function updateExternalTechnicianAction(id: string, formData: FormData): Promise<UserActionState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+
+  const name = String(formData.get('name') ?? '').trim()
+  if (!name) return { error: 'O nome é obrigatório.' }
+
+  try {
+    const externalCompanyId = String(formData.get('externalCompanyId') ?? '').trim() || null
+    const externalCompanyName = await resolveExternalCompanyName(profile.companyId, externalCompanyId)
+    await updateExternalTechnician(profile.companyId, id, {
+      name,
+      phone: String(formData.get('phone') ?? '').trim() || null,
+      email: String(formData.get('email') ?? '').trim() || null,
+      externalCompanyId,
+      externalCompanyName,
+    })
+    revalidateUserRelatedPaths()
+    return { ok: true }
+  } catch (e) {
+    return { error: formatActionError(e, 'Erro ao atualizar técnico externo.') }
   }
 }

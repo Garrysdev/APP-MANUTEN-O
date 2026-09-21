@@ -1560,6 +1560,66 @@ export async function createUserDirect(
   return authUser.uid
 }
 
+/**
+ * Técnico externo — ficha leve, sem conta Firebase Auth: estes técnicos nunca
+ * fazem login na app, só servem para atribuir OTs, por isso não faz sentido
+ * exigir email/password como para um utilizador interno (createUserDirect).
+ */
+export async function createExternalTechnician(
+  companyId: string,
+  data: {
+    name: string
+    phone?: string | null
+    email?: string | null
+    externalCompanyId?: string | null
+    externalCompanyName?: string | null
+  }
+): Promise<string> {
+  const now = new Date().toISOString()
+  const ref = await adminDb().collection('users').add(
+    JSON.parse(JSON.stringify({
+      companyId,
+      name: data.name.trim(),
+      email: data.email || null,
+      phone: data.phone || null,
+      role: 'technician',
+      isExternal: true,
+      externalCompanyId: data.externalCompanyId || null,
+      externalCompanyName: data.externalCompanyName || null,
+      active: true,
+      createdAt: now,
+    }))
+  )
+  revalidateTag('users')
+  return ref.id
+}
+
+export async function updateExternalTechnician(
+  companyId: string,
+  id: string,
+  data: {
+    name: string
+    phone?: string | null
+    email?: string | null
+    externalCompanyId?: string | null
+    externalCompanyName?: string | null
+  }
+): Promise<void> {
+  const cleanObj = JSON.parse(JSON.stringify({
+    name: data.name.trim(),
+    email: data.email || null,
+    phone: data.phone || null,
+    externalCompanyId: data.externalCompanyId || null,
+    externalCompanyName: data.externalCompanyName || null,
+    companyId,
+    updatedAt: new Date().toISOString(),
+  }))
+  // set({merge:true}) — cobre também o caso de "promover" um dos técnicos
+  // externos de exemplo (sem documento próprio) para um registo real.
+  await adminDb().collection('users').doc(id).set(cleanObj, { merge: true })
+  revalidateTag('users')
+}
+
 export async function updateUserProfile(
   userId: string,
   data: {

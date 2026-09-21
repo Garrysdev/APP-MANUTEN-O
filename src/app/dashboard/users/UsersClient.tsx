@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { UserPlus, UserX, ShieldCheck, Wrench, X, Eye, EyeOff, Link2, Copy, Check, Camera, Filter, KeyRound } from 'lucide-react'
 import { DEFAULT_TECHNICIAN_TYPES, type User, type ExternalCompany } from '@/types/models'
-import { createUserDirectAction, deactivateUserAction, deleteUserAction, deleteExternalCompanyAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction, toggleUserActiveAction, resetUserPasswordAction, createExternalCompanyAction, updateExternalCompanyAction } from './actions'
+import { createUserDirectAction, deactivateUserAction, deleteUserAction, deleteExternalCompanyAction, generateInviteAction, updateUserRateAction, updateUserByManagerAction, updateTechnicianTypesAction, toggleUserActiveAction, resetUserPasswordAction, createExternalCompanyAction, updateExternalCompanyAction, createExternalTechnicianAction, updateExternalTechnicianAction } from './actions'
 import Avatar from '@/components/ui/Avatar'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
@@ -37,6 +37,8 @@ export default function UsersClient({
   const [companyBusy, setCompanyBusy] = useState(false)
   const [companyError, setCompanyError] = useState('')
   const [presetTechCompanyId, setPresetTechCompanyId] = useState('')
+  const [extTechBusy, setExtTechBusy] = useState(false)
+  const [extTechError, setExtTechError] = useState('')
   const [isPending, startTransition] = useTransition()
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -203,8 +205,37 @@ export default function UsersClient({
     setSuccess(false)
     setNewAvatarFile(null)
     setNewAvatarPreview(null)
+  }
+
+  function closeExternalTechForm() {
     setIsExternalNew(false)
     setPresetTechCompanyId('')
+    setExtTechError('')
+  }
+
+  async function handleCreateExternalTech(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setExtTechBusy(true)
+    setExtTechError('')
+    const fd = new FormData(e.currentTarget)
+    const result = await createExternalTechnicianAction(fd)
+    setExtTechBusy(false)
+    if (result?.error) { setExtTechError(result.error); return }
+    closeExternalTechForm()
+    router.refresh()
+  }
+
+  async function handleEditExternalTech(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!editingUser) return
+    setExtTechBusy(true)
+    setExtTechError('')
+    const fd = new FormData(e.currentTarget)
+    const result = await updateExternalTechnicianAction(editingUser.id, fd)
+    setExtTechBusy(false)
+    if (result?.error) { setExtTechError(result.error); return }
+    closeEditModal()
+    router.refresh()
   }
 
   async function handleCompanySubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -371,9 +402,8 @@ export default function UsersClient({
                 </button>
                 <button
                   onClick={() => {
-                    setShowForm(true)
+                    setExtTechError('')
                     setIsExternalNew(true)
-                    setActiveTab('technicians')
                   }}
                   className="btn-primary flex items-center gap-1.5 text-xs font-bold"
                 >
@@ -555,37 +585,6 @@ export default function UsersClient({
                     ))}
                   </select>
                 </div>
-              </div>
-
-              {/* Opção Técnico Externo / Prestador de Serviço */}
-              <div className="p-3 bg-gray-50 dark:bg-slate-800/60 rounded-lg border border-gray-200 dark:border-slate-700 space-y-2">
-                <label className="flex items-center gap-2 text-xs font-bold text-gray-800 dark:text-slate-200 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="isExternal"
-                    checked={isExternalNew}
-                    onChange={(e) => setIsExternalNew(e.target.checked)}
-                    className="rounded border-gray-300 text-[#2E86C1]"
-                  />
-                  Técnico Externo / Prestador de Serviço Contratado
-                </label>
-                {isExternalNew && (
-                  <div className="pt-2 grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-gray-600 dark:text-slate-400 mb-1 font-medium">Empresa Prestadora de Serviços</label>
-                      <select name="externalCompanyId" defaultValue={presetTechCompanyId} className="input text-xs">
-                        <option value="">— Selecionar Empresa —</option>
-                        {externalCompanies.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-gray-600 dark:text-slate-400 mb-1 font-medium">Telefone Directo / Contacto</label>
-                      <input name="phone" className="input text-xs" placeholder="Ex: 912 345 678" />
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div>
@@ -919,12 +918,77 @@ export default function UsersClient({
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={closeEditModal} />
           <div className="card relative w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100">{dict.users.modalEdit}</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100">
+                {editingUser.isExternal ? 'Editar Técnico Externo' : dict.users.modalEdit}
+              </h2>
               <button onClick={closeEditModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
+            {editingUser.isExternal ? (
+              <form onSubmit={handleEditExternalTech} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Nome *</label>
+                  <input name="name" defaultValue={editingUser.name} className="input" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Empresa Prestadora de Serviços</label>
+                  <select name="externalCompanyId" defaultValue={editingUser.externalCompanyId || ''} className="input">
+                    <option value="">— Selecionar Empresa —</option>
+                    {externalCompanies.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Telemóvel</label>
+                    <input name="phone" defaultValue={editingUser.phone || ''} className="input" placeholder="Ex: 912 345 678" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">E-mail</label>
+                    <input name="email" type="email" defaultValue={editingUser.email || ''} className="input" placeholder="Opcional" />
+                  </div>
+                </div>
+
+                {extTechError && (
+                  <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                    {extTechError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!confirm(`Tem a certeza que deseja eliminar definitivamente o técnico ${editingUser.name}?`)) return
+                      setExtTechBusy(true)
+                      const res = await deleteUserAction(editingUser.id)
+                      setExtTechBusy(false)
+                      if (res.error) {
+                        setExtTechError(res.error)
+                      } else {
+                        closeEditModal()
+                        router.refresh()
+                      }
+                    }}
+                    disabled={extTechBusy}
+                    className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-xl flex items-center gap-1 transition-all"
+                  >
+                    <Trash2 className="h-4 w-4" /> Eliminar
+                  </button>
+                  <div className="flex gap-2 ml-auto">
+                    <button type="button" onClick={closeEditModal} className="btn-secondary text-xs px-4 py-1.5 font-bold">
+                      {dict.common.cancel}
+                    </button>
+                    <button type="submit" disabled={extTechBusy} className="btn-primary text-xs px-5 py-1.5 font-bold">
+                      {extTechBusy ? dict.common.loading : dict.common.save}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            ) : (
             <form onSubmit={handleEditUser} className="space-y-4">
               <div className="flex flex-col items-center justify-center mb-4">
                 <div className="relative">
@@ -1009,34 +1073,6 @@ export default function UsersClient({
                 </select>
               </div>
 
-              {/* Vínculo Técnico Externo no Edit */}
-              <div className="p-3 bg-gray-50 dark:bg-slate-800/60 rounded-lg border border-gray-200 dark:border-slate-700 space-y-2 text-xs">
-                <label className="flex items-center gap-2 font-bold text-gray-800 dark:text-slate-200 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="isExternal"
-                    defaultChecked={editingUser.isExternal || false}
-                    className="rounded border-gray-300 text-[#2E86C1]"
-                  />
-                  Técnico Externo / Prestador de Serviço Contratado
-                </label>
-                <div className="pt-2 grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-gray-600 dark:text-slate-400 mb-1 font-medium">Empresa Prestadora de Serviços</label>
-                    <select name="externalCompanyId" defaultValue={editingUser.externalCompanyId || ''} className="input text-xs">
-                      <option value="">— Selecionar Empresa —</option>
-                      {externalCompanies.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-gray-600 dark:text-slate-400 mb-1 font-medium">Telefone Directo / Contacto</label>
-                    <input name="phone" defaultValue={editingUser.phone || ''} className="input text-xs" placeholder="Ex: 912 345 678" />
-                  </div>
-                </div>
-              </div>
-
               {editError && (
                 <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                   {editError}
@@ -1075,6 +1111,7 @@ export default function UsersClient({
                 </div>
               </div>
             </form>
+            )}
           </div>
         </div>,
         document.body
@@ -1136,6 +1173,68 @@ export default function UsersClient({
                 {savingTypes ? 'A guardar…' : 'Guardar Tipos'}
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal Novo Técnico Externo — ficha diferente da dos técnicos internos: estes
+          nunca fazem login na app, por isso não têm password nem conta Firebase Auth,
+          e só o nome é obrigatório (telemóvel e email são opcionais). */}
+      {isExternalNew && isManager && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={closeExternalTechForm} />
+          <div className="card relative w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100">Novo Técnico Externo</h2>
+              <button onClick={closeExternalTechForm} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-slate-400 -mt-2 mb-4">
+              Técnicos externos não têm acesso à aplicação — apenas o nome é obrigatório.
+            </p>
+
+            <form onSubmit={handleCreateExternalTech} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Nome *</label>
+                <input name="name" className="input" placeholder="Nome completo" required autoFocus />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Empresa Prestadora de Serviços</label>
+                <select name="externalCompanyId" defaultValue={presetTechCompanyId} className="input">
+                  <option value="">— Selecionar Empresa —</option>
+                  {externalCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Telemóvel</label>
+                  <input name="phone" className="input" placeholder="Opcional" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">E-mail</label>
+                  <input name="email" type="email" className="input" placeholder="Opcional" />
+                </div>
+              </div>
+
+              {extTechError && (
+                <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                  {extTechError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={closeExternalTechForm} className="btn-secondary flex items-center gap-1.5">
+                  <X className="h-4 w-4" /> Cancelar
+                </button>
+                <button type="submit" disabled={extTechBusy} className="btn-primary">
+                  {extTechBusy ? 'A criar…' : 'Criar Técnico'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>,
         document.body
@@ -1283,9 +1382,8 @@ export default function UsersClient({
                       type="button"
                       onClick={() => {
                         setPresetTechCompanyId(selectedCompany.id)
+                        setExtTechError('')
                         setIsExternalNew(true)
-                        setShowForm(true)
-                        setActiveTab('technicians')
                         setSelectedCompany(null)
                       }}
                       className="btn-outline text-[11px] px-2 py-1 flex items-center gap-1 font-bold"
