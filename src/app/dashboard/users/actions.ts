@@ -35,16 +35,6 @@ export async function createUserDirectAction(
   if (!profile) return { error: 'Sessão expirada.' }
   if (profile.role !== 'manager') return { error: 'Sem permissão.' }
 
-  const plan = (profile.company?.plan ?? 'free') as PlanName
-  const activeCount = await countActiveUsers(profile.companyId)
-  const pendingCount = await countPendingInvites(profile.companyId)
-  const { maxUsers } = LIMITS[plan]
-  if (activeCount + pendingCount >= maxUsers) {
-    return {
-      error: `Limite de ${maxUsers} utilizador(es) atingido no plano ${plan} (Ativos: ${activeCount}, Convites pendentes: ${pendingCount}). Faz upgrade para adicionar mais.`,
-    }
-  }
-
   const name = String(formData.get('name') ?? '').trim()
   const email = String(formData.get('email') ?? '').trim()
   const role = String(formData.get('role') ?? 'technician') as UserRole
@@ -62,6 +52,16 @@ export async function createUserDirectAction(
   if (tempPassword.length < 6) return { error: 'A password deve ter pelo menos 6 caracteres.' }
 
   try {
+    const plan = (profile.company?.plan ?? 'free') as PlanName
+    const activeCount = await countActiveUsers(profile.companyId)
+    const pendingCount = await countPendingInvites(profile.companyId)
+    const { maxUsers } = LIMITS[plan] ?? LIMITS.free
+    if (activeCount + pendingCount >= maxUsers) {
+      return {
+        error: `Limite de ${maxUsers} utilizador(es) atingido no plano ${plan} (Ativos: ${activeCount}, Convites pendentes: ${pendingCount}). Faz upgrade para adicionar mais.`,
+      }
+    }
+
     await createUserDirect(profile.companyId, {
       email,
       name,
@@ -94,19 +94,19 @@ export async function generateInviteAction(
   if (!profile) return { error: 'Sessão expirada.' }
   if (profile.role !== 'manager') return { error: 'Sem permissão.' }
 
-  const plan = (profile.company?.plan ?? 'free') as PlanName
-  const activeCount = await countActiveUsers(profile.companyId)
-  const pendingCount = await countPendingInvites(profile.companyId)
-  const { maxUsers } = LIMITS[plan]
-  if (activeCount + pendingCount >= maxUsers) {
-    return {
-      error: `Limite de ${maxUsers} utilizador(es) atingido no plano ${plan} (Ativos: ${activeCount}, Convites pendentes: ${pendingCount}). Faz upgrade para poder gerar mais convites.`,
-    }
-  }
-
   const role = String(formData.get('role') ?? 'technician') as UserRole
   const email = String(formData.get('email') ?? '').trim().toLowerCase() || undefined
   try {
+    const plan = (profile.company?.plan ?? 'free') as PlanName
+    const activeCount = await countActiveUsers(profile.companyId)
+    const pendingCount = await countPendingInvites(profile.companyId)
+    const { maxUsers } = LIMITS[plan] ?? LIMITS.free
+    if (activeCount + pendingCount >= maxUsers) {
+      return {
+        error: `Limite de ${maxUsers} utilizador(es) atingido no plano ${plan} (Ativos: ${activeCount}, Convites pendentes: ${pendingCount}). Faz upgrade para poder gerar mais convites.`,
+      }
+    }
+
     const { token } = await createInviteToken(profile.companyId, role, email)
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://rg-maintenance.vercel.app'
     const emailParam = email ? `&email=${encodeURIComponent(email)}` : ''
@@ -397,17 +397,17 @@ export async function createExternalTechnicianAction(formData: FormData): Promis
   const name = String(formData.get('name') ?? '').trim()
   if (!name) return { error: 'O nome é obrigatório.' }
 
-  const plan = (profile.company?.plan ?? 'free') as PlanName
-  const activeCount = await countActiveUsers(profile.companyId)
-  const pendingCount = await countPendingInvites(profile.companyId)
-  const { maxUsers } = LIMITS[plan]
-  if (activeCount + pendingCount >= maxUsers) {
-    return {
-      error: `Limite de ${maxUsers} utilizador(es) atingido no plano ${plan} (Ativos: ${activeCount}, Convites pendentes: ${pendingCount}). Faz upgrade para adicionar mais.`,
-    }
-  }
-
   try {
+    const plan = (profile.company?.plan ?? 'free') as PlanName
+    const activeCount = await countActiveUsers(profile.companyId)
+    const pendingCount = await countPendingInvites(profile.companyId)
+    const { maxUsers } = LIMITS[plan] ?? LIMITS.free
+    if (activeCount + pendingCount >= maxUsers) {
+      return {
+        error: `Limite de ${maxUsers} utilizador(es) atingido no plano ${plan} (Ativos: ${activeCount}, Convites pendentes: ${pendingCount}). Faz upgrade para adicionar mais.`,
+      }
+    }
+
     const externalCompanyId = String(formData.get('externalCompanyId') ?? '').trim() || null
     const externalCompanyName = await resolveExternalCompanyName(profile.companyId, externalCompanyId)
     await createExternalTechnician(profile.companyId, {

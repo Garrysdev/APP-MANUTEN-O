@@ -185,17 +185,22 @@ export default function UsersClient({
     const fd = new FormData(e.currentTarget)
     if (avatarUrl) fd.set('avatarUrl', avatarUrl)
 
-    const result = await updateUserByManagerAction(editingUser.id, fd)
-    setEditBusy(false)
-    if (result.error) {
-      setEditError(result.error)
-    } else if (avatarFailed) {
-      setEditError('Dados guardados, mas falha ao carregar a fotografia.')
-      setAvatarFile(null)
-      router.refresh()
-    } else {
-      closeEditModal()
-      router.refresh()
+    try {
+      const result = await updateUserByManagerAction(editingUser.id, fd)
+      if (result.error) {
+        setEditError(result.error)
+      } else if (avatarFailed) {
+        setEditError('Dados guardados, mas falha ao carregar a fotografia.')
+        setAvatarFile(null)
+        router.refresh()
+      } else {
+        closeEditModal()
+        router.refresh()
+      }
+    } catch {
+      setEditError('Erro inesperado ao guardar. Tenta novamente.')
+    } finally {
+      setEditBusy(false)
     }
   }
 
@@ -218,11 +223,16 @@ export default function UsersClient({
     setExtTechBusy(true)
     setExtTechError('')
     const fd = new FormData(e.currentTarget)
-    const result = await createExternalTechnicianAction(fd)
-    setExtTechBusy(false)
-    if (result?.error) { setExtTechError(result.error); return }
-    closeExternalTechForm()
-    router.refresh()
+    try {
+      const result = await createExternalTechnicianAction(fd)
+      if (result?.error) { setExtTechError(result.error); return }
+      closeExternalTechForm()
+      router.refresh()
+    } catch {
+      setExtTechError('Erro inesperado ao criar o técnico. Tenta novamente.')
+    } finally {
+      setExtTechBusy(false)
+    }
   }
 
   async function handleEditExternalTech(e: React.FormEvent<HTMLFormElement>) {
@@ -231,11 +241,16 @@ export default function UsersClient({
     setExtTechBusy(true)
     setExtTechError('')
     const fd = new FormData(e.currentTarget)
-    const result = await updateExternalTechnicianAction(editingUser.id, fd)
-    setExtTechBusy(false)
-    if (result?.error) { setExtTechError(result.error); return }
-    closeEditModal()
-    router.refresh()
+    try {
+      const result = await updateExternalTechnicianAction(editingUser.id, fd)
+      if (result?.error) { setExtTechError(result.error); return }
+      closeEditModal()
+      router.refresh()
+    } catch {
+      setExtTechError('Erro inesperado ao guardar o técnico. Tenta novamente.')
+    } finally {
+      setExtTechBusy(false)
+    }
   }
 
   async function handleCompanySubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -243,14 +258,19 @@ export default function UsersClient({
     setCompanyBusy(true)
     setCompanyError('')
     const fd = new FormData(e.currentTarget)
-    const result = editingCompany
-      ? await updateExternalCompanyAction(editingCompany.id, fd)
-      : await createExternalCompanyAction(fd)
-    setCompanyBusy(false)
-    if (result?.error) { setCompanyError(result.error); return }
-    setIsExternalEdit(false)
-    setEditingCompany(null)
-    router.refresh()
+    try {
+      const result = editingCompany
+        ? await updateExternalCompanyAction(editingCompany.id, fd)
+        : await createExternalCompanyAction(fd)
+      if (result?.error) { setCompanyError(result.error); return }
+      setIsExternalEdit(false)
+      setEditingCompany(null)
+      router.refresh()
+    } catch {
+      setCompanyError('Erro inesperado ao guardar a empresa. Tenta novamente.')
+    } finally {
+      setCompanyBusy(false)
+    }
   }
 
   async function handleGenerateInvite(e: React.FormEvent<HTMLFormElement>) {
@@ -258,10 +278,15 @@ export default function UsersClient({
     setInviteBusy(true)
     setInviteError('')
     const fd = new FormData(e.currentTarget)
-    const result = await generateInviteAction({}, fd)
-    setInviteBusy(false)
-    if (result.error) { setInviteError(result.error); return }
-    if (result.inviteUrl) setInviteUrl(result.inviteUrl)
+    try {
+      const result = await generateInviteAction({}, fd)
+      if (result.error) { setInviteError(result.error); return }
+      if (result.inviteUrl) setInviteUrl(result.inviteUrl)
+    } catch {
+      setInviteError('Erro inesperado ao gerar o convite. Tenta novamente.')
+    } finally {
+      setInviteBusy(false)
+    }
   }
 
   async function handleCopy() {
@@ -274,7 +299,8 @@ export default function UsersClient({
     e.preventDefault()
     setBusy(true)
     setError('')
-    
+    const formEl = e.currentTarget
+
     let avatarUrl: string | null = null
     if (newAvatarFile) {
       try {
@@ -284,18 +310,23 @@ export default function UsersClient({
       }
     }
 
-    const fd = new FormData(e.currentTarget)
+    const fd = new FormData(formEl)
     if (avatarUrl) fd.set('avatarUrl', avatarUrl)
 
-    const result = await createUserDirectAction({}, fd)
-    setBusy(false)
-    if (result.error) {
-      setError(result.error)
-    } else {
-      setSuccess(true)
-      ;(e.currentTarget as HTMLFormElement).reset()
-      router.refresh()
-      setTimeout(() => { setSuccess(false); closeForm() }, 1500)
+    try {
+      const result = await createUserDirectAction({}, fd)
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setSuccess(true)
+        formEl.reset()
+        router.refresh()
+        setTimeout(() => { setSuccess(false); closeForm() }, 1500)
+      }
+    } catch {
+      setError('Erro inesperado ao criar o utilizador. Tenta novamente.')
+    } finally {
+      setBusy(false)
     }
   }
 
