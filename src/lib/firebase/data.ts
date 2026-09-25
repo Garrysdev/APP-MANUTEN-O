@@ -933,6 +933,10 @@ export async function createTask(
     }
   } catch (err) {
     console.error('Erro em createTask Firestore:', err)
+    // Não continuar em modo "sucesso silencioso": o fallback local (ficheiro JSON / cache em
+    // memória) não é fiável em produção (filesystem só-leitura no Vercel, cache por instância),
+    // por isso é preferível reportar o erro ao utilizador do que fingir que a OT foi criada.
+    throw err
   }
 
   const newTaskObj: Task = {

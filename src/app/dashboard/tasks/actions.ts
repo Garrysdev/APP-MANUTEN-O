@@ -12,6 +12,14 @@ import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, Executor } from '@/
 import { TIPOS_TAREFA } from '@/types/models'
 
 export type TaskFormState = { error?: string; ok?: boolean }
+
+function formatTaskActionError(e: unknown, fallback: string): string {
+  const msg = e instanceof Error ? e.message : String(e ?? '')
+  if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota exceeded') || msg.startsWith('8 ')) {
+    return 'A quota gratuita de leitura/escrita do Firebase Firestore foi excedida hoje. Tenta novamente daqui a alguns minutos.'
+  }
+  return msg || fallback
+}
 export type StockMaterialRef = {
   id: string
   name: string
@@ -214,7 +222,7 @@ export async function createTaskAction(
     revalidatePath('/dashboard')
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao criar tarefa.' }
+    return { error: formatTaskActionError(e, 'Erro ao criar tarefa.') }
   }
 }
 
