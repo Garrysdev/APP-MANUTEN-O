@@ -504,6 +504,13 @@ const listTasksCached = unstable_cache(
 
       if (!includeCompleted) {
         query = query.where('status', 'in', ['pending', 'in_progress']) as any
+      } else {
+        // Sem orderBy, o .limit() abaixo devolve um subconjunto arbitrário (por ID do
+        // documento) em vez dos mais recentes — com o histórico importado (~6700 OTs na
+        // UR) isto faz OTs novas nunca aparecerem, por ficarem fora desse subconjunto.
+        // Só se aplica quando includeCompleted=true (sem o "in" acima) para não exigir
+        // um índice composto que pode não existir em produção.
+        query = query.orderBy('createdAt', 'desc') as any
       }
 
       // Timeout alargado (vs. o padrão de 1.2s usado noutras queries pequenas): com o
