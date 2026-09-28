@@ -919,7 +919,12 @@ export default function TasksClient({
     return match ? parseInt(match[0], 10) : 0
   }
 
-  // Ordenação por coluna (por defeito pela coluna ID)
+  // Ordenação por coluna. Sem coluna ativa por defeito: mostra defaultSortedFiltered
+  // tal como vem (Em Curso/Pendentes primeiro, mais recentes no topo). "ID" não é um
+  // número sequencial real (otNumber nunca é preenchido) — extrai o 1º dígito do ID do
+  // Firestore, que por coincidência dá o mesmo valor para quase todo o histórico
+  // importado (prefixo comum da empresa) mas um valor arbitrário para OTs novas, o que
+  // as enterrava lá para o fundo da lista em vez de aparecerem no topo.
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Task>(
     defaultSortedFiltered,
     {
@@ -935,7 +940,7 @@ export default function TasksClient({
       obs: (t) => String(t.observacoes || (t as any).causa || '').toLowerCase(),
       status: (t) => STATUS_LABELS[t.status] || t.status,
     },
-    'id',
+    null,
     'desc',
   )
 
