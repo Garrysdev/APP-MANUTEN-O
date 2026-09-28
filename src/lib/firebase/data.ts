@@ -323,7 +323,7 @@ const listAssetsCached = unstable_cache(
     return isDemoCompany(companyId) ? getFallbackAssets() : []
   },
   ['assets'],
-  { revalidate: 45, tags: ['assets'] }
+  { revalidate: 300, tags: ['assets'] }
 )
 export const listAssets = cache(async function(companyId: string, limitCount = 2000): Promise<Asset[]> {
   return listAssetsCached(companyId, limitCount)
@@ -357,7 +357,7 @@ const listAssetRefsCached = unstable_cache(
     return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
   },
   ['asset-refs'],
-  { revalidate: 45, tags: ['assets'] }
+  { revalidate: 300, tags: ['assets'] }
 )
 export const listAssetRefs = cache(async function(companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> {
   return listAssetRefsCached(companyId)
@@ -583,7 +583,9 @@ const listTasksCached = unstable_cache(
     }
   },
   ['tasks'],
-  { revalidate: 30, tags: ['tasks'] }
+  // 300s (era 30s): cada falha de cache lê até 2000 documentos e o Dashboard chama isto 2x.
+  // Todas as escritas em OTs fazem revalidateTag('tasks'), por isso não fica desatualizado.
+  { revalidate: 300, tags: ['tasks'] }
 )
 
 // NOTA: não subir este limite às cegas. Com o histórico importado (~6700 OTs na
@@ -610,55 +612,70 @@ function effectiveTaskDate(t: Pick<Task, 'plannedStartDate' | 'createdAt' | 'due
 // query Firestore limitada a esse ano (por createdAt, campo sempre preenchido) em vez
 // de listTasks() com um limite alto — para 6000+ OTs isso excede o tecto de 2MB da
 // Data Cache do Next.js (fica sempre por cachear) e esgota a quota diária do Firestore
-// em poucos carregamentos de página. Cada ano fica pequeno e cacheável (revalidate 60s).
-const getTasksForYearCached = unstable_cache(
-  async (companyId: string, year: number): Promise<Task[]> => {
-    const startIso = `${year}-01-01`
-    const endIso = `${year + 1}-01-01`
-    let dbDocs: Task[] = []
-    try {
-      const snap = await firestoreWithTimeout(
-        () => adminDb()
-          .collection('tasks')
-          .where('companyId', '==', companyId)
-          .where('createdAt', '>=', startIso)
-          .where('createdAt', '<', endIso)
-          .limit(5000)
-          .get(),
-        null,
-        5000
-      )
-      if (snap && snap.docs) {
-        dbDocs = snap.docs.map((d) => serialize<Task>(d))
-      }
-    } catch (err) {
-      console.error('[getTasksForYearStats] Error:', err)
+// em poucos carregamentos de página. Cada ano fica pequeno e cacheável (cache 5 min no ano corrente, 6h nos anteriores).
+async function fetchTasksForYear(companyId: string, year: number): Promise<Task[]> {
+  const startIso = `${year}-01-01`
+  const endIso = `${year + 1}-01-01`
+  let dbDocs: Task[] = []
+  try {
+    const snap = await firestoreWithTimeout(
+      () => adminDb()
+        .collection('tasks')
+        .where('companyId', '==', companyId)
+        .where('createdAt', '>=', startIso)
+        .where('createdAt', '<', endIso)
+        .limit(5000)
+        .get(),
+      null,
+      5000
+    )
+    if (snap && snap.docs) {
+      dbDocs = snap.docs.map((d) => serialize<Task>(d))
     }
+  } catch (err) {
+    console.error('[getTasksForYearStats] Error:', err)
+  }
 
-    // A camada de reserva (só para a UR) guarda datas próprias (dueDate/plannedStartDate)
-    // que não batem certo com o createdAt genérico de alguns registos — filtrar pela
-    // data efetiva de cada item em vez de por createdAt.
-    if (isDemoCompany(companyId)) {
-      const fallbackForYear = getFallbackTasks().filter((f) => {
-        const d = effectiveTaskDate(f)
-        if (!d) return false
-        const y = parseInt(String(d).slice(0, 4), 10)
-        return y === year
-      })
-      if (dbDocs.length === 0) return fallbackForYear
-      const dbIds = new Set(dbDocs.map((d) => d.id))
-      const extraFallback = fallbackForYear.filter((f) => !dbIds.has(f.id))
-      return [...dbDocs, ...extraFallback]
-    }
+  // A camada de reserva (só para a UR) guarda datas próprias (dueDate/plannedStartDate)
+  // que não batem certo com o createdAt genérico de alguns registos — filtrar pela
+  // data efetiva de cada item em vez de por createdAt.
+  if (isDemoCompany(companyId)) {
+    const fallbackForYear = getFallbackTasks().filter((f) => {
+      const d = effectiveTaskDate(f)
+      if (!d) return false
+      const y = parseInt(String(d).slice(0, 4), 10)
+      return y === year
+    })
+    if (dbDocs.length === 0) return fallbackForYear
+    const dbIds = new Set(dbDocs.map((d) => d.id))
+    const extraFallback = fallbackForYear.filter((f) => !dbIds.has(f.id))
+    return [...dbDocs, ...extraFallback]
+  }
 
-    return dbDocs
-  },
+  return dbDocs
+}
+
+// Ano corrente: muda com o uso normal, mas as escritas já invalidam a tag 'tasks'.
+const getTasksForCurrentYearCached = unstable_cache(
+  fetchTasksForYear,
   ['tasks-by-year'],
-  { revalidate: 60, tags: ['tasks'] }
+  { revalidate: 300, tags: ['tasks'] }
+)
+
+// Anos passados: o Dashboard lê os ~11 anos de cada vez (~6700 leituras se não estiver
+// em cache) — é histórico fechado (equipamentos/OTs de anos anteriores), não muda com
+// o uso do dia a dia, por isso 1 dia de cache (ainda invalidado por tag se algo escrever
+// numa OT de um ano passado).
+const getTasksForPastYearCached = unstable_cache(
+  fetchTasksForYear,
+  ['tasks-by-year-past'],
+  { revalidate: 86400, tags: ['tasks'] }
 )
 
 export async function getTasksForYearStats(companyId: string, year: number): Promise<Task[]> {
-  return getTasksForYearCached(companyId, year)
+  return year < new Date().getFullYear()
+    ? getTasksForPastYearCached(companyId, year)
+    : getTasksForCurrentYearCached(companyId, year)
 }
 
 /**
@@ -1208,7 +1225,9 @@ const listUsersCached = unstable_cache(
     return isDemoCompany(companyId) ? getFallbackUsers() : []
   },
   ['users'],
-  { revalidate: 30, tags: ['users'] }
+  // 1h (era 30s): a lista de utilizadores/técnicos (atribuições, permissões de gestor)
+  // muda pouco no dia a dia — qualquer criação/edição/remoção já chama revalidateTag('users').
+  { revalidate: 3600, tags: ['users'] }
 )
 export const listUsers = cache(async function(companyId: string): Promise<User[]> {
   return listUsersCached(companyId)
@@ -1854,7 +1873,9 @@ const listMaintenancePlansCached = unstable_cache(
     return isDemoCompany(companyId) ? getFallbackPlans() : []
   },
   ['maintenance-plans'],
-  { revalidate: 45, tags: ['plans'] }
+  // 1h (era 5min): o Plano de Manutenção (definições, não as OTs geradas) muda raramente
+  // — escritas já chamam revalidateTag('plans').
+  { revalidate: 3600, tags: ['plans'] }
 )
 export const listMaintenancePlans = cache(async function(companyId: string): Promise<MaintenancePlan[]> {
   return listMaintenancePlansCached(companyId)

@@ -479,6 +479,24 @@ export default function CreateTaskModal({
     }
   }
 
+  async function handleDelete() {
+    if (!editingTask) return
+    if (!confirm(`Tem a certeza de que pretende eliminar "${editingTask.title || 'este registo'}"?`)) return
+    if (deleteAction) {
+      setBusy(true)
+      const res = await deleteAction(editingTask.id)
+      setBusy(false)
+      if (res?.error) {
+        setError(res.error)
+        return
+      }
+    }
+    if (onDelete) onDelete()
+    onClose()
+  }
+
+  const canDelete = Boolean(isManager && editingTask && (deleteAction || onDelete))
+
   return createPortal(
     <div className="fixed inset-0 z-[200] bg-slate-50 dark:bg-slate-950 overflow-y-auto flex flex-col">
       {/* Sticky Header de Página Completa */}
@@ -503,23 +521,10 @@ export default function CreateTaskModal({
         </div>
 
         <div className="flex items-center gap-2">
-          {isManager && editingTask && (deleteAction || onDelete) && (
+          {canDelete && (
             <button
               type="button"
-              onClick={async () => {
-                if (!confirm(`Tem a certeza de que pretende eliminar "${editingTask.title || 'este registo'}"?`)) return
-                if (deleteAction) {
-                  setBusy(true)
-                  const res = await deleteAction(editingTask.id)
-                  setBusy(false)
-                  if (res?.error) {
-                    setError(res.error)
-                    return
-                  }
-                }
-                if (onDelete) onDelete()
-                onClose()
-              }}
+              onClick={handleDelete}
               className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:hover:bg-red-900/60 dark:text-red-300 border border-red-200 dark:border-red-800 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Eliminar este registo"
             >
@@ -1092,18 +1097,31 @@ export default function CreateTaskModal({
               tempo (era isto o "uma OT dentro da outra" visto ao fazer scroll, não o
               portal). */}
           <div className="hidden sm:flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+            {canDelete && (
+              <button type="button" onClick={handleDelete} disabled={busy}
+                className="px-4 py-3 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:hover:bg-red-900/60 dark:text-red-300 border border-red-200 dark:border-red-800 text-sm font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer">
+                <Trash2 className="h-4 w-4" />
+                <span>Eliminar OT</span>
+              </button>
+            )}
             <button type="button" onClick={onClose} className="btn-secondary flex-1 py-3 text-sm font-bold">
               Cancelar
             </button>
             <button type="submit" disabled={busy} className="btn-primary flex-1 py-3 text-sm font-bold shadow-lg">
-              {busy ? 'A guardar…' : 'Guardar Nova OT'}
+              {busy ? 'A guardar…' : editingTask ? 'Guardar Alterações' : 'Guardar Nova OT'}
             </button>
           </div>
         </form>
       </div>
 
       {/* Barra Inferior Fixa para Dispositivos Móveis */}
-      <div className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 p-3 flex gap-3 shadow-2xl z-40 sm:hidden">
+      <div className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 p-3 flex gap-2 shadow-2xl z-40 sm:hidden">
+        {canDelete && (
+          <button type="button" onClick={handleDelete} disabled={busy}
+            className="px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:hover:bg-red-900/60 dark:text-red-300 border border-red-200 dark:border-red-800 text-xs font-bold rounded-xl flex items-center gap-1 transition-colors cursor-pointer">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
         <button type="button" onClick={onClose} className="btn-secondary flex-1 py-2.5 text-xs font-bold">
           Cancelar
         </button>
