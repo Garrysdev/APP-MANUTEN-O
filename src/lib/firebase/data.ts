@@ -2113,18 +2113,42 @@ function getFallbackStockItems(): StockItem[] {
 
 // ── STOCK ITEMS ───────────────────────────────────────────────────────────────
 
+// unstable_cache (persiste entre pedidos, ao contrário do cache() do React que só
+// deduplica dentro do MESMO pedido) + merge com a reserva (scripts/import/stocks.json,
+// onde vive o Inventário "CONSUMIVEIS UR" importado do Excel). Antes disto, assim que
+// existisse UM único documento em `stock_items` no Firestore para esta empresa, a
+// reserva inteira desaparecia da app — mesmo bug já documentado no CLAUDE.md para
+// `maintenance_plans` ("605 planos a cair para 1"), desta vez no Inventário.
+const listStockItemsCached = unstable_cache(
+  async (companyId: string): Promise<StockItem[]> => {
+    if (isQuotaExhausted()) {
+      return isDemoCompany(companyId) ? getFallbackStockItems() : []
+    }
+    try {
+      const snap = await firestoreWithTimeout(
+        () => adminDb().collection('stock_items').where('companyId', '==', companyId).get(),
+        null,
+        1200
+      )
+      const dbDocs = (snap && snap.docs) ? snap.docs.map((d) => serialize<StockItem & { deleted?: boolean }>(d)).filter((s) => !s.deleted) : []
+
+      if (!isDemoCompany(companyId)) {
+        return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
+      }
+      const byId = new Map<string, StockItem>()
+      getFallbackStockItems().forEach((s) => byId.set(s.id, s))
+      dbDocs.forEach((s) => byId.set(s.id, s)) // Firestore substitui a versão de reserva quando existe
+      return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name))
+    } catch (err) {
+      console.error('[listStockItems] Error:', err)
+    }
+    return isDemoCompany(companyId) ? getFallbackStockItems() : []
+  },
+  ['stock-items'],
+  { revalidate: 300, tags: ['stocks'] }
+)
 export const listStockItems = cache(async function(companyId: string): Promise<StockItem[]> {
-  try {
-    const snap = await adminDb()
-      .collection('stock_items')
-      .where('companyId', '==', companyId)
-      .get()
-    const docs = snap.docs.map((d) => serialize<StockItem>(d))
-    if (docs.length > 0 || !isDemoCompany(companyId)) return docs.sort((a, b) => a.name.localeCompare(b.name))
-  } catch (err) {
-    console.error('[listStockItems] Error:', err)
-  }
-  return isDemoCompany(companyId) ? getFallbackStockItems() : []
+  return listStockItemsCached(companyId)
 })
 
 export const getStockItem = cache(async function(companyId: string, id: string): Promise<StockItem | null> {
@@ -2147,6 +2171,7 @@ export async function createStockItem(
     const ref = await adminDb()
       .collection('stock_items')
       .add({ ...data, companyId, createdAt: now, updatedAt: now })
+    revalidateTag('stocks')
     return ref.id
   } catch (err) {
     // Nunca devolver um id fabricado aqui: o artigo não chegou a ser gravado, e um id
@@ -2167,6 +2192,7 @@ export async function updateStockItem(
     const doc = await ref.get()
     if (doc.exists && doc.data()?.companyId === companyId) {
       await ref.update({ ...data, updatedAt: new Date().toISOString() })
+      revalidateTag('stocks')
     }
   } catch (err) {
     console.error('[updateStockItem] Error:', err)
@@ -2179,6 +2205,7 @@ export async function deleteStockItem(companyId: string, id: string): Promise<vo
     const doc = await ref.get()
     if (doc.exists && doc.data()?.companyId === companyId) {
       await ref.delete()
+      revalidateTag('stocks')
     }
   } catch (err) {
     console.error('[deleteStockItem] Error:', err)
@@ -2430,18 +2457,31 @@ const DEFAULT_SAFETY_RULES: SafetyRule[] = [
   { id: 'sr_6', companyId: 'default', title: 'Ventilar e testar atmosfera em espaços confinados', category: 'Espaços Confinados', active: true, createdAt: new Date().toISOString() },
 ]
 
+// unstable_cache: o modal de OT/Plano chama loadSafetyRulesAction() (→ listSafetyRules)
+// de cada vez que abre — sem cache persistente entre pedidos, cada abertura do modal
+// era uma leitura Firestore nova. Já apanhado em produção a esgotar a quota
+// (RESOURCE_EXHAUSTED nos logs do Vercel).
+const listSafetyRulesCached = unstable_cache(
+  async (companyId: string): Promise<SafetyRule[]> => {
+    if (isQuotaExhausted()) return DEFAULT_SAFETY_RULES
+    try {
+      const snap = await firestoreWithTimeout(
+        () => adminDb().collection('safety_rules').where('companyId', '==', companyId).get(),
+        null,
+        800
+      )
+      const docs = (snap && snap.docs) ? snap.docs.map((d) => serialize<SafetyRule>(d)) : []
+      if (docs.length > 0) return docs.sort((a, b) => a.title.localeCompare(b.title))
+    } catch (err) {
+      console.error('[listSafetyRules] Error / Quota Exceeded:', err)
+    }
+    return DEFAULT_SAFETY_RULES
+  },
+  ['safety-rules'],
+  { revalidate: 1800, tags: ['safety-rules'] }
+)
 export const listSafetyRules = cache(async function(companyId: string): Promise<SafetyRule[]> {
-  try {
-    const snap = await adminDb()
-      .collection('safety_rules')
-      .where('companyId', '==', companyId)
-      .get()
-    const docs = snap.docs.map((d) => serialize<SafetyRule>(d))
-    if (docs.length > 0) return docs.sort((a, b) => a.title.localeCompare(b.title))
-  } catch (err) {
-    console.error('[listSafetyRules] Error / Quota Exceeded:', err)
-  }
-  return DEFAULT_SAFETY_RULES
+  return listSafetyRulesCached(companyId)
 })
 
 export async function createSafetyRule(
@@ -2455,6 +2495,7 @@ export async function createSafetyRule(
       companyId,
       createdAt: now,
     })
+    revalidateTag('safety-rules')
     return ref.id
   } catch (err) {
     console.error('[createSafetyRule] Error:', err)
@@ -2471,6 +2512,7 @@ export async function updateSafetyRule(
     const doc = await adminDb().collection('safety_rules').doc(id).get()
     if (doc.exists && doc.data()?.companyId === companyId) {
       await doc.ref.update(data)
+      revalidateTag('safety-rules')
     }
   } catch (err) {
     console.error('[updateSafetyRule] Error:', err)
@@ -2482,6 +2524,7 @@ export async function deleteSafetyRule(companyId: string, id: string): Promise<v
     const doc = await adminDb().collection('safety_rules').doc(id).get()
     if (doc.exists && doc.data()?.companyId === companyId) {
       await doc.ref.delete()
+      revalidateTag('safety-rules')
     }
   } catch (err) {
     console.error('[deleteSafetyRule] Error:', err)

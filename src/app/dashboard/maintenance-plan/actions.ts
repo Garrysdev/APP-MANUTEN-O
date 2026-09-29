@@ -20,6 +20,18 @@ import { periodicidadeToRecurrence, CRITICIDADE_LABELS, PERIODICIDADE_LABELS, TI
 
 export type PlanFormState = { error?: string; ok?: boolean; id?: string }
 
+// Sem isto, uma escrita a meio de um pico de quota do Firestore (plano Spark) devolvia o
+// erro cru do gRPC ("8 RESOURCE_EXHAUSTED: Quota exceeded.") — confuso, e fácil de
+// confundir com um bug de dados (ex.: "Plano de manutenção não encontrado"). Mesmo padrão
+// já usado em tasks/actions.ts (formatTaskActionError).
+function formatPlanActionError(e: unknown, fallback: string): string {
+  const msg = e instanceof Error ? e.message : String(e ?? '')
+  if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota exceeded') || msg.startsWith('8 ')) {
+    return 'A quota gratuita de leitura/escrita do Firebase Firestore foi excedida hoje. Tenta novamente daqui a alguns minutos.'
+  }
+  return msg || fallback
+}
+
 export async function generateAnnualPMScheduleAction(
   targetYear = 2026,
   planIds?: string[]
@@ -53,7 +65,7 @@ export async function generateAnnualPMScheduleAction(
     revalidatePath('/dashboard')
     return { ok: true, totalPlans: activePlans.length, totalTasksCreated: activePlans.length }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao gerar agendamento anual de PMs.' }
+    return { error: formatPlanActionError(e, 'Erro ao gerar agendamento anual de PMs.') }
   }
 }
 
@@ -101,7 +113,7 @@ export async function concludePMAction(
     revalidatePath('/dashboard')
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao concluir Manutenção Preventiva.' }
+    return { error: formatPlanActionError(e, 'Erro ao concluir Manutenção Preventiva.') }
   }
 }
 
@@ -132,7 +144,7 @@ export async function setPmOccurrenceStatusAction(
     revalidatePath('/dashboard')
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao atualizar estado da tarefa.' }
+    return { error: formatPlanActionError(e, 'Erro ao atualizar estado da tarefa.') }
   }
 }
 
@@ -208,7 +220,7 @@ export async function togglePlanCalendarAction(
     revalidatePath('/dashboard')
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao atualizar marcador do calendário.' }
+    return { error: formatPlanActionError(e, 'Erro ao atualizar marcador do calendário.') }
   }
 }
 
@@ -226,7 +238,7 @@ export async function togglePlanGanttAction(
     revalidatePath('/dashboard/projects')
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao atualizar marcador de Gantt.' }
+    return { error: formatPlanActionError(e, 'Erro ao atualizar marcador de Gantt.') }
   }
 }
 
@@ -243,7 +255,7 @@ export async function createMaintenancePlanAction(
     revalidatePath('/dashboard/calendar')
     return { ok: true, id }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao criar plano.' }
+    return { error: formatPlanActionError(e, 'Erro ao criar plano.') }
   }
 }
 
@@ -377,7 +389,7 @@ export async function importMaintenancePlansAction(formData: FormData): Promise<
     revalidatePath('/dashboard/calendar')
     return { created, skipped }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao importar ficheiro.' }
+    return { error: formatPlanActionError(e, 'Erro ao importar ficheiro.') }
   }
 }
 
@@ -396,7 +408,7 @@ export async function updateMaintenancePlanAction(
     revalidatePath('/dashboard/calendar')
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao atualizar plano.' }
+    return { error: formatPlanActionError(e, 'Erro ao atualizar plano.') }
   }
 }
 
@@ -413,7 +425,7 @@ export async function deleteMaintenancePlanAction(id: string): Promise<PlanFormS
     revalidatePath('/dashboard')
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao eliminar plano.' }
+    return { error: formatPlanActionError(e, 'Erro ao eliminar plano.') }
   }
 }
 
@@ -429,6 +441,6 @@ export async function toggleMaintenancePlanActiveAction(
     revalidatePath('/dashboard/maintenance-plan')
     return { ok: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Erro ao atualizar estado.' }
+    return { error: formatPlanActionError(e, 'Erro ao atualizar estado.') }
   }
 }
