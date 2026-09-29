@@ -31,7 +31,7 @@ export async function loadPlanTaskRefsAction(): Promise<PlanTaskRef[]> {
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
 // Lista canónica em @/types/models — derivada do próprio tipo, nunca escrita à mão.
 const TIPOS = TIPOS_TAREFA
-const STATUSES: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
+const STATUSES: TaskStatus[] = ['prazo', 'pending', 'in_progress', 'done', 'cancelled']
 
 function parseProjectTask(formData: FormData) {
   const title = String(formData.get('title') ?? '').trim()

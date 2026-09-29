@@ -60,7 +60,7 @@ export async function loadPlanTaskRefsAction(): Promise<PlanTaskRef[]> {
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
 // Lista canónica em @/types/models — derivada do próprio tipo, nunca escrita à mão.
 const TIPOS = TIPOS_TAREFA
-const STATUSES: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
+const STATUSES: TaskStatus[] = ['prazo', 'pending', 'in_progress', 'done', 'cancelled']
 
 function parseTask(formData: FormData) {
   const title = String(formData.get('title') ?? '').trim()
@@ -74,6 +74,12 @@ function parseTask(formData: FormData) {
   const tipo = String(formData.get('tipo') ?? 'preventiva') as TipoTarefa
   const rawStatus = String(formData.get('status') ?? 'pending') as TaskStatus
   const dueDate = String(formData.get('dueDate') ?? '').trim() || null
+
+  // Dia de lançamento (createdAt) — editável pelo gestor no formulário (campo "Data de
+  // Lançamento"). Só é aplicado se vier num formato de data válido; caso contrário não é
+  // incluído no resultado, para nunca apagar/corromper o createdAt já gravado.
+  const createdAtRaw = String(formData.get('createdAt') ?? '').trim()
+  const createdAt = /^\d{4}-\d{2}-\d{2}$/.test(createdAtRaw) ? `${createdAtRaw}T00:00:00.000Z` : null
 
   let status = STATUSES.includes(rawStatus) ? rawStatus : 'pending'
   // Se a data de conclusão/prazo foi apagada, a OT passa automaticamente para 'pending' (Pendente)
@@ -127,6 +133,7 @@ function parseTask(formData: FormData) {
     tipo: TIPOS.includes(tipo) ? tipo : 'preventiva',
     status,
     dueDate,
+    ...(createdAt ? { createdAt } : {}),
     startedAt: String(formData.get('startedAt') ?? '').trim() || (status === 'in_progress' || status === 'done' ? new Date().toISOString() : null),
     completedAt: String(formData.get('completedAt') ?? '').trim() || (status === 'done' ? (dueDate || new Date().toISOString()) : null),
     plannedStartDate: String(formData.get('plannedStartDate') ?? '').trim() || null,

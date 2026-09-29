@@ -97,7 +97,7 @@ export default function TaskSummaryActions({
   const [safetyRules, setSafetyRules] = useState<string[]>([''])
   const [materialsRequired, setMaterialsRequired] = useState<string[]>([''])
 
-  const statuses: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
+  const statuses: TaskStatus[] = ['prazo', 'pending', 'in_progress', 'done', 'cancelled']
   const criticidades: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
   const tipos: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 

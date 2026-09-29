@@ -11,6 +11,7 @@ import type { Task, TipoTarefa } from '@/types/models'
 import { TIPO_LABELS } from '@/types/models'
 
 const COLORS_STATUS = {
+  prazo: '#6366f1', // indigo-500
   pending: '#f59e0b', // amber-500
   in_progress: '#2563eb', // blue-600
   done: '#10b981', // emerald-500
@@ -18,6 +19,7 @@ const COLORS_STATUS = {
 }
 
 const STATUS_LABELS = {
+  prazo: 'Prazo',
   pending: 'Pendentes',
   in_progress: 'Em Curso',
   done: 'Concluídas',
@@ -37,7 +39,7 @@ export default function DashboardCharts({ tasks }: { tasks: Task[] }) {
   }, [tasks])
 
   const byStatus = useMemo(() => {
-    const counts: Record<string, number> = { pending: 0, in_progress: 0, done: 0, cancelled: 0 }
+    const counts: Record<string, number> = { prazo: 0, pending: 0, in_progress: 0, done: 0, cancelled: 0 }
     tasks.forEach(t => {
       if (counts[t.status] !== undefined) counts[t.status]++
     })

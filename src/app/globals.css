@@ -33,6 +33,7 @@
   }
 
   /* Badges Nítidos com Cores de Estado Definidas */
+  .badge-prazo      { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-extrabold uppercase tracking-wider bg-indigo-500 text-white border border-indigo-600 shadow-sm; }
   .badge-pending    { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-extrabold uppercase tracking-wider bg-slate-500 text-white border border-slate-600 shadow-sm; }
   .badge-in_progress{ @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-extrabold uppercase tracking-wider bg-amber-500 text-slate-950 border border-amber-600 shadow-sm; }
   .badge-done       { @apply inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-extrabold uppercase tracking-wider bg-emerald-600 text-white border border-emerald-700 shadow-sm; }

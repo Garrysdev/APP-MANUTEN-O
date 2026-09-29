@@ -2,7 +2,9 @@
 // Cada documento de coleção de negócio guarda `companyId` para multi-tenancy.
 
 export type UserRole = 'manager' | 'technician'
-export type TaskStatus = 'pending' | 'in_progress' | 'done' | 'cancelled'
+// 'prazo': OT já existe mas só arranca numa data futura definida (ex.: PM agendado) —
+// fica antes de 'pending' no ciclo de vida.
+export type TaskStatus = 'prazo' | 'pending' | 'in_progress' | 'done' | 'cancelled'
 export type StockMovementType = 'in' | 'out'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type TaskCriticidade = 'vermelho' | 'amarelo' | 'verde'
@@ -326,6 +328,7 @@ export interface Invite {
 
 // Rótulos PT para apresentação
 export const STATUS_LABELS: Record<TaskStatus, string> = {
+  prazo: 'Prazo',
   pending: 'Pendente',
   in_progress: 'Em curso',
   done: 'Concluída',

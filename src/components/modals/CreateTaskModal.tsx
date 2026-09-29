@@ -4,9 +4,9 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import {
-  X, ShieldAlert, Camera, Images, Wrench, ArrowLeft, FolderKanban, Trash2
+  X, ShieldAlert, Camera, Images, Wrench, ArrowLeft, FolderKanban, Trash2, Copy
 } from 'lucide-react'
-import type { Task, TaskCriticidade, TipoTarefa } from '@/types/models'
+import type { Task, TaskCriticidade, TipoTarefa, TaskStatus } from '@/types/models'
 import { STATUS_LABELS } from '@/types/models'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
@@ -195,6 +195,10 @@ export interface CreateTaskModalProps {
   onDelete?: () => void
   availableTasksForDependencies?: Task[]
   showDependencies?: boolean
+  /** "Duplicar OT" (pré-preencher um formulário novo a partir do registo em edição). Só faz
+   * sentido para OTs — a página de Plano de Manutenção reutiliza este modal para editar
+   * Planos (outro tipo de entidade) e desativa isto explicitamente. */
+  allowDuplicate?: boolean
 }
 
 export default function CreateTaskModal({
@@ -218,6 +222,7 @@ export default function CreateTaskModal({
   onDelete,
   availableTasksForDependencies,
   showDependencies = false,
+  allowDuplicate = true,
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState(initialTitle || '')
   const [tipo, setTipo] = useState<TipoTarefa>(initialTipo || 'curativa')
@@ -226,11 +231,14 @@ export default function CreateTaskModal({
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([])
   const [plannedStartDate, setPlannedStartDate] = useState('')
   const [dueDate, setDueDate] = useState('')
+  // Dia de lançamento (createdAt) — por omissão é "agora" ao criar, mas tem de poder ser
+  // corrigido (ex.: OT lançada com atraso, ou entrada tardia de dados históricos).
+  const [createdAtDate, setCreatedAtDate] = useState('')
   const [startedAt, setStartedAt] = useState('')
   const [completedAt, setCompletedAt] = useState('')
   const [description, setDescription] = useState(initialDescription || '')
   const [observacoes, setObservacoes] = useState('')
-  const [status, setStatus] = useState<'pending' | 'in_progress' | 'done' | 'cancelled'>('pending')
+  const [status, setStatus] = useState<TaskStatus>('pending')
   const [legal, setLegal] = useState<boolean>(false)
   const [safetyRules, setSafetyRules] = useState<string[]>([])
   const [dynamicSafetyRules, setDynamicSafetyRules] = useState<string[]>(PREDEFINED_SAFETY_RULES)
@@ -240,6 +248,9 @@ export default function CreateTaskModal({
   const [dependsOn, setDependsOn] = useState<string[]>([])
   const [addToPmModal, setAddToPmModal] = useState(false)
   const [periodicidadeModal, setPeriodicidadeModal] = useState<string>('mensal')
+  // true = a editingTask (prop) continua com o registo original, mas o formulário está a
+  // preparar uma CÓPIA nova a partir dele — ver handleDuplicateClick.
+  const [duplicating, setDuplicating] = useState(false)
 
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
@@ -257,6 +268,42 @@ export default function CreateTaskModal({
     )
   }, [dynamicSafetyRules, safetyRules])
 
+  // Extraído do efeito abaixo para poder ser reaplicado sem fechar/reabrir o modal — usado
+  // também para "Cancelar cópia" (ver handleCancelDuplicate) depois de "Duplicar OT".
+  function applyTaskToForm(t: any) {
+    setTitle(t.title || '')
+    setTipo(t.tipo || 'preventiva')
+    setCriticidade(t.criticidade || 'verde')
+    setAssetId(t.assetId || t.tag || initialAssetId || '')
+    const techIds = (t.assignedToIds && t.assignedToIds.length > 0)
+      ? t.assignedToIds
+      : (t.assignedTo ? [t.assignedTo] : [])
+    setSelectedTechIds(techIds)
+    let formattedStart = ''
+    if (t.plannedStartDate) {
+      formattedStart = t.plannedStartDate.slice(0, 16)
+      if (!formattedStart.includes('T') && formattedStart.length === 10) {
+        formattedStart = `${formattedStart}T09:00`
+      }
+    }
+    setPlannedStartDate(formattedStart)
+    setDueDate(t.dueDate ? t.dueDate.slice(0, 10) : '')
+    setCreatedAtDate(t.createdAt ? t.createdAt.slice(0, 10) : '')
+    setStartedAt(t.startedAt ? t.startedAt.slice(0, 16) : '')
+    setCompletedAt(t.completedAt ? t.completedAt.slice(0, 16) : '')
+    setDescription(t.description || '')
+    setObservacoes(t.observacoes || t.observations || '')
+    setStatus(t.status || 'pending')
+    setLegal(Boolean(t.legal || t.inspecaoLegal))
+    setSafetyRules(t.safetyRules?.length ? t.safetyRules : [])
+    setMaterialsRequired(t.materialsRequired?.length ? t.materialsRequired : [])
+    setRequiredFRs(t.requiredFRs || [])
+    setRequiredITs(t.requiredITs || [])
+    setDependsOn(Array.isArray(t.dependsOn) ? (t.dependsOn as string[]) : [])
+    setPhotoPreview(t.photoUrl || (t.photoUrls && t.photoUrls[0]) || null)
+    setPeriodicidadeModal(t.periodicidade || 'mensal')
+  }
+
   useEffect(() => {
     if (isOpen) {
       loadSafetyRulesAction().then((rules) => {
@@ -267,36 +314,8 @@ export default function CreateTaskModal({
       }).catch(() => {})
 
       if (editingTask) {
-        setTitle(editingTask.title || '')
-        setTipo(editingTask.tipo || 'preventiva')
-        setCriticidade(editingTask.criticidade || 'verde')
-        setAssetId(editingTask.assetId || editingTask.tag || initialAssetId || '')
-        const techIds = (editingTask.assignedToIds && editingTask.assignedToIds.length > 0)
-          ? editingTask.assignedToIds
-          : (editingTask.assignedTo ? [editingTask.assignedTo] : [])
-        setSelectedTechIds(techIds)
-        let formattedStart = ''
-        if (editingTask.plannedStartDate) {
-          formattedStart = editingTask.plannedStartDate.slice(0, 16)
-          if (!formattedStart.includes('T') && formattedStart.length === 10) {
-            formattedStart = `${formattedStart}T09:00`
-          }
-        }
-        setPlannedStartDate(formattedStart)
-        setDueDate(editingTask.dueDate ? editingTask.dueDate.slice(0, 10) : '')
-        setStartedAt(editingTask.startedAt ? editingTask.startedAt.slice(0, 16) : '')
-        setCompletedAt(editingTask.completedAt ? editingTask.completedAt.slice(0, 16) : '')
-        setDescription(editingTask.description || '')
-        setObservacoes(editingTask.observacoes || editingTask.observations || '')
-        setStatus(editingTask.status || 'pending')
-        setLegal(Boolean(editingTask.legal || editingTask.inspecaoLegal))
-        setSafetyRules(editingTask.safetyRules?.length ? editingTask.safetyRules : [])
-        setMaterialsRequired(editingTask.materialsRequired?.length ? editingTask.materialsRequired : [])
-        setRequiredFRs(editingTask.requiredFRs || [])
-        setRequiredITs(editingTask.requiredITs || [])
-        setDependsOn(Array.isArray(editingTask.dependsOn) ? (editingTask.dependsOn as string[]) : [])
-        setPhotoPreview(editingTask.photoUrl || (editingTask.photoUrls && editingTask.photoUrls[0]) || null)
-        setPeriodicidadeModal(editingTask.periodicidade || 'mensal')
+        applyTaskToForm(editingTask)
+        setDuplicating(false)
       } else {
         if (initialAssetId) setAssetId(initialAssetId)
         if (initialTitle) setTitle(initialTitle)
@@ -304,6 +323,7 @@ export default function CreateTaskModal({
         if (initialTipo) setTipo(initialTipo)
         if (initialPhotoUrl) setPhotoPreview(initialPhotoUrl)
         setDependsOn([])
+        setCreatedAtDate(new Date().toISOString().slice(0, 10))
       }
     } else {
       // Reset form on close
@@ -314,6 +334,7 @@ export default function CreateTaskModal({
       setSelectedTechIds([])
       setPlannedStartDate('')
       setDueDate('')
+      setCreatedAtDate('')
       setStartedAt('')
       setCompletedAt('')
       setDescription(initialDescription || '')
@@ -329,6 +350,7 @@ export default function CreateTaskModal({
       setPhotoPreview(initialPhotoUrl || null)
       setAddToPmModal(false)
       setPeriodicidadeModal('mensal')
+      setDuplicating(false)
       setError('')
       setBusy(false)
     }
@@ -356,6 +378,12 @@ export default function CreateTaskModal({
     setPhotoFile(compressed)
     setPhotoPreview(URL.createObjectURL(compressed))
   }
+
+  // Enquanto duplicating=true, editingTask (prop) continua a apontar para o registo
+  // original — mas o formulário está a preparar uma OT NOVA a partir dele: submeter tem de
+  // CRIAR, nunca atualizar o original, e as ações de Eliminar/Duplicar não fazem sentido
+  // sobre um rascunho ainda por gravar.
+  const isEditingExisting = Boolean(editingTask) && !duplicating
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -417,11 +445,11 @@ export default function CreateTaskModal({
         formData.set('status', status)
       }
 
-      if (editingTask) {
+      if (isEditingExisting) {
         formData.set('id', editingTask.id)
       }
 
-      const submitAction = editingTask
+      const submitAction = isEditingExisting
         ? (updateAction || updateTaskAction)
         : (createAction || createTaskAction)
 
@@ -495,7 +523,30 @@ export default function CreateTaskModal({
     onClose()
   }
 
-  const canDelete = Boolean(isManager && editingTask && (deleteAction || onDelete))
+  /** "Duplicar": mantém os campos já preenchidos (vindos de editingTask) mas passa o
+   * formulário para modo de criação — ao gravar, cria um registo novo com ID novo, nunca
+   * reaproveita o ID do original (ver nota sobre IDs em createTask/data.ts). */
+  function handleDuplicateClick() {
+    if (!editingTask) return
+    setStatus('pending')
+    setDueDate('')
+    setStartedAt('')
+    setCompletedAt('')
+    setCreatedAtDate(new Date().toISOString().slice(0, 10))
+    setPhotoFile(null)
+    setDuplicating(true)
+    setError('')
+  }
+
+  function handleCancelDuplicate() {
+    if (!editingTask) return
+    applyTaskToForm(editingTask)
+    setDuplicating(false)
+    setError('')
+  }
+
+  const canDelete = Boolean(isManager && isEditingExisting && (deleteAction || onDelete))
+  const canDuplicate = Boolean(isManager && isEditingExisting && allowDuplicate)
 
   return createPortal(
     <div className="fixed inset-0 z-[200] bg-slate-50 dark:bg-slate-950 overflow-y-auto flex flex-col">
@@ -512,15 +563,28 @@ export default function CreateTaskModal({
           </button>
           <div>
             <h1 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <span>{titleText || (editingTask ? 'Editar OT' : 'Nova Ordem de Trabalho')}</span>
+              <span>
+                {titleText || (isEditingExisting ? 'Editar OT' : duplicating ? 'Duplicar OT' : 'Nova Ordem de Trabalho')}
+              </span>
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-              Ficha completa de registo de OT
+              {duplicating ? 'Rever os dados da cópia antes de gravar como OT nova' : 'Ficha completa de registo de OT'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {canDuplicate && (
+            <button
+              type="button"
+              onClick={handleDuplicateClick}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Criar uma OT nova com os mesmos dados"
+            >
+              <Copy className="h-4 w-4" />
+              <span className="hidden sm:inline">Duplicar</span>
+            </button>
+          )}
           {canDelete && (
             <button
               type="button"
@@ -726,7 +790,19 @@ export default function CreateTaskModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {isManager && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data de Lançamento</label>
+                <input
+                  type="date"
+                  name="createdAt"
+                  value={createdAtDate}
+                  onChange={(e) => setCreatedAtDate(e.target.value)}
+                  className="input"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data Planeada</label>
               <input
@@ -998,8 +1074,9 @@ export default function CreateTaskModal({
             />
           )}
 
-          {/* SECÇÃO REGISTO ERP & AUDITORIA */}
-          {editingTask && (
+          {/* SECÇÃO REGISTO ERP & AUDITORIA — escondida ao duplicar: pertence ao registo
+              original, não ao rascunho da cópia (que ainda não tem histórico próprio). */}
+          {isEditingExisting && (
             <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
@@ -1086,6 +1163,15 @@ export default function CreateTaskModal({
             )}
           </div>
 
+          {duplicating && (
+            <div className="rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 px-3 py-2.5 text-sm text-indigo-800 dark:text-indigo-300 flex items-center justify-between gap-3">
+              <span>📋 A criar uma <strong>cópia</strong> desta OT — reveja os campos e grave para a criar como uma OT nova (ID diferente do original).</span>
+              <button type="button" onClick={handleCancelDuplicate} className="text-xs font-bold underline shrink-0 cursor-pointer">
+                Cancelar cópia
+              </button>
+            </div>
+          )}
+
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">
               {error}
@@ -1108,7 +1194,7 @@ export default function CreateTaskModal({
               Cancelar
             </button>
             <button type="submit" disabled={busy} className="btn-primary flex-1 py-3 text-sm font-bold shadow-lg">
-              {busy ? 'A guardar…' : editingTask ? 'Guardar Alterações' : 'Guardar Nova OT'}
+              {busy ? 'A guardar…' : isEditingExisting ? 'Guardar Alterações' : duplicating ? 'Guardar Cópia' : 'Guardar Nova OT'}
             </button>
           </div>
         </form>
@@ -1130,7 +1216,7 @@ export default function CreateTaskModal({
             trás, e a OT não era gravada. */}
         <button type="button" onClick={() => formRef.current?.requestSubmit()}
           disabled={busy} className="btn-primary flex-1 py-2.5 text-xs font-bold shadow-md">
-          {busy ? 'A guardar…' : editingTask ? 'Guardar Alterações' : 'Guardar Nova OT'}
+          {busy ? 'A guardar…' : isEditingExisting ? 'Guardar Alterações' : duplicating ? 'Guardar Cópia' : 'Guardar Nova OT'}
         </button>
       </div>
     </div>,

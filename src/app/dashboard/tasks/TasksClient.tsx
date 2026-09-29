@@ -243,8 +243,8 @@ export default function TasksClient({
     // Vindo de um link de "Distribuição por Tipo de Manutenção" (Estatísticas): esse
     // total conta OTs de todos os estados, por isso mostrar também todos aqui — senão
     // o filtro por omissão (só ativas) faz parecer que o link não filtrou nada.
-    if (searchParams.get('tipo')) return ['pending', 'in_progress', 'done', 'cancelled']
-    return ['pending', 'in_progress'] // DEFAULT: Mostrar apenas as OTs ATIVAS ao abrir a página
+    if (searchParams.get('tipo')) return ['prazo', 'pending', 'in_progress', 'done', 'cancelled']
+    return ['prazo', 'pending', 'in_progress'] // DEFAULT: Mostrar apenas as OTs ATIVAS ao abrir a página
   })
   const [selectedTIs, setSelectedTIs] = useState<string[]>(() => {
     // Vem de links "Ver OTs" nas Estatísticas (Distribuição por Tipo de Manutenção).
@@ -506,6 +506,17 @@ export default function TasksClient({
     if (colF.obs) cnt++
     return cnt
   }, [selectedAreas, selectedTags, selectedTIs, selectedTechs, colF])
+
+  // Distinto de activeFiltersCount (que só conta os filtros do badge "Filtros") — inclui
+  // também os 3 filtros de data Excel, para o botão "Limpar filtros" só ficar desativado
+  // quando não há mesmo nada para limpar.
+  const isExcelDateFilterActive = (v: ExcelDateFilterValues) =>
+    v.periodPreset !== 'all' || Boolean(v.selectedYear) || Boolean(v.selectedMonth) || Boolean(v.dateFrom) || Boolean(v.dateTo)
+  const hasAnyListFilterActive =
+    activeFiltersCount > 0 ||
+    isExcelDateFilterActive(excelDateFilter) ||
+    isExcelDateFilterActive(excelInicioFilter) ||
+    isExcelDateFilterActive(excelFimFilter)
 
   const getTaskDisplayDateTime = (task: Task) => {
     const d = task.plannedStartDate || task.createdAt
@@ -951,7 +962,7 @@ export default function TasksClient({
     return shown.slice((currentPage - 1) * pageSize, currentPage * pageSize)
   }, [shown, currentPage, pageSize, isManager])
 
-  const statuses: TaskStatus[] = ['pending', 'in_progress', 'done', 'cancelled']
+  const statuses: TaskStatus[] = ['prazo', 'pending', 'in_progress', 'done', 'cancelled']
   const criticidades: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
   const tipos: TipoTarefa[] = ['pi', 'curativa', 'mi', 'plano', 'stp', 'preventiva', 'mp', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 
@@ -1116,9 +1127,9 @@ export default function TasksClient({
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div className="flex gap-2 flex-wrap items-center">
           <button
-            onClick={() => setSelectedStatuses(['pending', 'in_progress'])}
+            onClick={() => setSelectedStatuses(['prazo', 'pending', 'in_progress'])}
             className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
-              selectedStatuses.length === 2 && selectedStatuses.includes('pending') && selectedStatuses.includes('in_progress')
+              selectedStatuses.length === 3 && selectedStatuses.includes('prazo') && selectedStatuses.includes('pending') && selectedStatuses.includes('in_progress')
                 ? 'bg-industrial-blue text-white shadow-industrial-blue/20 ring-2 ring-industrial-blue/30'
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
             }`}
@@ -1138,9 +1149,9 @@ export default function TasksClient({
           </button>
 
           <button
-            onClick={() => setSelectedStatuses(['pending', 'in_progress', 'done', 'cancelled'])}
+            onClick={() => setSelectedStatuses(['prazo', 'pending', 'in_progress', 'done', 'cancelled'])}
             className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
-              selectedStatuses.length >= 4
+              selectedStatuses.length >= 5
                 ? 'bg-slate-800 text-white shadow-slate-800/20 ring-2 ring-slate-800/30'
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
             }`}
@@ -1196,6 +1207,29 @@ export default function TasksClient({
               </span>
             )}
             {filtersOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+
+          {/* Sempre visível (não só no painel de filtros do telemóvel nem só quando a lista
+              fica vazia) — limpa área/TAG/TI/técnico/colunas Excel de uma vez. */}
+          <button
+            type="button"
+            onClick={() => {
+              setAreaFilter('')
+              setTagFilter('')
+              setSelectedAreas([])
+              setSelectedTags([])
+              setSelectedTIs([])
+              setSelectedTechs([])
+              setColF(emptyCol)
+              setExcelDateFilter(DEFAULT_EXCEL_DATE_FILTER)
+              setExcelInicioFilter(DEFAULT_EXCEL_DATE_FILTER)
+              setExcelFimFilter(DEFAULT_EXCEL_DATE_FILTER)
+            }}
+            disabled={!hasAnyListFilterActive}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 text-red-600 hover:underline disabled:text-slate-400 disabled:no-underline disabled:cursor-not-allowed cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+            <span>Limpar filtros</span>
           </button>
 
           <input
@@ -1487,7 +1521,7 @@ export default function TasksClient({
                   <td className="p-1 relative">
                     <MultiSelectPopoverFilter
                       label="Estado"
-                      options={(['pending', 'in_progress', 'done', 'cancelled'] as TaskStatus[]).map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
+                      options={(['prazo', 'pending', 'in_progress', 'done', 'cancelled'] as TaskStatus[]).map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
                       selectedValues={selectedStatuses}
                       onChange={(vals) => setSelectedStatuses(vals as TaskStatus[])}
                       placeholder="Estado (Todos)"

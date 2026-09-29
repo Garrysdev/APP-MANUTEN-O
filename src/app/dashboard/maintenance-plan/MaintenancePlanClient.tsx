@@ -827,11 +827,15 @@ export default function MaintenancePlanClient({
           <Scale className="h-3.5 w-3.5 text-red-600" />
           <span>Só legais</span>
         </label>
-        {anyFilter && (
-          <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-red-600 hover:underline font-bold">
-            <X className="h-3.5 w-3.5" /> Limpar filtros
-          </button>
-        )}
+        {/* Sempre visível (não só quando há filtros ativos) — pedido do Rui para não ter de
+            adivinhar se algum filtro ficou esquecido ligado noutra sessão/página. */}
+        <button
+          onClick={clearFilters}
+          disabled={!anyFilter}
+          className="flex items-center gap-1 text-xs text-red-600 hover:underline font-bold disabled:text-slate-400 disabled:no-underline disabled:cursor-not-allowed"
+        >
+          <X className="h-3.5 w-3.5" /> Limpar filtros
+        </button>
         <span className="text-xs font-semibold text-slate-700 ml-auto">Filtra por coluna na linha abaixo dos títulos (estilo Excel).</span>
       </div>
 
@@ -1176,6 +1180,7 @@ export default function MaintenancePlanClient({
           createAction={createMaintenancePlanAction}
           updateAction={updateMaintenancePlanAction}
           deleteAction={deleteMaintenancePlanAction}
+          allowDuplicate={false}
           onSuccess={() => {
             closeModal()
             router.refresh()

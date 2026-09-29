@@ -992,7 +992,9 @@ export async function createTask(
 export async function updateTask(
   companyId: string,
   id: string,
-  data: Partial<Omit<Task, 'id' | 'companyId' | 'createdAt' | 'createdBy'>>
+  // createdAt (o "dia de lançamento") é editável pelo gestor — ex.: corrigir OTs
+  // lançadas com atraso ou entradas tardias de dados históricos.
+  data: Partial<Omit<Task, 'id' | 'companyId' | 'createdBy'>>
 ): Promise<void> {
   const ref = adminDb().collection('tasks').doc(id)
   const doc = await ref.get().catch(() => null)
@@ -1960,8 +1962,20 @@ export async function updateMaintenancePlan(
   const ref = adminDb().collection('maintenance_plans').doc(id)
   const doc = await ref.get()
   if (doc.exists) {
-    if (doc.data()?.companyId !== companyId) throw new Error('Plano de manutenção não encontrado')
-    await ref.update({ ...data, updatedAt: now })
+    if (doc.data()?.companyId !== companyId) {
+      // Plano com este ID pertence, segundo o Firestore, a outra empresa — normalmente
+      // isto é mesmo um pedido para o plano errado (bloquear). MAS: se este ID é um dos
+      // planos da camada de reserva desta própria empresa (scripts/import/plans.json,
+      // só usada pela Empresa UR), o documento é quase de certeza uma cópia órfã/
+      // corrompida do MESMO plano (ex.: companyId ficou por preencher ou trocado numa
+      // escrita antiga — já aconteceu com utilizadores, ver CLAUDE.md) — não com o plano
+      // de outra empresa a sério. Nesse caso específico, repara o companyId em vez de
+      // bloquear a edição de um plano que é legitimamente da empresa a editar.
+      const belongsToThisCompanyFallback = isDemoCompany(companyId) && getFallbackPlans().some((p) => p.id === id)
+      if (!belongsToThisCompanyFallback) throw new Error('Plano de manutenção não encontrado')
+      console.warn(`[updateMaintenancePlan] companyId corrompido no plano ${id} — a corrigir para ${companyId}.`)
+    }
+    await ref.update({ ...data, companyId, updatedAt: now })
   } else {
     const fallback = isDemoCompany(companyId) ? getFallbackPlans().find((p) => p.id === id) : null
     const baseObj = fallback ? { ...fallback, ...data, companyId, updatedAt: now } : { ...data, companyId, createdAt: now, updatedAt: now }
@@ -2044,7 +2058,12 @@ export async function deleteMaintenancePlan(companyId: string, id: string): Prom
   const ref = adminDb().collection('maintenance_plans').doc(id)
   const doc = await ref.get()
   if (doc.exists) {
-    if (doc.data()?.companyId !== companyId) throw new Error('Plano de manutenção não encontrado')
+    if (doc.data()?.companyId !== companyId) {
+      // Mesma reparação que updateMaintenancePlan — ver comentário lá.
+      const belongsToThisCompanyFallback = isDemoCompany(companyId) && getFallbackPlans().some((p) => p.id === id)
+      if (!belongsToThisCompanyFallback) throw new Error('Plano de manutenção não encontrado')
+      console.warn(`[deleteMaintenancePlan] companyId corrompido no plano ${id} — a eliminar mesmo assim (é da empresa atual).`)
+    }
     await ref.delete()
   } else {
     await ref.set({ id, companyId, deleted: true, updatedAt: now })

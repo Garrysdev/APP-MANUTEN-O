@@ -713,7 +713,7 @@ export default function ProjectsClient({
   const [statusPending, startStatusTransition] = useTransition()
 
   const isManager = role === 'manager'
-  const statuses: TaskStatus[] = ['pending', 'in_progress', 'done']
+  const statuses: TaskStatus[] = ['prazo', 'pending', 'in_progress', 'done']
 
   function openCreate() {
     setEditing(null)
