@@ -1276,19 +1276,31 @@ export async function createCompanyWithManager(
 }
 
 // ── INTERVENTIONS (execução / histórico) ──────────────────────────────────────
+// unstable_cache: sem isto, era uma leitura Firestore nova (coleção completa desta
+// empresa) em CADA visita ao Dashboard, uma das páginas mais visitadas da app.
+const listInterventionsCached = unstable_cache(
+  async (companyId: string): Promise<Intervention[]> => {
+    if (isQuotaExhausted()) return []
+    try {
+      const snap = await firestoreWithTimeout(
+        () => adminDb().collection('interventions').where('companyId', '==', companyId).get(),
+        null,
+        1200
+      )
+      if (!snap || !snap.docs) return []
+      return snap.docs
+        .map((d) => serialize<Intervention>(d))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    } catch (err) {
+      console.error('[listInterventions] Error:', err)
+      return []
+    }
+  },
+  ['interventions'],
+  { revalidate: 300, tags: ['interventions'] }
+)
 export const listInterventions = cache(async function(companyId: string): Promise<Intervention[]> {
-  try {
-    const snap = await adminDb()
-      .collection('interventions')
-      .where('companyId', '==', companyId)
-      .get()
-    return snap.docs
-      .map((d) => serialize<Intervention>(d))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  } catch (err) {
-    console.error('[listInterventions] Error:', err)
-    return []
-  }
+  return listInterventionsCached(companyId)
 })
 
 export const listInterventionsByTask = cache(async function(
@@ -1316,6 +1328,7 @@ export async function createIntervention(
   const ref = await adminDb()
     .collection('interventions')
     .add({ ...data, companyId, createdAt: new Date().toISOString() })
+  revalidateTag('interventions')
   return ref.id
 }
 
@@ -1325,6 +1338,7 @@ export async function deleteIntervention(companyId: string, id: string): Promise
   if (!doc.exists || doc.data()?.companyId !== companyId)
     throw new Error('Intervenção não encontrada')
   await ref.delete()
+  revalidateTag('interventions')
 }
 
 // ── MATERIALS ─────────────────────────────────────────────────────────────────
@@ -2242,29 +2256,41 @@ const DEFAULT_WAREHOUSES: Warehouse[] = [
   }
 ]
 
+// unstable_cache: as 3 escritas abaixo (create/update/delete) já chamavam
+// revalidateTag('warehouses') sem esta função alguma vez ter passado a usar
+// unstable_cache — não fazia nada. Corrigido para a cache ser real (10 min: os
+// armazéns mudam muito raramente).
+const listWarehousesCached = unstable_cache(
+  async (finalCompanyId: string): Promise<Warehouse[]> => {
+    let docs: (Warehouse & { deleted?: boolean })[] = []
+    if (!isQuotaExhausted()) {
+      try {
+        const snap = await firestoreWithTimeout(() => adminDb().collection('warehouses').get(), null, 800)
+        if (snap && snap.docs) docs = snap.docs.map((d) => serialize<Warehouse & { deleted?: boolean }>(d))
+      } catch (err) {
+        console.warn('[listWarehouses] Firestore query failed / quota exceeded, using só os por omissão:', err)
+      }
+    }
+
+    const deletedIds = new Set(docs.filter((w) => w.deleted).map((w) => w.id))
+    const map = new Map<string, Warehouse>()
+    DEFAULT_WAREHOUSES.filter((w) => !deletedIds.has(w.id)).forEach((w) => map.set(w.id, w))
+    docs.filter((w) => !w.deleted).forEach((w) => map.set(w.id, w))
+
+    const filtered = Array.from(map.values()).filter((w) => {
+      if (!w.companyId) return true
+      if (w.companyId === finalCompanyId) return true
+      if (isDemoCompany(finalCompanyId) && isDemoCompany(w.companyId)) return true
+      return false
+    })
+
+    return filtered.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'))
+  },
+  ['warehouses'],
+  { revalidate: 600, tags: ['warehouses'] }
+)
 export const listWarehouses = cache(async function(companyId: string): Promise<Warehouse[]> {
-  const finalCompanyId = companyId || DEMO_COMPANY_ID
-  let docs: (Warehouse & { deleted?: boolean })[] = []
-  try {
-    const snap = await adminDb().collection('warehouses').get()
-    docs = snap.docs.map((d) => serialize<Warehouse & { deleted?: boolean }>(d))
-  } catch (err) {
-    console.warn('[listWarehouses] Firestore query failed / quota exceeded, using só os por omissão:', err)
-  }
-
-  const deletedIds = new Set(docs.filter((w) => w.deleted).map((w) => w.id))
-  const map = new Map<string, Warehouse>()
-  DEFAULT_WAREHOUSES.filter((w) => !deletedIds.has(w.id)).forEach((w) => map.set(w.id, w))
-  docs.filter((w) => !w.deleted).forEach((w) => map.set(w.id, w))
-
-  const filtered = Array.from(map.values()).filter((w) => {
-    if (!w.companyId) return true
-    if (w.companyId === finalCompanyId) return true
-    if (isDemoCompany(finalCompanyId) && isDemoCompany(w.companyId)) return true
-    return false
-  })
-
-  return filtered.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'))
+  return listWarehousesCached(companyId || DEMO_COMPANY_ID)
 })
 
 export async function createWarehouse(
