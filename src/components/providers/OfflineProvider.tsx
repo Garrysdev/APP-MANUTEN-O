@@ -1,13 +1,13 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useTransition } from 'react'
-import { Wifi, WifiOff, RefreshCw, CheckCircle2 } from 'lucide-react'
-import { getPendingMutations, removePendingMutation, type PendingMutation } from '@/lib/offline/db'
-import { useRouter } from 'next/navigation'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { usePathname } from 'next/navigation'
 
 type OfflineContextType = {
   isOnline: boolean
   pendingCount: number
+  rejectedCount: number
   isSyncing: boolean
   syncNow: () => Promise<void>
 }
@@ -15,6 +15,7 @@ type OfflineContextType = {
 const OfflineContext = createContext<OfflineContextType>({
   isOnline: true,
   pendingCount: 0,
+  rejectedCount: 0,
   isSyncing: false,
   syncNow: async () => {},
 })
@@ -26,20 +27,18 @@ export function useOffline() {
 export function OfflineProvider({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState<boolean>(true)
   const [pendingCount, setPendingCount] = useState<number>(0)
+  const [rejectedCount, setRejectedCount] = useState<number>(0)
   const [isSyncing, setIsSyncing] = useState<boolean>(false)
   const [syncedSuccessMsg, setSyncedSuccessMsg] = useState<boolean>(false)
-  const [, startTransition] = useTransition()
-  const router = useRouter()
+  const pathname = usePathname()
+  // Espelho local só faz sentido dentro da app autenticada (não em /login, /register, etc.)
+  const withinDashboard = pathname?.startsWith('/dashboard')
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setIsOnline(navigator.onLine)
 
       // Purga automática de cache do Service Worker a cada novo deploy.
-      // A versão vem do build (commit no Vercel), NÃO de uma constante escrita à mão:
-      // estava fixa em 'v2026_09_02_v1' e por isso deixou de disparar em cada deploy —
-      // o telemóvel continuava a servir o bundle antigo em cache e a mostrar bugs já
-      // corrigidos. Um valor que tem de acompanhar a realidade não pode ser manual.
       if ('caches' in window) {
         const CURRENT_VERSION = process.env.NEXT_PUBLIC_BUILD_VERSION || 'dev'
         const lastVersion = localStorage.getItem('app_build_version')
@@ -68,63 +67,91 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
         })
       }
 
-      const handleOnline = () => {
-        setIsOnline(true)
-        triggerSync()
-      }
-      const handleOffline = () => {
-        setIsOnline(false)
-      }
-
+      const handleOnline = () => setIsOnline(true)
+      const handleOffline = () => setIsOnline(false)
       window.addEventListener('online', handleOnline)
       window.addEventListener('offline', handleOffline)
-
-      // Verificar mutações pendentes periodicamente
-      checkPending()
-      const interval = setInterval(checkPending, 10000)
-
       return () => {
         window.removeEventListener('online', handleOnline)
         window.removeEventListener('offline', handleOffline)
-        clearInterval(interval)
       }
     }
   }, [])
 
-  async function checkPending() {
-    const mutations = await getPendingMutations()
-    setPendingCount(mutations.length)
-  }
+  // Sincronização real (RxDB) — só arranca dentro da app, e só uma vez.
+  useEffect(() => {
+    if (!withinDashboard || typeof window === 'undefined') return
+    let cancelled = false
+    let unsubTasks: (() => void) | undefined
+    let unsubIv: (() => void) | undefined
 
-  async function triggerSync() {
-    const mutations = await getPendingMutations()
-    if (mutations.length === 0) return
+    ;(async () => {
+      const [{ startTechnicianReplication, resyncNow, getReplicationStates }, { getTechnicianDB }] = await Promise.all([
+        import('@/lib/offline/replication'),
+        import('@/lib/offline/rxdb'),
+      ])
+      await startTechnicianReplication()
+      if (cancelled) return
 
-    setIsSyncing(true)
-    for (const m of mutations) {
-      try {
-        // Enviar mutações pendentes para o servidor
-        await removePendingMutation(m.id)
-      } catch (err) {
-        console.error('Erro ao sincronizar mutação:', err)
+      const db = await getTechnicianDB()
+      const refreshCounts = async () => {
+        const [tasks, ivs] = await Promise.all([
+          db.tasks.find().exec(),
+          db.interventions.find().exec(),
+        ])
+        const all = [...tasks, ...ivs]
+        setPendingCount(all.filter((d) => (d as any)._localSyncState === 'pending').length)
+        setRejectedCount(all.filter((d) => (d as any)._localSyncState === 'rejected').length)
       }
+      await refreshCounts()
+      const sub1 = db.tasks.$.subscribe(refreshCounts)
+      const sub2 = db.interventions.$.subscribe(refreshCounts)
+      unsubTasks = () => sub1.unsubscribe()
+      unsubIv = () => sub2.unsubscribe()
+
+      const states = getReplicationStates()
+      states.forEach((s) => {
+        s.active$.subscribe((active: boolean) => setIsSyncing(active))
+      })
+
+      const handleReconnect = () => { resyncNow().catch(() => {}) }
+      window.addEventListener('online', handleReconnect)
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') handleReconnect()
+      })
+    })().catch((err) => console.error('[OfflineProvider] Erro a iniciar sincronização:', err))
+
+    return () => {
+      cancelled = true
+      unsubTasks?.()
+      unsubIv?.()
     }
-    await checkPending()
-    setIsSyncing(false)
-    setSyncedSuccessMsg(true)
-    setTimeout(() => setSyncedSuccessMsg(false), 3000)
-    startTransition(() => {
-      router.refresh()
-    })
+  }, [withinDashboard])
+
+  async function syncNow() {
+    if (!withinDashboard) return
+    setIsSyncing(true)
+    try {
+      const { resyncNow } = await import('@/lib/offline/replication')
+      await resyncNow()
+      if (pendingCount === 0) {
+        setSyncedSuccessMsg(true)
+        setTimeout(() => setSyncedSuccessMsg(false), 3000)
+      }
+    } catch (err) {
+      console.error('[OfflineProvider] Erro ao sincronizar:', err)
+    } finally {
+      setIsSyncing(false)
+    }
   }
 
   return (
-    <OfflineContext.Provider value={{ isOnline, pendingCount, isSyncing, syncNow: triggerSync }}>
+    <OfflineContext.Provider value={{ isOnline, pendingCount, rejectedCount, isSyncing, syncNow }}>
       {children}
 
       {/* Barra Flutuante Discreta de Estado PWA Offline / Sincronização */}
-      {(!isOnline || pendingCount > 0 || isSyncing || syncedSuccessMsg) && (
-        <div className="fixed bottom-4 right-4 z-[9999] transition-all">
+      {(!isOnline || pendingCount > 0 || rejectedCount > 0 || isSyncing || syncedSuccessMsg) && (
+        <div className="fixed bottom-4 right-4 z-[9999] flex flex-col items-end gap-1.5 transition-all">
           {!isOnline && (
             <div className="bg-amber-600 text-white px-3.5 py-2 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-bold border border-amber-500 animate-pulse">
               <WifiOff className="h-4 w-4 shrink-0" />
@@ -132,16 +159,23 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
+          {rejectedCount > 0 && (
+            <div className="bg-red-700 text-white px-3.5 py-2 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-bold border border-red-600">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>{rejectedCount} alteração(ões) offline recusada(s) — revê a OT</span>
+            </div>
+          )}
+
           {isOnline && isSyncing && (
             <div className="bg-industrial-blue text-white px-3.5 py-2 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-bold border border-blue-600">
               <RefreshCw className="h-4 w-4 shrink-0 animate-spin text-safety-orange" />
-              <span>Sincronizar com Nuvem...</span>
+              <span>A sincronizar com a nuvem…</span>
             </div>
           )}
 
           {isOnline && !isSyncing && pendingCount > 0 && (
             <button
-              onClick={triggerSync}
+              onClick={syncNow}
               className="bg-[#1B4F72] hover:bg-[#154360] text-white px-3.5 py-2 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-bold border border-blue-400 transition-all cursor-pointer"
             >
               <RefreshCw className="h-4 w-4 shrink-0 text-safety-orange" />
@@ -152,7 +186,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
           {syncedSuccessMsg && (
             <div className="bg-emerald-600 text-white px-3.5 py-2 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-bold border border-emerald-500">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-200" />
-              <span>Tudo Sincronizado com Sucesso!</span>
+              <span>Tudo sincronizado com sucesso!</span>
             </div>
           )}
         </div>

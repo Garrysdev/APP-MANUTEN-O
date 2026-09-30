@@ -3,19 +3,16 @@
 import { revalidatePath } from 'next/cache'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import {
-  createIntervention,
   deleteIntervention,
   updateTask,
   createMaterial,
   deleteMaterial,
-  countInterventionsThisMonth,
   decrementStockQuantity,
-  calculateTaskCost,
   getTask,
 } from '@/lib/firebase/data'
-import { LIMITS } from '@/lib/plans'
-import type { ChecklistItem, TaskStatus, PlanName } from '@/types/models'
+import type { ChecklistItem, TaskStatus } from '@/types/models'
 import { updateTaskStatusAction } from '../actions'
+import { createInterventionCore } from '@/lib/offline/technician-actions'
 
 export type InterventionFormState = { error?: string; ok?: boolean }
 
@@ -108,15 +105,8 @@ export async function createInterventionAction(
     checklist = []
   }
 
-  const plan = (profile.company?.plan ?? 'free') as PlanName
-  const monthCount = await countInterventionsThisMonth(profile.companyId)
-  const { interventionsPerMonth } = LIMITS[plan]
-  if (monthCount >= interventionsPerMonth) {
-    return {
-      error: `Limite de ${interventionsPerMonth} intervenção(ões) por mês atingido no plano ${plan}.`,
-    }
-  }
-
+  // Limite de intervenções/mês e autorização são verificados dentro de
+  // createInterventionCore (partilhado com a rota de sincronização offline).
   const technicianId = String(formData.get('technicianId') ?? '').trim() || profile.id
   const startedAt = String(formData.get('startedAt') ?? '').trim() || null
   const endedAt = String(formData.get('endedAt') ?? '').trim() || null
@@ -153,17 +143,19 @@ export async function createInterventionAction(
   } catch { inlineMaterials = [] }
 
   try {
-    const interventionId = await createIntervention(profile.companyId, {
+    // Núcleo partilhado com a rota de sincronização offline (Fase 1: sem materiais
+    // inline aqui dentro — ver src/lib/offline/technician-actions.ts).
+    const coreResult = await createInterventionCore({
+      companyId: profile.companyId,
+      profile,
       taskId,
-      technicianId,
-      startedAt,
-      endedAt,
-      observations,
-      checklist,
-      photoUrls,
+      data: { technicianId, startedAt, endedAt, observations, checklist, photoUrls, newStatus },
     })
+    if (!coreResult.ok) return { error: coreResult.error }
+    const interventionId = coreResult.interventionId
 
-    // Cria materiais inline e desconta do stock quando aplicável
+    // Materiais inline (Fase 2 na sincronização offline — aqui, no caminho online normal,
+    // continuam a funcionar como sempre).
     if (inlineMaterials.length > 0) {
       await Promise.all(
         inlineMaterials.map(async (m) => {
@@ -180,18 +172,6 @@ export async function createInterventionAction(
           }
         })
       )
-    }
-
-    // Atualiza o estado da tarefa se foi pedido (ex.: marcar concluída)
-    if (newStatus) {
-      await updateTask(profile.companyId, taskId, { status: newStatus })
-      if (newStatus === 'done') {
-        await calculateTaskCost(profile.companyId, taskId)
-      }
-    } else {
-      // Se apenas adicionou material/horas e já estava done, atualizamos na mesma
-      const t = await getTask(profile.companyId, taskId)
-      if (t?.status === 'done') await calculateTaskCost(profile.companyId, taskId)
     }
 
     revalidatePath(`/dashboard/tasks/${taskId}`)

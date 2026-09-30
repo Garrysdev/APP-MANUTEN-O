@@ -1323,8 +1323,24 @@ export const listInterventionsByTask = cache(async function(
 
 export async function createIntervention(
   companyId: string,
-  data: Omit<Intervention, 'id' | 'companyId' | 'createdAt'>
+  data: Omit<Intervention, 'id' | 'companyId' | 'createdAt'>,
+  // ID opcional (gerado pelo cliente, ex.: um técnico offline) para tornar a criação
+  // idempotente — uma nova tentativa da replicação offline com o mesmo ID nunca duplica
+  // o registo. Sem ID, mantém-se o comportamento normal (ID automático do Firestore).
+  id?: string
 ): Promise<string> {
+  if (id) {
+    const ref = adminDb().collection('interventions').doc(id)
+    const existing = await ref.get()
+    if (existing.exists) {
+      // Já foi aplicada por uma tentativa anterior — não repetir a escrita nem mexer
+      // no createdAt original.
+      return id
+    }
+    await ref.set({ ...data, companyId, createdAt: new Date().toISOString() })
+    revalidateTag('interventions')
+    return id
+  }
   const ref = await adminDb()
     .collection('interventions')
     .add({ ...data, companyId, createdAt: new Date().toISOString() })

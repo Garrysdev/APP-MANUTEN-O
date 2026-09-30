@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { FileText, CheckCircle2, AlertCircle, Eye, Edit3, X, Check, Lock, ShieldCheck, ClipboardList } from 'lucide-react'
 import { updateTaskFRsAndITsAction } from '@/app/dashboard/tasks/actions'
 import { useRouter } from 'next/navigation'
+import { useOfflineAction } from '@/hooks/useOfflineAction'
 
 export const AVAILABLE_FRS = [
   {
@@ -237,6 +238,7 @@ export function TaskDocRequirementsTechnician({
   onUpdate?: () => void
 }) {
   const router = useRouter()
+  const offline = useOfflineAction()
   const [activeFRPopup, setActiveFRPopup] = useState<any | null>(null)
   const [activeITPopup, setActiveITPopup] = useState<any | null>(null)
   const [formData, setFormData] = useState<Record<string, any>>({})
@@ -271,7 +273,7 @@ export function TaskDocRequirementsTechnician({
           _savedAt: new Date().toISOString()
         }
       }
-      await updateTaskFRsAndITsAction(taskId, { completedFRs: nextCompleted })
+      await offline.updateFRsAndITs(taskId, { completedFRs: nextCompleted }, () => updateTaskFRsAndITsAction(taskId, { completedFRs: nextCompleted }))
       setActiveFRPopup(null)
       onUpdate?.()
       router.refresh()
@@ -286,7 +288,7 @@ export function TaskDocRequirementsTechnician({
     setSaving(true)
     try {
       const nextAck = Array.from(new Set([...(acknowledgedITs || []), itId]))
-      await updateTaskFRsAndITsAction(taskId, { acknowledgedITs: nextAck })
+      await offline.updateFRsAndITs(taskId, { acknowledgedITs: nextAck }, () => updateTaskFRsAndITsAction(taskId, { acknowledgedITs: nextAck }))
       setActiveITPopup(null)
       onUpdate?.()
       router.refresh()

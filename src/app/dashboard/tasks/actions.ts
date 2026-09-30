@@ -3,13 +3,18 @@
 import { revalidatePath } from 'next/cache'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import {
-  createTask, updateTask, deleteTask, getTask,
+  createTask, updateTask, deleteTask,
   listPlanTaskRefs, type PlanTaskRef,
   listStockItems, listAssetRefs, listSafetyRules,
-  calculateTaskCost, listCompletedTasksPaged,
+  listCompletedTasksPaged,
 } from '@/lib/firebase/data'
 import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, Executor } from '@/types/models'
 import { TIPOS_TAREFA } from '@/types/models'
+import {
+  changeTaskStatus,
+  updateTaskFRsAndITs,
+  updateTaskExecutionDetails,
+} from '@/lib/offline/technician-actions'
 
 export type TaskFormState = { error?: string; ok?: boolean }
 
@@ -157,7 +162,8 @@ export async function updateTaskFRsAndITsAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   try {
-    await updateTask(profile.companyId, taskId, data)
+    const result = await updateTaskFRsAndITs({ companyId: profile.companyId, taskId, data })
+    if (!result.ok) return { error: result.error }
     revalidatePath('/dashboard/tasks')
     revalidatePath(`/dashboard/tasks/${taskId}`)
     revalidatePath('/dashboard')
@@ -275,7 +281,11 @@ export async function deleteTaskAction(id: string): Promise<TaskFormState> {
   }
 }
 
-/** Permite alterar estado da OT (pending → in_progress → done) com revalidação imediata. */
+/**
+ * Permite alterar estado da OT (pending → in_progress → done) com revalidação imediata.
+ * Núcleo partilhado com a rota de sincronização offline — ver
+ * src/lib/offline/technician-actions.ts (changeTaskStatus).
+ */
 export async function updateTaskStatusAction(
   taskId: string,
   newStatus: TaskStatus
@@ -283,46 +293,9 @@ export async function updateTaskStatusAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
 
-  if (!STATUSES.includes(newStatus)) {
-    return { error: 'Estado inválido.' }
-  }
-
-  const task = await getTask(profile.companyId, taskId)
-  if (!task) return { error: 'Tarefa não encontrada.' }
-
-  if (profile.role === 'technician') {
-    const pId = profile.id.toLowerCase()
-    const pAbbr = (profile.abbreviation || '').toLowerCase()
-    const pName = (profile.name || '').toLowerCase()
-    const isRG = profile.email?.toLowerCase().trim() === 'garrido.rui@gmail.com'
-
-    const assignedIds = (task.assignedToIds || []).map((i) => i.toLowerCase())
-    const assignedStr = (task.assignedTo || '').toLowerCase()
-
-    const isAssigned =
-      !task.assignedTo ||
-      task.createdBy === profile.id ||
-      task.assignedTo === profile.id ||
-      task.assignedTo === profile.abbreviation ||
-      assignedIds.includes(pId) ||
-      (pAbbr && assignedIds.includes(pAbbr)) ||
-      (pAbbr && assignedStr.includes(pAbbr)) ||
-      (pName && assignedStr.includes(pName)) ||
-      (pId && assignedStr.includes(pId)) ||
-      isRG
-
-    if (!isAssigned) return { error: 'Sem permissão para alterar o estado desta tarefa.' }
-  }
-
   try {
-    const now = new Date().toISOString()
-    const extra: { startedAt?: string; completedAt?: string } = {}
-    if ((newStatus === 'in_progress' || newStatus === 'done') && !task.startedAt) extra.startedAt = now
-    if (newStatus === 'done' && !task.completedAt) extra.completedAt = now
-    await updateTask(profile.companyId, taskId, { status: newStatus, ...extra })
-    if (newStatus === 'done') {
-      await calculateTaskCost(profile.companyId, taskId)
-    }
+    const result = await changeTaskStatus({ companyId: profile.companyId, profile, taskId, newStatus })
+    if (!result.ok) return { error: result.error }
     revalidatePath('/dashboard/tasks')
     revalidatePath(`/dashboard/tasks/${taskId}`)
     revalidatePath('/dashboard/calendar')
@@ -359,29 +332,8 @@ export async function updateTaskExecutionDetailsAction(
   if (!profile) return { error: 'Sessão expirada.' }
 
   try {
-    const task = await getTask(profile.companyId, taskId)
-    if (!task) return { error: 'Tarefa não encontrada.' }
-
-    const updateData: any = {}
-    if (data.observacoes !== undefined) {
-      updateData.observacoes = data.observacoes
-      updateData.description = data.observacoes || task.description
-    }
-    if (data.photoUrl) {
-      updateData.photoUrl = data.photoUrl
-      const existingPhotos = Array.isArray((task as any).photos) ? (task as any).photos : []
-      if (!existingPhotos.includes(data.photoUrl)) {
-        updateData.photos = [...existingPhotos, data.photoUrl]
-      }
-    }
-    if (data.safetyRulesChecked !== undefined) {
-      updateData.safetyRulesChecked = data.safetyRulesChecked
-    }
-    if (data.frsChecked !== undefined) {
-      updateData.frsChecked = data.frsChecked
-    }
-
-    await updateTask(profile.companyId, taskId, updateData)
+    const result = await updateTaskExecutionDetails({ companyId: profile.companyId, taskId, data })
+    if (!result.ok) return { error: result.error }
     revalidatePath('/dashboard/tasks')
     revalidatePath(`/dashboard/tasks/${taskId}`)
     return { ok: true }

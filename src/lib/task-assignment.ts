@@ -81,6 +81,38 @@ export function isTaskAssignedToUser(t: any, profile: any): boolean {
 }
 
 /**
+ * Verificação de permissão para um TÉCNICO agir sobre uma OT (mudar estado, registar
+ * intervenção, etc.) — mais permissiva que isTaskAssignedToUser() acima: também deixa
+ * passar o criador da OT e uma OT sem ninguém atribuído. Extraído de
+ * updateTaskStatusAction (era só inline lá) para ser reutilizado também pela rota de
+ * sincronização offline (src/app/api/sync/technician/route.ts) — as duas têm de aplicar
+ * exatamente a mesma regra, nunca reimplementada em paralelo.
+ */
+export function isTechnicianAllowedOnTask(profile: any, task: any): boolean {
+  if (!profile || !task) return false
+  const pId = String(profile.id || '').toLowerCase()
+  const pAbbr = String(profile.abbreviation || '').toLowerCase()
+  const pName = String(profile.name || '').toLowerCase()
+  const isRG = String(profile.email || '').toLowerCase().trim() === 'garrido.rui@gmail.com'
+
+  const assignedIds = (task.assignedToIds || []).map((i: string) => String(i).toLowerCase())
+  const assignedStr = String(task.assignedTo || '').toLowerCase()
+
+  return Boolean(
+    !task.assignedTo ||
+    task.createdBy === profile.id ||
+    task.assignedTo === profile.id ||
+    task.assignedTo === profile.abbreviation ||
+    assignedIds.includes(pId) ||
+    (pAbbr && assignedIds.includes(pAbbr)) ||
+    (pAbbr && assignedStr.includes(pAbbr)) ||
+    (pName && assignedStr.includes(pName)) ||
+    (pId && assignedStr.includes(pId)) ||
+    isRG
+  )
+}
+
+/**
  * Filtro por técnico para a UI (dropdown multi-seleção e pesquisa de coluna).
  */
 export function matchesTechFilter(t: any, tecFilterRaw: string, users: any[]): boolean {

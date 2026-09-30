@@ -11,6 +11,7 @@ import type { Intervention, ChecklistItem, TaskStatus, Material } from '@/types/
 import { formatDateTime, formatDuration } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
 import { TaskDocRequirementsTechnician } from '@/components/ui/TaskDocRequirements'
+import { useOfflineAction } from '@/hooks/useOfflineAction'
 import {
   createInterventionAction,
   deleteInterventionAction,
@@ -91,6 +92,7 @@ export default function TaskDetailClient({
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const offline = useOfflineAction()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -271,9 +273,25 @@ export default function TaskDetailClient({
       }
     }
 
-    const result = await createInterventionAction({}, formData)
+    const checklist = items.filter((i) => i.label.trim())
+    const result = await offline.createIntervention(
+      taskId,
+      {
+        technicianId: String(formData.get('technicianId') ?? '') || null,
+        startedAt: String(formData.get('startedAt') ?? '') || null,
+        endedAt: String(formData.get('endedAt') ?? '') || null,
+        observations: String(formData.get('observations') ?? '') || null,
+        checklist,
+      },
+      () => createInterventionAction({}, formData)
+    )
     setBusy(false)
     if (result.error) setError(result.error)
+    else if (result.offline && validMats.length > 0) {
+      setError('Intervenção guardada offline. Os materiais indicados não foram guardados — sem rede, terás de os adicionar depois de reconectar.')
+      resetForm()
+      router.refresh()
+    }
     else if (photosFailed) {
       setError('Intervenção registada, mas as fotos não foram carregadas (serviço de imagens indisponível). Tenta adicioná-las mais tarde.')
       resetForm()
@@ -307,7 +325,7 @@ export default function TaskDetailClient({
   async function handleStart() {
     setStartBusy(true)
     setStartError('')
-    const result = await startTaskAction(taskId)
+    const result = await offline.changeStatus(taskId, 'in_progress', () => startTaskAction(taskId))
     setStartBusy(false)
     if (result.error) setStartError(result.error)
     else router.refresh()
@@ -318,7 +336,9 @@ export default function TaskDetailClient({
     if (!confirm('Tem a certeza que pretende Fechar / Concluir esta Ordem de Trabalho?')) return
     setCloseBusy(true)
     setStartError('')
-    const result = await closeTaskAction(taskId)
+    // Offline: fecha só com o estado (sem notas de fecho/email — precisam de rede e não
+    // fazem sentido sem ligação; ficam disponíveis assim que o técnico reconectar).
+    const result = await offline.changeStatus(taskId, 'done', () => closeTaskAction(taskId))
     setCloseBusy(false)
     if (result.error) setStartError(result.error)
     else router.refresh()
@@ -329,7 +349,7 @@ export default function TaskDetailClient({
     if (!confirm('Deseja reabrir esta Ordem de Trabalho?')) return
     setReopenBusy(true)
     setStartError('')
-    const result = await reopenTaskAction(taskId)
+    const result = await offline.changeStatus(taskId, 'pending', () => reopenTaskAction(taskId))
     setReopenBusy(false)
     if (result.error) setStartError(result.error)
     else router.refresh()
