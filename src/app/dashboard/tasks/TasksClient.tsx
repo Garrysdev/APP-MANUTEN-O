@@ -715,6 +715,13 @@ export default function TasksClient({
       }
       return []
     }
+    // Só a partir da ficha de Equipa/Utilizadores (users), nunca a partir do texto bruto
+    // de assignedTo nas OTs. Havia aqui um 2º passo que acrescentava ao filtro qualquer
+    // valor de assignedTo que não batesse certo com nenhum utilizador — com o histórico
+    // importado do Excel (códigos como "45029", "ALEX+MA", "Aroeste"...) isso enchia o
+    // filtro com ~200 "técnicos" que nunca foram contas reais, antigas ou não. Esses
+    // valores continuam a aparecer normalmente nas OTs antigas (não mexe nos dados) — só
+    // deixam de poluir o filtro, que agora mostra só a equipa atual e ativa.
     const map = new Map<string, string>()
     users.forEach((u) => {
       if ((u as any).active !== false && !isManagerUser(u)) {
@@ -726,24 +733,8 @@ export default function TasksClient({
         }
       }
     })
-    safeTasks.forEach((t) => {
-      if (t.assignedTo) {
-        const raw = String(t.assignedTo).trim()
-        if (raw === 'RG' || raw === 'nLqzaMwMu1OR4CKZzatjTlNBWt82' || raw === 'CUodZKziOwo128GLK66i') return
-        const u = users.find((usr) => usr.id === raw || usr.abbreviation === raw)
-        if (u) {
-          if ((u as any).active !== false && !isManagerUser(u)) {
-            const val = u.abbreviation || u.id
-            const label = u.abbreviation ? `${u.abbreviation} - ${u.name}` : u.name
-            map.set(val, label)
-          }
-        } else if (!raw.toLowerCase().includes('garrido') && !raw.toLowerCase().includes('admin')) {
-          map.set(t.assignedTo, (t as any).assignedToText || t.assignedTo)
-        }
-      }
-    })
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], 'pt'))
-  }, [safeTasks, users, isManager, userId])
+  }, [users, isManager, userId])
 
   const searchIndex = useMemo(() => {
     const assetSearchMap = new Map(assets.map((a) => [a.id, `${a.name || ''} ${(a as any).tag || ''} ${(a as any).area || ''}`.toLowerCase()]))
