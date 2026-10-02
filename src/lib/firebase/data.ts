@@ -3036,7 +3036,12 @@ export async function createInternalMessage(
   // Disparar notificações em background para não bloquear a resposta do servidor nem tornar o envio lento
   void (async () => {
     try {
-      const companyUsers = getFallbackUsers()
+      // listUsers() (Firestore real + reserva), não getFallbackUsers() sozinho — essa lista
+      // fixa no código só tem ~10 contas históricas; qualquer técnico atual que não esteja
+      // nela (ex.: adicionado depois pela página Equipa) nunca recebia a notificação da
+      // mensagem, mesmo a mensagem em si chegando bem (o envio da mensagem não depende
+      // disto, só a notificação/alerta).
+      const companyUsers = await listUsers(finalCompanyId)
 
       const senderUser = companyUsers.find((u) => u.id === senderId || (u.email && senderId.includes(u.email)))
       const senderEmail = (senderUser?.email || '').toLowerCase().trim()
