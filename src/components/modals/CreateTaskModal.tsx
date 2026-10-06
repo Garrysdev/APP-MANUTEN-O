@@ -414,7 +414,16 @@ export default function CreateTaskModal({
           formData.set('photoUrl', url)
         } catch (err) {
           console.error('Erro no upload de foto da OT:', err)
+          // Upload falhou: mantém a foto que já existia em vez de a apagar.
+          formData.set('photoUrl', editingTask?.photoUrl ?? '')
         }
+      } else {
+        // Sem ficheiro novo escolhido: submete sempre o que está em photoPreview (a foto já
+        // existente no registo em edição, OU vinda de initialPhotoUrl — ex. partilha de foto
+        // do telemóvel). Sem isto o campo "photoUrl" não existia no FormData e o servidor
+        // apagava a foto em QUALQUER gravação que não envolvesse escolher uma foto nova
+        // (parseTask trata campo ausente como null).
+        formData.set('photoUrl', photoPreview || '')
       }
 
       // Dedução automática de executor a partir dos técnicos atribuídos (Tarefa 1)

@@ -289,6 +289,7 @@ export default function TasksClient({
   const [tipo, setTipo] = useState<TipoTarefa>('preventiva')
   const [criticidade, setCriticidade] = useState<TaskCriticidade>('verde')
   const [assetId, setAssetId] = useState('')
+  const [sharedPhotoUrl, setSharedPhotoUrl] = useState('')
   const [maintenancePlanId, setMaintenancePlanId] = useState('')
   const [novaPeriodicidade, setNovaPeriodicidade] = useState<Periodicidade | ''>('')
   const [selectedTechIds, setSelectedTechIds] = useState<string[]>([])
@@ -302,6 +303,12 @@ export default function TasksClient({
       const pAssetId = searchParams.get('assetId') || searchParams.get('asset') || searchParams.get('tag') || searchParams.get('qrTag') || searchParams.get('id')
       if (pAssetId) {
         setAssetId(pAssetId)
+      }
+      // Partilha de foto do telemóvel (share-target da PWA): a foto já foi carregada para o
+      // Cloudinary pela rota /api/share-target antes do redirect para aqui.
+      const pSharedPhotoUrl = searchParams.get('sharedPhotoUrl')
+      if (pSharedPhotoUrl) {
+        setSharedPhotoUrl(pSharedPhotoUrl)
       }
     }
   }, [searchParams])
@@ -394,6 +401,7 @@ export default function TasksClient({
     setEditing(null)
     setCreating(false)
     setError('')
+    setSharedPhotoUrl('')
   }
 
   function openEdit(t: Task) {
@@ -885,35 +893,15 @@ export default function TasksClient({
     return isNaN(d.getTime()) ? 0 : d.getTime()
   }
 
-  // Prioridade de estado para ordenação por defeito:
-  // Em Curso (1) -> Pendente (2) -> Concluída (3) -> Cancelada (4)
-  const STATUS_DEFAULT_ORDER: Record<string, number> = {
-    in_progress: 1,
-    pending: 2,
-    done: 3,
-    cancelled: 4,
-  }
-
-  // Ordenação por defeito: Em Curso no topo, depois Pendentes, depois restantes.
-  // Dentro de cada grupo, mantém a ordenação por data decrescente (mais recente primeiro).
+  // Ordenação por defeito: data de abertura (createdAt) decrescente — mais recente primeiro.
+  // Igual para gestor e técnico.
   const defaultSortedFiltered = useMemo(() => {
     return [...filtered].sort((a, b) => {
-      if (!isManager) {
-        // Técnico vê as que lhe foram atribuídas estritamente ordenadas por data (mais recente primeiro)
-        const dateA = parseDateToTs(a.plannedStartDate || a.createdAt || (a as any).completedAt)
-        const dateB = parseDateToTs(b.plannedStartDate || b.createdAt || (b as any).completedAt)
-        return dateB - dateA
-      }
-      const orderA = STATUS_DEFAULT_ORDER[a.status] ?? 99
-      const orderB = STATUS_DEFAULT_ORDER[b.status] ?? 99
-      if (orderA !== orderB) {
-        return orderA - orderB
-      }
       const dateA = parseDateToTs(a.createdAt || a.plannedStartDate || (a as any).completedAt)
       const dateB = parseDateToTs(b.createdAt || b.plannedStartDate || (b as any).completedAt)
       return dateB - dateA
     })
-  }, [filtered, isManager])
+  }, [filtered])
 
   const parseTaskIdNum = (idStr: any): number => {
     const s = String(idStr || '')
@@ -1680,6 +1668,7 @@ export default function TasksClient({
         editingTask={editing}
         onClose={closeModal}
         initialAssetId={assetId}
+        initialPhotoUrl={sharedPhotoUrl}
         assets={assets}
         users={users}
         stockRefs={stockRefs}
