@@ -61,6 +61,7 @@ const managerNavGroups: NavGroup[] = [
     items: [
       { href: '/dashboard/calendar',           key: 'calendar',        icon: Calendar,       feature: 'calendar' },
       { href: '/dashboard/maintenance-plan',   key: 'maintenancePlan', icon: Wrench,         feature: 'maintenance-plan' },
+      { href: '/dashboard/projects',           key: 'projects',        icon: FolderKanban,   feature: 'projects' },
     ]
   },
   {

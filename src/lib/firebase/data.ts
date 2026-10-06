@@ -846,9 +846,15 @@ export async function notifyAssignedTechnicians(
   createdBy?: string | null
 ) {
   try {
+    // Fuga entre empresas encontrada em auditoria (Out 2026): lia TODOS os utilizadores de
+    // TODAS as empresas sem filtrar por companyId — se duas empresas tivessem um técnico com
+    // a mesma abreviatura (ex.: "LM"), o de uma empresa recebia notificação push (com o
+    // título da OT incluído) de uma OT de outra empresa, só por coincidência de iniciais.
     const allUsersSnap = await adminDb().collection('users').get().catch(() => null)
     if (!allUsersSnap) return
-    const companyUsers = allUsersSnap.docs.map((d) => ({ ...serialize<User>(d), id: d.id }))
+    const companyUsers = allUsersSnap.docs
+      .map((d) => ({ ...serialize<User>(d), id: d.id }))
+      .filter((u) => u.companyId === companyId)
 
     const targetUserIds = new Set<string>()
 
