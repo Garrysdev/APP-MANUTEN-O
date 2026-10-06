@@ -112,23 +112,6 @@ const plans = [
     href: '/register?plan=business',
     popular: false,
   },
-  {
-    name: 'Enterprise',
-    price: 'Sob Consulta',
-    period: '',
-    desc: 'Para grandes grupos e multinacionais',
-    plan: null,
-    features: [
-      'Infraestrutura & Servidor Dedicado',
-      'Integração SAP / ERP nativa',
-      'SLA Garantido 99.9%',
-      'Formação Presencial da Equipa',
-      'Account Manager Dedicado',
-    ],
-    cta: 'Falar com Especialista',
-    href: 'mailto:info@rgmaintenance.pt',
-    popular: false,
-  },
 ]
 
 const metrics = [
@@ -460,7 +443,7 @@ export default async function LandingPage() {
             </Link>
           </div>
           <p className="mt-6 text-sm text-[#AED6F1] font-medium opacity-80">
-            Acesso completo durante 14 dias. Não é necessário cartão de crédito.
+            Plano Free disponível sem limite de tempo. Não é necessário cartão de crédito.
           </p>
         </div>
       </section>
