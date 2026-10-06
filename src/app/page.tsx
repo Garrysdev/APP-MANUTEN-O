@@ -456,7 +456,8 @@ export default async function LandingPage() {
             <div className="flex gap-8 text-sm font-semibold text-slate-500">
               <a href="#" className="hover:text-[#1B4F72] transition-colors">Funcionalidades</a>
               <a href="#" className="hover:text-[#1B4F72] transition-colors">Preços</a>
-              <a href="#" className="hover:text-[#1B4F72] transition-colors">Termos & Privacidade</a>
+              <Link href="/legal/termos" className="hover:text-[#1B4F72] transition-colors">Termos</Link>
+              <Link href="/legal/privacidade" className="hover:text-[#1B4F72] transition-colors">Privacidade</Link>
               <a href="mailto:info@rgmaintenance.pt" className="hover:text-[#1B4F72] transition-colors">Contacto</a>
             </div>
           </div>
