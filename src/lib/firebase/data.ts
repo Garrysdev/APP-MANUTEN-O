@@ -1153,7 +1153,10 @@ const listUsersCached = unstable_cache(
 
       const dbDocs = allDbDocs.filter((u) => {
         if (isCorruptOrMock(u)) return false
-        if (!u.companyId) return true
+        // Utilizador legado sem companyId (anterior ao multi-tenant) pertence
+        // historicamente só à Empresa UR — sem isto, aparecia na lista de técnicos
+        // de QUALQUER empresa nova (fuga cross-tenant).
+        if (!u.companyId) return isDemoCompany(finalCompanyId)
         if (u.companyId === finalCompanyId) return true
         if (isDemoCompany(finalCompanyId) && isDemoCompany(u.companyId)) return true
         return false
@@ -2839,7 +2842,13 @@ export const listInternalMessages = cache(async function(
     for (const m of candidates) {
       if (m.id && !seen.has(m.id) && !deletedIds.has(m.id)) {
         seen.add(m.id)
-        if (!m.companyId || m.companyId === companyId || companyId === DEMO_COMPANY_ID || isDemoCompany(companyId) || isDemoCompany(m.companyId)) {
+        // Mensagem com companyId: só é visível para essa mesma empresa (nunca para outra,
+        // mesmo que uma das duas seja a Empresa UR/demo). Mensagem legada sem companyId:
+        // pertence historicamente à Empresa UR, só visível para ela — não para empresas
+        // novas. Antes disto, `isDemoCompany(m.companyId)` mostrava TODAS as mensagens
+        // reais da Empresa UR a qualquer empresa cliente nova (fuga cross-tenant).
+        const belongsToViewer = m.companyId ? m.companyId === companyId : isDemoCompany(companyId)
+        if (belongsToViewer) {
           allDocs.push(m)
         }
       }
