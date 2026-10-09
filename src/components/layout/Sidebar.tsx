@@ -50,18 +50,18 @@ const managerNavGroups: NavGroup[] = [
       { href: '/dashboard/tasks',              key: 'tasks',           icon: ClipboardList },
       { href: '/dashboard/assets',             key: 'assets',          icon: Package,        feature: 'assets' },
       { href: '/dashboard/stocks',             key: 'stocks',          icon: Boxes,          feature: 'stocks' },
-      { href: '/dashboard/warehouses',         key: 'warehouses',      icon: Warehouse,      feature: 'stocks' },
-      { href: '/dashboard/safety-rules',       key: 'safetyRules',     icon: ShieldCheck },
-      { href: '/dashboard/messages',           key: 'messages',        icon: MessageSquare },
       { href: '/dashboard/users',              key: 'users',           icon: Users,          feature: 'users' },
     ]
   },
   {
     groupName: 'Módulos Starter',
     items: [
-      { href: '/dashboard/calendar',           key: 'calendar',        icon: Calendar,       feature: 'calendar' },
       { href: '/dashboard/maintenance-plan',   key: 'maintenancePlan', icon: Wrench,         feature: 'maintenance-plan' },
+      { href: '/dashboard/calendar',           key: 'calendar',        icon: Calendar,       feature: 'calendar' },
+      { href: '/dashboard/warehouses',         key: 'warehouses',      icon: Warehouse,      feature: 'warehouses' },
+      { href: '/dashboard/safety-rules',       key: 'safetyRules',     icon: ShieldCheck,    feature: 'safetyRules' },
       { href: '/dashboard/projects',           key: 'projects',        icon: FolderKanban,   feature: 'projects' },
+      { href: '/dashboard/messages',           key: 'messages',        icon: MessageSquare,  feature: 'messages' },
     ]
   },
   {
