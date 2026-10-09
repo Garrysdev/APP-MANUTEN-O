@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ArrowRight, ExternalLink, Loader2 } from 'lucide-react'
 
 interface UpgradeButtonProps {
-  plan: 'pro' | 'business'
+  plan: 'starter' | 'pro' | 'business'
   label: string
   primary?: boolean
 }

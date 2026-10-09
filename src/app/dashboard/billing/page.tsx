@@ -27,7 +27,7 @@ const ALL_PLANS = [
     name: 'Starter',
     price: '19€/mês',
     desc: 'Para pequenas oficinas e PMEs industriais',
-    features: ['Até 5 técnicos', 'Até 100 OTs/mês', 'Controlo de Projetos (Gantt)', 'Calendário de Manutenção', '10 Relatórios mensais'],
+    features: ['Até 5 utilizadores', 'Até 100 OTs/mês · 25 equipamentos', 'Armazéns, Regras de Segurança & Mensagens', 'Projetos, Gráficos Gantt & Calendário', '10 Relatórios mensais'],
     tier: 1,
   },
   {
@@ -35,31 +35,24 @@ const ALL_PLANS = [
     name: 'Pro',
     price: '49€/mês',
     desc: 'Para fábricas e operações em crescimento',
-    features: ['Até 15 técnicos', 'Até 500 OTs/mês', 'Planos de Manutenção Preventiva', 'KPIs de Fiabilidade (MTTR/MTBF)', 'Relatórios PDF & Excel Ilimitados'],
+    features: ['Até 15 utilizadores', 'Até 500 OTs/mês · 100 equipamentos', 'Planos de Manutenção Preventiva (até 50)', 'KPIs de Fiabilidade (MTTR/MTBF)', '100 Relatórios mensais em PDF & Excel'],
     tier: 2,
   },
   {
     id: 'business' as const,
     name: 'Business',
-    price: '119€/mês',
+    price: '149€/mês',
     desc: 'Para plantas industriais multi-unidade',
-    features: ['Técnicos Ilimitados', 'Intervenções Ilimitadas', 'Consultor IA (com RAG & ficheiros)', 'Gestão Financeira', 'Suporte Prioritário 24/7'],
+    features: ['Utilizadores & Equipamentos Ilimitados', 'Intervenções Ilimitadas', 'Consultor IA (com RAG & ficheiros)', 'Gestão Financeira', 'Suporte Prioritário 24/7'],
     tier: 3,
-  },
-  {
-    id: 'enterprise' as const,
-    name: 'Enterprise',
-    price: 'Sob Consulta',
-    desc: 'Para grandes grupos e multinacionais',
-    features: ['Infraestrutura & Servidor Dedicado', 'Integração SAP / ERP nativa', 'SLA Garantido 99.9%', 'Formação Presencial da Equipa'],
-    tier: 4,
   },
 ]
 
 const FEATURE_NAMES: Record<string, { label: string; minPlan: string }> = {
   assets: { label: 'Gestão de Equipamentos', minPlan: 'Free' },
   stocks: { label: 'Gestão de Inventário & Stocks', minPlan: 'Free' },
-  history: { label: 'Histórico de Intervenções', minPlan: 'Pro' },
+  history: { label: 'Histórico de Intervenções', minPlan: 'Free' },
+  users: { label: 'Gestão de Utilizadores', minPlan: 'Free' },
   reports: { label: 'Relatórios Avançados', minPlan: 'Starter' },
   'maintenance-plan': { label: 'Plano de Manutenção', minPlan: 'Pro' },
   calendar: { label: 'Calendário de Manutenção', minPlan: 'Starter' },
@@ -68,6 +61,10 @@ const FEATURE_NAMES: Record<string, { label: string; minPlan: string }> = {
   reliability: { label: 'Fiabilidade & KPIs (MTTR/MTBF)', minPlan: 'Pro' },
   compliance: { label: 'Compliance ISO & Auditorias', minPlan: 'Enterprise' },
   projects: { label: 'Gestão de Projetos (Gantt)', minPlan: 'Starter' },
+  warehouses: { label: 'Gestão de Armazéns', minPlan: 'Starter' },
+  safetyRules: { label: 'Regras de Segurança', minPlan: 'Starter' },
+  messages: { label: 'Mensagens Internas', minPlan: 'Starter' },
+  documents: { label: 'Gestão Documental (FR/IT)', minPlan: 'Starter' },
 }
 
 export default async function BillingPage({
@@ -217,7 +214,7 @@ export default async function BillingPage({
                 </div>
 
                 <UpgradeButton
-                  plan={plan.id as 'pro' | 'business'}
+                  plan={plan.id}
                   label={`Subscrever ${plan.name}`}
                   primary={plan.id === 'pro' || plan.id === 'business'}
                 />
