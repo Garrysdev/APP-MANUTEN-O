@@ -18,6 +18,10 @@ const FEATURE_LABELS: Record<FeatureKey, string> = {
   reliability:         'Fiabilidade & KPIs',
   compliance:          'Compliance ISO & Auditorias',
   projects:            'Controlo de Projetos (Gantt)',
+  warehouses:          'Gestão de Armazéns',
+  safetyRules:         'Regras de Segurança',
+  messages:            'Mensagens Internas',
+  documents:           'Gestão Documental (FR/IT)',
 }
 
 interface UpgradeModalProps {
