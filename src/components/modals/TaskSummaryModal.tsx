@@ -9,7 +9,7 @@ import {
   Save, ExternalLink, Wrench
 } from 'lucide-react'
 import type { Task, TaskStatus } from '@/types/models'
-import { STATUS_LABELS, CRITICIDADE_LABELS } from '@/types/models'
+import { STATUS_LABELS, CRITICIDADE_LABELS, statusBadgeClass } from '@/types/models'
 import { formatDate } from '@/lib/utils'
 import { TipoBadge } from '@/components/ui/TipoBadge'
 import { format3DigitId } from '@/app/dashboard/history/HistoryClient'
@@ -228,7 +228,7 @@ export default function TaskSummaryModal({
                   Estado da Intervenção
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className={`badge-${status} text-xs font-extrabold px-3 py-1 rounded-full`}>
+                  <span className={`${statusBadgeClass(status)} text-xs font-extrabold px-3 py-1 rounded-full`}>
                     {STATUS_LABELS[status] || status}
                   </span>
                   {task.plannedStartDate && (

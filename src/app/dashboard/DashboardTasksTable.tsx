@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import type { Task } from '@/types/models'
-import { STATUS_LABELS } from '@/types/models'
+import { STATUS_LABELS, statusBadgeClass } from '@/types/models'
 import { formatDate, taskDelayLevel, DELAY_CLASSES, DELAY_LABELS } from '@/lib/utils'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
 
@@ -57,7 +57,7 @@ export default function DashboardTasksTable({ tasks, users }: { tasks: Task[]; u
               <td className="px-3 py-3.5 font-semibold text-gray-800 dark:text-slate-200">{task.title}</td>
               <td className="px-3 py-3.5 text-gray-500 dark:text-slate-400 text-xs hidden sm:table-cell">{technician(task.assignedTo)}</td>
               <td className="px-3 py-3.5">
-                <span className={`badge-${task.status}`}>{STATUS_LABELS[task.status]}</span>
+                <span className={statusBadgeClass(task.status)}>{STATUS_LABELS[task.status]}</span>
               </td>
               <td className="px-3 py-3.5 hidden md:table-cell text-xs">
                 {lvl === 'none' ? (

@@ -19,6 +19,7 @@ import {
   type Periodicidade,
   type Executor,
   STATUS_LABELS,
+  statusBadgeClass,
   CRITICIDADE_LABELS,
   TIPO_LABELS,
   PERIODICIDADE_LABELS,
@@ -1383,7 +1384,7 @@ export default function TasksClient({
                       )} · {area}
                     </span>
                   </div>
-                  <span className={`badge-${t.status} shrink-0`}>{STATUS_LABELS[t.status]}</span>
+                  <span className={`${statusBadgeClass(t.status)} shrink-0`}>{STATUS_LABELS[t.status]}</span>
                 </div>
                 <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-2">{t.title}</p>
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 text-[11px]">
@@ -1622,7 +1623,7 @@ export default function TasksClient({
                         <span className="line-clamp-2" title={t.description ?? ''}>{t.description || '—'}</span>
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
-                        <span className={`badge-${t.status}`}>
+                        <span className={statusBadgeClass(t.status)}>
                           {STATUS_LABELS[t.status]}
                         </span>
                       </td>

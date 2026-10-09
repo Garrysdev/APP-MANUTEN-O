@@ -7,6 +7,7 @@ import {
   STATUS_LABELS,
   CRITICIDADE_LABELS,
   TIPO_LABELS,
+  statusBadgeClass,
 } from '@/types/models'
 import { formatDate } from '@/lib/utils'
 import TaskDetailClient from './TaskDetailClient'
@@ -61,7 +62,7 @@ export default async function TaskDetailPage({
             {task.description && <p className="text-sm text-gray-600 mt-1">{task.description}</p>}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-            <span className={`badge-${task.status}`}>{STATUS_LABELS[task.status]}</span>
+            <span className={statusBadgeClass(task.status)}>{STATUS_LABELS[task.status]}</span>
             {task.status === 'done' && (
               <a
                 href={`/report/task/${task.id}`}

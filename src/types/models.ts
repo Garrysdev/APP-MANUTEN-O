@@ -335,6 +335,17 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   cancelled: 'Cancelada',
 }
 
+// Classe CSS do badge (ver .badge-* em globals.css) a partir de um status — normaliza
+// maiúsculas/espaços antes de montar o nome da classe, porque OTs antigas/importadas por
+// vezes têm o status gravado com capitalização diferente (ex. "Prazo" em vez de "prazo"),
+// o que faz `badge-${status}` não bater com nenhuma regra CSS e o badge aparecer sem estilo
+// nenhum (texto simples, sem fundo). Com valor desconhecido, cai em "badge-neutral".
+const KNOWN_STATUS_BADGES = new Set<TaskStatus>(['prazo', 'pending', 'in_progress', 'done', 'cancelled'])
+export function statusBadgeClass(status: string | null | undefined): string {
+  const normalized = String(status || '').toLowerCase().trim() as TaskStatus
+  return KNOWN_STATUS_BADGES.has(normalized) ? `badge-${normalized}` : 'badge-neutral'
+}
+
 export const PRIORITY_LABELS: Record<TaskPriority, string> = {
   low: 'Baixa',
   medium: 'Média',
