@@ -8,8 +8,10 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   markMessagesRead,
+  countMessagesThisMonth,
 } from '@/lib/firebase/data'
-import type { MessageStatus } from '@/types/models'
+import { LIMITS } from '@/lib/plans'
+import type { MessageStatus, PlanName } from '@/types/models'
 
 export type MessageFormState = { error?: string; ok?: boolean; messageId?: string }
 
@@ -19,6 +21,13 @@ export async function sendInternalMessageAction(
 ): Promise<MessageFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada. Efetue login novamente.' }
+
+  const plan = (profile.company?.plan ?? 'free') as PlanName
+  const { messagesPerMonth } = LIMITS[plan] ?? LIMITS.free
+  const sentThisMonth = await countMessagesThisMonth(profile.companyId)
+  if (sentThisMonth >= messagesPerMonth) {
+    return { error: `Limite de ${messagesPerMonth} mensagem(ns) este mês atingido no plano ${plan}. Faz upgrade para enviar mais.` }
+  }
 
   const content = String(formData.get('content') ?? '').trim()
   if (!content) return { error: 'O conteúdo da mensagem é obrigatório.' }

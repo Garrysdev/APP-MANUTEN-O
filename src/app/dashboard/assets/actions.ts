@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache'
 import ExcelJS from 'exceljs'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { createAsset, updateAsset, deleteAsset } from '@/lib/firebase/data'
-import type { Asset } from '@/types/models'
+import { createAsset, updateAsset, deleteAsset, listAssets } from '@/lib/firebase/data'
+import { LIMITS } from '@/lib/plans'
+import type { Asset, PlanName } from '@/types/models'
 
 export type AssetFormState = { error?: string; ok?: boolean }
 
@@ -38,6 +39,12 @@ export async function createAssetAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   try {
+    const plan = (profile.company?.plan ?? 'free') as PlanName
+    const { maxAssets } = LIMITS[plan] ?? LIMITS.free
+    const current = await listAssets(profile.companyId)
+    if (current.length >= maxAssets) {
+      return { error: `Limite de ${maxAssets} equipamento(s) atingido no plano ${plan}. Faz upgrade para adicionar mais.` }
+    }
     await createAsset(profile.companyId, parseAsset(formData))
     revalidatePath('/dashboard/assets')
     return { ok: true }
@@ -63,7 +70,7 @@ export async function updateAssetAction(
   }
 }
 
-export type ImportAssetsState = { error?: string; created?: number; skipped?: number }
+export type ImportAssetsState = { error?: string; created?: number; skipped?: number; limitReached?: boolean }
 
 function normalizeHeader(s: string): string {
   return s
@@ -113,6 +120,10 @@ export async function importAssetsAction(formData: FormData): Promise<ImportAsse
       return { error: `Ficheiro com demasiadas linhas (máx. ${MAX_ROWS}).` }
     }
 
+    const plan = (profile.company?.plan ?? 'free') as PlanName
+    const { maxAssets } = LIMITS[plan] ?? LIMITS.free
+    let remainingQuota = maxAssets - (await listAssets(profile.companyId)).length
+
     let created = 0
     let skipped = 0
     for (let r = 2; r <= sheet.rowCount; r++) {
@@ -124,6 +135,8 @@ export async function importAssetsAction(formData: FormData): Promise<ImportAsse
       }
       const name = cellText('name')
       if (!name) { skipped++; continue }
+      if (remainingQuota <= 0) { skipped++; continue }
+      remainingQuota--
 
       await createAsset(profile.companyId, {
         name,
@@ -145,7 +158,7 @@ export async function importAssetsAction(formData: FormData): Promise<ImportAsse
     }
 
     revalidatePath('/dashboard/assets')
-    return { created, skipped }
+    return { created, skipped, limitReached: remainingQuota <= 0 }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao importar ficheiro.' }
   }

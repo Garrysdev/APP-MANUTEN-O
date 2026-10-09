@@ -15,7 +15,8 @@ import {
   setMaintenancePlanOccurrenceStatus,
 } from '@/lib/firebase/data'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
-import type { TaskCriticidade, TipoTarefa, Periodicidade, Executor, TaskStatus } from '@/types/models'
+import { LIMITS } from '@/lib/plans'
+import type { TaskCriticidade, TipoTarefa, Periodicidade, Executor, TaskStatus, PlanName } from '@/types/models'
 import { periodicidadeToRecurrence, CRITICIDADE_LABELS, PERIODICIDADE_LABELS, TIPOS_TAREFA } from '@/types/models'
 
 export type PlanFormState = { error?: string; ok?: boolean; id?: string }
@@ -249,6 +250,14 @@ export async function createMaintenancePlanAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+
+  const plan = (profile.company?.plan ?? 'free') as PlanName
+  const { maxMaintenancePlans } = LIMITS[plan] ?? LIMITS.free
+  const current = await listMaintenancePlans(profile.companyId)
+  if (current.length >= maxMaintenancePlans) {
+    return { error: `Limite de ${maxMaintenancePlans} plano(s) de manutenção atingido no plano ${plan}. Faz upgrade para adicionar mais.` }
+  }
+
   try {
     const id = await createMaintenancePlan(profile.companyId, profile.id, parsePlan(formData))
     revalidatePath('/dashboard/maintenance-plan')

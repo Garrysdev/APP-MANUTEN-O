@@ -2264,6 +2264,10 @@ export async function deleteStockItem(companyId: string, id: string): Promise<vo
 // "deleted" (mesmo padrão de deleteTask/deleteMaintenancePlan) para os
 // armazéns por omissão, que nunca tiveram documento próprio no Firestore.
 
+// Exportado para quem precisa de excluir os armazéns pré-definidos duma contagem
+// (ex. limite de armazéns por plano — só devem contar os criados pela empresa).
+export const DEFAULT_WAREHOUSE_IDS = new Set(['wh_central', 'wh_ur'])
+
 const DEFAULT_WAREHOUSES: Warehouse[] = [
   {
     id: 'wh_central',
@@ -2307,7 +2311,9 @@ const listWarehousesCached = unstable_cache(
     docs.filter((w) => !w.deleted).forEach((w) => map.set(w.id, w))
 
     const filtered = Array.from(map.values()).filter((w) => {
-      if (!w.companyId) return true
+      // Armazém sem companyId (legado) pertence historicamente só à Empresa UR —
+      // mesma fuga cross-tenant já corrigida em listInternalMessages/listUsers.
+      if (!w.companyId) return isDemoCompany(finalCompanyId)
       if (w.companyId === finalCompanyId) return true
       if (isDemoCompany(finalCompanyId) && isDemoCompany(w.companyId)) return true
       return false
@@ -2503,6 +2509,12 @@ export async function calculateTaskCost(companyId: string, taskId: string): Prom
 }
 
 // ── SAFETY RULES (REGRAS DE SEGURANÇA) ──────────────────────────────────────
+// Exportado para quem precisa de excluir as regras pré-definidas duma contagem
+// (ex. limite de Regras de Segurança por plano — só devem contar as criadas pela
+// empresa; as pré-definidas só aparecem como base quando a empresa ainda não tem
+// nenhuma regra própria, ver listSafetyRulesCached).
+export const DEFAULT_SAFETY_RULE_IDS = new Set(['sr_1', 'sr_2', 'sr_3', 'sr_4', 'sr_5', 'sr_6'])
+
 const DEFAULT_SAFETY_RULES: SafetyRule[] = [
   { id: 'sr_1', companyId: 'default', title: 'Uso obrigatório de EPI (Capacete, Luvas, Calçado de Segurança)', category: 'Geral', active: true, createdAt: new Date().toISOString() },
   { id: 'sr_2', companyId: 'default', title: 'Bloqueio e Etiquetagem de Energia (LOTO)', category: 'Elétrico', active: true, createdAt: new Date().toISOString() },
@@ -2977,6 +2989,32 @@ export const listInternalMessages = cache(async function(
   }
   return cachedInternalMessages
 })
+
+// Contagem direta por query Firestore (companyId + createdAt do mês) em vez de
+// listInternalMessages().length — essa função está limitada (feed de ~100
+// mensagens / .limit(50) na coleção), por isso subestimaria o total real para
+// empresas com mais mensagens do que isso. Usada só para aplicar o limite do
+// plano (Fase 2), não para mostrar a lista.
+export async function countMessagesThisMonth(companyId: string): Promise<number> {
+  if (isQuotaExhausted()) return 0
+  try {
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    const snap = await firestoreWithTimeout(
+      () => adminDb()
+        .collection('internal_messages')
+        .where('companyId', '==', companyId)
+        .where('createdAt', '>=', startOfMonth)
+        .get(),
+      null,
+      1200
+    )
+    return snap?.docs?.length ?? 0
+  } catch (err) {
+    console.error('[countMessagesThisMonth] Error:', err)
+    return 0
+  }
+}
 
 export async function createInternalMessage(
   companyId: string,

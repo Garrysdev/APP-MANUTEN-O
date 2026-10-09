@@ -2,8 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { createStockItem, updateStockItem, deleteStockItem } from '@/lib/firebase/data'
-import { planHas } from '@/lib/plans'
+import { createStockItem, updateStockItem, deleteStockItem, listStockItems } from '@/lib/firebase/data'
+import { planHas, LIMITS } from '@/lib/plans'
 import type { PlanName } from '@/types/models'
 
 export type StockFormState = { error?: string; ok?: boolean; id?: string }
@@ -17,6 +17,12 @@ export async function createStockItemAction(
 
   const plan = (profile.company?.plan ?? 'free') as PlanName
   if (!planHas(plan, 'stocks')) return { error: 'Funcionalidade não disponível no plano atual.' }
+
+  const { maxStockItems } = LIMITS[plan] ?? LIMITS.free
+  const current = await listStockItems(profile.companyId)
+  if (current.length >= maxStockItems) {
+    return { error: `Limite de ${maxStockItems} artigo(s) de stock atingido no plano ${plan}. Faz upgrade para adicionar mais.` }
+  }
 
   const name = String(formData.get('name') ?? '').trim()
   if (!name) return { error: 'Nome obrigatório.' }

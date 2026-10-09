@@ -9,7 +9,9 @@ import {
   calculateTaskCost,
 } from '@/lib/firebase/data'
 import { adminDb } from '@/lib/firebase/admin'
-import type { Task, TaskCriticidade, TipoTarefa, TaskStatus } from '@/types/models'
+import { LIMITS } from '@/lib/plans'
+import { isOpenProjectTask } from '@/lib/task-assignment'
+import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, PlanName } from '@/types/models'
 import { TIPOS_TAREFA } from '@/types/models'
 
 export type TaskFormState = { error?: string; ok?: boolean }
@@ -106,6 +108,14 @@ export async function createProjectTaskAction(
 ): Promise<TaskFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
+
+  const plan = (profile.company?.plan ?? 'free') as PlanName
+  const { maxOpenProjects } = LIMITS[plan] ?? LIMITS.free
+  const openCount = (await listTasks(profile.companyId)).filter(isOpenProjectTask).length
+  if (openCount >= maxOpenProjects) {
+    return { error: `Limite de ${maxOpenProjects} projeto(s) aberto(s) atingido no plano ${plan}. Conclui um projeto ou faz upgrade para abrir mais.` }
+  }
+
   try {
     const parsed = parseProjectTask(formData)
     if (!parsed.assetId) {

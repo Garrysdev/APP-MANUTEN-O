@@ -1,6 +1,32 @@
 import type { Task, User } from '@/types/models'
 
 /**
+ * Deteção de "isto é um Projeto" (vs. uma OT normal) — critério único, partilhado por
+ * `src/app/dashboard/tasks/page.tsx` (exclui projetos da lista de OTs),
+ * `src/app/dashboard/projects/page.tsx` / `gantt/page.tsx` (incluem só projetos) e o
+ * limite de "Projetos abertos" por plano (`projects/actions.ts`). Antes desta extração a
+ * mesma lógica estava duplicada e ligeiramente inconsistente entre tasks/page.tsx e
+ * projects/page.tsx — um único helper evita as duas divergirem outra vez.
+ */
+export function isProjectTask(t: Pick<Task, 'source' | 'isProject' | 'tipo' | 'description'> | any): boolean {
+  if (!t) return false
+  return Boolean(
+    (t as any).source === 'folha_projetos' ||
+    (t as any).isProject === true ||
+    (t.tipo as string) === 'projeto' ||
+    (t.tipo as string) === 'projecto' ||
+    (t.tipo as string) === 'pr' ||
+    (t.description || '').toLowerCase().includes('projecto') ||
+    (t.description || '').toLowerCase().includes('projeto')
+  )
+}
+
+/** Projeto "aberto" para efeitos do limite por plano: é um Projeto e o estado ainda não é final. */
+export function isOpenProjectTask(t: Pick<Task, 'status'> & Parameters<typeof isProjectTask>[0]): boolean {
+  return isProjectTask(t) && t.status !== 'done' && t.status !== 'cancelled'
+}
+
+/**
  * Validação rigorosa e tokenizada de atribuição de tarefas a um técnico/utilizador.
  * Suporta:
  * 1. Atribuições diretas por ID ou array de IDs (assignedTo, assignedToIds).
