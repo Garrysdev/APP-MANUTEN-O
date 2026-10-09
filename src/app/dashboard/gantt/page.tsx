@@ -1,14 +1,14 @@
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { listTasks, listAssetRefs, listUsers } from '@/lib/firebase/data'
+import { listTasks, listAssetRefs, listUsers, listMaintenancePlans } from '@/lib/firebase/data'
 import { planHas } from '@/lib/plans'
 import { isProjectTask } from '@/lib/task-assignment'
 import type { PlanName } from '@/types/models'
-import ProjectsListClient from './ProjectsListClient'
+import GanttClient from './GanttClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function ProjectsPage() {
+export default async function GanttPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
   if (profile.role !== 'manager') redirect('/dashboard/tasks')
@@ -16,16 +16,17 @@ export default async function ProjectsPage() {
   const plan = (profile.company?.plan ?? 'free') as PlanName
   if (!planHas(plan, 'projects')) redirect('/dashboard/billing?feature=projects')
 
-  const [allTasks, assets, users] = await Promise.all([
+  const [allTasks, assets, users, plans] = await Promise.all([
     listTasks(profile.companyId),
     listAssetRefs(profile.companyId),
     listUsers(profile.companyId),
+    listMaintenancePlans(profile.companyId),
   ])
 
   const tasks = allTasks.filter(isProjectTask)
 
   return (
-    <ProjectsListClient
+    <GanttClient
       tasks={tasks}
       assets={assets}
       users={users.map((u) => ({
@@ -39,6 +40,7 @@ export default async function ProjectsPage() {
         externalCompanyId: u.externalCompanyId,
         externalCompanyName: u.externalCompanyName,
       }))}
+      plans={plans}
       role={profile.role}
       userId={profile.id}
     />

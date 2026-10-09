@@ -1,39 +1,30 @@
 'use client'
 
-import { useState, useEffect, useTransition, useId, useMemo, useRef } from 'react'
+import { useState, useEffect, useTransition, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  Plus, Pencil, Trash2, FolderKanban, X, Play, CheckCircle2,
-  ShieldAlert, Package, CalendarClock, Building2, Eye, GripHorizontal,
+  Plus, FolderKanban, Play, CheckCircle2,
+  ShieldAlert, CalendarClock, Building2, GripHorizontal, ArrowLeft,
 } from 'lucide-react'
-import { format3DigitId } from '../history/HistoryClient'
 import {
   type Task,
   type TaskStatus,
-  type TaskCriticidade,
   type TipoTarefa,
   type UserRole,
-  type Periodicidade,
-  type Executor,
   type MaintenancePlan,
   STATUS_LABELS,
-  CRITICIDADE_LABELS,
   TIPO_LABELS,
-  PERIODICIDADE_LABELS,
 } from '@/types/models'
 import { isPlanGanttActive } from '../maintenance-plan/MaintenancePlanClient'
-import { formatDate, formatDateTime } from '@/lib/utils'
-import Avatar from '@/components/ui/Avatar'
-import { TipoBadge } from '@/components/ui/TipoBadge'
 import { useLanguage } from '@/components/providers/LanguageProvider'
-import { useTableSort, SortableTh } from '@/lib/useTableSort'
+import { useTableSort } from '@/lib/useTableSort'
 import {
   createProjectTaskAction, updateProjectTaskAction, deleteProjectTaskAction, updateProjectTaskStatusAction, updateProjectTaskDatesAction,
   loadStockRefsAction, type StockMaterialRef,
-} from './actions'
+} from '../projects/actions'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
-import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
+import { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 
 type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
 type UserRef = Ref & {
@@ -686,7 +677,7 @@ function GanttChartView({
   )
 }
 
-export default function ProjectsClient({
+export default function GanttClient({
   tasks,
   assets,
   users,
@@ -755,12 +746,6 @@ export default function ProjectsClient({
     })
   }
 
-  async function handleDelete(task: Task) {
-    if (!confirm(`Eliminar "${task.title}"?`)) return
-    await deleteProjectTaskAction(task.id)
-    router.refresh()
-  }
-
   const [taskList, setTaskList] = useState<Task[]>(tasks)
   useEffect(() => { setTaskList(tasks) }, [tasks])
 
@@ -775,7 +760,6 @@ export default function ProjectsClient({
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedTech, setSelectedTech] = useState<string>('')
-  const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
   const [timeScale, setTimeScale] = useState<TimeScale>('week')
   const [pmTypeFilter, setPmTypeFilter] = useState<'all' | 'pm_only' | 'projects_only'>('all')
 
@@ -1060,8 +1044,14 @@ export default function ProjectsClient({
     <div className="max-w-7xl mx-auto animate-fade-in-up space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 gap-4">
         <div>
+          <Link
+            href="/dashboard/projects"
+            className="inline-flex items-center gap-1 text-xs font-bold text-industrial-blue-light dark:text-slate-400 hover:text-safety-orange transition-colors mb-1"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Ver Lista de Projetos
+          </Link>
           <h1 className="text-xl sm:text-2xl font-extrabold text-industrial-blue dark:text-slate-100 tracking-tight flex items-center gap-2">
-            <span>Controlo de Projetos (Gantt)</span>
+            <span>Gráficos Gantt</span>
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
               {filtered.length} / {combinedTasks.length}
             </span>
@@ -1082,28 +1072,6 @@ export default function ProjectsClient({
             <CalendarClock className="h-4 w-4 shrink-0" />
             <span>Paragens (AGO/DEZ)</span>
           </button>
-          <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex items-center border border-slate-200 dark:border-slate-700">
-            <button
-              onClick={() => setViewMode('gantt')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                viewMode === 'gantt'
-                  ? 'bg-industrial-blue text-white shadow-md'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-              }`}
-            >
-              <FolderKanban className="h-3.5 w-3.5" /> Gantt
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                viewMode === 'table'
-                  ? 'bg-industrial-blue text-white shadow-md'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-              }`}
-            >
-              <Package className="h-3.5 w-3.5" /> Lista
-            </button>
-          </div>
           <button onClick={openCreate} className="shrink-0 h-10 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-xs shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
             <Plus size={16} className="stroke-[2.5] shrink-0" />
             <span className="hidden sm:inline">Novo Projeto / OT</span>
@@ -1250,180 +1218,44 @@ export default function ProjectsClient({
         </div>
       </div>
 
-      {viewMode === 'gantt' ? (
-        <GanttChartView
-          tasks={shown}
-          users={users}
-          assetName={assetName}
-          userName={userName}
-          assetArea={assetArea}
-          assetTag={assetTag}
-          timeScale={timeScale}
-          setTimeScale={setTimeScale}
-          dateStartFilter={dateStartFilter}
-          dateEndFilter={dateEndFilter}
-          sortKey={sortKey}
-          sortDir={sortDir}
-          toggleSort={toggleSort}
-          onEdit={openEdit}
-          onToggleStatus={(taskId, currentStatus) => {
-            const nextStatus = currentStatus === 'done' ? 'pending' : 'done'
-            handleStatusChange(taskId, nextStatus)
-          }}
-          onRescheduleTask={(taskId, newStart, newDue) => {
-            setTaskList((prev) => {
-              const updated = prev.map((t) => (t.id === taskId ? { ...t, plannedStartDate: newStart, dueDate: newDue } : t))
-              return cascadeLocalTasks(updated, taskId, newDue)
-            })
-            startStatusTransition(async () => {
-              const res = await updateProjectTaskDatesAction(taskId, newStart, newDue)
-              if (res?.error) console.warn(res.error)
-            })
-          }}
-          areaFilter={areaFilter}
-          setAreaFilter={setAreaFilter}
-          tagFilter={tagFilter}
-          setTagFilter={setTagFilter}
-          techFilter={selectedTech}
-          setTechFilter={setSelectedTech}
-          uniqueAreas={uniqueAreas}
-          uniqueTags={uniqueTags}
-        />
-      ) : (
-        <div className="card overflow-hidden">
-          {shown.length === 0 ? (
-            <div className="px-5 py-12 text-center text-gray-400">
-              <FolderKanban className="h-10 w-10 mx-auto mb-3 opacity-40" />
-              <p className="text-sm">Sem projetos neste filtro.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs min-w-[1000px]">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-100/90 text-slate-700 font-bold uppercase tracking-wider">
-                    <SortableTh label="ID" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                    <SortableTh label="DATA" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                    <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                    <SortableTh label="EQUIPAMENTO / TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                    <SortableTh label="TI" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                    <SortableTh label="PROJETO / DESCRIÇÃO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                    <SortableTh label="TÉCNICOS" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                    <SortableTh label="INÍCIO" sortableKey="plannedStartDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
-                    <SortableTh label="FIM" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
-                    <SortableTh label="CAUSA / OBS" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden lg:table-cell" />
-                    <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                    <th className="px-3 py-2 text-right font-mono text-xs font-bold text-slate-700 uppercase tracking-wider">AÇÕES</th>
-                  </tr>
-                  <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 p-1">
-                    <td className="p-1"><input value={searchId} onChange={(e) => setSearchId(e.target.value)} placeholder="ID..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
-                    <td className="p-1 relative"><ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} /></td>
-                    <td className="p-1"><input value={searchArea} onChange={(e) => setSearchArea(e.target.value)} placeholder="Área..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
-                    <td className="p-1"><input value={searchTag} onChange={(e) => setSearchTag(e.target.value)} placeholder="TAG..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
-                    <td className="p-1"><input value={searchTi} onChange={(e) => setSearchTi(e.target.value)} placeholder="TI..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
-                    <td className="p-1"><input value={searchProject} onChange={(e) => setSearchProject(e.target.value)} placeholder="Projeto..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
-                    <td className="p-1"><input value={searchTech} onChange={(e) => setSearchTech(e.target.value)} placeholder="Técnico..." className="input !text-[11px] !py-0.5 !px-1.5 w-full" /></td>
-                    <td className="p-1 hidden xl:table-cell relative"><ExcelColumnDateFilter values={excelInicioFilter} onChange={setExcelInicioFilter} /></td>
-                    <td className="p-1 hidden xl:table-cell relative"><ExcelColumnDateFilter values={excelFimFilter} onChange={setExcelFimFilter} /></td>
-                    <td className="p-1 hidden lg:table-cell" />
-                    <td className="p-1" />
-                    <td className="p-1" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentShown.map((t, idx) => {
-                    const asset = assets.find((a) => a.id === t.assetId)
-                    const formattedId = format3DigitId(t.id, idx)
-                    const sDateStr = t.plannedStartDate ? t.plannedStartDate.slice(0, 10) : (t.createdAt ? t.createdAt.slice(0, 10) : '')
-                    const eDateStr = t.dueDate ? t.dueDate.slice(0, 10) : sDateStr
-
-                    return (
-                      <tr
-                        key={t.id}
-                        onClick={() => openEdit(t)}
-                        className="border-b border-slate-100 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group"
-                        title="Clique para abrir e ver/editar a OT"
-                      >
-                        <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
-                          <span className="bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200 group-hover:border-blue-400 group-hover:bg-blue-100/80 transition-colors">{formattedId}</span>
-                        </td>
-                        <td className="px-3 py-2.5 font-mono font-semibold text-slate-800 whitespace-nowrap">
-                          {formatDate(sDateStr || t.createdAt)}
-                        </td>
-                        <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
-                          {(t as any).area || (asset as any)?.area || '—'}
-                        </td>
-                        <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                          {(() => {
-                            const tagOrName = (asset as any)?.tag || asset?.name || (t as any).tag || '—'
-                            const targetId = asset?.id || t.assetId || (t as any).tag
-                            if (!targetId || tagOrName === '—') return <span>{tagOrName}</span>
-                            return (
-                              <Link
-                                href={`/dashboard/assets/${encodeURIComponent(targetId)}`}
-                                className="text-industrial-blue dark:text-blue-400 hover:text-safety-orange hover:underline font-bold transition-colors inline-flex items-center gap-1"
-                                title={`Abrir página do equipamento ${tagOrName}`}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <span>{tagOrName}</span>
-                              </Link>
-                            )
-                          })()}
-                        </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">
-                          <TipoBadge tipo={t.tipo} codeOnly={true} />
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-900 font-semibold max-w-[280px]">
-                          <span className="hover:text-safety-orange transition-colors underline-offset-2 group-hover:underline">
-                            {t.title}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-800 font-semibold whitespace-nowrap">
-                          {userName(t.assignedTo)}
-                        </td>
-                        <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">
-                          {sDateStr ? formatDate(sDateStr) : formatDateTime(t.createdAt)}
-                        </td>
-                        <td className="px-3 py-2.5 font-mono text-slate-700 hidden xl:table-cell whitespace-nowrap">
-                          {eDateStr ? formatDate(eDateStr) : (t.updatedAt ? formatDateTime(t.updatedAt) : '—')}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-700 hidden lg:table-cell max-w-[200px]">
-                          <span className="line-clamp-2" title={t.description ?? ''}>{t.description || '—'}</span>
-                        </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            t.status === 'done' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
-                            t.status === 'in_progress' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                            'bg-slate-100 text-slate-700 border border-slate-300'
-                          }`}>
-                            {STATUS_LABELS[t.status]}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1">
-                            <Link href={`/dashboard/tasks/${t.id}`} className="p-1 text-slate-600 hover:text-industrial-blue hover:bg-slate-100 rounded" title="Ver detalhes">
-                              <Eye size={15} />
-                            </Link>
-                            {isManager && (
-                              <>
-                                <button onClick={() => openEdit(t)} className="p-1 text-slate-600 hover:text-industrial-blue hover:bg-slate-100 rounded" title="Editar">
-                                  <Pencil size={15} />
-                                </button>
-                                <button onClick={() => handleDelete(t)} className="p-1 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded" title="Eliminar">
-                                  <Trash2 size={15} />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+      <GanttChartView
+        tasks={shown}
+        users={users}
+        assetName={assetName}
+        userName={userName}
+        assetArea={assetArea}
+        assetTag={assetTag}
+        timeScale={timeScale}
+        setTimeScale={setTimeScale}
+        dateStartFilter={dateStartFilter}
+        dateEndFilter={dateEndFilter}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        toggleSort={toggleSort}
+        onEdit={openEdit}
+        onToggleStatus={(taskId, currentStatus) => {
+          const nextStatus = currentStatus === 'done' ? 'pending' : 'done'
+          handleStatusChange(taskId, nextStatus)
+        }}
+        onRescheduleTask={(taskId, newStart, newDue) => {
+          setTaskList((prev) => {
+            const updated = prev.map((t) => (t.id === taskId ? { ...t, plannedStartDate: newStart, dueDate: newDue } : t))
+            return cascadeLocalTasks(updated, taskId, newDue)
+          })
+          startStatusTransition(async () => {
+            const res = await updateProjectTaskDatesAction(taskId, newStart, newDue)
+            if (res?.error) console.warn(res.error)
+          })
+        }}
+        areaFilter={areaFilter}
+        setAreaFilter={setAreaFilter}
+        tagFilter={tagFilter}
+        setTagFilter={setTagFilter}
+        techFilter={selectedTech}
+        setTechFilter={setSelectedTech}
+        uniqueAreas={uniqueAreas}
+        uniqueTags={uniqueTags}
+      />
 
       <CreateTaskModal
         isOpen={modalActive}
@@ -1435,6 +1267,7 @@ export default function ProjectsClient({
         isManager={isManager}
         createAction={createProjectTaskAction}
         updateAction={updateProjectTaskAction}
+        deleteAction={deleteProjectTaskAction}
         availableTasksForDependencies={combinedTasks}
         showDependencies={true}
         onSuccess={(newTask) => {
