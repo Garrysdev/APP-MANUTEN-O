@@ -205,6 +205,27 @@ export interface SafetyRule {
   createdAt: string
 }
 
+/**
+ * Gestão Documental — Folhas de Registo (FR) e Instruções de Trabalho (IT) por empresa.
+ * Substitui os 3 FR + 3 IT que viviam fixos no código (AVAILABLE_FRS/AVAILABLE_ITS em
+ * TaskDocRequirements.tsx), partilhados por todas as empresas. `fieldLabels` (só FR) é a
+ * versão simplificada dos campos tipados antigos (number/select/text) — uma lista de
+ * labels de texto livre que o técnico preenche, para o gestor poder criar FRs novas sem
+ * programar; perde a validação por tipo, ganha-se a edição livre.
+ */
+export interface DocumentoObrigatorio {
+  id: string
+  companyId: string
+  type: 'FR' | 'IT'
+  code: string
+  title: string
+  content?: string | null
+  fieldLabels?: string[] | null
+  category?: string | null
+  active: boolean
+  createdAt: string
+}
+
 export interface ChecklistItem {
   label: string
   done: boolean

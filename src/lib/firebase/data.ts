@@ -9,7 +9,7 @@ import { adminDb, adminAuth, firestoreWithTimeout, isQuotaExhausted, markQuotaEx
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
-import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus, type TaskStatus } from '@/types/models'
+import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus, type TaskStatus, type DocumentoObrigatorio } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
   return { id: doc.id, ...doc.data() } as T
@@ -1023,7 +1023,25 @@ export async function updateTask(
     }
     await ref.set(JSON.parse(JSON.stringify(rawDoc)), { merge: true }).catch(console.error)
   } else {
-    await ref.update(JSON.parse(JSON.stringify({ ...data, updatedAt: now }))).catch(console.error)
+    if (doc.data()?.companyId !== companyId) {
+      // Mesma classe de corrupção já documentada para planos de manutenção/utilizadores
+      // (ver updateMaintenancePlan): uma OT importada cujo documento Firestore ficou com
+      // companyId errado/vazio numa escrita antiga. Sem isto, a gravação `ref.update()`
+      // abaixo (que nunca tocava em companyId) mantinha o valor corrompido — a edição
+      // "resultava" (sem erro), mas na leitura seguinte listTasksCached filtra por
+      // `where('companyId','==',companyId)`, não encontra este documento, e a OT volta a
+      // mostrar a versão antiga vinda da camada de reserva (parece que a alteração
+      // "desapareceu"). Só repara quando a OT é uma das da camada de reserva desta mesma
+      // empresa (scripts/import/tasks.json, só usada pela Empresa UR) — nunca sobre uma OT
+      // real de outra empresa.
+      const belongsToThisCompanyFallback = isDemoCompany(companyId) && getFallbackTasks().some((t) => t.id === id)
+      if (!belongsToThisCompanyFallback) {
+        console.error(`[updateTask] companyId não corresponde para a tarefa ${id} — gravação ignorada.`)
+        return
+      }
+      console.warn(`[updateTask] companyId corrompido na tarefa ${id} — a corrigir para ${companyId}.`)
+    }
+    await ref.update(JSON.parse(JSON.stringify({ ...data, companyId, updatedAt: now }))).catch(console.error)
   }
 
   if (cachedFallbackTasks) {
@@ -2595,6 +2613,84 @@ export async function deleteSafetyRule(companyId: string, id: string): Promise<v
     }
   } catch (err) {
     console.error('[deleteSafetyRule] Error:', err)
+  }
+}
+
+// ── GESTÃO DOCUMENTAL (Folhas de Registo / Instruções de Trabalho) ────────────
+// Substitui os 3 FR + 3 IT antes fixos no código (AVAILABLE_FRS/AVAILABLE_ITS em
+// TaskDocRequirements.tsx) — cada empresa passa a ter os seus próprios documentos,
+// sem base gratuita (ao contrário de Regras de Segurança): o limite do plano é 0 no
+// Free, por isso não há fallback de defeito aqui.
+const listDocumentsCached = unstable_cache(
+  async (companyId: string): Promise<DocumentoObrigatorio[]> => {
+    if (isQuotaExhausted()) return []
+    try {
+      const snap = await firestoreWithTimeout(
+        () => adminDb().collection('documents').where('companyId', '==', companyId).get(),
+        null,
+        800
+      )
+      if (!snap || !snap.docs) return []
+      return snap.docs
+        .map((d) => serialize<DocumentoObrigatorio>(d))
+        .sort((a, b) => a.code.localeCompare(b.code, 'pt', { numeric: true }))
+    } catch (err) {
+      console.error('[listDocuments] Error:', err)
+      return []
+    }
+  },
+  ['documents'],
+  { revalidate: 1800, tags: ['documents'] }
+)
+export const listDocuments = cache(async function(companyId: string, type?: 'FR' | 'IT'): Promise<DocumentoObrigatorio[]> {
+  const docs = await listDocumentsCached(companyId)
+  return type ? docs.filter((d) => d.type === type) : docs
+})
+
+export async function createDocument(
+  companyId: string,
+  data: Omit<DocumentoObrigatorio, 'id' | 'companyId' | 'createdAt'>
+): Promise<string> {
+  const now = new Date().toISOString()
+  try {
+    const ref = await adminDb().collection('documents').add({
+      ...data,
+      companyId,
+      createdAt: now,
+    })
+    revalidateTag('documents')
+    return ref.id
+  } catch (err) {
+    console.error('[createDocument] Error:', err)
+    return `doc_${Date.now()}`
+  }
+}
+
+export async function updateDocument(
+  companyId: string,
+  id: string,
+  data: Partial<Omit<DocumentoObrigatorio, 'id' | 'companyId' | 'createdAt'>>
+): Promise<void> {
+  try {
+    const doc = await adminDb().collection('documents').doc(id).get()
+    if (doc.exists && doc.data()?.companyId === companyId) {
+      await doc.ref.update(data)
+      revalidateTag('documents')
+    }
+  } catch (err) {
+    console.error('[updateDocument] Error:', err)
+  }
+}
+
+export async function deleteDocument(companyId: string, id: string): Promise<void> {
+  try {
+    const doc = await adminDb().collection('documents').doc(id).get()
+    if (doc.exists && doc.data()?.companyId === companyId) {
+      await doc.ref.delete()
+      revalidateTag('documents')
+    }
+  } catch (err) {
+    console.error('[deleteDocument] Error:', err)
   }
 }
 
