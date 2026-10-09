@@ -6,7 +6,7 @@ import Image from 'next/image'
 import {
   X, ShieldAlert, Camera, Images, Wrench, ArrowLeft, FolderKanban, Trash2, Copy
 } from 'lucide-react'
-import type { Task, TaskCriticidade, TipoTarefa, TaskStatus } from '@/types/models'
+import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, DocumentoObrigatorio } from '@/types/models'
 import { STATUS_LABELS } from '@/types/models'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
@@ -14,7 +14,7 @@ import { formatDateTime } from '@/lib/utils'
 import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
 import MaterialsSelector from '@/components/ui/MaterialsSelector'
 import { TaskDocPickerManager } from '@/components/ui/TaskDocRequirements'
-import { createTaskAction, updateTaskAction, loadSafetyRulesAction, type StockMaterialRef } from '@/app/dashboard/tasks/actions'
+import { createTaskAction, updateTaskAction, loadSafetyRulesAction, loadDocumentsAction, type StockMaterialRef } from '@/app/dashboard/tasks/actions'
 
 export const PREDEFINED_SAFETY_RULES = [
   'EPI: Capacete',
@@ -242,6 +242,7 @@ export default function CreateTaskModal({
   const [legal, setLegal] = useState<boolean>(false)
   const [safetyRules, setSafetyRules] = useState<string[]>([])
   const [dynamicSafetyRules, setDynamicSafetyRules] = useState<string[]>(PREDEFINED_SAFETY_RULES)
+  const [liveDocs, setLiveDocs] = useState<DocumentoObrigatorio[]>([])
   const [materialsRequired, setMaterialsRequired] = useState<string[]>([])
   const [requiredFRs, setRequiredFRs] = useState<string[]>([])
   const [requiredITs, setRequiredITs] = useState<string[]>([])
@@ -312,6 +313,8 @@ export default function CreateTaskModal({
           setDynamicSafetyRules(combined)
         }
       }).catch(() => {})
+
+      loadDocumentsAction().then(setLiveDocs).catch(() => {})
 
       if (editingTask) {
         applyTaskToForm(editingTask)
@@ -1080,6 +1083,8 @@ export default function CreateTaskModal({
               selectedITs={requiredITs}
               onChangeFRs={setRequiredFRs}
               onChangeITs={setRequiredITs}
+              liveFRs={liveDocs.filter((d) => d.type === 'FR')}
+              liveITs={liveDocs.filter((d) => d.type === 'IT')}
             />
           )}
 

@@ -6,6 +6,28 @@ import { FileText, CheckCircle2, AlertCircle, Eye, Edit3, X, Check, Lock, Shield
 import { updateTaskFRsAndITsAction } from '@/app/dashboard/tasks/actions'
 import { useRouter } from 'next/navigation'
 import { useOfflineAction } from '@/hooks/useOfflineAction'
+import type { DocumentoObrigatorio } from '@/types/models'
+
+// Campo tipado (number/select/text) do sistema antigo (3 FR hardcoded abaixo). Os
+// documentos reais (Gestão Documental, ver listDocuments) só têm `fieldLabels: string[]`
+// — convertidos para esta mesma forma (todos tipo 'text') em docToFRShape(), para
+// reutilizar sem duplicar a UI de preenchimento.
+type FRField = { name: string; label: string; type: 'number' | 'select' | 'text'; placeholder?: string; options?: string[] }
+type FRShape = { id: string; title: string; desc: string; fields: FRField[] }
+type ITShape = { id: string; title: string; content: string }
+
+function docToFRShape(d: DocumentoObrigatorio): FRShape {
+  return {
+    id: d.id,
+    title: d.code ? `${d.code}: ${d.title}` : d.title,
+    desc: d.content || '',
+    fields: (d.fieldLabels || []).map((label, i) => ({ name: `f${i}`, label, type: 'text' as const })),
+  }
+}
+
+function docToITShape(d: DocumentoObrigatorio): ITShape {
+  return { id: d.id, title: d.code ? `${d.code}: ${d.title}` : d.title, content: d.content || '' }
+}
 
 export const AVAILABLE_FRS = [
   {
@@ -77,15 +99,29 @@ export function TaskDocPickerManager({
   selectedFRs = [],
   selectedITs = [],
   onChangeFRs,
-  onChangeITs
+  onChangeITs,
+  liveFRs = [],
+  liveITs = [],
 }: {
   selectedFRs: string[]
   selectedITs: string[]
   onChangeFRs: (frs: string[]) => void
   onChangeITs: (its: string[]) => void
+  /** FR/IT reais da empresa (Gestão Documental) — ver loadDocumentsAction(). Mesclados com
+   * os 3+3 antigos hardcoded abaixo (ainda referenciados por OTs já existentes) até estes
+   * serem migrados para documentos reais com os mesmos IDs. */
+  liveFRs?: DocumentoObrigatorio[]
+  liveITs?: DocumentoObrigatorio[]
 }) {
   const [frToSelect, setFrToSelect] = useState('')
   const [itToSelect, setItToSelect] = useState('')
+
+  const liveFRShapes = liveFRs.map(docToFRShape)
+  const liveITShapes = liveITs.map(docToITShape)
+  const liveFRIds = new Set(liveFRShapes.map((f) => f.id))
+  const liveITIds = new Set(liveITShapes.map((i) => i.id))
+  const allFRs = [...liveFRShapes, ...AVAILABLE_FRS.filter((f) => !liveFRIds.has(f.id))]
+  const allITs = [...liveITShapes, ...AVAILABLE_ITS.filter((i) => !liveITIds.has(i.id))]
 
   function handleAddFR(frId: string) {
     if (!frId) return
@@ -111,8 +147,8 @@ export function TaskDocPickerManager({
     onChangeITs(selectedITs.filter(id => id !== itId))
   }
 
-  const unselectedFRs = AVAILABLE_FRS.filter(f => !selectedFRs.includes(f.id))
-  const unselectedITs = AVAILABLE_ITS.filter(i => !selectedITs.includes(i.id))
+  const unselectedFRs = allFRs.filter(f => !selectedFRs.includes(f.id))
+  const unselectedITs = allITs.filter(i => !selectedITs.includes(i.id))
 
   return (
     <div className="space-y-4 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/20 p-4">
@@ -144,7 +180,7 @@ export function TaskDocPickerManager({
         {selectedFRs.length > 0 ? (
           <div className="space-y-1.5">
             {selectedFRs.map(frId => {
-              const frDef = AVAILABLE_FRS.find(f => f.id === frId) || { title: frId, desc: '' }
+              const frDef = allFRs.find(f => f.id === frId) || { title: frId, desc: '' }
               return (
                 <div key={frId} className="flex items-center justify-between bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-amber-200 dark:border-amber-900/50 shadow-sm text-xs">
                   <div>
@@ -195,7 +231,7 @@ export function TaskDocPickerManager({
         {selectedITs.length > 0 ? (
           <div className="space-y-1.5">
             {selectedITs.map(itId => {
-              const itDef = AVAILABLE_ITS.find(i => i.id === itId) || { title: itId, content: '' }
+              const itDef = allITs.find(i => i.id === itId) || { title: itId, content: '' }
               return (
                 <div key={itId} className="flex items-center justify-between bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-teal-200 dark:border-teal-900/50 shadow-sm text-xs">
                   <div>
@@ -228,7 +264,9 @@ export function TaskDocRequirementsTechnician({
   requiredITs = [],
   completedFRs = {},
   acknowledgedITs = [],
-  onUpdate
+  onUpdate,
+  liveFRs = [],
+  liveITs = [],
 }: {
   taskId: string
   requiredFRs?: string[]
@@ -236,6 +274,9 @@ export function TaskDocRequirementsTechnician({
   completedFRs?: Record<string, any>
   acknowledgedITs?: string[]
   onUpdate?: () => void
+  /** FR/IT reais da empresa — ver comentário em TaskDocPickerManager acima. */
+  liveFRs?: DocumentoObrigatorio[]
+  liveITs?: DocumentoObrigatorio[]
 }) {
   const router = useRouter()
   const offline = useOfflineAction()
@@ -244,19 +285,26 @@ export function TaskDocRequirementsTechnician({
   const [formData, setFormData] = useState<Record<string, any>>({})
   const [saving, setSaving] = useState(false)
 
+  const liveFRShapes = liveFRs.map(docToFRShape)
+  const liveITShapes = liveITs.map(docToITShape)
+  const liveFRIds = new Set(liveFRShapes.map((f) => f.id))
+  const liveITIds = new Set(liveITShapes.map((i) => i.id))
+  const allFRs = [...liveFRShapes, ...AVAILABLE_FRS.filter((f) => !liveFRIds.has(f.id))]
+  const allITs = [...liveITShapes, ...AVAILABLE_ITS.filter((i) => !liveITIds.has(i.id))]
+
   if ((!requiredFRs || requiredFRs.length === 0) && (!requiredITs || requiredITs.length === 0)) {
     return null
   }
 
   function openFR(frId: string) {
-    const frDef = AVAILABLE_FRS.find(f => f.id === frId)
+    const frDef = allFRs.find(f => f.id === frId)
     if (!frDef) return
     setActiveFRPopup(frDef)
     setFormData(completedFRs?.[frId] || {})
   }
 
   function openIT(itId: string) {
-    const itDef = AVAILABLE_ITS.find(i => i.id === itId)
+    const itDef = allITs.find(i => i.id === itId)
     if (!itDef) return
     setActiveITPopup(itDef)
   }
@@ -319,7 +367,7 @@ export function TaskDocRequirementsTechnician({
           </span>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {requiredFRs.map(frId => {
-              const frDef = AVAILABLE_FRS.find(f => f.id === frId) || { id: frId, title: frId, desc: '' }
+              const frDef = allFRs.find(f => f.id === frId) || { id: frId, title: frId, desc: '' }
               const isFilled = !!completedFRs?.[frId]
 
               return (
@@ -355,7 +403,7 @@ export function TaskDocRequirementsTechnician({
           </span>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {requiredITs.map(itId => {
-              const itDef = AVAILABLE_ITS.find(i => i.id === itId) || { id: itId, title: itId, content: '' }
+              const itDef = allITs.find(i => i.id === itId) || { id: itId, title: itId, content: '' }
               const isAck = (acknowledgedITs || []).includes(itId)
 
               return (

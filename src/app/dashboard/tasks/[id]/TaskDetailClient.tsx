@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Plus, Trash2, X, Wrench, CheckSquare, Square, Package, ShieldAlert, Camera, Images, CheckCircle2 } from 'lucide-react'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
-import type { Intervention, ChecklistItem, TaskStatus, Material } from '@/types/models'
+import type { Intervention, ChecklistItem, TaskStatus, Material, DocumentoObrigatorio } from '@/types/models'
 import { formatDateTime, formatDuration } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
 import { TaskDocRequirementsTechnician } from '@/components/ui/TaskDocRequirements'
@@ -21,6 +21,7 @@ import {
   closeTaskAction,
   reopenTaskAction,
 } from './actions'
+import { loadDocumentsAction } from '../actions'
 
 const MAX_PHOTOS = 5
 const MAX_PHOTO_MB = 10
@@ -93,6 +94,14 @@ export default function TaskDetailClient({
   const router = useRouter()
   const searchParams = useSearchParams()
   const offline = useOfflineAction()
+  const [liveDocs, setLiveDocs] = useState<DocumentoObrigatorio[]>([])
+
+  useEffect(() => {
+    if (requiredFRs.length > 0 || requiredITs.length > 0) {
+      loadDocumentsAction().then(setLiveDocs).catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -366,6 +375,8 @@ export default function TaskDetailClient({
         requiredITs={requiredITs}
         completedFRs={completedFRs}
         acknowledgedITs={acknowledgedITs}
+        liveFRs={liveDocs.filter((d) => d.type === 'FR')}
+        liveITs={liveDocs.filter((d) => d.type === 'IT')}
       />
 
       <div className="flex items-center justify-between mb-3 pb-3 border-b border-outline/60">

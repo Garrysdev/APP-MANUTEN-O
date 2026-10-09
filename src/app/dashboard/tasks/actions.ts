@@ -5,10 +5,10 @@ import { getCurrentProfile } from '@/lib/firebase/session'
 import {
   createTask, updateTask, deleteTask,
   listPlanTaskRefs, type PlanTaskRef,
-  listStockItems, listAssetRefs, listSafetyRules,
+  listStockItems, listAssetRefs, listSafetyRules, listDocuments,
   listCompletedTasksPaged,
 } from '@/lib/firebase/data'
-import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, Executor } from '@/types/models'
+import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, Executor, DocumentoObrigatorio } from '@/types/models'
 import { TIPOS_TAREFA } from '@/types/models'
 import {
   changeTaskStatus,
@@ -53,6 +53,13 @@ export async function loadSafetyRulesAction(): Promise<string[]> {
   if (!profile) return []
   const rules = await listSafetyRules(profile.companyId)
   return rules.map((r: any) => r.name || r.title || r.rule || r.text).filter(Boolean)
+}
+
+/** FR/IT reais da Gestão Documental da empresa — carregadas só quando o modal de OT abre. */
+export async function loadDocumentsAction(): Promise<DocumentoObrigatorio[]> {
+  const profile = await getCurrentProfile()
+  if (!profile) return []
+  return listDocuments(profile.companyId)
 }
 
 /** Carrega os planos (leves) só quando o utilizador abre o modal de criação — evita pesá-los em cada visita. */
