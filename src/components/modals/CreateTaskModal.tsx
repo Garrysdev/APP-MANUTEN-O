@@ -95,21 +95,66 @@ function nowForInput(): string {
 
 /** Mostra a data/hora carimbada, ou um botão para a carimbar no momento. */
 function StampField({
-  label, name, value, onStamp, onClear, actionLabel, tone, disabled = false, disabledHint,
+  label, name, value, onStamp, onClear, onChangeValue, actionLabel, tone, disabled = false, disabledHint, editable = false,
 }: {
   label: string
   name: string
   value: string
   onStamp: () => void
   onClear: () => void
+  onChangeValue?: (value: string) => void
   actionLabel: string
   tone: 'blue' | 'emerald'
   disabled?: boolean
   disabledHint?: string
+  /** Gestor só: permite escrever/escolher a data e hora à mão, em vez de só poder
+   * "carimbar agora" — para fechar uma OT com a data real de término quando o registo
+   * no sistema acontece mais tarde (ex.: no dia seguinte), sem adulterar métricas como o
+   * MTTR, que usam esta data para calcular o tempo de intervenção. */
+  editable?: boolean
 }) {
   const tones = {
     blue: 'bg-blue-600 hover:bg-blue-700 border-blue-700',
     emerald: 'bg-emerald-600 hover:bg-emerald-700 border-emerald-700',
+  }
+  if (editable) {
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{label}</label>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="datetime-local"
+            name={name}
+            value={value}
+            onChange={(e) => onChangeValue?.(e.target.value)}
+            disabled={disabled}
+            className="input flex-1"
+          />
+          <button
+            type="button"
+            onClick={onStamp}
+            disabled={disabled}
+            title="Preencher com a data e hora atuais"
+            className={`shrink-0 text-white font-bold text-xs rounded-xl border px-2.5 py-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${tones[tone]}`}
+          >
+            Agora
+          </button>
+          {value && (
+            <button
+              type="button"
+              onClick={onClear}
+              title="Limpar"
+              className="shrink-0 text-slate-400 hover:text-red-500 cursor-pointer p-2"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        {disabled && disabledHint && (
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{disabledHint}</p>
+        )}
+      </div>
+    )
   }
   return (
     <div>
@@ -843,8 +888,11 @@ export default function CreateTaskModal({
             </div>
           </div>
 
-          {/* Início e Fim reais: carimbados por botão, para o técnico registar no momento
-              em que arranca e em que acaba, sem ter de escolher data e hora à mão. */}
+          {/* Início e Fim reais: por omissão carimbados por botão (o técnico regista no
+              momento em que arranca/acaba, sem escolher data e hora à mão). O gestor pode
+              escrever a data e hora à mão (editable) — para fechar uma OT com a data real
+              de término quando o registo no sistema acontece mais tarde (ex.: no dia
+              seguinte), sem adulterar métricas como o MTTR. */}
           <div className="grid grid-cols-2 gap-3">
             <StampField
               label="Início da OT"
@@ -852,8 +900,10 @@ export default function CreateTaskModal({
               value={startedAt}
               onStamp={() => setStartedAt(nowForInput())}
               onClear={() => setStartedAt('')}
+              onChangeValue={setStartedAt}
               actionLabel="Iniciar OT"
               tone="blue"
+              editable={isManager}
             />
             <StampField
               label="Fim da OT"
@@ -861,10 +911,12 @@ export default function CreateTaskModal({
               value={completedAt}
               onStamp={() => setCompletedAt(nowForInput())}
               onClear={() => setCompletedAt('')}
+              onChangeValue={setCompletedAt}
               actionLabel="Terminar OT"
               tone="emerald"
               disabled={!startedAt}
               disabledHint="Marque primeiro o início"
+              editable={isManager}
             />
           </div>
 
