@@ -87,6 +87,7 @@ function parseTask(formData: FormData) {
   const rawStatus = String(formData.get('status') ?? 'pending') as TaskStatus
   const dueDate = String(formData.get('dueDate') ?? '').trim() || null
   const completedAtRaw = String(formData.get('completedAt') ?? '').trim()
+  const plannedStartDateRaw = String(formData.get('plannedStartDate') ?? '').trim()
 
   // Dia de lançamento (createdAt) — editável pelo gestor no formulário (campo "Data de
   // Lançamento"). Só é aplicado se vier num formato de data válido; caso contrário não é
@@ -156,7 +157,10 @@ function parseTask(formData: FormData) {
     ...(createdAt ? { createdAt } : {}),
     startedAt: String(formData.get('startedAt') ?? '').trim() || (status === 'in_progress' || status === 'done' ? new Date().toISOString() : null),
     completedAt: completedAtRaw || (status === 'done' ? new Date().toISOString() : null),
-    plannedStartDate: String(formData.get('plannedStartDate') ?? '').trim() || null,
+    // Já não pedido no formulário (simplificação: só "Data Limite"/dueDate fica visível) —
+    // omitido (em vez de forçado a null) quando não vier no FormData, para não apagar um
+    // plannedStartDate já definido por outra via (ex.: arrastar uma barra no Gantt).
+    ...(plannedStartDateRaw ? { plannedStartDate: plannedStartDateRaw } : {}),
     observacoes: String(formData.get('observacoes') ?? '').trim() || null,
     safetyRules: parseStringArray('safetyRules'),
     materialsRequired: parseStringArray('materialsRequired'),

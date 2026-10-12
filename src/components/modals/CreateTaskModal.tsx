@@ -863,7 +863,7 @@ export default function CreateTaskModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {isManager && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data de Lançamento</label>
@@ -877,23 +877,14 @@ export default function CreateTaskModal({
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data Planeada</label>
-              <input
-                type="datetime-local"
-                name="plannedStartDate"
-                value={plannedStartDate}
-                onChange={(e) => setPlannedStartDate(e.target.value)}
-                className="input"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Prazo</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data Limite</label>
               <input
                 type="date"
                 name="dueDate"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 className="input"
+                placeholder="Opcional"
               />
             </div>
           </div>

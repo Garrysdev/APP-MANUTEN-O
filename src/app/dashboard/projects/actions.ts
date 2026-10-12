@@ -45,10 +45,18 @@ function parseProjectTask(formData: FormData) {
   const tipo = String(formData.get('tipo') ?? 'curativa') as TipoTarefa
   const rawStatus = String(formData.get('status') ?? 'pending') as TaskStatus
   const dueDate = String(formData.get('dueDate') ?? '').trim() || null
-  const plannedStartDate = String(formData.get('plannedStartDate') ?? '').trim() || null
+  const plannedStartDateRaw = String(formData.get('plannedStartDate') ?? '').trim()
+  const completedAtRaw = String(formData.get('completedAt') ?? '').trim()
 
   let status = STATUSES.includes(rawStatus) ? rawStatus : 'pending'
-  if (!dueDate && (status === 'done' || status === 'cancelled')) {
+  // Mesma regra de tasks/actions.ts: a data de Fim da OT (completedAt) é o sinal real de
+  // conclusão, não o Prazo (dueDate) — ver fix "guardar Estado 'Concluída' revertia para
+  // 'Pendente' sem Prazo preenchido", que também se aplicava aqui (cópia duplicada da
+  // mesma lógica, não partilhada entre os dois ficheiros de actions).
+  if (completedAtRaw && status !== 'cancelled') {
+    status = 'done'
+  }
+  if (!completedAtRaw && status === 'done') {
     status = 'pending'
   }
 
@@ -87,9 +95,12 @@ function parseProjectTask(formData: FormData) {
     tipo: TIPOS.includes(tipo) ? tipo : 'curativa',
     status,
     dueDate,
-    plannedStartDate,
+    // Já não pedido no formulário (simplificação: só "Data Limite"/dueDate fica visível) —
+    // omitido (em vez de forçado a null) quando não vier no FormData, para não apagar um
+    // plannedStartDate já definido por outra via (ex.: arrastar uma barra no Gantt).
+    ...(plannedStartDateRaw ? { plannedStartDate: plannedStartDateRaw } : {}),
     startedAt: String(formData.get('startedAt') ?? '').trim() || (status === 'in_progress' || status === 'done' ? new Date().toISOString() : null),
-    completedAt: String(formData.get('completedAt') ?? '').trim() || (status === 'done' ? (dueDate || new Date().toISOString()) : null),
+    completedAt: completedAtRaw || (status === 'done' ? new Date().toISOString() : null),
     observacoes: String(formData.get('observacoes') ?? '').trim() || null,
     safetyRules: parseStringArray('safetyRules'),
     materialsRequired: parseStringArray('materialsRequired'),

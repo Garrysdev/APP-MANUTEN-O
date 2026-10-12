@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { listTasks, listAssetRefs, listUsers, listMaintenancePlans } from '@/lib/firebase/data'
+import { listTasks, listAssetRefs, listUsers } from '@/lib/firebase/data'
 import { planHas } from '@/lib/plans'
 import { isProjectTask } from '@/lib/task-assignment'
 import type { PlanName } from '@/types/models'
@@ -16,11 +16,10 @@ export default async function GanttPage() {
   const plan = (profile.company?.plan ?? 'free') as PlanName
   if (!planHas(plan, 'projects')) redirect('/dashboard/billing?feature=projects')
 
-  const [allTasks, assets, users, plans] = await Promise.all([
+  const [allTasks, assets, users] = await Promise.all([
     listTasks(profile.companyId),
     listAssetRefs(profile.companyId),
     listUsers(profile.companyId),
-    listMaintenancePlans(profile.companyId),
   ])
 
   const tasks = allTasks.filter(isProjectTask)
@@ -40,7 +39,6 @@ export default async function GanttPage() {
         externalCompanyId: u.externalCompanyId,
         externalCompanyName: u.externalCompanyName,
       }))}
-      plans={plans}
       role={profile.role}
       userId={profile.id}
     />

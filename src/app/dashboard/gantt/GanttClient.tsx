@@ -5,18 +5,16 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Plus, FolderKanban, Play, CheckCircle2,
-  ShieldAlert, CalendarClock, Building2, GripHorizontal, ArrowLeft,
+  ShieldAlert, Building2, GripHorizontal, ArrowLeft,
 } from 'lucide-react'
 import {
   type Task,
   type TaskStatus,
   type TipoTarefa,
   type UserRole,
-  type MaintenancePlan,
   STATUS_LABELS,
   TIPO_LABELS,
 } from '@/types/models'
-import { isPlanGanttActive } from '../maintenance-plan/MaintenancePlanClient'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { useTableSort } from '@/lib/useTableSort'
 import {
@@ -681,14 +679,12 @@ export default function GanttClient({
   tasks,
   assets,
   users,
-  plans = [],
   role,
   userId,
 }: {
   tasks: Task[]
   assets: Ref[]
   users: UserRef[]
-  plans?: MaintenancePlan[]
   role: UserRole
   userId: string
 }) {
@@ -700,7 +696,6 @@ export default function GanttClient({
   const [editing, setEditing] = useState<Task | null>(null)
   const [creating, setCreating] = useState(false)
   const [filter, setFilter] = useState<'all' | TaskStatus>('all')
-  const [showParagensOnly, setShowParagensOnly] = useState(false)
   const [statusPending, startStatusTransition] = useTransition()
 
   const isManager = role === 'manager'
@@ -781,80 +776,9 @@ export default function GanttClient({
   const assetArea = (id?: string | null) => (id ? assetAreaMap.get(id) ?? '—' : '—')
   const assetTag = (id?: string | null) => (id ? assetTagMap.get(id) ?? '—' : '—')
 
-  const planGanttTasks = useMemo(() => {
-    const list: Task[] = []
-    ;(plans || [])
-      .filter((p) => isPlanGanttActive(p))
-      .forEach((p) => {
-        const title = `[PM] ${p.title} (${(p.periodicidadeLabel || p.periodicidade || 'PM').toUpperCase()})`
-        const pLow = String(p.periodicidade || '').toLowerCase()
-        const pLabelLow = String(p.periodicidadeLabel || '').toLowerCase()
-        const titleLow = String(p.title || '').toLowerCase()
-        const descLow = String(p.description || '').toLowerCase()
-        const combo = `${pLow} ${pLabelLow} ${titleLow} ${descLow}`
-
-        const isBianual = combo.includes('bianual') || combo.includes('2x/ano') || combo.includes('2x ano')
-        const isAnual = combo.includes('anual') || combo.includes('1x/ano')
-
-        const baseTask: Partial<Task> = {
-          companyId: p.companyId,
-          title,
-          description: `Plano de Manutenção: ${p.periodicidadeLabel || p.periodicidade || 'PM'} | TAG: ${p.tag || '—'}`,
-          assetId: p.assetId,
-          tag: p.tag || null,
-          area: p.area || null,
-          assignedTo: p.assignedTo,
-          criticidade: p.criticidade,
-          tipo: 'plano' as TipoTarefa,
-          status: 'pending' as TaskStatus,
-          createdBy: p.createdBy,
-        }
-
-        if (isBianual) {
-          list.push({
-            ...baseTask,
-            id: `plan_${p.id}_1`,
-            plannedStartDate: '2026-08-08',
-            createdAt: '2026-08-08',
-            dueDate: '2026-08-08',
-            updatedAt: '2026-08-08',
-          } as Task)
-          list.push({
-            ...baseTask,
-            id: `plan_${p.id}_2`,
-            plannedStartDate: '2026-12-21',
-            createdAt: '2026-12-21',
-            dueDate: '2026-12-21',
-            updatedAt: '2026-12-21',
-          } as Task)
-        } else if (isAnual) {
-          list.push({
-            ...baseTask,
-            id: `plan_${p.id}_1`,
-            plannedStartDate: '2026-08-08',
-            createdAt: '2026-08-08',
-            dueDate: '2026-08-08',
-            updatedAt: '2026-08-08',
-          } as Task)
-        } else {
-          const sDate = p.calendarStartDate || '2026-08-08'
-          const eDate = p.nextDueDate || p.calendarStartDate || '2026-08-08'
-          list.push({
-            ...baseTask,
-            id: `plan_${p.id}`,
-            plannedStartDate: sDate,
-            createdAt: sDate,
-            dueDate: eDate,
-            updatedAt: sDate,
-          } as Task)
-        }
-      })
-    return list
-  }, [plans])
-
-  const combinedTasks = useMemo(() => {
-    return [...taskList, ...planGanttTasks]
-  }, [taskList, planGanttTasks])
+  // O Gantt mostra só Projetos (taskList) — decisão do Rui: barras sintéticas de Plano de
+  // Manutenção (PM) deixaram de aparecer aqui, ficam só no Calendário.
+  const combinedTasks = taskList
 
   const uniqueAreas = useMemo(() => {
     const set = new Set<string>()
@@ -890,7 +814,7 @@ export default function GanttClient({
     setCurrentPage(1)
   }, [
     search, searchId, searchArea, searchTag, searchTi, searchProject, searchTech,
-    filter, pmTypeFilter, selectedTech, showParagensOnly, dateStartFilter, dateEndFilter,
+    filter, selectedTech, dateStartFilter, dateEndFilter,
     areaFilter, tagFilter, pageSize
   ])
 
@@ -917,31 +841,8 @@ export default function GanttClient({
 
     return searchIndex
       .filter(({ task: t, text }) => {
-        const isPmTask =
-          t.tipo === 'plano' ||
-          t.id.startsWith('plan_') ||
-          (t.title || '').startsWith('[PM]') ||
-          (t.description || '').toLowerCase().includes('plano de manutenção')
-
-        if (pmTypeFilter === 'pm_only' && !isPmTask) return false
-        if (pmTypeFilter === 'projects_only' && isPmTask) return false
-
         if (filter !== 'all' && t.status !== filter) return false
         if (selectedTech && t.assignedTo !== selectedTech) return false
-        if (showParagensOnly) {
-          const titleUpper = (t.title || '').toUpperCase()
-          const descUpper = (t.description || '').toUpperCase()
-          const isParagem =
-            titleUpper.includes('AGO') ||
-            titleUpper.includes('DEZ') ||
-            titleUpper.includes('PARAGEM') ||
-            titleUpper.includes('PARAGENS') ||
-            titleUpper.includes('BIANUAL') ||
-            descUpper.includes('AGO') ||
-            descUpper.includes('DEZ') ||
-            descUpper.includes('PARAGEM')
-          if (!isParagem) return false
-        }
 
         if (areaFilter) {
           const af = areaFilter.trim().toLowerCase()
@@ -999,7 +900,7 @@ export default function GanttClient({
       })
       .map(({ task }) => task)
   }, [
-    searchIndex, filter, pmTypeFilter, selectedTech, showParagensOnly, areaFilter, tagFilter,
+    searchIndex, filter, selectedTech, areaFilter, tagFilter,
     dateStartFilter, dateEndFilter, search, searchId, searchArea, searchTag, searchTi, searchProject, searchTech,
     assetAreaMap, assetTagMap, userMap, excelDateFilter, excelInicioFilter, excelFimFilter
   ])
@@ -1057,21 +958,10 @@ export default function GanttClient({
             </span>
           </h1>
           <p className="text-xs sm:text-sm font-medium text-industrial-blue-light dark:text-slate-400 mt-1">
-            Gestão visual de cronogramas, OTs do Plano de Manutenção e alocação de técnicos.
+            Gestão visual de cronogramas e alocação de técnicos dos Projetos.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setShowParagensOnly(!showParagensOnly)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 border ${
-              showParagensOnly
-                ? 'bg-amber-500 text-slate-900 border-amber-600 shadow-amber-500/20 ring-2 ring-amber-400'
-                : 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700 hover:bg-amber-100'
-            }`}
-          >
-            <CalendarClock className="h-4 w-4 shrink-0" />
-            <span>Paragens (AGO/DEZ)</span>
-          </button>
           <button onClick={openCreate} className="shrink-0 h-10 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white rounded-xl font-bold text-xs shadow-lg shadow-safety-orange/15 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
             <Plus size={16} className="stroke-[2.5] shrink-0" />
             <span className="hidden sm:inline">Novo Projeto / OT</span>
@@ -1118,44 +1008,6 @@ export default function GanttClient({
       </div>
 
       <div className="flex flex-col gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center justify-between gap-3 flex-wrap border-b border-slate-100 dark:border-slate-800 pb-2.5">
-          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-            <button
-              type="button"
-              onClick={() => setPmTypeFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                pmTypeFilter === 'all'
-                  ? 'bg-industrial-blue text-white shadow-sm'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              📊 Ver Todos
-            </button>
-            <button
-              type="button"
-              onClick={() => setPmTypeFilter('pm_only')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                pmTypeFilter === 'pm_only'
-                  ? 'bg-safety-orange text-white shadow-sm'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              📋 Ver só PM (Plano de Manutenção)
-            </button>
-            <button
-              type="button"
-              onClick={() => setPmTypeFilter('projects_only')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                pmTypeFilter === 'projects_only'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              🏗️ Ver só outros projetos
-            </button>
-          </div>
-        </div>
-
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex gap-2 flex-wrap items-center">
             {(['all', ...statuses] as const).map((s) => (
