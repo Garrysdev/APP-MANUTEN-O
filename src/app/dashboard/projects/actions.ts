@@ -12,7 +12,6 @@ import { adminDb } from '@/lib/firebase/admin'
 import { LIMITS } from '@/lib/plans'
 import { isOpenProjectTask } from '@/lib/task-assignment'
 import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, PlanName } from '@/types/models'
-import { TIPOS_TAREFA } from '@/types/models'
 
 export type TaskFormState = { error?: string; ok?: boolean }
 export type StockMaterialRef = { id: string; name: string; unit: string | null }
@@ -31,8 +30,6 @@ export async function loadPlanTaskRefsAction(): Promise<PlanTaskRef[]> {
 }
 
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
-// Lista canónica em @/types/models — derivada do próprio tipo, nunca escrita à mão.
-const TIPOS = TIPOS_TAREFA
 const STATUSES: TaskStatus[] = ['prazo', 'pending', 'in_progress', 'done', 'cancelled']
 
 function parseProjectTask(formData: FormData) {
@@ -42,7 +39,6 @@ function parseProjectTask(formData: FormData) {
   const assetId = String(formData.get('assetId') ?? '').trim() || null
 
   const criticidade = String(formData.get('criticidade') ?? 'verde') as TaskCriticidade
-  const tipo = String(formData.get('tipo') ?? 'curativa') as TipoTarefa
   const rawStatus = String(formData.get('status') ?? 'pending') as TaskStatus
   const dueDate = String(formData.get('dueDate') ?? '').trim() || null
   const plannedStartDateRaw = String(formData.get('plannedStartDate') ?? '').trim()
@@ -92,7 +88,9 @@ function parseProjectTask(formData: FormData) {
     assignedTo: String(formData.get('assignedTo') ?? '').trim() || null,
     assignedToIds,
     criticidade: CRITICIDADES.includes(criticidade) ? criticidade : 'verde',
-    tipo: TIPOS.includes(tipo) ? tipo : 'curativa',
+    // 'Tipo de OT' já não faz parte do formulário de Projetos (página específica, não cópia
+    // da OT) — fica sempre 'projeto', nunca lido do formulário.
+    tipo: 'projeto' as TipoTarefa,
     status,
     dueDate,
     // Já não pedido no formulário (simplificação: só "Data Limite"/dueDate fica visível) —

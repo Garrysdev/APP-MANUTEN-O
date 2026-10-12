@@ -244,6 +244,10 @@ export interface CreateTaskModalProps {
    * sentido para OTs — a página de Plano de Manutenção reutiliza este modal para editar
    * Planos (outro tipo de entidade) e desativa isto explicitamente. */
   allowDuplicate?: boolean
+  /** Formulário de Projeto (Projetos/Gantt) em vez de OT — página específica, não cópia da
+   * OT (pedido do Rui): esconde Tipo de OT, Criticidade, Legal, FR/IT obrigatórias e
+   * Criar/Incluir no PM; Equipamento deixa de ser obrigatório. tipo fica sempre 'projeto'. */
+  isProjectForm?: boolean
 }
 
 export default function CreateTaskModal({
@@ -268,6 +272,7 @@ export default function CreateTaskModal({
   availableTasksForDependencies,
   showDependencies = false,
   allowDuplicate = true,
+  isProjectForm = false,
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState(initialTitle || '')
   const [tipo, setTipo] = useState<TipoTarefa>(initialTipo || 'curativa')
@@ -451,7 +456,7 @@ export default function CreateTaskModal({
       setError('⚠️ O Título / Descrição da Avaria é um campo obrigatório (*). Por favor preencha o título antes de guardar.')
       return
     }
-    if (!assetId.trim()) {
+    if (!isProjectForm && !assetId.trim()) {
       setError('⚠️ A Seleção do Equipamento / TAG é um campo obrigatório (*). Por favor selecione a Área e a TAG do equipamento.')
       return
     }
@@ -695,56 +700,58 @@ export default function CreateTaskModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Tipo de OT *</label>
-                <label
-                  className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer select-none"
-                  title="Inspeção legal / obrigatória por regulamentação oficial"
+          {!isProjectForm && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Tipo de OT *</label>
+                  <label
+                    className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer select-none"
+                    title="Inspeção legal / obrigatória por regulamentação oficial"
+                  >
+                    <input
+                      type="checkbox"
+                      name="legal"
+                      checked={legal}
+                      onChange={(e) => setLegal(e.target.checked)}
+                      className="rounded accent-red-600 h-3.5 w-3.5"
+                    />
+                    <span>⚖️ Legal</span>
+                  </label>
+                </div>
+                <select
+                  name="tipo"
+                  value={tipo}
+                  onChange={(e) => setTipo(e.target.value as TipoTarefa)}
+                  className="input"
                 >
-                  <input
-                    type="checkbox"
-                    name="legal"
-                    checked={legal}
-                    onChange={(e) => setLegal(e.target.checked)}
-                    className="rounded accent-red-600 h-3.5 w-3.5"
-                  />
-                  <span>⚖️ Legal</span>
-                </label>
+                  {/* Registos antigos importados podem trazer um tipo fora da lista canónica
+                      (ex. "melhoria"). Sem esta opção sintética, o <select> controlado mostrava
+                      e submetia silenciosamente a primeira opção da lista, corrompendo o campo
+                      em qualquer gravação em que o utilizador não mexesse no tipo. */}
+                  {!TIPO_OPTIONS.some((opt) => opt.value === tipo) && (
+                    <option value={tipo}>{String(tipo)} (valor original — escolha o tipo correto)</option>
+                  )}
+                  {TIPO_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
               </div>
-              <select
-                name="tipo"
-                value={tipo}
-                onChange={(e) => setTipo(e.target.value as TipoTarefa)}
-                className="input"
-              >
-                {/* Registos antigos importados podem trazer um tipo fora da lista canónica
-                    (ex. "melhoria"). Sem esta opção sintética, o <select> controlado mostrava
-                    e submetia silenciosamente a primeira opção da lista, corrompendo o campo
-                    em qualquer gravação em que o utilizador não mexesse no tipo. */}
-                {!TIPO_OPTIONS.some((opt) => opt.value === tipo) && (
-                  <option value={tipo}>{String(tipo)} (valor original — escolha o tipo correto)</option>
-                )}
-                {TIPO_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Criticidade *</label>
+                <select
+                  name="criticidade"
+                  value={criticidade}
+                  onChange={(e) => setCriticidade(e.target.value as TaskCriticidade)}
+                  className="input"
+                >
+                  {CRITICIDADE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Criticidade *</label>
-              <select
-                name="criticidade"
-                value={criticidade}
-                onChange={(e) => setCriticidade(e.target.value as TaskCriticidade)}
-                className="input"
-              >
-                {CRITICIDADE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+          )}
 
           {/* Periodicidade (apenas visível em OTs de PM / Preventiva) */}
           {isPmTipo && (
@@ -1130,7 +1137,7 @@ export default function CreateTaskModal({
             assetId={assetId}
           />
 
-          {isManager && (
+          {isManager && !isProjectForm && (
             <TaskDocPickerManager
               selectedFRs={requiredFRs}
               selectedITs={requiredITs}
@@ -1195,40 +1202,43 @@ export default function CreateTaskModal({
             </div>
           )}
 
-          {/* Incluir no PM e Periodicidade (Último bloco do formulário) */}
-          <div className="bg-amber-50/60 dark:bg-amber-900/20 p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/50 space-y-3">
-            <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-amber-900 dark:text-amber-300">
-              <input
-                type="checkbox"
-                checked={addToPmModal}
-                onChange={(e) => setAddToPmModal(e.target.checked)}
-                className="rounded accent-amber-600 h-4 w-4"
-              />
-              <span>⚙️ Criar / Incluir no Plano de Manutenção Preventiva (PM)</span>
-            </label>
-            {addToPmModal && (
-              isPmTipo ? (
-                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
-                  Será incluído no plano com a periodicidade definida acima: <strong>{periodicidadeModal}</strong>.
-                </p>
-              ) : (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Periodicidade do PM *
-                  </label>
-                  <select
-                    value={periodicidadeModal}
-                    onChange={(e) => setPeriodicidadeModal(e.target.value)}
-                    className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-700"
-                  >
-                    {PERIODICIDADE_PM_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )
-            )}
-          </div>
+          {/* Incluir no PM e Periodicidade (Último bloco do formulário) — não faz sentido
+              para Projetos (página específica, não cópia da OT). */}
+          {!isProjectForm && (
+            <div className="bg-amber-50/60 dark:bg-amber-900/20 p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/50 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-amber-900 dark:text-amber-300">
+                <input
+                  type="checkbox"
+                  checked={addToPmModal}
+                  onChange={(e) => setAddToPmModal(e.target.checked)}
+                  className="rounded accent-amber-600 h-4 w-4"
+                />
+                <span>⚙️ Criar / Incluir no Plano de Manutenção Preventiva (PM)</span>
+              </label>
+              {addToPmModal && (
+                isPmTipo ? (
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                    Será incluído no plano com a periodicidade definida acima: <strong>{periodicidadeModal}</strong>.
+                  </p>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Periodicidade do PM *
+                    </label>
+                    <select
+                      value={periodicidadeModal}
+                      onChange={(e) => setPeriodicidadeModal(e.target.value)}
+                      className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-700"
+                    >
+                      {PERIODICIDADE_PM_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              )}
+            </div>
+          )}
 
           {duplicating && (
             <div className="rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 px-3 py-2.5 text-sm text-indigo-800 dark:text-indigo-300 flex items-center justify-between gap-3">

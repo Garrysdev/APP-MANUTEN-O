@@ -506,6 +506,7 @@ export default function ProjectsListClient({
         deleteAction={deleteProjectTaskAction}
         availableTasksForDependencies={taskList}
         showDependencies={true}
+        isProjectForm={true}
         onSuccess={() => {
           closeModal()
           router.refresh()

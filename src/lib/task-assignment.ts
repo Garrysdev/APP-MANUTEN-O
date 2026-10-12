@@ -8,16 +8,20 @@ import type { Task, User } from '@/types/models'
  * mesma lógica estava duplicada e ligeiramente inconsistente entre tasks/page.tsx e
  * projects/page.tsx — um único helper evita as duas divergirem outra vez.
  */
-export function isProjectTask(t: Pick<Task, 'source' | 'isProject' | 'tipo' | 'description'> | any): boolean {
+export function isProjectTask(t: Pick<Task, 'source' | 'isProject' | 'tipo'> | any): boolean {
   if (!t) return false
+  // Só sinais explícitos e estruturados — nunca texto livre da descrição. Uma OT normal
+  // que mencione a palavra "projeto"/"projecto" na descrição (ex. "Reparação ligada ao
+  // projeto de expansão") não é um Projeto; só é projeto o que foi criado como tal
+  // (source/isProject, gravados por createProjectTaskAction) ou tem Tipo 'projeto'
+  // explicitamente escolhido. Pedido do Rui: "as OT que estão nos projetos deveriam de
+  // estar só nas OT".
   return Boolean(
     (t as any).source === 'folha_projetos' ||
     (t as any).isProject === true ||
     (t.tipo as string) === 'projeto' ||
     (t.tipo as string) === 'projecto' ||
-    (t.tipo as string) === 'pr' ||
-    (t.description || '').toLowerCase().includes('projecto') ||
-    (t.description || '').toLowerCase().includes('projeto')
+    (t.tipo as string) === 'pr'
   )
 }
 

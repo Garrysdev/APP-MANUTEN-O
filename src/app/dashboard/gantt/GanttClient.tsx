@@ -1122,6 +1122,7 @@ export default function GanttClient({
         deleteAction={deleteProjectTaskAction}
         availableTasksForDependencies={combinedTasks}
         showDependencies={true}
+        isProjectForm={true}
         onSuccess={(newTask) => {
           router.refresh()
         }}
