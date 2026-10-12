@@ -86,6 +86,7 @@ function parseTask(formData: FormData) {
   const tipo = String(formData.get('tipo') ?? 'preventiva') as TipoTarefa
   const rawStatus = String(formData.get('status') ?? 'pending') as TaskStatus
   const dueDate = String(formData.get('dueDate') ?? '').trim() || null
+  const completedAtRaw = String(formData.get('completedAt') ?? '').trim()
 
   // Dia de lançamento (createdAt) — editável pelo gestor no formulário (campo "Data de
   // Lançamento"). Só é aplicado se vier num formato de data válido; caso contrário não é
@@ -94,8 +95,15 @@ function parseTask(formData: FormData) {
   const createdAt = /^\d{4}-\d{2}-\d{2}$/.test(createdAtRaw) ? `${createdAtRaw}T00:00:00.000Z` : null
 
   let status = STATUSES.includes(rawStatus) ? rawStatus : 'pending'
-  // Se a data de conclusão/prazo foi apagada, a OT passa automaticamente para 'pending' (Pendente)
-  if (!dueDate && (status === 'done' || status === 'cancelled')) {
+  // A data de Fim da OT (completedAt) é o sinal real de que a intervenção terminou — não
+  // o Prazo (dueDate, só um alvo/deadline, muitas vezes nunca preenchido em OTs
+  // importadas/sem prazo formal). Antes disto, a regra usava dueDate: guardar um estado
+  // 'concluída' escolhido no formulário era silenciosamente revertido para 'pendente' só
+  // por a OT não ter Prazo — mesmo já tendo Fim da OT preenchido.
+  if (completedAtRaw && status !== 'cancelled') {
+    status = 'done'
+  }
+  if (!completedAtRaw && status === 'done') {
     status = 'pending'
   }
 
@@ -147,7 +155,7 @@ function parseTask(formData: FormData) {
     dueDate,
     ...(createdAt ? { createdAt } : {}),
     startedAt: String(formData.get('startedAt') ?? '').trim() || (status === 'in_progress' || status === 'done' ? new Date().toISOString() : null),
-    completedAt: String(formData.get('completedAt') ?? '').trim() || (status === 'done' ? (dueDate || new Date().toISOString()) : null),
+    completedAt: completedAtRaw || (status === 'done' ? new Date().toISOString() : null),
     plannedStartDate: String(formData.get('plannedStartDate') ?? '').trim() || null,
     observacoes: String(formData.get('observacoes') ?? '').trim() || null,
     safetyRules: parseStringArray('safetyRules'),

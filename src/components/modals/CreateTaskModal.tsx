@@ -285,6 +285,18 @@ export default function CreateTaskModal({
   const [observacoes, setObservacoes] = useState('')
   const [status, setStatus] = useState<TaskStatus>('pending')
   const [legal, setLegal] = useState<boolean>(false)
+
+  // A data de Fim da OT é o sinal real de conclusão — ao preenchê-la o estado passa
+  // automaticamente a 'done' (exceto se a OT estiver 'cancelled'); ao limpá-la, se
+  // estava 'done' volta a 'pending'. Mesma regra aplicada no servidor (parseTask).
+  function setCompletedAtAndStatus(value: string) {
+    setCompletedAt(value)
+    if (value.trim() && status !== 'cancelled') {
+      setStatus('done')
+    } else if (!value.trim() && status === 'done') {
+      setStatus('pending')
+    }
+  }
   const [safetyRules, setSafetyRules] = useState<string[]>([])
   const [dynamicSafetyRules, setDynamicSafetyRules] = useState<string[]>(PREDEFINED_SAFETY_RULES)
   const [liveDocs, setLiveDocs] = useState<DocumentoObrigatorio[]>([])
@@ -496,7 +508,11 @@ export default function CreateTaskModal({
       if (editingTask?.requesterEmail) {
         formData.set('requesterEmail', editingTask.requesterEmail)
       }
-      if (!dueDate.trim() && (status === 'done' || status === 'cancelled' || editingTask?.status === 'done' || editingTask?.status === 'cancelled')) {
+      // Mesma regra do servidor (parseTask): a data de Fim da OT é o sinal real de
+      // conclusão, não o Prazo — mantém o dropdown e o valor submetido coerentes.
+      if (completedAt.trim() && status !== 'cancelled') {
+        formData.set('status', 'done')
+      } else if (!completedAt.trim() && status === 'done') {
         formData.set('status', 'pending')
       } else {
         formData.set('status', status)
@@ -876,13 +892,7 @@ export default function CreateTaskModal({
                 type="date"
                 name="dueDate"
                 value={dueDate}
-                onChange={(e) => {
-                  const val = e.target.value
-                  setDueDate(val)
-                  if (!val.trim() && (status === 'done' || status === 'cancelled' || editingTask?.status === 'done' || editingTask?.status === 'cancelled')) {
-                    setStatus('pending')
-                  }
-                }}
+                onChange={(e) => setDueDate(e.target.value)}
                 className="input"
               />
             </div>
@@ -909,9 +919,9 @@ export default function CreateTaskModal({
               label="Fim da OT"
               name="completedAt"
               value={completedAt}
-              onStamp={() => setCompletedAt(nowForInput())}
-              onClear={() => setCompletedAt('')}
-              onChangeValue={setCompletedAt}
+              onStamp={() => setCompletedAtAndStatus(nowForInput())}
+              onClear={() => setCompletedAtAndStatus('')}
+              onChangeValue={setCompletedAtAndStatus}
               actionLabel="Terminar OT"
               tone="emerald"
               disabled={!startedAt}
