@@ -89,6 +89,30 @@ function getFallbackPlans(): MaintenancePlan[] {
   return []
 }
 
+// Última leitura bem-sucedida do Firestore por empresa (em memória, por instância —
+// não sobrevive a cold starts nem é partilhada entre instâncias da Vercel, mas é sempre
+// mais fiel do que o JSON estático do histórico importado, que nunca é atualizado em
+// produção). Usada como fallback quando o Firestore falha (quota/timeout), em vez de
+// mostrar sempre a mesma "foto" de meses atrás — pedido do Rui depois de OTs criadas no
+// próprio dia terem "desaparecido" da lista durante um esgotamento de quota: a app
+// trocava silenciosamente a lista real por este JSON antigo, sem aviso nenhum.
+const lastGoodTasksByKey = new Map<string, { data: Task[]; savedAt: number }>()
+function tasksCacheKey(companyId: string, includeCompleted: boolean): string {
+  return `${companyId}|${includeCompleted}`
+}
+// Fallback a usar quando o Firestore falha: a última leitura boa desta mesma instância,
+// se existir (reflete o estado real há pouco tempo), senão o JSON estático do histórico
+// importado (pode estar meses desatualizado — último recurso, não a primeira escolha).
+function getTasksFallback(companyId: string, includeCompleted: boolean): Task[] {
+  const lastGood = lastGoodTasksByKey.get(tasksCacheKey(companyId, includeCompleted))
+  if (lastGood) return lastGood.data
+  let fallbacks = getFallbackTasks()
+  if (!includeCompleted) {
+    fallbacks = fallbacks.filter((f) => f.source === 'excel_ur' || (f.status !== 'done' && f.status !== 'cancelled'))
+  }
+  return isDemoCompany(companyId) ? fallbacks : []
+}
+
 let cachedFallbackTasks: Task[] | null = null
 function getFallbackTasks(): Task[] {
   if (cachedFallbackTasks) return cachedFallbackTasks
@@ -495,11 +519,7 @@ export async function deleteAsset(companyId: string, id: string): Promise<void> 
 const listTasksCached = unstable_cache(
   async (companyId: string, limitCount: number, includeCompleted: boolean): Promise<Task[]> => {
     if (isQuotaExhausted()) {
-      let fallbacks = getFallbackTasks()
-      if (!includeCompleted) {
-        fallbacks = fallbacks.filter((f) => f.source === 'excel_ur' || (f.status !== 'done' && f.status !== 'cancelled'))
-      }
-      return isDemoCompany(companyId) ? fallbacks : []
+      return getTasksFallback(companyId, includeCompleted)
     }
     try {
       let query = adminDb()
@@ -527,11 +547,7 @@ const listTasksCached = unstable_cache(
         8000
       )
       if (!snap || !snap.docs) {
-        let fallbacks = getFallbackTasks()
-        if (!includeCompleted) {
-          fallbacks = fallbacks.filter((f) => f.source === 'excel_ur' || (f.status !== 'done' && f.status !== 'cancelled'))
-        }
-        return isDemoCompany(companyId) ? fallbacks : []
+        return getTasksFallback(companyId, includeCompleted)
       }
 
       const rawDocs = snap.docs.map((d) => serialize<Task & { deleted?: boolean }>(d))
@@ -560,30 +576,33 @@ const listTasksCached = unstable_cache(
         })
 
       if (!isDemoCompany(companyId)) {
-        return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+        const sorted = dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+        lastGoodTasksByKey.set(tasksCacheKey(companyId, includeCompleted), { data: sorted, savedAt: Date.now() })
+        return sorted
       }
       let fallbacks = getFallbackTasks().filter((f) => !deletedIds.has(f.id))
       if (!includeCompleted) {
         fallbacks = fallbacks.filter((f) => f.source === 'excel_ur' || (f.status !== 'done' && f.status !== 'cancelled'))
       }
-      if (dbDocs.length === 0) return fallbacks
-
-      const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
-      const mergedFallbacks = fallbacks.map((f) => dbMap.get(f.id) || f)
-      const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
-      return [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      let result: Task[]
+      if (dbDocs.length === 0) {
+        result = fallbacks
+      } else {
+        const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
+        const mergedFallbacks = fallbacks.map((f) => dbMap.get(f.id) || f)
+        const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
+        result = [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      }
+      lastGoodTasksByKey.set(tasksCacheKey(companyId, includeCompleted), { data: result, savedAt: Date.now() })
+      return result
     } catch (err: any) {
       const isQuotaErr = String(err?.message || err).includes('Quota exceeded') || String(err?.message || err).includes('RESOURCE_EXHAUSTED')
       if (isQuotaErr) {
-        console.warn('[listTasks] Quota do Firestore atingida. A usar dados de reserva.')
+        console.warn('[listTasks] Quota do Firestore atingida. A usar última leitura boa (ou reserva estática se não houver nenhuma nesta instância).')
       } else {
         console.error('[listTasks] Error:', err)
       }
-      let fallbacks = getFallbackTasks()
-      if (!includeCompleted) {
-        fallbacks = fallbacks.filter((f) => f.source === 'excel_ur' || (f.status !== 'done' && f.status !== 'cancelled'))
-      }
-      return isDemoCompany(companyId) ? fallbacks : []
+      return getTasksFallback(companyId, includeCompleted)
     }
   },
   ['tasks'],
