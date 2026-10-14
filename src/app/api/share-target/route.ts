@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
 import { uploadImage } from '@/lib/upload'
 
+// Runtime Edge (não o Node.js serverless padrão): o limite de tamanho de pedido do
+// runtime serverless da Vercel é ~4,5 MB, fixo, sem forma de o aumentar por configuração
+// — uma foto de câmara em alta resolução (comum em telemóveis recentes) ultrapassa-o
+// facilmente e a Vercel rejeita o pedido antes sequer de chegar a este código (erro 413
+// "FUNÇÃO_CARGA_MUITO_GRANDE"). O runtime Edge não tem este teto. uploadImage() só usa
+// fetch/FormData/File — compatível com Edge, sem precisar de nenhuma API só de Node.
+export const runtime = 'edge'
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
