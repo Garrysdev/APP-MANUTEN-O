@@ -527,7 +527,10 @@ const listTasksCached = unstable_cache(
         .where('companyId', '==', companyId)
 
       if (!includeCompleted) {
-        query = query.where('status', 'in', ['pending', 'in_progress']) as any
+        // 'prazo' é um estado ativo real (OT que só arranca numa data futura, ex. PM
+        // agendado) — faltava aqui, por isso uma OT nesse estado ficava invisível assim
+        // que qualquer página passasse a pedir só as ativas (includeCompleted=false).
+        query = query.where('status', 'in', ['pending', 'in_progress', 'prazo']) as any
       } else {
         // Sem orderBy, o .limit() abaixo devolve um subconjunto arbitrário (por ID do
         // documento) em vez dos mais recentes — com o histórico importado (~6700 OTs na

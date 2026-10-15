@@ -12,8 +12,15 @@ export default async function TasksPage() {
   if (!profile) redirect('/login')
 
   // Planos NÃO são carregados aqui — o cliente busca-os sob demanda ao abrir o modal (loadPlanTaskRefsAction).
+  // includeCompleted=false: a vista por omissão só mostra OTs Ativas, e o cliente já
+  // carrega o Histórico (Concluídas/Canceladas) sob demanda via loadCompletedTasksAction
+  // quando o utilizador muda o filtro de Estado (TasksClient.tsx). Pedir sempre as 6000+
+  // OTs todas (incluindo o histórico 2017-2026 importado, que nunca muda) nesta página só
+  // para mostrar por omissão as ~dezenas Ativas foi a causa principal de a quota diária de
+  // leituras do Firestore esgotar (confirmado no Query Insights: uma só query deste tipo,
+  // sozinha, gerou 46 mil das 74 mil leituras do dia).
   const [allTasks, assets, users, externalCompanies] = await Promise.all([
-    listTasks(profile.companyId),
+    listTasks(profile.companyId, 2000, false),
     listAssetRefs(profile.companyId),
     listUsers(profile.companyId),
     listExternalCompanies(profile.companyId).catch(() => []),
