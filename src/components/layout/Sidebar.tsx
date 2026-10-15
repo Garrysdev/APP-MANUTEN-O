@@ -30,7 +30,7 @@ interface SidebarProps {
     name: string
     role: string
     avatarUrl?: string | null
-    company?: { name: string; plan?: string } | null
+    company?: { name: string; plan?: string; logoUrl?: string | null } | null
     language?: string
   }
   open?: boolean
@@ -237,7 +237,11 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
       <aside className="hidden lg:flex w-64 flex-col bg-slate-50 border-r border-outline min-h-screen transition-colors shrink-0 py-6 gap-4">
         <div className="px-6 flex items-center justify-between border-b border-outline/60 pb-4">
           <div className="flex flex-col items-start gap-1">
-            <Image src="/logo-rg.png" alt="RG Maintenance" width={140} height={78} className="h-10 w-auto" priority />
+            {user.company?.logoUrl ? (
+              <Image src={user.company.logoUrl} alt={user.company.name} width={140} height={78} className="h-10 w-auto object-contain" style={{ width: 'auto' }} priority />
+            ) : (
+              <Image src="/logo-rg.png" alt="RG Maintenance" width={140} height={78} className="h-10 w-auto" priority />
+            )}
           </div>
         </div>
 
@@ -261,7 +265,11 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
           <aside className="relative flex w-64 flex-col bg-slate-50 h-full shadow-2xl border-r border-outline transition-transform duration-300 ease-in-out py-6 gap-4">
             <div className="px-6 flex items-center justify-between border-b border-outline/60 pb-4">
               <div className="flex flex-col items-start gap-1">
-                <Image src="/logo-rg.png" alt="RG Maintenance" width={110} height={62} className="h-8 w-auto" />
+                {user.company?.logoUrl ? (
+                  <Image src={user.company.logoUrl} alt={user.company.name} width={110} height={62} className="h-8 w-auto object-contain" style={{ width: 'auto' }} />
+                ) : (
+                  <Image src="/logo-rg.png" alt="RG Maintenance" width={110} height={62} className="h-8 w-auto" />
+                )}
               </div>
               <button onClick={() => setOpen(false)} className="p-1.5 text-industrial-blue-light hover:bg-slate-200 rounded-xl transition-colors cursor-pointer">
                 <X size={18} />

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { getCurrentProfile, DEMO_COMPANY_ID } from '@/lib/firebase/session'
-import { updateUserProfile } from '@/lib/firebase/data'
+import { updateUserProfile, updateCompany } from '@/lib/firebase/data'
 import { adminAuth } from '@/lib/firebase/admin'
 
 export type ProfileFormState = { error?: string; ok?: boolean }
@@ -57,6 +57,38 @@ export async function updateProfileAction(
     return { ok: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erro ao atualizar perfil.' }
+  }
+}
+
+/**
+ * Nome e logótipo da empresa — só o Gestor pode alterar (pedido do Rui, Out/2026):
+ * "o Gestor tem que conseguir no seu perfil criar o nome da empresa e importar o logo".
+ */
+export async function updateCompanyAction(
+  _prev: ProfileFormState,
+  formData: FormData
+): Promise<ProfileFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+
+  const name = String(formData.get('companyName') ?? '').trim()
+  if (!name || name.length < 2) return { error: 'Nome da empresa inválido (mínimo 2 caracteres).' }
+
+  const logoUrl = formData.has('logoUrl')
+    ? String(formData.get('logoUrl') ?? '').trim() || null
+    : undefined
+
+  try {
+    await updateCompany(profile.companyId || DEMO_COMPANY_ID, {
+      name,
+      ...(logoUrl !== undefined ? { logoUrl } : {}),
+    })
+    revalidatePath('/dashboard/profile')
+    revalidatePath('/dashboard')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao atualizar a empresa.' }
   }
 }
 

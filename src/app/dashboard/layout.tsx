@@ -22,7 +22,7 @@ export default async function DashboardLayout({
     role: profile.role,
     avatarUrl: profile.avatarUrl ?? null,
     company: profile.company
-      ? { name: profile.company.name, plan: profile.company.plan }
+      ? { name: profile.company.name, plan: profile.company.plan, logoUrl: profile.company.logoUrl }
       : null,
     language: profile.language,
     notifications,

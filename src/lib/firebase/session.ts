@@ -54,6 +54,7 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
       plan: 'enterprise',
       activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'messages'],
       aiCredits: 100,
+      logoUrl: null,
     },
   })
 
@@ -108,12 +109,13 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
     )
     if (companySnap?.exists) {
       const c = companySnap.data()!
-      user.company = { 
-        id: companySnap.id, 
-        name: c.name || 'Empresa UR', 
-        plan: (isRGAdmin || companyId === DEMO_COMPANY_ID) ? 'enterprise' : (c.plan || 'starter'), 
+      user.company = {
+        id: companySnap.id,
+        name: c.name || 'Empresa UR',
+        plan: (isRGAdmin || companyId === DEMO_COMPANY_ID) ? 'enterprise' : (c.plan || 'starter'),
         activeModules: c.activeModules || ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'messages'],
-        aiCredits: c.aiCredits || 100 
+        aiCredits: c.aiCredits || 100,
+        logoUrl: c.logoUrl || null,
       }
     } else {
       user.company = {
@@ -121,7 +123,8 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
         name: isRGAdmin ? 'Empresa UR' : 'Minha Empresa',
         plan: (isRGAdmin || companyId === DEMO_COMPANY_ID) ? 'enterprise' : 'starter',
         activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'messages'],
-        aiCredits: 100
+        aiCredits: 100,
+        logoUrl: null,
       }
     }
 

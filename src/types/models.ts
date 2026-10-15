@@ -105,7 +105,7 @@ export interface User {
 
 /** Perfil enriquecido usado na UI (user + empresa resolvida). */
 export interface UserProfile extends User {
-  company?: Pick<Company, 'id' | 'name' | 'plan' | 'activeModules' | 'aiCredits'> | null
+  company?: Pick<Company, 'id' | 'name' | 'plan' | 'activeModules' | 'aiCredits' | 'logoUrl'> | null
 }
 
 /** Categoria de criticidade do cadastro (A/B/C) usada no plano de manutenção. */

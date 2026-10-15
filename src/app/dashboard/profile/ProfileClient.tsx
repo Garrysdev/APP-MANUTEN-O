@@ -9,7 +9,7 @@ import { uploadImage } from '@/lib/upload'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import type { UserProfile } from '@/types/models'
 import { ROLE_LABELS } from '@/types/models'
-import { updateProfileAction } from './actions'
+import { updateProfileAction, updateCompanyAction } from './actions'
 
 export default function ProfileClient({ profile }: { profile: UserProfile }) {
   const router = useRouter()
@@ -244,6 +244,8 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
         </form>
       </div>
 
+      {profile.role === 'manager' && <CompanyProfileCard company={profile.company} />}
+
       <div className="card p-6">
         <h2 className="font-semibold text-gray-800 dark:text-slate-200 mb-2 text-base flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-gray-400 dark:text-slate-500" />
@@ -267,6 +269,138 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
         </p>
         <WebPushButton userId={profile.id} isSubscribed={!!profile.pushSubscription} />
       </div>
+    </div>
+  )
+}
+
+function CompanyProfileCard({ company }: { company: UserProfile['company'] }) {
+  const router = useRouter()
+  const [companyName, setCompanyName] = useState(company?.name || '')
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const original = e.target.files?.[0]
+    if (!original) return
+    const file = await compressImage(original, 512)
+    setLogoFile(file)
+    setLogoPreview(URL.createObjectURL(file))
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    setSuccess(false)
+
+    try {
+      let logoUrl: string | null = null
+      let logoFailed = false
+      if (logoFile) {
+        setUploadingLogo(true)
+        try {
+          logoUrl = await uploadImage(logoFile, 'company_logos')
+        } catch {
+          logoFailed = true
+        } finally {
+          setUploadingLogo(false)
+        }
+      }
+
+      const fd = new FormData()
+      fd.set('companyName', companyName)
+      if (logoUrl) fd.set('logoUrl', logoUrl)
+      const result = await updateCompanyAction({}, fd)
+
+      setBusy(false)
+      if (result.error) setError(result.error)
+      else if (logoFailed) {
+        setError('Empresa guardada, mas o logótipo não foi carregado. Tenta novamente.')
+        setLogoFile(null)
+        router.refresh()
+      } else {
+        setSuccess(true)
+        setLogoFile(null)
+        router.refresh()
+      }
+    } catch (err) {
+      setUploadingLogo(false)
+      setBusy(false)
+      setError(err instanceof Error ? err.message : 'Erro ao guardar a empresa.')
+    }
+  }
+
+  const currentLogo = logoPreview ?? company?.logoUrl
+
+  return (
+    <div className="card p-6">
+      <h2 className="font-semibold text-gray-800 dark:text-slate-200 mb-2 text-base flex items-center gap-2">
+        <Building2 className="h-4 w-4 text-gray-400 dark:text-slate-500" />
+        A minha Empresa
+      </h2>
+      <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">
+        Nome e logótipo da empresa, visíveis no menu e nos relatórios. Só o Gestor pode alterar.
+      </p>
+
+      <form onSubmit={handleSave} className="space-y-4 max-w-sm">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            {currentLogo ? (
+              <Image
+                src={currentLogo}
+                alt={companyName || 'Logótipo da empresa'}
+                width={72}
+                height={72}
+                className="h-18 w-18 rounded-xl object-contain bg-slate-50 dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700"
+                style={{ width: 72, height: 72 }}
+              />
+            ) : (
+              <div className="h-[72px] w-[72px] rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center border-2 border-gray-100 dark:border-slate-700">
+                <Building2 className="h-6 w-6 text-slate-400" />
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-sm flex items-center justify-center text-gray-500 dark:text-slate-400 hover:text-[#2E86C1] dark:hover:text-blue-400 transition-colors"
+            >
+              <Camera className="h-3.5 w-3.5" />
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleLogoChange}
+            />
+          </div>
+          {logoFile && (
+            <p className="text-xs text-[#2E86C1] dark:text-blue-400">Novo logótipo selecionado</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Nome da Empresa</label>
+          <input
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            className="input"
+            required
+            minLength={2}
+          />
+        </div>
+
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {success && <p className="text-sm text-green-600 dark:text-emerald-400">Empresa atualizada com sucesso.</p>}
+        <button type="submit" disabled={busy || uploadingLogo} className="btn-primary">
+          {uploadingLogo || busy ? 'A guardar...' : 'Guardar Empresa'}
+        </button>
+      </form>
     </div>
   )
 }

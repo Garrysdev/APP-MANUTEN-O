@@ -1639,6 +1639,22 @@ export async function updateTechnicianTypes(companyId: string, technicianTypes: 
   await adminDb().collection('companies').doc(companyId).update({ technicianTypes })
 }
 
+/**
+ * Nome e logótipo da empresa, editáveis pelo Gestor no seu perfil (pedido do Rui,
+ * Out/2026). `logoUrl` já existia no tipo `Company` mas nunca tinha UI nem esta
+ * função para o gravar — ficava sempre null.
+ */
+export async function updateCompany(
+  companyId: string,
+  data: { name?: string; logoUrl?: string | null }
+): Promise<void> {
+  const update: Record<string, unknown> = {}
+  if (data.name !== undefined) update.name = data.name
+  if (data.logoUrl !== undefined) update.logoUrl = data.logoUrl
+  if (Object.keys(update).length === 0) return
+  await adminDb().collection('companies').doc(companyId).update(update)
+}
+
 export async function createUserDirect(
   companyId: string,
   data: {

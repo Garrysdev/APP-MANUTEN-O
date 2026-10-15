@@ -9,7 +9,7 @@ interface LayoutShellProps {
     name: string
     role: string
     avatarUrl?: string | null
-    company?: { name: string; plan?: string } | null
+    company?: { name: string; plan?: string; logoUrl?: string | null } | null
     language?: string
   }
   children: React.ReactNode

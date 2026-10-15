@@ -7,12 +7,12 @@ import { signInWithEmailAndPassword } from 'firebase/auth'
 import { getFirebaseAuth } from '@/lib/firebase/client'
 import { Eye, EyeOff } from 'lucide-react'
 
+// Pedido do Rui: a página de login é pública (produção), por isso só ficam os 2 acessos
+// rápidos reais — o resto (Free/Starter/Pro/Business de teste) expunha emails e senhas de
+// teste a qualquer visitante. As contas de teste por plano continuam a existir para QA,
+// só deixaram de ter atalho aqui — entra-se com o email/password normal.
 const TEST_ACCOUNTS = [
-  { label: 'Free',       email: 'free@teste.rg',       role: 'Gestor' },
-  { label: 'Starter',    email: 'starter@teste.rg',    role: 'Gestor' },
-  { label: 'Pro',        email: 'pro@teste.rg',        role: 'Gestor' },
-  { label: 'Business',   email: 'business@teste.rg',   role: 'Gestor' },
-  { label: 'Enterprise', email: 'garrido.rui@gmail.com', role: 'Gestor' },
+  { label: 'Empresa UR (Enterprise)', email: 'garrido.rui@gmail.com', role: 'Gestor' },
   { label: 'Técnico (RG - RuiG)', email: 'tecnico@teste.rg', role: 'Técnico' },
 ]
 
@@ -162,7 +162,7 @@ export default function LoginPage() {
         {/* Acesso rápido — contas de teste */}
         <div className="mt-6">
           <p className="text-center text-xs text-slate-700 mb-2 uppercase tracking-wide font-bold">Acesso rápido (teste)</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {TEST_ACCOUNTS.map((acc) => (
               <button
                 key={acc.email}
