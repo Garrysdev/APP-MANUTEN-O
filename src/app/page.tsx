@@ -45,33 +45,32 @@ const features = [
 
 const plans = [
   {
-    name: 'Free',
-    price: 'Grátis',
-    period: '',
+    name: 'Base',
+    price: '9,99€',
+    period: '/mês',
     desc: 'Para testes e pequenas oficinas',
     plan: null,
     features: [
       'Até 2 utilizadores (técnicos + gestores)',
       '20 intervenções/mês',
-      'Até 5 equipamentos, 10 itens em stock',
+      'Até 5 equipamentos',
       '1 relatório mensal em PDF',
     ],
-    cta: 'Começar Grátis',
+    cta: 'Começar no Base',
     href: '/register',
     popular: false,
   },
   {
     name: 'Starter',
-    price: '19€',
+    price: '19,99€',
     period: '/mês',
     desc: 'Para pequenas equipas industriais',
     plan: 'starter',
     features: [
       'Até 5 utilizadores (técnicos + gestores)',
       '100 intervenções/mês · até 25 equipamentos',
-      'Armazéns, Regras de Segurança & Mensagens',
-      'Calendário, Projetos & Gráficos Gantt',
-      'Gestão Documental (Folhas de Registo & IT)',
+      'Inventário de Stock, Armazéns & Regras de Segurança',
+      'Calendário & Mensagens internas',
       '10 relatórios mensais',
     ],
     cta: 'Começar no Starter',
@@ -80,17 +79,17 @@ const plans = [
   },
   {
     name: 'Pro',
-    price: '49€',
+    price: '49,99€',
     period: '/mês',
     desc: 'Para fábricas e PMEs em crescimento',
     plan: 'pro',
     features: [
       'Até 15 utilizadores (técnicos + gestores)',
       '500 intervenções/mês · até 100 equipamentos',
+      'Projetos, Gráficos Gantt & Gestão Documental',
       'Planos de Manutenção Preventiva (até 50)',
       'KPIs de Fiabilidade (MTTR/MTBF)',
       '100 relatórios mensais em PDF & Excel',
-      'Peças & Itens de Segurança',
     ],
     cta: 'Experimentar 14 dias',
     href: '/register?plan=pro',
@@ -98,7 +97,7 @@ const plans = [
   },
   {
     name: 'Business',
-    price: '149€',
+    price: '149,99€',
     period: '/mês',
     desc: 'Para plantas industriais multi-unidade',
     plan: 'business',
@@ -176,7 +175,7 @@ export default async function LandingPage() {
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
             <Link href="/register" className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#1B4F72] to-[#2874A6] px-8 py-4 text-base font-bold text-white shadow-xl shadow-[#1B4F72]/30 hover:shadow-2xl hover:shadow-[#1B4F72]/40 hover:-translate-y-1 transition-all">
-              Experimentar Grátis 14 Dias <ArrowRight className="h-5 w-5" />
+              Experimentar 14 Dias Grátis <ArrowRight className="h-5 w-5" />
             </Link>
             <a href="#video-demo" className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-white border border-gray-200 px-8 py-4 text-base font-bold text-slate-700 shadow-sm hover:bg-gray-50 hover:-translate-y-1 transition-all">
               <PlayCircle className="h-5 w-5 text-[#2E86C1]" /> Ver Vídeo Demo
@@ -440,11 +439,11 @@ export default async function LandingPage() {
               href="/register"
               className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-lg font-black text-[#1B4F72] hover:bg-gray-50 hover:scale-105 transition-all shadow-[0_0_40px_rgba(255,255,255,0.3)]"
             >
-              Criar Conta Gratuita <ArrowRight className="h-5 w-5" />
+              Começar Agora <ArrowRight className="h-5 w-5" />
             </Link>
           </div>
           <p className="mt-6 text-sm text-[#AED6F1] font-medium opacity-80">
-            Plano Free disponível sem limite de tempo. Não é necessário cartão de crédito.
+            14 dias de teste em qualquer plano. Não é necessário cartão de crédito.
           </p>
         </div>
       </section>

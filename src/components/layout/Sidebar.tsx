@@ -44,31 +44,31 @@ interface NavGroup {
 
 const managerNavGroups: NavGroup[] = [
   {
-    groupName: 'Base (Free)',
+    groupName: 'Módulo Base',
     items: [
       { href: '/dashboard',                    key: 'dashboard',       icon: LayoutDashboard },
       { href: '/dashboard/tasks',              key: 'tasks',           icon: ClipboardList },
       { href: '/dashboard/assets',             key: 'assets',          icon: Package,        feature: 'assets' },
-      { href: '/dashboard/stocks',             key: 'stocks',          icon: Boxes,          feature: 'stocks' },
       { href: '/dashboard/users',              key: 'users',           icon: Users,          feature: 'users' },
     ]
   },
   {
     groupName: 'Módulos Starter',
     items: [
+      { href: '/dashboard/stocks',             key: 'stocks',          icon: Boxes,          feature: 'stocks' },
       { href: '/dashboard/maintenance-plan',   key: 'maintenancePlan', icon: Wrench,         feature: 'maintenance-plan' },
       { href: '/dashboard/calendar',           key: 'calendar',        icon: Calendar,       feature: 'calendar' },
       { href: '/dashboard/warehouses',         key: 'warehouses',      icon: Warehouse,      feature: 'warehouses' },
       { href: '/dashboard/safety-rules',       key: 'safetyRules',     icon: ShieldCheck,    feature: 'safetyRules' },
-      { href: '/dashboard/documents',          key: 'documents',       icon: FileText,       feature: 'documents' },
-      { href: '/dashboard/projects',           key: 'projects',        icon: FolderKanban,   feature: 'projects' },
-      { href: '/dashboard/gantt',              key: 'gantt',           icon: BarChart3,      feature: 'projects' },
       { href: '/dashboard/messages',           key: 'messages',        icon: MessageSquare,  feature: 'messages' },
     ]
   },
   {
     groupName: 'Módulos Pro',
     items: [
+      { href: '/dashboard/documents',          key: 'documents',       icon: FileText,       feature: 'documents' },
+      { href: '/dashboard/projects',           key: 'projects',        icon: FolderKanban,   feature: 'projects' },
+      { href: '/dashboard/gantt',              key: 'gantt',           icon: BarChart3,      feature: 'projects' },
       { href: '/dashboard/reports',            key: 'reports',         icon: FileBarChart,   feature: 'reports' },
       { href: '/dashboard/reliability',        key: 'reliability',     icon: Activity,       feature: 'reliability' },
     ]

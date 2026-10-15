@@ -21,16 +21,19 @@ export interface PlanLimits {
 }
 
 const GATES: Record<PlanName, Record<FeatureKey, boolean>> = {
-  free:       { assets: true,  history: true,  users: true,  reports: false, 'maintenance-plan': false, calendar: false, stocks: true,  finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false, warehouses: false, safetyRules: false, messages: false, documents: false },
-  starter:    { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': false, calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: false, compliance: false, projects: true,  warehouses: true,  safetyRules: true,  messages: true,  documents: true  },
+  // 'free' passou a ser o Módulo Base, pago (deixou de ser grátis) — a chave interna
+  // mantém-se 'free' para não obrigar a migrar o campo `plan` já gravado em todas as
+  // empresas existentes; só o que o utilizador vê (label, preço) mudou (ver PLAN_LABELS).
+  free:       { assets: true,  history: true,  users: true,  reports: false, 'maintenance-plan': false, calendar: false, stocks: false, finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false, warehouses: false, safetyRules: false, messages: false, documents: false },
+  starter:    { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': false, calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false, warehouses: true,  safetyRules: true,  messages: true,  documents: false },
   pro:        { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: true,  compliance: false, projects: true,  warehouses: true,  safetyRules: true,  messages: true,  documents: true  },
   business:   { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: false, projects: true,  warehouses: true,  safetyRules: true,  messages: true,  documents: true  },
   enterprise: { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: true,  projects: true,  warehouses: true,  safetyRules: true,  messages: true,  documents: true  },
 }
 
 export const LIMITS: Record<PlanName, PlanLimits> = {
-  free:       { maxUsers: 2,    interventionsPerMonth: 20,   reportsPerMonth: 1,   maxAssets: 5,    maxStockItems: 10,  maxWarehouses: 0, maxSafetyRules: 0,  messagesPerMonth: 0,   maxMaintenancePlans: 0,  maxOpenProjects: 0, maxFRs: 0,  maxITs: 0  },
-  starter:    { maxUsers: 5,    interventionsPerMonth: 100,  reportsPerMonth: 10,  maxAssets: 25,   maxStockItems: 50,  maxWarehouses: 3, maxSafetyRules: 10, messagesPerMonth: 100, maxMaintenancePlans: 25, maxOpenProjects: 3, maxFRs: 10, maxITs: 10 },
+  free:       { maxUsers: 2,    interventionsPerMonth: 20,   reportsPerMonth: 1,   maxAssets: 5,    maxStockItems: 0,   maxWarehouses: 0, maxSafetyRules: 0,  messagesPerMonth: 0,   maxMaintenancePlans: 0,  maxOpenProjects: 0, maxFRs: 0,  maxITs: 0  },
+  starter:    { maxUsers: 5,    interventionsPerMonth: 100,  reportsPerMonth: 10,  maxAssets: 25,   maxStockItems: 50,  maxWarehouses: 3, maxSafetyRules: 10, messagesPerMonth: 100, maxMaintenancePlans: 25, maxOpenProjects: 0, maxFRs: 0,  maxITs: 0  },
   pro:        { maxUsers: 15,   interventionsPerMonth: 500,  reportsPerMonth: 100, maxAssets: 100,  maxStockItems: 100, maxWarehouses: 5, maxSafetyRules: 20, messagesPerMonth: 500, maxMaintenancePlans: 50, maxOpenProjects: 5, maxFRs: 20, maxITs: 20 },
   business:   { maxUsers: 9999, interventionsPerMonth: 9999, reportsPerMonth: 9999, maxAssets: 9999, maxStockItems: 9999, maxWarehouses: 9999, maxSafetyRules: 9999, messagesPerMonth: 9999, maxMaintenancePlans: 9999, maxOpenProjects: 9999, maxFRs: 9999, maxITs: 9999 },
   enterprise: { maxUsers: 9999, interventionsPerMonth: 9999, reportsPerMonth: 9999, maxAssets: 9999, maxStockItems: 9999, maxWarehouses: 9999, maxSafetyRules: 9999, messagesPerMonth: 9999, maxMaintenancePlans: 9999, maxOpenProjects: 9999, maxFRs: 9999, maxITs: 9999 },
@@ -56,7 +59,7 @@ export const TEASER_LIMITS: Record<FeatureKey, number> = {
 }
 
 export const PLAN_LABELS: Record<PlanName, string> = {
-  free:       'Free',
+  free:       'Base',
   starter:    'Starter',
   pro:        'Pro',
   business:   'Business',
