@@ -216,7 +216,9 @@ export interface SafetyRule {
 export interface DocumentoObrigatorio {
   id: string
   companyId: string
-  type: 'FR' | 'IT'
+  // 'MANUAL' = base de conhecimento (upload de ficheiro — manuais, normas ISO, PDFs
+  // técnicos) — não é obrigatório/associado a OTs como FR/IT, é só consulta.
+  type: 'FR' | 'IT' | 'MANUAL'
   code: string
   title: string
   content?: string | null
@@ -224,6 +226,9 @@ export interface DocumentoObrigatorio {
   category?: string | null
   active: boolean
   createdAt: string
+  // Só para type === 'MANUAL':
+  fileUrl?: string | null
+  fileName?: string | null
 }
 
 export interface ChecklistItem {

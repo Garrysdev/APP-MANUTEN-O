@@ -39,3 +39,34 @@ export async function uploadImage(file: File, folder: string): Promise<string> {
   if (!data.secure_url) throw new Error('Resposta do Cloudinary sem secure_url.')
   return data.secure_url
 }
+
+/**
+ * Faz upload de um ficheiro genérico (PDF, etc.) via o endpoint 'auto' do Cloudinary —
+ * ao contrário de uploadImage() (endpoint 'image', só aceita imagens), este aceita
+ * qualquer tipo. Usado na Gestão Documental para anexar manuais/normas/PDFs aos
+ * documentos do tipo 'MANUAL'.
+ */
+export async function uploadFile(file: File, folder: string): Promise<string> {
+  if (!CLOUD_NAME || !UPLOAD_PRESET) {
+    throw new Error('Cloudinary não configurado (NEXT_PUBLIC_CLOUDINARY_*).')
+  }
+
+  const body = new FormData()
+  body.append('file', file)
+  body.append('upload_preset', UPLOAD_PRESET)
+  body.append('folder', folder)
+
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`,
+    { method: 'POST', body },
+  )
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`Upload falhou (${res.status}). ${detail}`)
+  }
+
+  const data = (await res.json()) as { secure_url?: string }
+  if (!data.secure_url) throw new Error('Resposta do Cloudinary sem secure_url.')
+  return data.secure_url
+}

@@ -2680,7 +2680,7 @@ const listDocumentsCached = unstable_cache(
   ['documents'],
   { revalidate: 1800, tags: ['documents'] }
 )
-export const listDocuments = cache(async function(companyId: string, type?: 'FR' | 'IT'): Promise<DocumentoObrigatorio[]> {
+export const listDocuments = cache(async function(companyId: string, type?: 'FR' | 'IT' | 'MANUAL'): Promise<DocumentoObrigatorio[]> {
   const docs = await listDocumentsCached(companyId)
   return type ? docs.filter((d) => d.type === type) : docs
 })

@@ -18,6 +18,9 @@ export interface PlanLimits {
   maxOpenProjects: number
   maxFRs: number
   maxITs: number
+  // Base de Conhecimento (Gestão Documental, type 'MANUAL') — manuais/normas/PDFs
+  // enviados pela empresa. Mesmo gate que FR/IT (feature 'documents').
+  maxManuals: number
 }
 
 const GATES: Record<PlanName, Record<FeatureKey, boolean>> = {
@@ -32,11 +35,11 @@ const GATES: Record<PlanName, Record<FeatureKey, boolean>> = {
 }
 
 export const LIMITS: Record<PlanName, PlanLimits> = {
-  free:       { maxUsers: 2,    interventionsPerMonth: 20,   reportsPerMonth: 1,   maxAssets: 5,    maxStockItems: 0,   maxWarehouses: 0, maxSafetyRules: 0,  messagesPerMonth: 0,   maxMaintenancePlans: 0,  maxOpenProjects: 0, maxFRs: 0,  maxITs: 0  },
-  starter:    { maxUsers: 5,    interventionsPerMonth: 100,  reportsPerMonth: 10,  maxAssets: 25,   maxStockItems: 50,  maxWarehouses: 3, maxSafetyRules: 10, messagesPerMonth: 100, maxMaintenancePlans: 25, maxOpenProjects: 0, maxFRs: 0,  maxITs: 0  },
-  pro:        { maxUsers: 15,   interventionsPerMonth: 500,  reportsPerMonth: 100, maxAssets: 100,  maxStockItems: 100, maxWarehouses: 5, maxSafetyRules: 20, messagesPerMonth: 500, maxMaintenancePlans: 50, maxOpenProjects: 5, maxFRs: 20, maxITs: 20 },
-  business:   { maxUsers: 9999, interventionsPerMonth: 9999, reportsPerMonth: 9999, maxAssets: 9999, maxStockItems: 9999, maxWarehouses: 9999, maxSafetyRules: 9999, messagesPerMonth: 9999, maxMaintenancePlans: 9999, maxOpenProjects: 9999, maxFRs: 9999, maxITs: 9999 },
-  enterprise: { maxUsers: 9999, interventionsPerMonth: 9999, reportsPerMonth: 9999, maxAssets: 9999, maxStockItems: 9999, maxWarehouses: 9999, maxSafetyRules: 9999, messagesPerMonth: 9999, maxMaintenancePlans: 9999, maxOpenProjects: 9999, maxFRs: 9999, maxITs: 9999 },
+  free:       { maxUsers: 2,    interventionsPerMonth: 20,   reportsPerMonth: 1,   maxAssets: 5,    maxStockItems: 0,   maxWarehouses: 0, maxSafetyRules: 0,  messagesPerMonth: 0,   maxMaintenancePlans: 0,  maxOpenProjects: 0, maxFRs: 0,  maxITs: 0,  maxManuals: 0  },
+  starter:    { maxUsers: 5,    interventionsPerMonth: 100,  reportsPerMonth: 10,  maxAssets: 25,   maxStockItems: 50,  maxWarehouses: 3, maxSafetyRules: 10, messagesPerMonth: 100, maxMaintenancePlans: 25, maxOpenProjects: 0, maxFRs: 0,  maxITs: 0,  maxManuals: 0  },
+  pro:        { maxUsers: 15,   interventionsPerMonth: 500,  reportsPerMonth: 100, maxAssets: 100,  maxStockItems: 100, maxWarehouses: 5, maxSafetyRules: 20, messagesPerMonth: 500, maxMaintenancePlans: 50, maxOpenProjects: 5, maxFRs: 20, maxITs: 20, maxManuals: 20 },
+  business:   { maxUsers: 9999, interventionsPerMonth: 9999, reportsPerMonth: 9999, maxAssets: 9999, maxStockItems: 9999, maxWarehouses: 9999, maxSafetyRules: 9999, messagesPerMonth: 9999, maxMaintenancePlans: 9999, maxOpenProjects: 9999, maxFRs: 9999, maxITs: 9999, maxManuals: 9999 },
+  enterprise: { maxUsers: 9999, interventionsPerMonth: 9999, reportsPerMonth: 9999, maxAssets: 9999, maxStockItems: 9999, maxWarehouses: 9999, maxSafetyRules: 9999, messagesPerMonth: 9999, maxMaintenancePlans: 9999, maxOpenProjects: 9999, maxFRs: 9999, maxITs: 9999, maxManuals: 9999 },
 }
 
 export const TEASER_LIMITS: Record<FeatureKey, number> = {
