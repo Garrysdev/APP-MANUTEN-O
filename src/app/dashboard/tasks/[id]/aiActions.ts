@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { adminDb } from '@/lib/firebase/admin'
 import { listTasksByAsset } from '@/lib/firebase/data'
@@ -22,6 +22,7 @@ export async function askTaskConsultantAction(taskId: string, contextData: any) 
     await db.collection('companies').doc(profile.companyId).update({
       aiCredits: FieldValue.increment(-1)
     })
+    revalidateTag('companies') // o perfil em cache (session.ts) traz os créditos
 
     // Simulate AI thinking
     await new Promise(r => setTimeout(r, 2000))

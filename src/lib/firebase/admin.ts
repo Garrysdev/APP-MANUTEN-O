@@ -52,10 +52,31 @@ export function markQuotaExhausted(cooldownMinutes = 15) {
   console.warn(`[Firestore Circuit Breaker] Quota diária excedida. Modo offline/fallback ativo nos próximos ${cooldownMinutes} minutos.`)
 }
 
+// ── MEDIÇÃO DE LEITURAS ──────────────────────────────────────────────────────
+// Cada documento devolvido por uma query conta como 1 leitura na quota do Firestore.
+// Regista nos logs da Vercel as leituras grandes (>= READS_LOG_THRESHOLD documentos)
+// com uma etiqueta, para se saber que função gasta a quota sem adivinhar.
+// Procurar "[fs-reads]" nos logs.
+const READS_LOG_THRESHOLD = 100
+
+export function logReads(label: string, count: number) {
+  if (count >= READS_LOG_THRESHOLD) {
+    console.info(`[fs-reads] ${label}: ${count} documentos`)
+  }
+}
+
+function countDocs(result: unknown): number {
+  const r = result as { size?: unknown; exists?: unknown } | null
+  if (r && typeof r.size === 'number') return r.size
+  if (r && typeof r.exists === 'boolean') return 1
+  return 0
+}
+
 export async function firestoreWithTimeout<T>(
   fn: () => Promise<T>,
   fallback: T,
-  timeoutMs = 1200
+  timeoutMs = 1200,
+  label?: string
 ): Promise<T> {
   if (isQuotaExhausted()) {
     return fallback
@@ -72,6 +93,7 @@ export async function firestoreWithTimeout<T>(
   try {
     const result = await Promise.race([fn(), timeoutPromise])
     clearTimeout(timer!)
+    if (label && result !== fallback) logReads(label, countDocs(result))
     return result
   } catch (err: any) {
     clearTimeout(timer!)

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import Stripe from 'stripe'
 import { stripe } from '@/lib/stripe'
 import { adminDb } from '@/lib/firebase/admin'
@@ -77,5 +78,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // O perfil em cache (session.ts) traz o plano da empresa
+  revalidateTag('companies')
   return NextResponse.json({ received: true })
 }

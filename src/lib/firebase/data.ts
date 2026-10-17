@@ -5,7 +5,7 @@ import { unstable_cache, revalidateTag } from 'next/cache'
 import fs from 'fs'
 import path from 'path'
 import type { DocumentSnapshot } from 'firebase-admin/firestore'
-import { adminDb, adminAuth, firestoreWithTimeout, isQuotaExhausted, markQuotaExhausted } from './admin'
+import { adminDb, adminAuth, firestoreWithTimeout, isQuotaExhausted, markQuotaExhausted, logReads } from './admin'
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
@@ -19,6 +19,54 @@ export const DEMO_COMPANY_ID = 'rjHNaSUbLm4qTMyKP0oX'
 export function isDemoCompany(companyId: string): boolean {
   if (!companyId) return false
   return companyId === DEMO_COMPANY_ID || companyId === 'demo' || companyId === 'demo_company'
+}
+
+// ── ETIQUETAS DE CACHE DAS OTs, POR EMPRESA ──────────────────────────────────
+// Uma escrita numa empresa nunca deve invalidar a cache das outras: com uma etiqueta
+// global ('tasks'), cada OT editada em qualquer empresa obrigava TODAS a reler as suas
+// OTs do Firestore. O histórico de anos fechados tem etiqueta própria e só é invalidado
+// quando a escrita toca numa OT de um ano passado — antes, cada edição de uma OT deste
+// ano obrigava o Dashboard a reler as ~6700 OTs antigas (picos de 50-70 mil leituras/dia).
+const tasksTag = (companyId: string) => `tasks:${companyId}`
+const tasksHistoryTag = (companyId: string) => `tasks-history:${companyId}`
+// Lista de Concluídas/Canceladas (lê todas as OTs fechadas, ~6000 na UR): só muda
+// quando uma OT entra ou sai desses estados, não a cada edição de uma OT ativa.
+const tasksCompletedTag = (companyId: string) => `tasks-completed:${companyId}`
+const notificationsTag = (companyId: string) => `notifications:${companyId}`
+
+function isClosedStatus(status: unknown): boolean {
+  return status === 'done' || status === 'cancelled'
+}
+
+function taskDates(t: Partial<Task> | null | undefined): (string | null | undefined)[] {
+  if (!t) return []
+  return [t.createdAt, t.plannedStartDate, t.dueDate, (t as any).completedAt]
+}
+
+function touchesPastYear(dates: (string | null | undefined)[]): boolean {
+  const currentYear = new Date().getFullYear()
+  return dates.some((d) => {
+    const year = parseInt(String(d || '').slice(0, 4), 10)
+    return Number.isFinite(year) && year < currentYear
+  })
+}
+
+function invalidateTasks(companyId: string, opts: { history?: boolean; completed?: boolean } = {}): void {
+  revalidateTag(tasksTag(companyId))
+  if (opts.history) revalidateTag(tasksHistoryTag(companyId))
+  if (opts.completed) revalidateTag(tasksCompletedTag(companyId))
+}
+
+// Invalidação a partir do estado da OT antes e depois de uma escrita.
+function invalidateTasksForChange(
+  companyId: string,
+  before: Partial<Task> | null | undefined,
+  after: Partial<Task> | null | undefined
+): void {
+  invalidateTasks(companyId, {
+    history: touchesPastYear([...taskDates(before), ...taskDates(after)]),
+    completed: isClosedStatus(before?.status) || isClosedStatus(after?.status),
+  })
 }
 
 // ── LOCAL FALLBACK LOADERS (Quando o Firebase Firestore atinge a quota diária) ──
@@ -338,7 +386,8 @@ const listAssetsCached = unstable_cache(
       const snap = await firestoreWithTimeout(
         () => adminDb().collection('assets').where('companyId', '==', companyId).limit(limitCount).get(),
         null,
-        1000
+        1000,
+        'listAssets'
       )
       if (snap && snap.docs && snap.docs.length > 0) {
         const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
@@ -351,7 +400,9 @@ const listAssetsCached = unstable_cache(
     return isDemoCompany(companyId) ? getFallbackAssets() : []
   },
   ['assets'],
-  { revalidate: 300, tags: ['assets'] }
+  // 1h (era 300s): as escritas já fazem revalidateTag('assets'); o tempo é só uma rede
+  // de segurança e com 300s forçava releituras (até 2000 ativos) a cada 5 min.
+  { revalidate: 3600, tags: ['assets'] }
 )
 export const listAssets = cache(async function(companyId: string, limitCount = 2000): Promise<Asset[]> {
   return listAssetsCached(companyId, limitCount)
@@ -516,10 +567,9 @@ export async function deleteAsset(companyId: string, id: string): Promise<void> 
 }
 
 // // ── TASKS ───────────────────────────────────────────────────────────────────
-const listTasksCached = unstable_cache(
-  async (companyId: string, limitCount: number, includeCompleted: boolean): Promise<Task[]> => {
+async function fetchTasksList(companyId: string, limitCount: number, includeCompleted: boolean): Promise<Task[]> {
     if (isQuotaExhausted()) {
-      return getTasksFallback(companyId, includeCompleted)
+      throw new Error('Firestore indisponível (listTasks)')
     }
     try {
       let query = adminDb()
@@ -547,10 +597,11 @@ const listTasksCached = unstable_cache(
       const snap = await firestoreWithTimeout(
         () => query.limit(limitCount).get(),
         null,
-        8000
+        8000,
+        `listTasks(includeCompleted=${includeCompleted})`
       )
       if (!snap || !snap.docs) {
-        return getTasksFallback(companyId, includeCompleted)
+        throw new Error('Firestore indisponível (listTasks)')
       }
 
       const rawDocs = snap.docs.map((d) => serialize<Task & { deleted?: boolean }>(d))
@@ -605,14 +656,26 @@ const listTasksCached = unstable_cache(
       } else {
         console.error('[listTasks] Error:', err)
       }
-      return getTasksFallback(companyId, includeCompleted)
+      throw new Error('Firestore indisponível (listTasks)')
     }
-  },
-  ['tasks'],
-  // 300s (era 30s): cada falha de cache lê até 2000 documentos e o Dashboard chama isto 2x.
-  // Todas as escritas em OTs fazem revalidateTag('tasks'), por isso não fica desatualizado.
-  { revalidate: 300, tags: ['tasks'] }
-)
+}
+
+// 1h (era 300s): cada falha de cache lê até 2000 documentos e o Dashboard chama isto 2x.
+// Com 300s, um gestor a navegar o dia todo forçava uma releitura a cada 5 minutos mesmo
+// sem nada mudar. Todas as escritas em OTs invalidam a etiqueta da empresa
+// (invalidateTasks), por isso não fica desatualizado — o tempo é só uma rede de segurança.
+// fetchTasksList lança em caso de falha/quota (em vez de devolver a reserva) para a
+// reserva nunca ficar guardada em cache durante 1h; a reserva aplica-se só aqui fora.
+async function listTasksCached(companyId: string, limitCount: number, includeCompleted: boolean): Promise<Task[]> {
+  try {
+    return await unstable_cache(fetchTasksList, ['tasks'], {
+      revalidate: 3600,
+      tags: ['tasks', tasksTag(companyId)],
+    })(companyId, limitCount, includeCompleted)
+  } catch {
+    return getTasksFallback(companyId, includeCompleted)
+  }
+}
 
 // NOTA: não subir este limite às cegas. Com o histórico importado (~6700 OTs na
 // UR), um limite alto tenta trazer ~5MB de documentos de uma só vez — excede o
@@ -642,36 +705,27 @@ function effectiveTaskDate(t: Pick<Task, 'plannedStartDate' | 'createdAt' | 'due
 async function fetchTasksForYear(companyId: string, year: number): Promise<Task[]> {
   const startIso = `${year}-01-01`
   const endIso = `${year + 1}-01-01`
-  let dbDocs: Task[] = []
-  try {
-    const snap = await firestoreWithTimeout(
-      () => adminDb()
-        .collection('tasks')
-        .where('companyId', '==', companyId)
-        .where('createdAt', '>=', startIso)
-        .where('createdAt', '<', endIso)
-        .limit(5000)
-        .get(),
-      null,
-      5000
-    )
-    if (snap && snap.docs) {
-      dbDocs = snap.docs.map((d) => serialize<Task>(d))
-    }
-  } catch (err) {
-    console.error('[getTasksForYearStats] Error:', err)
+  // Falha/timeout/quota → lança (não devolve a reserva): um resultado de reserva
+  // guardado em cache ficaria até 7 dias nos anos passados (ver getTasksForYearStats).
+  const snap = await firestoreWithTimeout(
+    () => adminDb()
+      .collection('tasks')
+      .where('companyId', '==', companyId)
+      .where('createdAt', '>=', startIso)
+      .where('createdAt', '<', endIso)
+      .limit(5000)
+      .get(),
+    null,
+    5000,
+    `getTasksForYearStats(${year})`
+  )
+  if (!snap || !snap.docs) {
+    throw new Error(`Firestore indisponível ao ler as OTs de ${year}`)
   }
+  const dbDocs = snap.docs.map((d) => serialize<Task>(d))
 
-  // A camada de reserva (só para a UR) guarda datas próprias (dueDate/plannedStartDate)
-  // que não batem certo com o createdAt genérico de alguns registos — filtrar pela
-  // data efetiva de cada item em vez de por createdAt.
   if (isDemoCompany(companyId)) {
-    const fallbackForYear = getFallbackTasks().filter((f) => {
-      const d = effectiveTaskDate(f)
-      if (!d) return false
-      const y = parseInt(String(d).slice(0, 4), 10)
-      return y === year
-    })
+    const fallbackForYear = getFallbackTasksForYear(year)
     if (dbDocs.length === 0) return fallbackForYear
     const dbIds = new Set(dbDocs.map((d) => d.id))
     const extraFallback = fallbackForYear.filter((f) => !dbIds.has(f.id))
@@ -681,27 +735,39 @@ async function fetchTasksForYear(companyId: string, year: number): Promise<Task[
   return dbDocs
 }
 
-// Ano corrente: muda com o uso normal, mas as escritas já invalidam a tag 'tasks'.
-const getTasksForCurrentYearCached = unstable_cache(
-  fetchTasksForYear,
-  ['tasks-by-year'],
-  { revalidate: 300, tags: ['tasks'] }
-)
+// A camada de reserva (só para a UR) guarda datas próprias (dueDate/plannedStartDate)
+// que não batem certo com o createdAt genérico de alguns registos — filtrar pela
+// data efetiva de cada item em vez de por createdAt.
+function getFallbackTasksForYear(year: number): Task[] {
+  return getFallbackTasks().filter((f) => {
+    const d = effectiveTaskDate(f)
+    if (!d) return false
+    const y = parseInt(String(d).slice(0, 4), 10)
+    return y === year
+  })
+}
 
+// Ano corrente: muda com o uso normal, mas as escritas já invalidam a etiqueta da empresa.
+//
 // Anos passados: o Dashboard lê os ~11 anos de cada vez (~6700 leituras se não estiver
-// em cache) — é histórico fechado (equipamentos/OTs de anos anteriores), não muda com
-// o uso do dia a dia, por isso 1 dia de cache (ainda invalidado por tag se algo escrever
-// numa OT de um ano passado).
-const getTasksForPastYearCached = unstable_cache(
-  fetchTasksForYear,
-  ['tasks-by-year-past'],
-  { revalidate: 86400, tags: ['tasks'] }
-)
-
+// em cache) — é histórico fechado, não muda com o uso do dia a dia. Usa só a etiqueta de
+// histórico (tasksHistoryTag), invalidada apenas por escritas em OTs de anos passados,
+// por isso pode ficar 7 dias em cache. Antes partilhava a etiqueta global 'tasks' e
+// qualquer edição de uma OT deste ano deitava fora as ~6700 OTs antigas da cache.
+// NOTA: scripts externos (imports do histórico) não invalidam esta cache — depois de
+// correr um, purgar a Data Cache no painel da Vercel (Settings → Data Cache) ou
+// esperar até 7 dias.
 export async function getTasksForYearStats(companyId: string, year: number): Promise<Task[]> {
-  return year < new Date().getFullYear()
-    ? getTasksForPastYearCached(companyId, year)
-    : getTasksForCurrentYearCached(companyId, year)
+  const isPastYear = year < new Date().getFullYear()
+  try {
+    return await unstable_cache(fetchTasksForYear, [isPastYear ? 'tasks-by-year-past' : 'tasks-by-year'], {
+      revalidate: isPastYear ? 7 * 86400 : 3600,
+      tags: isPastYear ? [tasksHistoryTag(companyId)] : ['tasks', tasksTag(companyId)],
+    })(companyId, year)
+  } catch (err) {
+    console.error('[getTasksForYearStats] Error:', err)
+    return isDemoCompany(companyId) ? getFallbackTasksForYear(year) : []
+  }
 }
 
 /**
@@ -729,25 +795,42 @@ export async function getPMComplianceForYear(
   return { total, done, pct }
 }
 
+// Lê TODAS as OTs fechadas da empresa (~6000 na UR) — por isso fica em cache (só a
+// página pedida, pequena o suficiente para o limite de 2MB da Data Cache), invalidada
+// apenas quando uma OT entra/sai de Concluída/Cancelada. Antes não tinha cache nenhuma:
+// cada vez que alguém filtrava por "Concluída" na página de OTs custava ~6000 leituras.
+// Erros são lançados (não devolvidos) para nunca ficar o fallback guardado em cache.
+async function fetchCompletedTasksPage(
+  companyId: string,
+  page: number,
+  pageSize: number
+): Promise<{ tasks: Task[]; total: number }> {
+  const snap = await adminDb()
+    .collection('tasks')
+    .where('companyId', '==', companyId)
+    .where('status', 'in', ['done', 'cancelled'])
+    .get()
+  logReads('listCompletedTasksPaged', snap.size)
+
+  const dbDocs = snap.docs
+    .map((d) => serialize<Task>(d))
+    .sort((a, b) => (b.completedAt || b.updatedAt || b.createdAt || '').localeCompare(a.completedAt || a.updatedAt || a.createdAt || ''))
+
+  const offset = (page - 1) * pageSize
+  const paginated = dbDocs.slice(offset, offset + pageSize)
+  return { tasks: paginated, total: dbDocs.length }
+}
+
 export const listCompletedTasksPaged = cache(async function(
   companyId: string,
   page = 1,
   pageSize = 50
 ): Promise<{ tasks: Task[]; total: number }> {
   try {
-    const snap = await adminDb()
-      .collection('tasks')
-      .where('companyId', '==', companyId)
-      .where('status', 'in', ['done', 'cancelled'])
-      .get()
-
-    const dbDocs = snap.docs
-      .map((d) => serialize<Task>(d))
-      .sort((a, b) => (b.completedAt || b.updatedAt || b.createdAt || '').localeCompare(a.completedAt || a.updatedAt || a.createdAt || ''))
-
-    const offset = (page - 1) * pageSize
-    const paginated = dbDocs.slice(offset, offset + pageSize)
-    return { tasks: paginated, total: dbDocs.length }
+    return await unstable_cache(fetchCompletedTasksPage, ['tasks-completed-page'], {
+      revalidate: 3600,
+      tags: [tasksCompletedTag(companyId)],
+    })(companyId, page, pageSize)
   } catch (err) {
     console.error('[listCompletedTasksPaged] Error:', err)
     const fallbacks = getFallbackTasks().filter((f) => f.status === 'done' || f.status === 'cancelled')
@@ -1017,7 +1100,7 @@ export async function createTask(
     }
   } catch { /* read-only fs */ }
 
-  revalidateTag('tasks')
+  invalidateTasksForChange(companyId, null, data as Partial<Task>)
   return generatedId
 }
 
@@ -1117,7 +1200,10 @@ export async function updateTask(
       }
     }
   }
-  revalidateTag('tasks')
+  const before = (doc && doc.exists)
+    ? (doc.data() as Partial<Task>)
+    : (isDemoCompany(companyId) ? getFallbackTasks().find((t) => t.id === id) : null)
+  invalidateTasksForChange(companyId, before, data)
 }
 
 export async function deleteTask(companyId: string, id: string): Promise<void> {
@@ -1134,7 +1220,10 @@ export async function deleteTask(companyId: string, id: string): Promise<void> {
     // não encontrada" e a OT reaparecia na lista.
     await ref.set({ id, companyId, deleted: true, updatedAt: new Date().toISOString() })
   }
-  revalidateTag('tasks')
+  const before = doc.exists
+    ? (doc.data() as Partial<Task>)
+    : (isDemoCompany(companyId) ? getFallbackTasks().find((t) => t.id === id) : null)
+  invalidateTasksForChange(companyId, before, null)
 }
 
 export async function deleteTasksByMaintenancePlan(companyId: string, planId: string): Promise<void> {
@@ -1148,7 +1237,11 @@ export async function deleteTasksByMaintenancePlan(companyId: string, planId: st
     const batch = adminDb().batch()
     snap.docs.forEach((doc) => batch.delete(doc.ref))
     await batch.commit()
-    revalidateTag('tasks')
+    const deleted = snap.docs.map((d) => d.data() as Partial<Task>)
+    invalidateTasks(companyId, {
+      history: touchesPastYear(deleted.flatMap(taskDates)),
+      completed: deleted.some((t) => isClosedStatus(t.status)),
+    })
   } catch (err) {
     console.error('[deleteTasksByMaintenancePlan] Error:', err)
   }
@@ -1338,7 +1431,8 @@ const listInterventionsCached = unstable_cache(
       const snap = await firestoreWithTimeout(
         () => adminDb().collection('interventions').where('companyId', '==', companyId).get(),
         null,
-        1200
+        1200,
+        'listInterventions'
       )
       if (!snap || !snap.docs) return []
       return snap.docs
@@ -1350,7 +1444,9 @@ const listInterventionsCached = unstable_cache(
     }
   },
   ['interventions'],
-  { revalidate: 300, tags: ['interventions'] }
+  // 1h (era 300s): as escritas já fazem revalidateTag('interventions'); o tempo é só
+  // uma rede de segurança e com 300s forçava releituras a cada 5 min sem nada mudar.
+  { revalidate: 3600, tags: ['interventions'] }
 )
 export const listInterventions = cache(async function(companyId: string): Promise<Intervention[]> {
   return listInterventionsCached(companyId)
@@ -1637,6 +1733,7 @@ export const getTechnicianTypes = cache(async function(companyId: string): Promi
 
 export async function updateTechnicianTypes(companyId: string, technicianTypes: string[]): Promise<void> {
   await adminDb().collection('companies').doc(companyId).update({ technicianTypes })
+  revalidateTag('companies')
 }
 
 /**
@@ -1653,6 +1750,7 @@ export async function updateCompany(
   if (data.logoUrl !== undefined) update.logoUrl = data.logoUrl
   if (Object.keys(update).length === 0) return
   await adminDb().collection('companies').doc(companyId).update(update)
+  revalidateTag('companies') // perfil em cache (session.ts) traz nome/logótipo da empresa
 }
 
 export async function createUserDirect(
@@ -1799,6 +1897,20 @@ export async function updateUserProfile(
   if (data.phone !== undefined) update.phone = data.phone
   if (data.hourlyRate !== undefined) update.hourlyRate = data.hourlyRate
 
+  // Só propagar às OTs (passo 3) quando o nome/abreviatura mudam mesmo: a propagação
+  // lê TODAS as OTs da empresa (~6700 leituras na UR) e corria em qualquer gravação de
+  // perfil que trouxesse o nome, mesmo igual ao atual. Tem de ler antes da escrita.
+  let nameOrAbbrChanged = data.name !== undefined || data.abbreviation !== undefined
+  if (nameOrAbbrChanged) {
+    const current = await adminDb().collection('users').doc(userId).get().catch(() => null)
+    if (current?.exists) {
+      const c = current.data() || {}
+      const sameName = data.name === undefined || (c.name || '') === update.name
+      const sameAbbr = data.abbreviation === undefined || (c.abbreviation ?? null) === update.abbreviation
+      nameOrAbbrChanged = !(sameName && sameAbbr)
+    }
+  }
+
   // 1. Atualizar na cache em memória de fallbacks
   if (cachedFallbackUsers) {
     const idx = cachedFallbackUsers.findIndex(
@@ -1832,7 +1944,7 @@ export async function updateUserProfile(
   }
 
   // 3. Propagar alterações de Nome e Abreviatura às tarefas e aos ficheiros locais da BD
-  if (data.name !== undefined || data.abbreviation !== undefined) {
+  if (nameOrAbbrChanged) {
     const newName = data.name ? data.name.trim() : undefined
     const newAbbr = data.abbreviation ? data.abbreviation.trim().toUpperCase() : undefined
 
@@ -1888,7 +2000,7 @@ export async function updateUserProfile(
 
   // 4. Invalidar todos os tags de cache para refletir em toda a BD imediatamente
   revalidateTag('users')
-  revalidateTag('tasks')
+  if (nameOrAbbrChanged) invalidateTasks(finalCompanyId, { history: true, completed: true })
   revalidateTag('messages')
   revalidateTag('notifications')
 }
@@ -1941,7 +2053,8 @@ const listMaintenancePlansCached = unstable_cache(
       const snap = await firestoreWithTimeout(
         () => adminDb().collection('maintenance_plans').where('companyId', '==', companyId).get(),
         null,
-        1000
+        1000,
+        'listMaintenancePlans'
       )
       const dbDocs = (snap && snap.docs)
         ? snap.docs
@@ -2148,7 +2261,7 @@ export async function setMaintenancePlanOccurrenceStatus(
     await updateMaintenancePlan(companyId, plan.id, { lastGeneratedAt: todayStr, updatedAt: now })
   }
 
-  revalidateTag('tasks')
+  invalidateTasksForChange(companyId, existing ? (existing.data() as Partial<Task>) : null, { status })
   revalidateTag('plans')
 }
 
@@ -2559,6 +2672,9 @@ export async function calculateTaskCost(companyId: string, taskId: string): Prom
 
     const totalCost = calculateTotalCost(interventions, materials, userRates)
     await adminDb().collection('tasks').doc(taskId).update({ totalCost })
+    // Grava depois do updateTask que lhe deu origem: sem isto, uma releitura entretanto
+    // ficava com o custo antigo em cache até 1h.
+    invalidateTasks(companyId, { completed: true })
   } catch (err) {
     console.error('[calculateTaskCost] Error:', err)
   }
@@ -2737,74 +2853,72 @@ export async function deleteDocument(companyId: string, id: string): Promise<voi
 let cachedNotifications: AppNotification[] = []
 let cachedInternalMessages: InternalMessage[] = []
 
-const listNotificationsCached = unstable_cache(
-  async (companyId: string, userId: string): Promise<AppNotification[]> => {
-    const uLower = String(userId || '').toLowerCase().trim()
-    const uClean = uLower.replace(/^(tech_|user_)/, '')
-    if (isQuotaExhausted()) {
-      return cachedNotifications.filter((n) => {
-        if (n.companyId !== companyId) return false
-        const target = String(n.userId || '').toLowerCase().trim()
-        const targetClean = target.replace(/^(tech_|user_)/, '')
-        return target === uLower || target === uClean || targetClean === uClean
-      })
-    }
-    try {
-      // Sem orderBy() de propósito: um where() com dois campos de igualdade
-      // (companyId + userId) não precisa de índice composto no Firestore,
-      // mas combinado com orderBy(createdAt) precisa — e esse índice nunca
-      // foi criado, pelo que a query falhava sempre em silêncio e caía no
-      // fallback vazio. Ordena-se aqui em memória em vez de no Firestore.
-      let snap = await firestoreWithTimeout(
-        () => adminDb()
-          .collection('notifications')
-          .where('companyId', '==', companyId)
-          .where('userId', '==', userId)
-          .limit(50)
-          .get(),
-        null,
-        800
-      )
+// Notificações locais em memória (por instância) — reserva quando o Firestore falha.
+function localNotificationsFor(companyId: string, userId: string): AppNotification[] {
+  const uLower = String(userId || '').toLowerCase().trim()
+  const uClean = uLower.replace(/^(tech_|user_)/, '')
+  return cachedNotifications.filter((n) => {
+    if (n.companyId !== companyId) return false
+    const target = String(n.userId || '').toLowerCase().trim()
+    const targetClean = target.replace(/^(tech_|user_)/, '')
+    return target === uLower || target === uClean || targetClean === uClean
+  })
+}
 
-      if (!snap || snap.empty) {
-        snap = await firestoreWithTimeout(
-          () => adminDb()
-            .collection('notifications')
-            .where('companyId', '==', companyId)
-            .where('userId', '==', uClean)
-            .limit(50)
-            .get(),
-          null,
-          800
-        )
-      }
+// Falha/timeout/quota → lança (não devolve a reserva local), para a reserva nunca
+// ficar guardada em cache durante 1h; a reserva aplica-se em listNotifications.
+async function fetchNotifications(companyId: string, userId: string): Promise<AppNotification[]> {
+  const uClean = String(userId || '').toLowerCase().trim().replace(/^(tech_|user_)/, '')
+  if (isQuotaExhausted()) {
+    throw new Error('Quota do Firestore esgotada (listNotifications)')
+  }
 
-      if (snap && !snap.empty) {
-        return snap.docs
-          .map((d) => serialize<AppNotification>(d))
-          .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-          .slice(0, 15)
-      }
-    } catch (err: any) {
-      const isQuotaErr = String(err?.message || err).includes('Quota exceeded') || String(err?.message || err).includes('RESOURCE_EXHAUSTED')
-      if (isQuotaErr) {
-        console.warn('[listNotifications] Quota do Firestore atingida. A usar notificações locais.')
-      } else {
-        console.error('[listNotifications] Error:', err)
-      }
-    }
-    return cachedNotifications.filter((n) => {
-      if (n.companyId !== companyId) return false
-      const target = String(n.userId || '').toLowerCase().trim()
-      const targetClean = target.replace(/^(tech_|user_)/, '')
-      return target === uLower || target === uClean || targetClean === uClean
-    })
-  },
-  ['notifications'],
-  { revalidate: 60, tags: ['notifications'] }
-)
+  // Só as 15 mais recentes (as únicas mostradas): orderBy(createdAt) com dois
+  // where() de igualdade precisa do índice composto (companyId, userId, createdAt
+  // desc), já em firestore.indexes.json. Enquanto esse índice não estiver publicado
+  // no Firebase, a query ordenada falha (firestoreWithTimeout devolve null) e usa-se
+  // a antiga sem orderBy — que devolve 50 notificações quaisquer, não as mais
+  // recentes (por isso, a partir de 50, as novas podiam não aparecer no sino).
+  const queryFor = (uid: string) => {
+    const base = adminDb()
+      .collection('notifications')
+      .where('companyId', '==', companyId)
+      .where('userId', '==', uid)
+    return firestoreWithTimeout(() => base.orderBy('createdAt', 'desc').limit(15).get(), null, 800)
+      .then((ordered) => ordered ?? firestoreWithTimeout(() => base.limit(50).get(), null, 800))
+  }
+
+  let snap = await queryFor(userId)
+  if (!snap || snap.empty) {
+    snap = await queryFor(uClean)
+  }
+
+  if (!snap) {
+    throw new Error('Firestore indisponível (listNotifications)')
+  }
+  if (!snap.empty) {
+    return snap.docs
+      .map((d) => serialize<AppNotification>(d))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      .slice(0, 15)
+  }
+  return localNotificationsFor(companyId, userId)
+}
+
+// 1h (era 60s): o sino faz polling a cada 2 min e, com 60s, cada poll falhava sempre a
+// cache e ia ao Firestore (~12 mil leituras/dia por utilizador com a app aberta). Criar
+// ou marcar notificações invalida a etiqueta da empresa, por isso as novas aparecem
+// logo no poll seguinte — o tempo é só uma rede de segurança.
 export const listNotifications = cache(async function(companyId: string, userId: string): Promise<AppNotification[]> {
-  return listNotificationsCached(companyId, userId)
+  try {
+    return await unstable_cache(fetchNotifications, ['notifications'], {
+      revalidate: 3600,
+      tags: ['notifications', notificationsTag(companyId)],
+    })(companyId, userId)
+  } catch (err) {
+    console.warn('[listNotifications] Firestore indisponível. A usar notificações locais.', err)
+    return localNotificationsFor(companyId, userId)
+  }
 })
 
 export async function createNotification(
@@ -2826,7 +2940,7 @@ export async function createNotification(
     console.error('[createNotification] Error:', err)
   }
   cachedNotifications.unshift(notif)
-  revalidateTag('notifications')
+  revalidateTag(notificationsTag(companyId))
 
   // Disparar notificação Push se o utilizador tiver subscrição ativa
   if (data.userId) {
@@ -2858,7 +2972,7 @@ export async function markNotificationRead(companyId: string, id: string): Promi
   }
   const item = cachedNotifications.find((n) => n.id === id)
   if (item) item.read = true
-  revalidateTag('notifications')
+  revalidateTag(notificationsTag(companyId))
 }
 
 export async function markAllNotificationsRead(companyId: string, userId: string): Promise<void> {
@@ -2891,7 +3005,7 @@ export async function markAllNotificationsRead(companyId: string, userId: string
       }
     }
   })
-  revalidateTag('notifications')
+  revalidateTag(notificationsTag(companyId))
 }
 
 export function syncInternalMessages(msgs: InternalMessage[]): void {
