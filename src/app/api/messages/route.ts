@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     const msgs: InternalMessage[] = Array.isArray(body?.messages) ? body.messages : []
     const clean = msgs.filter((m) => m && m.id && !m.id.startsWith('msg_seed_'))
     if (clean.length > 0) {
-      syncInternalMessages(clean)
+      syncInternalMessages(profile.companyId, clean)
     }
     return NextResponse.json({ ok: true, synced: clean.length })
   } catch (err: any) {

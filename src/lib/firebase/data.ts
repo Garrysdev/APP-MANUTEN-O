@@ -1299,7 +1299,9 @@ const listUsersCached = unstable_cache(
       let deletedEmails = new Set<string>()
       try {
         const delSnap = await firestoreWithTimeout(
-          () => adminDb().collection('deleted_users').get(),
+          // Só as eliminações DESTA empresa (gravadas sempre com companyId) — antes lia as
+          // de todas e uma eliminação noutra empresa escondia o utilizador aqui também.
+          () => adminDb().collection('deleted_users').where('companyId', '==', finalCompanyId).get(),
           null,
           600
         )
@@ -1620,7 +1622,24 @@ export async function createUserFromInvite(
   revalidateTag('users')
 }
 
+/**
+ * Garante que `userId` pertence a `companyId` antes de um gestor o alterar. Sem isto, um
+ * gestor de outra empresa que soubesse o uid podia repor a password, desativar ou "puxar"
+ * para a sua empresa (as escritas gravam companyId) um utilizador alheio.
+ * Documento legado sem companyId conta como Empresa UR (como em session.ts).
+ */
+export async function assertUserInCompany(companyId: string, userId: string): Promise<void> {
+  const doc = await adminDb().collection('users').doc(userId).get()
+  if (doc.exists) {
+    if ((doc.data()?.companyId || DEMO_COMPANY_ID) === companyId) return
+  } else if (getFallbackUsers().some((u) => u.id === userId && u.companyId === companyId)) {
+    return
+  }
+  throw new Error('Utilizador não pertence a esta empresa.')
+}
+
 export async function deactivateUser(companyId: string, userId: string): Promise<void> {
+  await assertUserInCompany(companyId, userId)
   const ref = adminDb().collection('users').doc(userId)
   await ref.set({ active: false, companyId }, { merge: true })
   try {
@@ -1678,6 +1697,7 @@ export async function checkUserHasHistory(companyId: string, userId: string): Pr
 }
 
 export async function deleteUserPermanent(companyId: string, userId: string): Promise<void> {
+  await assertUserInCompany(companyId, userId)
   const ref = adminDb().collection('users').doc(userId)
   const doc = await ref.get()
   const userData = doc.exists ? doc.data() : null
@@ -1703,6 +1723,7 @@ export async function deleteUserPermanent(companyId: string, userId: string): Pr
 }
 
 export async function updateUserRate(companyId: string, userId: string, hourlyRate: number): Promise<void> {
+  await assertUserInCompany(companyId, userId)
   const ref = adminDb().collection('users').doc(userId)
   await ref.set({ hourlyRate, companyId }, { merge: true })
   revalidateTag('users')
@@ -1876,11 +1897,13 @@ export async function updateUserProfile(
     companyId?: string
   }
 ): Promise<void> {
-  const finalCompanyId = data.companyId || DEMO_COMPANY_ID
+  // companyId só é gravado quando vem explícito. Antes caía para a Empresa UR sempre que
+  // faltava (subscrição push, mudar password, ativar/desativar...), movendo utilizadores
+  // de outras empresas para a UR.
   const update: Record<string, unknown> = {
     updatedAt: new Date().toISOString(),
-    companyId: finalCompanyId,
   }
+  if (data.companyId) update.companyId = data.companyId
   if (data.name !== undefined) update.name = data.name.trim()
   if (data.email !== undefined) update.email = data.email.trim().toLowerCase()
   if (data.abbreviation !== undefined) update.abbreviation = data.abbreviation ? data.abbreviation.trim().toUpperCase() : null
@@ -1901,25 +1924,35 @@ export async function updateUserProfile(
   // lê TODAS as OTs da empresa (~6700 leituras na UR) e corria em qualquer gravação de
   // perfil que trouxesse o nome, mesmo igual ao atual. Tem de ler antes da escrita.
   let nameOrAbbrChanged = data.name !== undefined || data.abbreviation !== undefined
+  let finalCompanyId = data.companyId || ''
   if (nameOrAbbrChanged) {
     const current = await adminDb().collection('users').doc(userId).get().catch(() => null)
     if (current?.exists) {
       const c = current.data() || {}
+      if (!finalCompanyId) finalCompanyId = c.companyId || ''
       const sameName = data.name === undefined || (c.name || '') === update.name
       const sameAbbr = data.abbreviation === undefined || (c.abbreviation ?? null) === update.abbreviation
       nameOrAbbrChanged = !(sameName && sameAbbr)
     }
   }
+  // Utilizadores só da camada de reserva (sem documento) pertencem à empresa da reserva.
+  if (!finalCompanyId) finalCompanyId = getFallbackUsers().find((u) => u.id === userId)?.companyId || ''
 
   // 1. Atualizar na cache em memória de fallbacks
   if (cachedFallbackUsers) {
     const idx = cachedFallbackUsers.findIndex(
-      (u) => u.id === userId || (data.email && u.email?.toLowerCase() === data.email.toLowerCase())
+      (u) =>
+        u.id === userId ||
+        // Por email só dentro da mesma empresa — senão um utilizador de outra empresa com o
+        // mesmo email reescrevia a entrada (e o companyId) de um técnico da UR.
+        (!!data.email && u.companyId === finalCompanyId && u.email?.toLowerCase() === data.email.toLowerCase())
     )
     if (idx !== -1) {
       cachedFallbackUsers[idx] = { ...cachedFallbackUsers[idx], ...(update as any) }
-    } else {
-      cachedFallbackUsers.push({ id: userId, ...(update as any) } as User)
+    } else if (finalCompanyId === DEMO_COMPANY_ID) {
+      // A reserva é só da Empresa UR: utilizadores de outras empresas não entram nela,
+      // senão apareciam na equipa da UR durante uma quebra de quota.
+      cachedFallbackUsers.push({ id: userId, companyId: finalCompanyId, ...(update as any) } as User)
     }
   }
 
@@ -1933,7 +1966,8 @@ export async function updateUserProfile(
       const emailQuery = await adminDb().collection('users').where('email', '==', data.email.trim().toLowerCase()).get().catch(() => null)
       if (emailQuery && !emailQuery.empty) {
         for (const doc of emailQuery.docs) {
-          if (doc.id !== userId) {
+          // Só duplicados legados da MESMA empresa — nunca reescrever o registo de outra.
+          if (doc.id !== userId && finalCompanyId && (doc.data()?.companyId || DEMO_COMPANY_ID) === finalCompanyId) {
             await doc.ref.set(sanitized, { merge: true }).catch(() => {})
           }
         }
@@ -1944,7 +1978,7 @@ export async function updateUserProfile(
   }
 
   // 3. Propagar alterações de Nome e Abreviatura às tarefas e aos ficheiros locais da BD
-  if (nameOrAbbrChanged) {
+  if (nameOrAbbrChanged && finalCompanyId) {
     const newName = data.name ? data.name.trim() : undefined
     const newAbbr = data.abbreviation ? data.abbreviation.trim().toUpperCase() : undefined
 
@@ -2000,7 +2034,7 @@ export async function updateUserProfile(
 
   // 4. Invalidar todos os tags de cache para refletir em toda a BD imediatamente
   revalidateTag('users')
-  if (nameOrAbbrChanged) invalidateTasks(finalCompanyId, { history: true, completed: true })
+  if (nameOrAbbrChanged && finalCompanyId) invalidateTasks(finalCompanyId, { history: true, completed: true })
   revalidateTag('messages')
   revalidateTag('notifications')
 }
@@ -3008,19 +3042,85 @@ export async function markAllNotificationsRead(companyId: string, userId: string
   revalidateTag(notificationsTag(companyId))
 }
 
-export function syncInternalMessages(msgs: InternalMessage[]): void {
+// ── FEED DE MENSAGENS POR EMPRESA ────────────────────────────────────────────
+// Um documento por empresa em system_sync (1 leitura para listar). Até Out/2026 era um
+// único feed global com as 100 últimas mensagens de TODAS as empresas: uma empresa com
+// muito movimento empurrava as das outras para fora, e qualquer escrita (incl. o sync
+// vindo do browser, que aceitava qualquer companyId) reescrevia mensagens alheias.
+// Enquanto o feed da empresa não existir, lê-se o global antigo filtrado por empresa;
+// a primeira escrita cria o feed próprio com essas mensagens (migração automática).
+const LEGACY_MESSAGES_FEED = 'internal_messages_feed'
+const messagesFeedRef = (companyId: string) =>
+  adminDb().collection('system_sync').doc(`${LEGACY_MESSAGES_FEED}_${companyId}`)
+
+// Mensagem legada sem companyId pertence historicamente à Empresa UR.
+function messageBelongsTo(m: InternalMessage, companyId: string): boolean {
+  return m.companyId ? m.companyId === companyId : isDemoCompany(companyId)
+}
+
+/** Lança em caso de erro (para firestoreWithTimeout cair no fallback). */
+async function readMessagesFeed(companyId: string): Promise<InternalMessage[]> {
+  const snap = await messagesFeedRef(companyId).get()
+  if (snap.exists) {
+    const list = snap.data()?.messages
+    return Array.isArray(list) ? (list as InternalMessage[]) : []
+  }
+  const legacy = await adminDb().collection('system_sync').doc(LEGACY_MESSAGES_FEED).get()
+  const list = legacy.exists ? legacy.data()?.messages : null
+  const own = Array.isArray(list)
+    ? (list as InternalMessage[]).filter((m) => m?.id && messageBelongsTo(m, companyId))
+    : []
+  // Criar já o feed da empresa (migração) para as leituras seguintes custarem só 1 documento.
+  void writeMessagesFeed(companyId, own).catch(() => {})
+  return own
+}
+
+async function writeMessagesFeed(companyId: string, messages: InternalMessage[]): Promise<void> {
+  const own = messages
+    .filter((m) => m?.id && !m.id.startsWith('msg_seed_') && messageBelongsTo(m, companyId))
+    .slice(0, 100)
+  await messagesFeedRef(companyId).set({ messages: JSON.parse(JSON.stringify(own)), updatedAt: new Date().toISOString() })
+}
+
+/**
+ * Garante que a mensagem é da empresa antes de a alterar/apagar. Sem documento no
+ * Firestore (mensagens só da cache/messages.json), procura-a aí; se não a encontrar em
+ * lado nenhum, recusa.
+ */
+async function assertMessageInCompany(companyId: string, messageId: string): Promise<void> {
+  const doc = await adminDb().collection('internal_messages').doc(messageId).get()
+  if (doc.exists) {
+    if (messageBelongsTo(doc.data() as InternalMessage, companyId)) return
+    throw new Error('Mensagem não pertence a esta empresa.')
+  }
+  let fileMessages: InternalMessage[] = []
+  try {
+    const filePath = path.join(process.cwd(), 'scripts', 'import', 'messages.json')
+    if (fs.existsSync(filePath)) fileMessages = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+  } catch {}
+  const local = [...cachedInternalMessages, ...fileMessages].find((m) => m?.id === messageId)
+  if (local && messageBelongsTo(local, companyId)) return
+  throw new Error('Mensagem não pertence a esta empresa.')
+}
+
+// Sincronização vinda do browser (mensagens guardadas localmente). Só atualiza a cache em
+// memória e só com mensagens da própria empresa — o companyId vem do cliente e não é de
+// confiança. Já não escreve no feed: o feed é mantido pelas escritas no servidor
+// (criar/estado/apagar), e reescrevê-lo a partir da memória de uma instância podia
+// apagar mensagens recentes gravadas por outra.
+export function syncInternalMessages(companyId: string, msgs: InternalMessage[]): void {
   const map = new Map<string, InternalMessage>()
   cachedInternalMessages.forEach((m) => {
     if (m?.id && !m.id.startsWith('msg_seed_')) map.set(m.id, m)
   })
   msgs.forEach((m) => {
-    if (m?.id && !m.id.startsWith('msg_seed_')) map.set(m.id, m)
+    if (!m?.id || m.id.startsWith('msg_seed_') || !messageBelongsTo(m, companyId)) return
+    // O id também vem do cliente: nunca substituir uma mensagem de outra empresa.
+    const existing = map.get(m.id)
+    if (existing && !messageBelongsTo(existing, companyId)) return
+    map.set(m.id, m)
   })
   cachedInternalMessages = Array.from(map.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-  try {
-    const feedRef = adminDb().collection('system_sync').doc('internal_messages_feed')
-    void feedRef.set({ messages: JSON.parse(JSON.stringify(cachedInternalMessages.slice(0, 100))), updatedAt: new Date().toISOString() }, { merge: true })
-  } catch {}
 }
 
 export const listInternalMessages = cache(async function(
@@ -3031,28 +3131,21 @@ export const listInternalMessages = cache(async function(
     let docs: InternalMessage[] = []
 
     if (!isQuotaExhausted()) {
-      // 1. Tentar ler do feed sincronizado de documento único (consome apenas 1 leitura de quota!)
+      // 1. Tentar ler do feed da empresa (documento único — 1 leitura de quota)
       try {
-        const feedSnap = await firestoreWithTimeout(
-          () => adminDb().collection('system_sync').doc('internal_messages_feed').get(),
-          null,
-          800
-        )
-        if (feedSnap && feedSnap.exists && Array.isArray(feedSnap.data()?.messages)) {
-          const feedList = feedSnap.data()!.messages as InternalMessage[]
-          feedList.forEach((m) => {
-            if (m && m.id && !m.id.startsWith('msg_seed_')) {
-              docs.push(m)
-            }
-          })
-        }
+        const feedList = await firestoreWithTimeout(() => readMessagesFeed(companyId), null, 800)
+        ;(feedList || []).forEach((m) => {
+          if (m && m.id && !m.id.startsWith('msg_seed_')) {
+            docs.push(m)
+          }
+        })
       } catch { /* ignore */ }
 
-      // 2. Se o feed estiver vazio, tentar a coleção completa
+      // 2. Se o feed estiver vazio, tentar a coleção (só desta empresa)
       if (docs.length === 0) {
         try {
           const snap = await firestoreWithTimeout(
-            () => adminDb().collection('internal_messages').limit(50).get(),
+            () => adminDb().collection('internal_messages').where('companyId', '==', companyId).limit(50).get(),
             null,
             800
           )
@@ -3074,7 +3167,8 @@ export const listInternalMessages = cache(async function(
     if (!isQuotaExhausted()) {
       try {
         const delSnap = await firestoreWithTimeout(
-          () => adminDb().collection('deleted_internal_messages').limit(100).get(),
+          // Só as eliminações desta empresa (antes: as primeiras 100 de todas as empresas).
+          () => adminDb().collection('deleted_internal_messages').where('companyId', '==', companyId).limit(300).get(),
           null,
           600
         )
@@ -3107,8 +3201,7 @@ export const listInternalMessages = cache(async function(
         // pertence historicamente à Empresa UR, só visível para ela — não para empresas
         // novas. Antes disto, `isDemoCompany(m.companyId)` mostrava TODAS as mensagens
         // reais da Empresa UR a qualquer empresa cliente nova (fuga cross-tenant).
-        const belongsToViewer = m.companyId ? m.companyId === companyId : isDemoCompany(companyId)
-        if (belongsToViewer) {
+        if (messageBelongsTo(m, companyId)) {
           allDocs.push(m)
         }
       }
@@ -3235,7 +3328,8 @@ export const listInternalMessages = cache(async function(
   } catch (err) {
     console.error('[listInternalMessages] Error:', err)
   }
-  return cachedInternalMessages
+  // Nunca devolver a cache em bruto: tem mensagens de todas as empresas.
+  return cachedInternalMessages.filter((m) => messageBelongsTo(m, companyId))
 })
 
 // Contagem direta por query Firestore (companyId + createdAt do mês) em vez de
@@ -3293,16 +3387,10 @@ export async function createInternalMessage(
   }
   cachedInternalMessages.unshift(msgObj)
 
-  // Atualizar o feed centralizado (apenas 1 documento - sem consumo excessivo de quota)
+  // Atualizar o feed da empresa (apenas 1 documento - sem consumo excessivo de quota)
   try {
-    const feedRef = adminDb().collection('system_sync').doc('internal_messages_feed')
-    const feedSnap = await feedRef.get().catch(() => null)
-    let currentFeed: InternalMessage[] = []
-    if (feedSnap && feedSnap.exists && Array.isArray(feedSnap.data()?.messages)) {
-      currentFeed = feedSnap.data()!.messages
-    }
-    const merged = [msgObj, ...currentFeed.filter((m) => m?.id !== msgObj.id && !m?.id?.startsWith('msg_seed_'))].slice(0, 100)
-    await feedRef.set({ messages: JSON.parse(JSON.stringify(merged)), updatedAt: now }, { merge: true })
+    const currentFeed = await readMessagesFeed(finalCompanyId)
+    await writeMessagesFeed(finalCompanyId, [msgObj, ...currentFeed.filter((m) => m?.id !== msgObj.id)])
   } catch {}
 
   try {
@@ -3320,6 +3408,7 @@ export async function createInternalMessage(
   // Se esta mensagem é uma resposta a outra, atualizar o estado da mensagem original para 'replied'
   if (data.replyToId) {
     try {
+      await assertMessageInCompany(finalCompanyId, data.replyToId)
       const origMsg = cachedInternalMessages.find((m) => m.id === data.replyToId)
       if (origMsg) {
         origMsg.status = 'replied'
@@ -3440,22 +3529,33 @@ export async function markMessagesRead(
   const now = new Date().toISOString()
 
   cachedInternalMessages.forEach((m) => {
-    if (ids.includes(m.id)) {
+    if (ids.includes(m.id) && messageBelongsTo(m, companyId)) {
       m.readBy = Array.from(new Set([...(m.readBy || []), userId]))
     }
   })
 
   try {
     const { FieldValue } = await import('firebase-admin/firestore')
+    // Só mensagens desta empresa. As que estão no feed da empresa já se sabe que são
+    // (1 leitura); as restantes são confirmadas documento a documento.
+    const feedIds = new Set((await readMessagesFeed(companyId).catch(() => [])).map((m) => m.id))
+    const unknownRefs = ids
+      .filter((id) => !feedIds.has(id))
+      .map((id) => adminDb().collection('internal_messages').doc(id))
+    const confirmed = unknownRefs.length > 0 ? await adminDb().getAll(...unknownRefs) : []
+    const ownIds = [
+      ...ids.filter((id) => feedIds.has(id)),
+      ...confirmed.filter((s) => s.exists && messageBelongsTo(s.data() as InternalMessage, companyId)).map((s) => s.id),
+    ]
     const batch = adminDb().batch()
-    ids.forEach((id) => {
+    ownIds.forEach((id) => {
       batch.set(
         adminDb().collection('internal_messages').doc(id),
         { readBy: FieldValue.arrayUnion(userId), updatedAt: now },
         { merge: true }
       )
     })
-    await batch.commit()
+    if (ownIds.length > 0) await batch.commit()
   } catch (err) {
     console.error('[markMessagesRead] Error:', err)
   }
@@ -3498,8 +3598,9 @@ export async function updateInternalMessageStatus(
   status: MessageStatus
 ): Promise<void> {
   const now = new Date().toISOString()
+  await assertMessageInCompany(companyId, messageId)
   try {
-    const orig = cachedInternalMessages.find((m) => m.id === messageId)
+    const orig = cachedInternalMessages.find((m) => m.id === messageId && messageBelongsTo(m, companyId))
     if (orig) {
       orig.status = status
     }
@@ -3508,17 +3609,13 @@ export async function updateInternalMessageStatus(
       .doc(messageId)
       .update({ status, updatedAt: now })
 
-    // Atualizar no feed centralizado
-    const feedRef = adminDb().collection('system_sync').doc('internal_messages_feed')
-    const feedSnap = await feedRef.get().catch(() => null)
-    if (feedSnap && feedSnap.exists && Array.isArray(feedSnap.data()?.messages)) {
-      const feedList = feedSnap.data()!.messages as InternalMessage[]
-      const target = feedList.find((m) => m.id === messageId)
-      if (target) {
-        target.status = status
-        target.updatedAt = now
-        await feedRef.set({ messages: feedList, updatedAt: now }, { merge: true }).catch(() => {})
-      }
+    // Atualizar no feed da empresa
+    const feedList = await readMessagesFeed(companyId)
+    if (feedList.some((m) => m.id === messageId)) {
+      await writeMessagesFeed(
+        companyId,
+        feedList.map((m) => (m.id === messageId ? { ...m, status, updatedAt: now } : m))
+      ).catch(() => {})
     }
   } catch (err) {
     console.error('[updateInternalMessageStatus] Error:', err)
@@ -3531,7 +3628,8 @@ export async function deleteInternalMessage(
   messageId: string
 ): Promise<void> {
   const finalCompanyId = companyId || DEMO_COMPANY_ID
-  cachedInternalMessages = cachedInternalMessages.filter((m) => m.id !== messageId)
+  await assertMessageInCompany(finalCompanyId, messageId)
+  cachedInternalMessages = cachedInternalMessages.filter((m) => !(m.id === messageId && messageBelongsTo(m, finalCompanyId)))
   try {
     await adminDb().collection('internal_messages').doc(messageId).delete().catch(() => {})
     await adminDb().collection('deleted_internal_messages').doc(messageId).set({
@@ -3539,12 +3637,10 @@ export async function deleteInternalMessage(
       companyId: finalCompanyId,
     }).catch(() => {})
 
-    // Remover do feed centralizado
-    const feedRef = adminDb().collection('system_sync').doc('internal_messages_feed')
-    const feedSnap = await feedRef.get().catch(() => null)
-    if (feedSnap && feedSnap.exists && Array.isArray(feedSnap.data()?.messages)) {
-      const remaining = feedSnap.data()!.messages.filter((m: any) => m?.id !== messageId)
-      await feedRef.set({ messages: remaining, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {})
+    // Remover do feed da empresa
+    const feedList = await readMessagesFeed(finalCompanyId)
+    if (feedList.some((m) => m.id === messageId)) {
+      await writeMessagesFeed(finalCompanyId, feedList.filter((m) => m.id !== messageId)).catch(() => {})
     }
   } catch (err) {
     console.error('[deleteInternalMessage] Error:', err)
@@ -3552,15 +3648,21 @@ export async function deleteInternalMessage(
   revalidateTag('messages')
 }
 
+// Só apaga as mensagens DESTA empresa. Antes apagava as primeiras 300 da coleção e o
+// feed global — ou seja, mensagens de todas as empresas.
 export async function clearAllInternalMessages(companyId: string): Promise<void> {
-  cachedInternalMessages = []
+  cachedInternalMessages = cachedInternalMessages.filter((m) => !messageBelongsTo(m, companyId))
   try {
-    const feedRef = adminDb().collection('system_sync').doc('internal_messages_feed')
-    await feedRef.set({ messages: [], updatedAt: new Date().toISOString() })
+    await writeMessagesFeed(companyId, [])
   } catch {}
 
   try {
-    const snap = await adminDb().collection('internal_messages').limit(300).get().catch(() => null)
+    const snap = await adminDb()
+      .collection('internal_messages')
+      .where('companyId', '==', companyId)
+      .limit(300)
+      .get()
+      .catch(() => null)
     if (snap && !snap.empty) {
       const batch = adminDb().batch()
       snap.docs.forEach((doc) => batch.delete(doc.ref))
@@ -3570,7 +3672,10 @@ export async function clearAllInternalMessages(companyId: string): Promise<void>
 
   try {
     const filePath = path.join(process.cwd(), 'scripts', 'import', 'messages.json')
-    fs.writeFileSync(filePath, '[]', 'utf-8')
+    if (fs.existsSync(filePath)) {
+      const current: InternalMessage[] = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+      fs.writeFileSync(filePath, JSON.stringify(current.filter((m) => !messageBelongsTo(m, companyId)), null, 2), 'utf-8')
+    }
   } catch {}
 
   revalidateTag('messages')

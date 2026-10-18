@@ -62,13 +62,22 @@ function loadProfileDocs(uid: string, email: string): Promise<ProfileDocs | null
   )(uid, email)
 }
 
+// Último perfil lido com sucesso, por uid, nesta instância do servidor. Numa falha
+// temporária do Firestore (quota, timeout) serve-se este antes do perfil de reserva.
+const lastGoodProfile = new Map<string, UserProfile>()
+
 /** Devolve o perfil completo (user + company) do utilizador autenticado, ou null. */
 export const getCurrentProfile = cache(async function (): Promise<UserProfile | null> {
   const session = await getSessionUser().catch(() => null)
   if (!session) return null
 
   const userEmail = (session.email || '').toLowerCase().trim()
-  const isRGAdmin = userEmail === 'garrido.rui@gmail.com' || userEmail === 'admin@rgmaintenance.com'
+  // Por uid, ou por email só se verificado: um gestor pode mudar o email de uma conta
+  // (updateUserByManagerAction) e, por email sozinho, ganhava o acesso de administrador
+  // e o perfil de reserva da Empresa UR.
+  const isRGAdmin =
+    session.uid === 'nLqzaMwMu1OR4CKZzatjTlNBWt82' ||
+    (session.email_verified === true && (userEmail === 'garrido.rui@gmail.com' || userEmail === 'admin@rgmaintenance.com'))
 
   const KNOWN_USERS = [
     { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', email: 'tecnico@teste.rg', name: 'RuiG', abbreviation: 'RU', role: 'technician' },
@@ -77,7 +86,10 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
     { id: 'zmDAeoGTzIWPavraKu0f', email: 'cb@rgmaintenance.pt', name: 'Carlos Branco', abbreviation: 'CB', role: 'technician' },
     { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', email: 'garrido.rui@gmail.com', name: 'Rui Garrido', abbreviation: 'RG', role: 'manager' },
   ]
-  const matchedKnown = KNOWN_USERS.find((k) => k.id === session.uid || (userEmail && k.email.toLowerCase() === userEmail))
+  // Por uid, ou por email só se verificado (o email pode ser alterado — ver isRGAdmin).
+  const matchedKnown = KNOWN_USERS.find(
+    (k) => k.id === session.uid || (session.email_verified === true && userEmail && k.email.toLowerCase() === userEmail)
+  )
 
   const buildFallbackProfile = (): UserProfile => ({
     id: matchedKnown?.id || session.uid,
@@ -98,14 +110,31 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
     },
   })
 
+  // O perfil de reserva é o da Empresa UR, por isso só serve às contas conhecidas da UR.
+  // Antes era dado a QUALQUER utilizador autenticado sempre que o Firestore falhava —
+  // um cliente de outra empresa entrava na UR com plano Enterprise (fuga cross-tenant).
+  // Os restantes recebem o último perfil bom em memória ou null (volta ao login).
+  const isURAccount = isRGAdmin || !!matchedKnown
+  const fallbackOrNull = (): UserProfile | null => {
+    const last = lastGoodProfile.get(session.uid)
+    if (last) return last
+    if (isURAccount) return buildFallbackProfile()
+    console.warn('[getCurrentProfile] Firestore indisponível e sem perfil em memória para', session.uid)
+    return null
+  }
+
   if (isQuotaExhausted()) {
-    return buildFallbackProfile()
+    return fallbackOrNull()
   }
 
   try {
-    const docs = await firestoreWithTimeout(() => loadProfileDocs(session.uid, userEmail), null, 2000)
+    let docs = await firestoreWithTimeout(() => loadProfileDocs(session.uid, userEmail), null, 2000)
+    // Sem perfil de reserva para estas contas: dar mais tempo antes de as mandar ao login.
+    if (!docs && !isURAccount && !lastGoodProfile.has(session.uid) && !isQuotaExhausted()) {
+      docs = await firestoreWithTimeout(() => loadProfileDocs(session.uid, userEmail), null, 3000)
+    }
     if (!docs) {
-      return buildFallbackProfile()
+      return fallbackOrNull()
     }
     const docData = docs.userData
 
@@ -125,7 +154,10 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
       companyId
     } as UserProfile
 
-    if (user.active === false) return null
+    if (user.active === false) {
+      lastGoodProfile.delete(session.uid)
+      return null
+    }
 
     if (docs.company) {
       const c = docs.company
@@ -148,31 +180,10 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
       }
     }
 
+    lastGoodProfile.set(session.uid, user)
     return user
   } catch (err: any) {
     console.error('[getCurrentProfile Error]:', err)
-    const KNOWN_USERS = [
-      { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', email: 'tecnico@teste.rg', name: 'RuiG', abbreviation: 'RU', role: 'technician' },
-      { id: 'MEGjjvqtGqv3Oosxvlrx', email: 'lm@rgmaintenance.pt', name: 'Leandro Maia', abbreviation: 'LM', role: 'technician' },
-      { id: 'nAcCSm4E3tNnPLr72UPl', email: 'ms@rgmaintenance.pt', name: 'Marco Silva', abbreviation: 'MS', role: 'technician' },
-      { id: 'zmDAeoGTzIWPavraKu0f', email: 'cb@rgmaintenance.pt', name: 'Carlos Branco', abbreviation: 'CB', role: 'technician' },
-      { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', email: 'garrido.rui@gmail.com', name: 'Rui Garrido', abbreviation: 'RG', role: 'manager' },
-    ]
-    const matchedKnown = KNOWN_USERS.find((k) => k.id === session.uid || (userEmail && k.email.toLowerCase() === userEmail))
-    return {
-      id: matchedKnown?.id || session.uid,
-      email: userEmail || matchedKnown?.email || '',
-      name: matchedKnown?.name || session.name || (isRGAdmin ? 'Rui Garrido' : 'Utilizador'),
-      abbreviation: matchedKnown?.abbreviation || (isRGAdmin ? 'RG' : null),
-      role: isRGAdmin ? 'manager' : (matchedKnown?.role || 'technician'),
-      companyId: DEMO_COMPANY_ID,
-      company: {
-        id: DEMO_COMPANY_ID,
-        name: 'Empresa UR',
-        plan: 'enterprise',
-        activeModules: ['tasks', 'assets', 'maintenance_plan', 'stocks', 'history', 'messages'],
-        aiCredits: 100,
-      },
-    } as UserProfile
+    return fallbackOrNull()
   }
 })

@@ -171,7 +171,7 @@ export async function updateUserRateAction(userId: string, hourlyRate: number): 
   }
 }
 
-import { updateUserProfile, updateTechnicianTypes } from '@/lib/firebase/data'
+import { updateUserProfile, updateTechnicianTypes, assertUserInCompany } from '@/lib/firebase/data'
 import { adminAuth } from '@/lib/firebase/admin'
 
 export async function updateTechnicianTypesAction(types: string[]): Promise<UserActionState> {
@@ -232,7 +232,8 @@ export async function updateUserByManagerAction(
   const phone = phoneRaw !== null ? String(phoneRaw).trim() || null : undefined
 
   try {
-    const updateData: any = { 
+    await assertUserInCompany(profile.companyId, userId)
+    const updateData: any = {
       name,
       companyId: profile.companyId || DEMO_COMPANY_ID 
     }
@@ -275,6 +276,7 @@ export async function toggleUserActiveAction(userId: string, active: boolean): P
   if (userId === profile.id) return { error: 'Não podes alterar o teu próprio estado.' }
 
   try {
+    await assertUserInCompany(profile.companyId, userId)
     await updateUserProfile(userId, { active })
     try {
       await adminAuth().updateUser(userId, { disabled: !active })
@@ -299,6 +301,7 @@ export async function resetUserPasswordAction(
     : 'Muda@' + Math.floor(1000 + Math.random() * 9000)
 
   try {
+    await assertUserInCompany(profile.companyId, userId)
     try {
       await adminAuth().updateUser(userId, { password: pwd })
     } catch (authErr) {
