@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { getCurrentProfile, DEMO_COMPANY_ID } from '@/lib/firebase/session'
+import { getCurrentProfile } from '@/lib/firebase/session'
 import { updateUserProfile, updateCompany } from '@/lib/firebase/data'
 import { adminAuth } from '@/lib/firebase/admin'
 
@@ -42,9 +42,12 @@ export async function updateProfileAction(
       }
     }
 
-    await updateUserProfile(profile.id, { 
-      name, 
-      companyId: profile.companyId || DEMO_COMPANY_ID,
+    await updateUserProfile(profile.id, {
+      name,
+      // NUNCA passar companyId aqui com fallback para DEMO_COMPANY_ID — já causou
+      // utilizadores de empresas novas (via /register) ficarem ligados à Empresa UR
+      // sempre que profile.companyId vinha vazio por qualquer motivo (ver nota em
+      // updateUserProfile(), data.ts). Esta ação não precisa de tocar no companyId.
       ...(email ? { email } : {}),
       ...(phone !== undefined ? { phone } : {}),
       ...(abbreviation !== undefined ? { abbreviation } : {}),
@@ -71,6 +74,9 @@ export async function updateCompanyAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  // Nunca cair para DEMO_COMPANY_ID aqui — escreveria silenciosamente no nome/logo da
+  // Empresa UR em vez de falhar. Mesma classe de bug corrigida em updateUserProfile().
+  if (!profile.companyId) return { error: 'Sessão inválida — tenta sair e entrar novamente.' }
 
   const name = String(formData.get('companyName') ?? '').trim()
   if (!name || name.length < 2) return { error: 'Nome da empresa inválido (mínimo 2 caracteres).' }
@@ -80,7 +86,7 @@ export async function updateCompanyAction(
     : undefined
 
   try {
-    await updateCompany(profile.companyId || DEMO_COMPANY_ID, {
+    await updateCompany(profile.companyId, {
       name,
       ...(logoUrl !== undefined ? { logoUrl } : {}),
     })
