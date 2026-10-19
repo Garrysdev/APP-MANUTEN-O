@@ -222,7 +222,7 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
           {importStatus && <p className="font-semibold text-slate-700 dark:text-slate-200">{importStatus}</p>}
           {tab === 'FR' && importStatus && !importStatus.startsWith('A importar') && (
             <p className="text-slate-500 dark:text-slate-400">
-              Abre cada Folha de Registo em "Editar" para definir os campos que o técnico tem de preencher.
+              Abre cada Folha de Registo em «Editar» para definir os campos que o técnico tem de preencher.
             </p>
           )}
           {importErrors.map((msg) => (
@@ -289,7 +289,7 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
                   d.fieldLabels && d.fieldLabels.length > 0 ? (
                     <p className="text-xs text-slate-500 dark:text-slate-400">{d.fieldLabels.length} campo(s) a preencher</p>
                   ) : (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">Sem campos definidos — o técnico preenche "Registo / Observações"</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400">Sem campos definidos — o técnico preenche «Registo / Observações»</p>
                   )
                 )}
                 {d.type === 'IT' && d.content && (
