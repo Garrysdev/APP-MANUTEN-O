@@ -382,11 +382,14 @@ export default function CreateTaskModal({
         applyTaskToForm(editingTask)
         setDuplicating(false)
       } else {
-        if (initialAssetId) setAssetId(initialAssetId)
-        if (initialTitle) setTitle(initialTitle)
-        if (initialDescription) setDescription(initialDescription)
-        if (initialTipo) setTipo(initialTipo)
-        if (initialPhotoUrl) setPhotoPreview(initialPhotoUrl)
+        // Sempre (não só quando vêm preenchidos): o reset ao fechar usa os initial* desse
+        // momento, e depois de editar/duplicar uma OT a página ainda passava a TAG dessa OT
+        // em initialAssetId — a "Nova OT" seguinte abria com a TAG da anterior.
+        setAssetId(initialAssetId || '')
+        setTitle(initialTitle || '')
+        setDescription(initialDescription || '')
+        setTipo(initialTipo || 'curativa')
+        setPhotoPreview(initialPhotoUrl || null)
         setDependsOn([])
         setCreatedAtDate(new Date().toISOString().slice(0, 10))
       }
