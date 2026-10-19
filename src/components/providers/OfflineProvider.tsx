@@ -86,10 +86,19 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     let unsubIv: (() => void) | undefined
 
     ;(async () => {
-      const [{ startTechnicianReplication, resyncNow, getReplicationStates }, { getTechnicianDB }] = await Promise.all([
+      const [
+        { startTechnicianReplication, stopTechnicianReplication, resolveOfflineUid, resyncNow, getReplicationStates },
+        { getTechnicianDB, setOfflineUser },
+      ] = await Promise.all([
         import('@/lib/offline/replication'),
         import('@/lib/offline/rxdb'),
       ])
+      // Base offline do utilizador ATUAL (uma por uid — nunca a de quem usou o telemóvel antes).
+      const uid = await resolveOfflineUid()
+      if (cancelled) return
+      if (!uid) return
+      await stopTechnicianReplication()
+      await setOfflineUser(uid)
       await startTechnicianReplication()
       if (cancelled) return
 

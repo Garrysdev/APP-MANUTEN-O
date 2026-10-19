@@ -134,6 +134,9 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
   const dict = dictionaries[lang] || dictionaries['pt']
 
   async function handleLogout() {
+    // Fecha a base offline deste utilizador e esquece-o neste browser — o próximo a
+    // entrar no mesmo telemóvel abre a sua própria base, nunca a deste.
+    await import('@/lib/offline/replication').then((m) => m.signOutOffline()).catch(() => {})
     await signOut(getFirebaseAuth())
     await fetch('/api/auth/session', { method: 'DELETE' })
     router.push('/login')

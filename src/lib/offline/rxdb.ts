@@ -217,12 +217,49 @@ let dbPromise: Promise<RxDatabase<TechnicianCollections>> | null = null
  * dev-mode do RxDB (mensagens de erro completas) — só é carregado condicionalmente
  * para não pesar o bundle de produção.
  */
+// Uma base offline POR UTILIZADOR (nome derivado do uid). Antes era uma só
+// ('rgmaintenance_technician') para quem usasse o telemóvel: depois de trocar de conta,
+// o novo utilizador via as OTs/intervenções do anterior (mesmo de outra empresa) e a
+// sincronização continuava do ponto do outro. Com uma base por uid, as alterações
+// offline ainda por enviar de quem saiu ficam na base dele e seguem quando voltar a entrar.
+let offlineUid: string | null = null
+let openedForUid: string | null = null
+
+// Último utilizador identificado neste browser (ver resolveOfflineUid em replication.ts).
+export const OFFLINE_UID_KEY = 'rgm_offline_uid'
+
+async function dbNameFor(uid: string): Promise<string> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(uid))
+  const hex = Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, '0')).join('')
+  return `rgm_tech_${hex.slice(0, 24)}`
+}
+
+/** Define o utilizador dono da base offline; fecha a base de outro utilizador, se aberta. */
+export async function setOfflineUser(uid: string | null): Promise<void> {
+  if (uid === offlineUid) return
+  offlineUid = uid
+  if (dbPromise && openedForUid !== uid) {
+    const old = dbPromise
+    dbPromise = null
+    openedForUid = null
+    await old.then((db) => db.close()).catch(() => {})
+  }
+}
+
 export async function getTechnicianDB(): Promise<RxDatabase<TechnicianCollections>> {
   if (typeof window === 'undefined') {
     throw new Error('A base de dados offline do técnico só existe no browser.')
   }
+  if (!offlineUid) {
+    try { offlineUid = localStorage.getItem(OFFLINE_UID_KEY) } catch {}
+  }
+  if (!offlineUid) {
+    throw new Error('Base offline indisponível: utilizador por identificar.')
+  }
   if (dbPromise) return dbPromise
 
+  const uid = offlineUid
+  openedForUid = uid
   dbPromise = (async () => {
     if (process.env.NODE_ENV !== 'production') {
       const { RxDBDevModePlugin } = await import('rxdb/plugins/dev-mode')
@@ -230,7 +267,7 @@ export async function getTechnicianDB(): Promise<RxDatabase<TechnicianCollection
     }
 
     const db = await createRxDatabase<TechnicianCollections>({
-      name: 'rgmaintenance_technician',
+      name: await dbNameFor(uid),
       storage: getRxStorageDexie(),
       multiInstance: true,
       eventReduce: true,

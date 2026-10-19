@@ -9,7 +9,7 @@
  */
 
 import { replicateRxCollection, type RxReplicationState } from 'rxdb/plugins/replication'
-import { getTechnicianDB, type LocalTask, type LocalIntervention, type LocalAssetRef, type LocalSafetyRule } from './rxdb'
+import { getTechnicianDB, OFFLINE_UID_KEY, type LocalTask, type LocalIntervention, type LocalAssetRef, type LocalSafetyRule } from './rxdb'
 
 type Checkpoint = { updatedAt: string } | undefined
 
@@ -112,4 +112,42 @@ export async function resyncNow() {
 
 export function getReplicationStates() {
   return replicationStates
+}
+
+/** Pára a sincronização (logout / troca de utilizador) — a seguinte arranca do zero. */
+export async function stopTechnicianReplication() {
+  const states = replicationStates
+  replicationStates = []
+  started = false
+  await Promise.all(states.map((s) => s.cancel().catch(() => {})))
+}
+
+// OFFLINE_UID_KEY: último utilizador identificado neste browser — permite abrir a base
+// offline certa sem rede (a app instalada pode arrancar offline). Apagado no logout.
+
+/** uid do utilizador atual: da sessão (online) ou o último guardado (offline). */
+export async function resolveOfflineUid(): Promise<string | null> {
+  try {
+    const res = await fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' })
+    if (res.ok) {
+      const { uid } = (await res.json()) as { uid?: string }
+      if (uid) {
+        try { localStorage.setItem(OFFLINE_UID_KEY, uid) } catch {}
+        return uid
+      }
+    }
+    if (res.status === 401) {
+      try { localStorage.removeItem(OFFLINE_UID_KEY) } catch {}
+      return null
+    }
+  } catch { /* sem rede */ }
+  try { return localStorage.getItem(OFFLINE_UID_KEY) } catch { return null }
+}
+
+/** Logout: pára a sincronização, fecha a base e esquece o utilizador neste browser. */
+export async function signOutOffline() {
+  await stopTechnicianReplication()
+  try { localStorage.removeItem(OFFLINE_UID_KEY) } catch {}
+  const { setOfflineUser } = await import('./rxdb')
+  await setOfflineUser(null)
 }
