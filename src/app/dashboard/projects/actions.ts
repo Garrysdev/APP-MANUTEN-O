@@ -8,7 +8,7 @@ import {
   listStockItems, listAssetRefs, listTasks,
   calculateTaskCost,
 } from '@/lib/firebase/data'
-import { adminDb } from '@/lib/firebase/admin'
+import { adminDbFor } from '@/lib/firebase/tenant-db'
 import { LIMITS } from '@/lib/plans'
 import { isOpenProjectTask } from '@/lib/task-assignment'
 import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, PlanName } from '@/types/models'
@@ -282,12 +282,14 @@ export async function updateProjectTaskDatesAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   try {
-    const db = adminDb()
+    const db = adminDbFor(profile.companyId)
     if (taskId.startsWith('plan_')) {
       const parts = taskId.split('_')
       const planId = parts[1]
-      if (planId) {
-        await db.collection('maintenance_plans').doc(planId).update({
+      const planDoc = planId ? await db.collection('maintenance_plans').doc(planId).get().catch(() => null) : null
+      // Só planos desta empresa (antes gravava em qualquer plano pelo id).
+      if (planDoc?.exists && planDoc.data()?.companyId === profile.companyId) {
+        await planDoc.ref.update({
           calendarStartDate: plannedStartDate,
           nextDueDate: dueDate,
           scheduledDate: plannedStartDate,

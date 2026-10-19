@@ -25,7 +25,9 @@ function getServiceAccount() {
 }
 
 function getAdminApp(): App {
-  if (getApps().length) return getApp()
+  // Procurar a app por defeito pelo nome: com bases dedicadas por empresa (tenant-db.ts)
+  // passam a existir apps com nome, e getApps().length deixa de chegar.
+  if (getApps().some((a) => a.name === '[DEFAULT]')) return getApp()
   const { projectId, clientEmail, privateKey } = getServiceAccount()
   return initializeApp({
     credential: cert({ projectId, clientEmail, privateKey }),

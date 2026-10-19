@@ -6,6 +6,9 @@ import fs from 'fs'
 import path from 'path'
 import type { DocumentSnapshot } from 'firebase-admin/firestore'
 import { adminDb, adminAuth, firestoreWithTimeout, isQuotaExhausted, markQuotaExhausted, logReads } from './admin'
+// adminDb() = coleções centrais (companies, users, invites, deleted_users);
+// adminDbFor(companyId) = dados de negócio da empresa (ver tenant-db.ts).
+import { adminDbFor } from './tenant-db'
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
@@ -239,7 +242,7 @@ const listExternalCompaniesCached = unstable_cache(
     }
     try {
       const snap = await firestoreWithTimeout(
-        () => adminDb().collection('external_companies').where('companyId', '==', companyId).get(),
+        () => adminDbFor(companyId).collection('external_companies').where('companyId', '==', companyId).get(),
         null,
         1000
       )
@@ -272,7 +275,7 @@ export async function createExternalCompany(
   data: Omit<ExternalCompany, 'id' | 'companyId' | 'active' | 'createdAt'>
 ): Promise<string> {
   const now = new Date().toISOString()
-  const ref = await adminDb().collection('external_companies').add(
+  const ref = await adminDbFor(companyId).collection('external_companies').add(
     JSON.parse(JSON.stringify({ ...data, companyId, active: true, createdAt: now }))
   )
   revalidateTag('external-companies')
@@ -287,12 +290,12 @@ export async function updateExternalCompany(
   const cleanObj = JSON.parse(JSON.stringify({ ...data, companyId, updatedAt: new Date().toISOString() }))
   // set({merge:true}) em vez de update() — as empresas de exemplo não têm
   // documento próprio no Firestore até serem editadas ou apagadas pela 1ª vez.
-  await adminDb().collection('external_companies').doc(id).set(cleanObj, { merge: true })
+  await adminDbFor(companyId).collection('external_companies').doc(id).set(cleanObj, { merge: true })
   revalidateTag('external-companies')
 }
 
 export async function deleteExternalCompany(companyId: string, id: string): Promise<void> {
-  const ref = adminDb().collection('external_companies').doc(id)
+  const ref = adminDbFor(companyId).collection('external_companies').doc(id)
   const doc = await ref.get()
   if (doc.exists) {
     if (doc.data()?.companyId !== companyId) throw new Error('Empresa não encontrada')
@@ -384,7 +387,7 @@ const listAssetsCached = unstable_cache(
     }
     try {
       const snap = await firestoreWithTimeout(
-        () => adminDb().collection('assets').where('companyId', '==', companyId).limit(limitCount).get(),
+        () => adminDbFor(companyId).collection('assets').where('companyId', '==', companyId).limit(limitCount).get(),
         null,
         1000,
         'listAssets'
@@ -416,7 +419,7 @@ const listAssetRefsCached = unstable_cache(
     }
     try {
       const snap = await firestoreWithTimeout(
-        () => adminDb().collection('assets').where('companyId', '==', companyId).select('name', 'tag', 'area').get(),
+        () => adminDbFor(companyId).collection('assets').where('companyId', '==', companyId).select('name', 'tag', 'area').get(),
         null,
         800
       )
@@ -459,7 +462,7 @@ export const listPlanTaskRefs = cache(async function(companyId: string): Promise
   if (isQuotaExhausted()) return []
   try {
     const snap = await firestoreWithTimeout(
-      () => adminDb().collection('maintenance_plans').where('companyId', '==', companyId).select('title', 'assetId', 'criticidade', 'periodicidade', 'periodicidadeLabel', 'executor', 'legal', 'months', 'safetyRules', 'active').get(),
+      () => adminDbFor(companyId).collection('maintenance_plans').where('companyId', '==', companyId).select('title', 'assetId', 'criticidade', 'periodicidade', 'periodicidadeLabel', 'executor', 'legal', 'months', 'safetyRules', 'active').get(),
       null,
       800
     )
@@ -492,13 +495,13 @@ export const getAsset = cache(async function(companyId: string, id: string): Pro
     let rawId = id
     try { rawId = decodeURIComponent(id).trim() } catch {}
 
-    const doc = await adminDb().collection('assets').doc(rawId).get()
+    const doc = await adminDbFor(companyId).collection('assets').doc(rawId).get()
     if (doc.exists && doc.data()?.companyId === companyId) {
       return serialize<Asset>(doc)
     }
 
     // Busca por TAG em Firestore se o ID for uma TAG (ex: "90 H1 B1" ou "90 h1 b1")
-    const snap = await adminDb().collection('assets')
+    const snap = await adminDbFor(companyId).collection('assets')
       .where('companyId', '==', companyId)
       .where('tag', '==', rawId)
       .limit(1)
@@ -507,7 +510,7 @@ export const getAsset = cache(async function(companyId: string, id: string): Pro
       return serialize<Asset>(snap.docs[0])
     }
 
-    const snapUpper = await adminDb().collection('assets')
+    const snapUpper = await adminDbFor(companyId).collection('assets')
       .where('companyId', '==', companyId)
       .where('tag', '==', rawId.toUpperCase())
       .limit(1)
@@ -539,7 +542,7 @@ export async function createAsset(
   companyId: string,
   data: Omit<Asset, 'id' | 'companyId' | 'createdAt'>
 ): Promise<string> {
-  const ref = await adminDb()
+  const ref = await adminDbFor(companyId)
     .collection('assets')
     .add({ ...data, companyId, createdAt: new Date().toISOString() })
   revalidateTag('assets')
@@ -551,7 +554,7 @@ export async function updateAsset(
   id: string,
   data: Partial<Omit<Asset, 'id' | 'companyId' | 'createdAt'>>
 ): Promise<void> {
-  const ref = adminDb().collection('assets').doc(id)
+  const ref = adminDbFor(companyId).collection('assets').doc(id)
   const doc = await ref.get()
   if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Ativo não encontrado')
   await ref.update(data)
@@ -559,7 +562,7 @@ export async function updateAsset(
 }
 
 export async function deleteAsset(companyId: string, id: string): Promise<void> {
-  const ref = adminDb().collection('assets').doc(id)
+  const ref = adminDbFor(companyId).collection('assets').doc(id)
   const doc = await ref.get()
   if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Ativo não encontrado')
   await ref.delete()
@@ -572,7 +575,7 @@ async function fetchTasksList(companyId: string, limitCount: number, includeComp
       throw new Error('Firestore indisponível (listTasks)')
     }
     try {
-      let query = adminDb()
+      let query = adminDbFor(companyId)
         .collection('tasks')
         .where('companyId', '==', companyId)
 
@@ -708,7 +711,7 @@ async function fetchTasksForYear(companyId: string, year: number): Promise<Task[
   // Falha/timeout/quota → lança (não devolve a reserva): um resultado de reserva
   // guardado em cache ficaria até 7 dias nos anos passados (ver getTasksForYearStats).
   const snap = await firestoreWithTimeout(
-    () => adminDb()
+    () => adminDbFor(companyId)
       .collection('tasks')
       .where('companyId', '==', companyId)
       .where('createdAt', '>=', startIso)
@@ -805,7 +808,7 @@ async function fetchCompletedTasksPage(
   page: number,
   pageSize: number
 ): Promise<{ tasks: Task[]; total: number }> {
-  const snap = await adminDb()
+  const snap = await adminDbFor(companyId)
     .collection('tasks')
     .where('companyId', '==', companyId)
     .where('status', 'in', ['done', 'cancelled'])
@@ -857,7 +860,7 @@ export const listTasksByAsset = cache(async function(companyId: string, assetId:
     }
 
     const queries: Promise<any>[] = [
-      adminDb()
+      adminDbFor(companyId)
         .collection('tasks')
         .where('companyId', '==', companyId)
         .where('assetId', '==', assetId)
@@ -868,7 +871,7 @@ export const listTasksByAsset = cache(async function(companyId: string, assetId:
 
     if (assetTag && assetTag !== assetId) {
       queries.push(
-        adminDb()
+        adminDbFor(companyId)
           .collection('tasks')
           .where('companyId', '==', companyId)
           .where('tag', '==', assetTag)
@@ -926,7 +929,7 @@ export const listTasksByAsset = cache(async function(companyId: string, assetId:
 
 export const getTask = cache(async function(companyId: string, id: string): Promise<Task | null> {
   try {
-    const doc = await adminDb().collection('tasks').doc(id).get()
+    const doc = await adminDbFor(companyId).collection('tasks').doc(id).get()
     if (doc.exists) {
       if (doc.data()?.companyId !== companyId) return null
       if (doc.data()?.deleted) return null // marcador de eliminado (ver deleteTask)
@@ -1050,7 +1053,7 @@ export async function createTask(
     }
     const rawDoc = { createdAt: now, updatedAt: now, ...data, companyId, createdBy }
     const cleanObj = JSON.parse(JSON.stringify(rawDoc))
-    const ref = await adminDb().collection('tasks').add(cleanObj)
+    const ref = await adminDbFor(companyId).collection('tasks').add(cleanObj)
     generatedId = ref.id
 
     // Notificar os técnicos atribuídos via Web Push e Notificação Interna
@@ -1111,7 +1114,7 @@ export async function updateTask(
   // lançadas com atraso ou entradas tardias de dados históricos.
   data: Partial<Omit<Task, 'id' | 'companyId' | 'createdBy'>>
 ): Promise<void> {
-  const ref = adminDb().collection('tasks').doc(id)
+  const ref = adminDbFor(companyId).collection('tasks').doc(id)
   const doc = await ref.get().catch(() => null)
   const now = new Date().toISOString()
 
@@ -1186,7 +1189,7 @@ export async function updateTask(
     const parts = id.split('_')
     const planId = parts[1]
     if (planId) {
-      const planRef = adminDb().collection('maintenance_plans').doc(planId)
+      const planRef = adminDbFor(companyId).collection('maintenance_plans').doc(planId)
       const planDoc = await planRef.get().catch(() => null)
       if (planDoc && planDoc.exists) {
         const updatePlan: any = { updatedAt: now }
@@ -1207,7 +1210,7 @@ export async function updateTask(
 }
 
 export async function deleteTask(companyId: string, id: string): Promise<void> {
-  const ref = adminDb().collection('tasks').doc(id)
+  const ref = adminDbFor(companyId).collection('tasks').doc(id)
   const doc = await ref.get()
   if (doc.exists) {
     if (doc.data()?.companyId !== companyId) throw new Error('Tarefa não encontrada')
@@ -1228,13 +1231,13 @@ export async function deleteTask(companyId: string, id: string): Promise<void> {
 
 export async function deleteTasksByMaintenancePlan(companyId: string, planId: string): Promise<void> {
   try {
-    const snap = await adminDb()
+    const snap = await adminDbFor(companyId)
       .collection('tasks')
       .where('companyId', '==', companyId)
       .where('maintenancePlanId', '==', planId)
       .get()
     if (snap.empty) return
-    const batch = adminDb().batch()
+    const batch = adminDbFor(companyId).batch()
     snap.docs.forEach((doc) => batch.delete(doc.ref))
     await batch.commit()
     const deleted = snap.docs.map((d) => d.data() as Partial<Task>)
@@ -1331,7 +1334,7 @@ const listUsersCached = unstable_cache(
       if (isDemoCompany(finalCompanyId)) {
         try {
           const compSnap = await firestoreWithTimeout(
-            () => adminDb().collection('external_companies').where('companyId', '==', finalCompanyId).get(),
+            () => adminDbFor(companyId).collection('external_companies').where('companyId', '==', finalCompanyId).get(),
             null,
             600
           )
@@ -1431,7 +1434,7 @@ const listInterventionsCached = unstable_cache(
     if (isQuotaExhausted()) return []
     try {
       const snap = await firestoreWithTimeout(
-        () => adminDb().collection('interventions').where('companyId', '==', companyId).get(),
+        () => adminDbFor(companyId).collection('interventions').where('companyId', '==', companyId).get(),
         null,
         1200,
         'listInterventions'
@@ -1459,7 +1462,7 @@ export const listInterventionsByTask = cache(async function(
   taskId: string
 ): Promise<Intervention[]> {
   try {
-    const snap = await adminDb()
+    const snap = await adminDbFor(companyId)
       .collection('interventions')
       .where('companyId', '==', companyId)
       .where('taskId', '==', taskId)
@@ -1481,7 +1484,7 @@ export async function createIntervention(
   id?: string
 ): Promise<string> {
   if (id) {
-    const ref = adminDb().collection('interventions').doc(id)
+    const ref = adminDbFor(companyId).collection('interventions').doc(id)
     const existing = await ref.get()
     if (existing.exists) {
       // Já foi aplicada por uma tentativa anterior — não repetir a escrita nem mexer
@@ -1492,7 +1495,7 @@ export async function createIntervention(
     revalidateTag('interventions')
     return id
   }
-  const ref = await adminDb()
+  const ref = await adminDbFor(companyId)
     .collection('interventions')
     .add({ ...data, companyId, createdAt: new Date().toISOString() })
   revalidateTag('interventions')
@@ -1500,7 +1503,7 @@ export async function createIntervention(
 }
 
 export async function deleteIntervention(companyId: string, id: string): Promise<void> {
-  const ref = adminDb().collection('interventions').doc(id)
+  const ref = adminDbFor(companyId).collection('interventions').doc(id)
   const doc = await ref.get()
   if (!doc.exists || doc.data()?.companyId !== companyId)
     throw new Error('Intervenção não encontrada')
@@ -1519,7 +1522,7 @@ export const listMaterialsForInterventions = cache(async function(
     chunks.push(interventionIds.slice(i, i + 10))
   const results = await Promise.all(
     chunks.map((chunk) =>
-      adminDb()
+      adminDbFor(companyId)
         .collection('materials')
         .where('companyId', '==', companyId)
         .where('interventionId', 'in', chunk)
@@ -1534,14 +1537,14 @@ export async function createMaterial(
   companyId: string,
   data: Omit<Material, 'id' | 'companyId' | 'createdAt'>
 ): Promise<string> {
-  const ref = await adminDb()
+  const ref = await adminDbFor(companyId)
     .collection('materials')
     .add({ ...data, companyId, createdAt: new Date().toISOString() })
   return ref.id
 }
 
 export async function deleteMaterial(companyId: string, id: string): Promise<void> {
-  const ref = adminDb().collection('materials').doc(id)
+  const ref = adminDbFor(companyId).collection('materials').doc(id)
   const doc = await ref.get()
   if (!doc.exists || doc.data()?.companyId !== companyId)
     throw new Error('Material não encontrado')
@@ -1655,7 +1658,7 @@ export async function checkUserHasHistory(companyId: string, userId: string): Pr
     const user = userDoc.exists ? userDoc.data() : null
     const abbr = user?.abbreviation || null
 
-    const ivSnap = await adminDb()
+    const ivSnap = await adminDbFor(companyId)
       .collection('interventions')
       .where('companyId', '==', companyId)
       .where('technicianId', '==', userId)
@@ -1664,7 +1667,7 @@ export async function checkUserHasHistory(companyId: string, userId: string): Pr
     if (!ivSnap.empty) return true
 
     if (abbr) {
-      const ivSnapAbbr = await adminDb()
+      const ivSnapAbbr = await adminDbFor(companyId)
         .collection('interventions')
         .where('companyId', '==', companyId)
         .where('technicianId', '==', abbr)
@@ -1673,7 +1676,7 @@ export async function checkUserHasHistory(companyId: string, userId: string): Pr
       if (!ivSnapAbbr.empty) return true
     }
 
-    const taskSnapAssigned = await adminDb()
+    const taskSnapAssigned = await adminDbFor(companyId)
       .collection('tasks')
       .where('companyId', '==', companyId)
       .where('assignedTo', '==', userId)
@@ -1682,7 +1685,7 @@ export async function checkUserHasHistory(companyId: string, userId: string): Pr
     if (!taskSnapAssigned.empty) return true
 
     if (abbr) {
-      const taskSnapAbbr = await adminDb()
+      const taskSnapAbbr = await adminDbFor(companyId)
         .collection('tasks')
         .where('companyId', '==', companyId)
         .where('assignedTo', '==', abbr)
@@ -1984,8 +1987,8 @@ export async function updateUserProfile(
 
     try {
       // Atualizar no Firestore tasks
-      const taskBatch = adminDb().batch()
-      const tSnap = await adminDb().collection('tasks').where('companyId', '==', finalCompanyId).get().catch(() => null)
+      const taskBatch = adminDbFor(finalCompanyId).batch()
+      const tSnap = await adminDbFor(finalCompanyId).collection('tasks').where('companyId', '==', finalCompanyId).get().catch(() => null)
       if (tSnap && !tSnap.empty) {
         let batchCount = 0
         tSnap.docs.forEach((d) => {
@@ -2085,7 +2088,7 @@ const listMaintenancePlansCached = unstable_cache(
     }
     try {
       const snap = await firestoreWithTimeout(
-        () => adminDb().collection('maintenance_plans').where('companyId', '==', companyId).get(),
+        () => adminDbFor(companyId).collection('maintenance_plans').where('companyId', '==', companyId).get(),
         null,
         1000,
         'listMaintenancePlans'
@@ -2131,7 +2134,7 @@ export const listMaintenancePlans = cache(async function(companyId: string): Pro
 
 export const getMaintenancePlan = cache(async function(companyId: string, id: string): Promise<MaintenancePlan | null> {
   try {
-    const doc = await adminDb().collection('maintenance_plans').doc(id).get()
+    const doc = await adminDbFor(companyId).collection('maintenance_plans').doc(id).get()
     if (doc.exists && doc.data()?.companyId === companyId && !doc.data()?.deleted) {
       return serialize<MaintenancePlan>(doc)
     }
@@ -2152,7 +2155,7 @@ export async function createMaintenancePlan(
   let existingDocId: string | null = null
 
   if (codeToMatch) {
-    const snapCode = await adminDb()
+    const snapCode = await adminDbFor(companyId)
       .collection('maintenance_plans')
       .where('companyId', '==', companyId)
       .where('code', '==', codeToMatch)
@@ -2165,7 +2168,7 @@ export async function createMaintenancePlan(
   }
 
   if (!existingDocId && data.title) {
-    const snapTitle = await adminDb()
+    const snapTitle = await adminDbFor(companyId)
       .collection('maintenance_plans')
       .where('companyId', '==', companyId)
       .where('title', '==', data.title.trim())
@@ -2184,7 +2187,7 @@ export async function createMaintenancePlan(
   }
 
   if (existingDocId) {
-    await adminDb().collection('maintenance_plans').doc(existingDocId).set(
+    await adminDbFor(companyId).collection('maintenance_plans').doc(existingDocId).set(
       { ...data, updatedAt: now },
       { merge: true }
     )
@@ -2192,7 +2195,7 @@ export async function createMaintenancePlan(
     return existingDocId
   }
 
-  const ref = await adminDb()
+  const ref = await adminDbFor(companyId)
     .collection('maintenance_plans')
     .add({ ...data, companyId, createdBy, createdAt: now, updatedAt: now, lastGeneratedAt: null })
   revalidateTag('plans')
@@ -2205,7 +2208,7 @@ export async function updateMaintenancePlan(
   data: Partial<Omit<MaintenancePlan, 'id' | 'companyId' | 'createdBy' | 'createdAt'>>
 ): Promise<void> {
   const now = new Date().toISOString()
-  const ref = adminDb().collection('maintenance_plans').doc(id)
+  const ref = adminDbFor(companyId).collection('maintenance_plans').doc(id)
   const doc = await ref.get()
   if (doc.exists) {
     if (doc.data()?.companyId !== companyId) {
@@ -2247,7 +2250,7 @@ export async function setMaintenancePlanOccurrenceStatus(
   const now = new Date().toISOString()
   const todayStr = now.slice(0, 10)
 
-  const snap = await adminDb()
+  const snap = await adminDbFor(companyId)
     .collection('tasks')
     .where('companyId', '==', companyId)
     .where('maintenancePlanId', '==', plan.id)
@@ -2301,7 +2304,7 @@ export async function setMaintenancePlanOccurrenceStatus(
 
 export async function deleteMaintenancePlan(companyId: string, id: string): Promise<void> {
   const now = new Date().toISOString()
-  const ref = adminDb().collection('maintenance_plans').doc(id)
+  const ref = adminDbFor(companyId).collection('maintenance_plans').doc(id)
   const doc = await ref.get()
   if (doc.exists) {
     if (doc.data()?.companyId !== companyId) {
@@ -2372,7 +2375,7 @@ const listStockItemsCached = unstable_cache(
     }
     try {
       const snap = await firestoreWithTimeout(
-        () => adminDb().collection('stock_items').where('companyId', '==', companyId).get(),
+        () => adminDbFor(companyId).collection('stock_items').where('companyId', '==', companyId).get(),
         null,
         1200
       )
@@ -2399,7 +2402,7 @@ export const listStockItems = cache(async function(companyId: string): Promise<S
 
 export const getStockItem = cache(async function(companyId: string, id: string): Promise<StockItem | null> {
   try {
-    const snap = await adminDb().collection('stock_items').doc(id).get()
+    const snap = await adminDbFor(companyId).collection('stock_items').doc(id).get()
     if (!snap.exists || snap.data()?.companyId !== companyId) return null
     return serialize<StockItem>(snap)
   } catch (err) {
@@ -2414,7 +2417,7 @@ export async function createStockItem(
 ): Promise<string> {
   const now = new Date().toISOString()
   try {
-    const ref = await adminDb()
+    const ref = await adminDbFor(companyId)
       .collection('stock_items')
       .add({ ...data, companyId, createdAt: now, updatedAt: now })
     revalidateTag('stocks')
@@ -2434,7 +2437,7 @@ export async function updateStockItem(
   data: Partial<Omit<StockItem, 'id' | 'companyId' | 'createdAt'>>
 ): Promise<void> {
   try {
-    const ref = adminDb().collection('stock_items').doc(id)
+    const ref = adminDbFor(companyId).collection('stock_items').doc(id)
     const doc = await ref.get()
     if (doc.exists && doc.data()?.companyId === companyId) {
       await ref.update({ ...data, updatedAt: new Date().toISOString() })
@@ -2447,7 +2450,7 @@ export async function updateStockItem(
 
 export async function deleteStockItem(companyId: string, id: string): Promise<void> {
   try {
-    const ref = adminDb().collection('stock_items').doc(id)
+    const ref = adminDbFor(companyId).collection('stock_items').doc(id)
     const doc = await ref.get()
     if (doc.exists && doc.data()?.companyId === companyId) {
       await ref.delete()
@@ -2501,7 +2504,7 @@ const listWarehousesCached = unstable_cache(
     let docs: (Warehouse & { deleted?: boolean })[] = []
     if (!isQuotaExhausted()) {
       try {
-        const snap = await firestoreWithTimeout(() => adminDb().collection('warehouses').get(), null, 800)
+        const snap = await firestoreWithTimeout(() => adminDbFor(finalCompanyId).collection('warehouses').get(), null, 800)
         if (snap && snap.docs) docs = snap.docs.map((d) => serialize<Warehouse & { deleted?: boolean }>(d))
       } catch (err) {
         console.warn('[listWarehouses] Firestore query failed / quota exceeded, using só os por omissão:', err)
@@ -2545,7 +2548,7 @@ export async function createWarehouse(
     createdAt: now,
     updatedAt: now,
   }
-  const ref = await adminDb().collection('warehouses').add(JSON.parse(JSON.stringify(newWh)))
+  const ref = await adminDbFor(companyId).collection('warehouses').add(JSON.parse(JSON.stringify(newWh)))
   revalidateTag('warehouses')
   return ref.id
 }
@@ -2566,12 +2569,12 @@ export async function updateWarehouse(
   )
   // set({merge:true}) em vez de update() — os armazéns por omissão não têm
   // documento no Firestore até serem editados ou apagados pela 1ª vez.
-  await adminDb().collection('warehouses').doc(id).set(cleanObj, { merge: true })
+  await adminDbFor(companyId).collection('warehouses').doc(id).set(cleanObj, { merge: true })
   revalidateTag('warehouses')
 }
 
 export async function deleteWarehouse(companyId: string, id: string): Promise<void> {
-  const ref = adminDb().collection('warehouses').doc(id)
+  const ref = adminDbFor(companyId).collection('warehouses').doc(id)
   const doc = await ref.get()
   if (doc.exists) {
     await ref.delete()
@@ -2591,7 +2594,7 @@ export async function decrementStockQuantity(
 ): Promise<void> {
   try {
     const { FieldValue } = await import('firebase-admin/firestore')
-    const ref = adminDb().collection('stock_items').doc(id)
+    const ref = adminDbFor(companyId).collection('stock_items').doc(id)
     const doc = await ref.get()
     if (!doc.exists || doc.data()?.companyId !== companyId) return
     await ref.update({
@@ -2610,7 +2613,7 @@ export async function incrementStockQuantity(
 ): Promise<void> {
   try {
     const { FieldValue } = await import('firebase-admin/firestore')
-    const ref = adminDb().collection('stock_items').doc(id)
+    const ref = adminDbFor(companyId).collection('stock_items').doc(id)
     const doc = await ref.get()
     if (!doc.exists || doc.data()?.companyId !== companyId) return
     await ref.update({
@@ -2629,7 +2632,7 @@ export async function createStockMovement(
 ): Promise<string> {
   const now = new Date().toISOString()
   try {
-    const ref = await adminDb().collection('stock_movements').add({
+    const ref = await adminDbFor(companyId).collection('stock_movements').add({
       ...data,
       companyId,
       createdBy,
@@ -2647,7 +2650,7 @@ export const listStockMovements = cache(async function(
   stockItemId: string
 ): Promise<StockMovement[]> {
   try {
-    const snap = await adminDb()
+    const snap = await adminDbFor(companyId)
       .collection('stock_movements')
       .where('companyId', '==', companyId)
       .where('stockItemId', '==', stockItemId)
@@ -2663,7 +2666,7 @@ export const listStockMovements = cache(async function(
 
 export const listMaterialsByName = cache(async function(companyId: string, name: string): Promise<Material[]> {
   try {
-    const snap = await adminDb()
+    const snap = await adminDbFor(companyId)
       .collection('materials')
       .where('companyId', '==', companyId)
       .where('name', '==', name)
@@ -2679,7 +2682,7 @@ export const listMaterialsByName = cache(async function(companyId: string, name:
 
 export async function calculateTaskCost(companyId: string, taskId: string): Promise<void> {
   try {
-    const interventionsSnap = await adminDb().collection('interventions')
+    const interventionsSnap = await adminDbFor(companyId).collection('interventions')
       .where('companyId', '==', companyId).where('taskId', '==', taskId).get()
     const interventions = interventionsSnap.docs.map(d => serialize<Intervention>(d))
 
@@ -2697,7 +2700,7 @@ export async function calculateTaskCost(companyId: string, taskId: string): Prom
       const batches = []
       for (let i = 0; i < interventionIds.length; i += 10) batches.push(interventionIds.slice(i, i + 10))
       for (const batch of batches) {
-        const matSnap = await adminDb().collection('materials')
+        const matSnap = await adminDbFor(companyId).collection('materials')
           .where('companyId', '==', companyId)
           .where('interventionId', 'in', batch).get()
         matSnap.forEach(doc => materials.push(doc.data() as Material))
@@ -2705,7 +2708,7 @@ export async function calculateTaskCost(companyId: string, taskId: string): Prom
     }
 
     const totalCost = calculateTotalCost(interventions, materials, userRates)
-    await adminDb().collection('tasks').doc(taskId).update({ totalCost })
+    await adminDbFor(companyId).collection('tasks').doc(taskId).update({ totalCost })
     // Grava depois do updateTask que lhe deu origem: sem isto, uma releitura entretanto
     // ficava com o custo antigo em cache até 1h.
     invalidateTasks(companyId, { completed: true })
@@ -2739,7 +2742,7 @@ const listSafetyRulesCached = unstable_cache(
     if (isQuotaExhausted()) return DEFAULT_SAFETY_RULES
     try {
       const snap = await firestoreWithTimeout(
-        () => adminDb().collection('safety_rules').where('companyId', '==', companyId).get(),
+        () => adminDbFor(companyId).collection('safety_rules').where('companyId', '==', companyId).get(),
         null,
         800
       )
@@ -2763,7 +2766,7 @@ export async function createSafetyRule(
 ): Promise<string> {
   const now = new Date().toISOString()
   try {
-    const ref = await adminDb().collection('safety_rules').add({
+    const ref = await adminDbFor(companyId).collection('safety_rules').add({
       ...data,
       companyId,
       createdAt: now,
@@ -2782,7 +2785,7 @@ export async function updateSafetyRule(
   data: Partial<Omit<SafetyRule, 'id' | 'companyId' | 'createdAt'>>
 ): Promise<void> {
   try {
-    const doc = await adminDb().collection('safety_rules').doc(id).get()
+    const doc = await adminDbFor(companyId).collection('safety_rules').doc(id).get()
     if (doc.exists && doc.data()?.companyId === companyId) {
       await doc.ref.update(data)
       revalidateTag('safety-rules')
@@ -2794,7 +2797,7 @@ export async function updateSafetyRule(
 
 export async function deleteSafetyRule(companyId: string, id: string): Promise<void> {
   try {
-    const doc = await adminDb().collection('safety_rules').doc(id).get()
+    const doc = await adminDbFor(companyId).collection('safety_rules').doc(id).get()
     if (doc.exists && doc.data()?.companyId === companyId) {
       await doc.ref.delete()
       revalidateTag('safety-rules')
@@ -2814,7 +2817,7 @@ const listDocumentsCached = unstable_cache(
     if (isQuotaExhausted()) return []
     try {
       const snap = await firestoreWithTimeout(
-        () => adminDb().collection('documents').where('companyId', '==', companyId).get(),
+        () => adminDbFor(companyId).collection('documents').where('companyId', '==', companyId).get(),
         null,
         800
       )
@@ -2841,7 +2844,7 @@ export async function createDocument(
 ): Promise<string> {
   const now = new Date().toISOString()
   try {
-    const ref = await adminDb().collection('documents').add({
+    const ref = await adminDbFor(companyId).collection('documents').add({
       ...data,
       companyId,
       createdAt: now,
@@ -2860,7 +2863,7 @@ export async function updateDocument(
   data: Partial<Omit<DocumentoObrigatorio, 'id' | 'companyId' | 'createdAt'>>
 ): Promise<void> {
   try {
-    const doc = await adminDb().collection('documents').doc(id).get()
+    const doc = await adminDbFor(companyId).collection('documents').doc(id).get()
     if (doc.exists && doc.data()?.companyId === companyId) {
       await doc.ref.update(data)
       revalidateTag('documents')
@@ -2872,7 +2875,7 @@ export async function updateDocument(
 
 export async function deleteDocument(companyId: string, id: string): Promise<void> {
   try {
-    const doc = await adminDb().collection('documents').doc(id).get()
+    const doc = await adminDbFor(companyId).collection('documents').doc(id).get()
     if (doc.exists && doc.data()?.companyId === companyId) {
       await doc.ref.delete()
       revalidateTag('documents')
@@ -2914,7 +2917,7 @@ async function fetchNotifications(companyId: string, userId: string): Promise<Ap
   // a antiga sem orderBy — que devolve 50 notificações quaisquer, não as mais
   // recentes (por isso, a partir de 50, as novas podiam não aparecer no sino).
   const queryFor = (uid: string) => {
-    const base = adminDb()
+    const base = adminDbFor(companyId)
       .collection('notifications')
       .where('companyId', '==', companyId)
       .where('userId', '==', uid)
@@ -2968,7 +2971,7 @@ export async function createNotification(
     ...data,
   }
   try {
-    const ref = await adminDb().collection('notifications').add(notif)
+    const ref = await adminDbFor(companyId).collection('notifications').add(notif)
     notif.id = ref.id
   } catch (err) {
     console.error('[createNotification] Error:', err)
@@ -3000,7 +3003,7 @@ export async function createNotification(
 
 export async function markNotificationRead(companyId: string, id: string): Promise<void> {
   try {
-    await adminDb().collection('notifications').doc(id).update({ read: true })
+    await adminDbFor(companyId).collection('notifications').doc(id).update({ read: true })
   } catch (err) {
     console.error('[markNotificationRead] Error:', err)
   }
@@ -3013,12 +3016,12 @@ export async function markAllNotificationsRead(companyId: string, userId: string
   const uLower = String(userId || '').toLowerCase().trim()
   const uClean = uLower.replace(/^(tech_|user_)/, '')
   try {
-    const snap = await adminDb()
+    const snap = await adminDbFor(companyId)
       .collection('notifications')
       .where('companyId', '==', companyId)
       .where('read', '==', false)
       .get()
-    const batch = adminDb().batch()
+    const batch = adminDbFor(companyId).batch()
     snap.docs.forEach((doc) => {
       const target = String(doc.data()?.userId || '').toLowerCase().trim()
       const targetClean = target.replace(/^(tech_|user_)/, '')
@@ -3051,7 +3054,7 @@ export async function markAllNotificationsRead(companyId: string, userId: string
 // a primeira escrita cria o feed próprio com essas mensagens (migração automática).
 const LEGACY_MESSAGES_FEED = 'internal_messages_feed'
 const messagesFeedRef = (companyId: string) =>
-  adminDb().collection('system_sync').doc(`${LEGACY_MESSAGES_FEED}_${companyId}`)
+  adminDbFor(companyId).collection('system_sync').doc(`${LEGACY_MESSAGES_FEED}_${companyId}`)
 
 // Mensagem legada sem companyId pertence historicamente à Empresa UR.
 function messageBelongsTo(m: InternalMessage, companyId: string): boolean {
@@ -3088,7 +3091,7 @@ async function writeMessagesFeed(companyId: string, messages: InternalMessage[])
  * lado nenhum, recusa.
  */
 async function assertMessageInCompany(companyId: string, messageId: string): Promise<void> {
-  const doc = await adminDb().collection('internal_messages').doc(messageId).get()
+  const doc = await adminDbFor(companyId).collection('internal_messages').doc(messageId).get()
   if (doc.exists) {
     if (messageBelongsTo(doc.data() as InternalMessage, companyId)) return
     throw new Error('Mensagem não pertence a esta empresa.')
@@ -3145,7 +3148,7 @@ export const listInternalMessages = cache(async function(
       if (docs.length === 0) {
         try {
           const snap = await firestoreWithTimeout(
-            () => adminDb().collection('internal_messages').where('companyId', '==', companyId).limit(50).get(),
+            () => adminDbFor(companyId).collection('internal_messages').where('companyId', '==', companyId).limit(50).get(),
             null,
             800
           )
@@ -3168,7 +3171,7 @@ export const listInternalMessages = cache(async function(
       try {
         const delSnap = await firestoreWithTimeout(
           // Só as eliminações desta empresa (antes: as primeiras 100 de todas as empresas).
-          () => adminDb().collection('deleted_internal_messages').where('companyId', '==', companyId).limit(300).get(),
+          () => adminDbFor(companyId).collection('deleted_internal_messages').where('companyId', '==', companyId).limit(300).get(),
           null,
           600
         )
@@ -3343,7 +3346,7 @@ export async function countMessagesThisMonth(companyId: string): Promise<number>
     const now = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
     const snap = await firestoreWithTimeout(
-      () => adminDb()
+      () => adminDbFor(companyId)
         .collection('internal_messages')
         .where('companyId', '==', companyId)
         .where('createdAt', '>=', startOfMonth)
@@ -3380,7 +3383,7 @@ export async function createInternalMessage(
   const sanitizedObj = JSON.parse(JSON.stringify(msgObj))
   
   try {
-    const ref = await adminDb().collection('internal_messages').add(sanitizedObj)
+    const ref = await adminDbFor(companyId).collection('internal_messages').add(sanitizedObj)
     msgObj.id = ref.id
   } catch (err) {
     console.error('[createInternalMessage Firestore error]:', err)
@@ -3413,7 +3416,7 @@ export async function createInternalMessage(
       if (origMsg) {
         origMsg.status = 'replied'
       }
-      await adminDb()
+      await adminDbFor(companyId)
         .collection('internal_messages')
         .doc(data.replyToId)
         .update({ status: 'replied', updatedAt: now })
@@ -3541,16 +3544,16 @@ export async function markMessagesRead(
     const feedIds = new Set((await readMessagesFeed(companyId).catch(() => [])).map((m) => m.id))
     const unknownRefs = ids
       .filter((id) => !feedIds.has(id))
-      .map((id) => adminDb().collection('internal_messages').doc(id))
-    const confirmed = unknownRefs.length > 0 ? await adminDb().getAll(...unknownRefs) : []
+      .map((id) => adminDbFor(companyId).collection('internal_messages').doc(id))
+    const confirmed = unknownRefs.length > 0 ? await adminDbFor(companyId).getAll(...unknownRefs) : []
     const ownIds = [
       ...ids.filter((id) => feedIds.has(id)),
       ...confirmed.filter((s) => s.exists && messageBelongsTo(s.data() as InternalMessage, companyId)).map((s) => s.id),
     ]
-    const batch = adminDb().batch()
+    const batch = adminDbFor(companyId).batch()
     ownIds.forEach((id) => {
       batch.set(
-        adminDb().collection('internal_messages').doc(id),
+        adminDbFor(companyId).collection('internal_messages').doc(id),
         { readBy: FieldValue.arrayUnion(userId), updatedAt: now },
         { merge: true }
       )
@@ -3562,14 +3565,14 @@ export async function markMessagesRead(
 
   // Marcar notificações do sino ligadas a estas mensagens como lidas
   try {
-    const snap = await adminDb()
+    const snap = await adminDbFor(companyId)
       .collection('notifications')
       .where('companyId', '==', companyId)
       .where('userId', '==', userId)
       .limit(100)
       .get()
 
-    const notifBatch = adminDb().batch()
+    const notifBatch = adminDbFor(companyId).batch()
     let any = false
     snap.docs.forEach((doc) => {
       const d = doc.data()
@@ -3604,7 +3607,7 @@ export async function updateInternalMessageStatus(
     if (orig) {
       orig.status = status
     }
-    await adminDb()
+    await adminDbFor(companyId)
       .collection('internal_messages')
       .doc(messageId)
       .update({ status, updatedAt: now })
@@ -3631,8 +3634,8 @@ export async function deleteInternalMessage(
   await assertMessageInCompany(finalCompanyId, messageId)
   cachedInternalMessages = cachedInternalMessages.filter((m) => !(m.id === messageId && messageBelongsTo(m, finalCompanyId)))
   try {
-    await adminDb().collection('internal_messages').doc(messageId).delete().catch(() => {})
-    await adminDb().collection('deleted_internal_messages').doc(messageId).set({
+    await adminDbFor(companyId).collection('internal_messages').doc(messageId).delete().catch(() => {})
+    await adminDbFor(companyId).collection('deleted_internal_messages').doc(messageId).set({
       deletedAt: new Date().toISOString(),
       companyId: finalCompanyId,
     }).catch(() => {})
@@ -3657,14 +3660,14 @@ export async function clearAllInternalMessages(companyId: string): Promise<void>
   } catch {}
 
   try {
-    const snap = await adminDb()
+    const snap = await adminDbFor(companyId)
       .collection('internal_messages')
       .where('companyId', '==', companyId)
       .limit(300)
       .get()
       .catch(() => null)
     if (snap && !snap.empty) {
-      const batch = adminDb().batch()
+      const batch = adminDbFor(companyId).batch()
       snap.docs.forEach((doc) => batch.delete(doc.ref))
       await batch.commit().catch(() => {})
     }
