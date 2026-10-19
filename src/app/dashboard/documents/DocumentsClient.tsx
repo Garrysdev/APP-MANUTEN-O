@@ -3,13 +3,22 @@
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import { FileText, ClipboardList, BookOpen, Plus, Trash2, Edit2, X, Paperclip, Download } from 'lucide-react'
+import { FileText, ClipboardList, BookOpen, Plus, Trash2, Edit2, X, Paperclip, Download, Upload } from 'lucide-react'
 import type { DocumentoObrigatorio } from '@/types/models'
 import { uploadFile } from '@/lib/upload'
 import { createDocumentAction, updateDocumentAction, deleteDocumentAction } from './actions'
 
 type DocTab = 'FR' | 'IT' | 'MANUAL'
 
+const IMPORT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,image/*'
+
+/** "FR-04 - Leituras diárias.pdf" → { code: 'FR-04', title: 'Leituras diárias' }. */
+function docFromFileName(fileName: string): { code: string; title: string } {
+  const base = fileName.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim()
+  const m = base.match(/^((?:FR|IT|MAN)[\s.-]?\d+[A-Za-z]?)\s*[-–:.]?\s*(.*)$/i)
+  if (m) return { code: m[1].toUpperCase().replace(/\s/, '-'), title: m[2].trim() || base }
+  return { code: '', title: base }
+}
 /**
  * Gestão Documental — Folhas de Registo (FR), Instruções de Trabalho (IT) e, desde
  * Out/2026, Manuais/Normas (type 'MANUAL', upload de PDF via Cloudinary) reais por
@@ -34,6 +43,9 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
+  const [importStatus, setImportStatus] = useState('')
+  const [importErrors, setImportErrors] = useState<string[]>([])
 
   const shown = initialDocs.filter((d) => d.type === tab)
 
@@ -71,7 +83,7 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
     setUploadingFile(true)
     setError('')
     try {
-      const url = await uploadFile(file, 'manuals')
+      const url = await uploadFile(file, tab === 'MANUAL' ? 'manuals' : 'documents')
       setFileUrl(url)
       setFileName(file.name)
     } catch (err) {
@@ -79,6 +91,44 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
     } finally {
       setUploadingFile(false)
     }
+  }
+
+  // Importação em lote: um documento por ficheiro, do tipo do separador atual. Código e
+  // título vêm do nome do ficheiro; os campos das FR definem-se depois em "Editar".
+  async function handleImportFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (files.length === 0) return
+    const failures: string[] = []
+    let created = 0
+    for (const [i, file] of files.entries()) {
+      setImportStatus(`A importar ${i + 1} de ${files.length}: ${file.name}`)
+      try {
+        const url = await uploadFile(file, tab === 'MANUAL' ? 'manuals' : 'documents')
+        const { code: fileCode, title: fileTitle } = docFromFileName(file.name)
+        const formData = new FormData()
+        formData.append('type', tab)
+        formData.append('code', fileCode)
+        formData.append('title', fileTitle)
+        formData.append('category', 'Geral')
+        formData.append('content', '')
+        formData.append('active', 'true')
+        formData.append('fileUrl', url)
+        formData.append('fileName', file.name)
+        const res = await createDocumentAction(formData)
+        if (res?.error) {
+          failures.push(`${file.name}: ${res.error}`)
+          if (res.error.includes('Limite')) break
+        } else {
+          created++
+        }
+      } catch (err) {
+        failures.push(`${file.name}: ${err instanceof Error ? err.message : 'falha no envio'}`)
+      }
+    }
+    setImportStatus(created > 0 ? `${created} documento(s) importado(s).` : '')
+    setImportErrors(failures)
+    router.refresh()
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -102,10 +152,8 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
     formData.append('content', content)
     formData.append('active', active ? 'true' : 'false')
     fieldLabels.filter((f) => f.trim()).forEach((f) => formData.append('fieldLabels', f.trim()))
-    if (tab === 'MANUAL') {
-      formData.append('fileUrl', fileUrl)
-      formData.append('fileName', fileName)
-    }
+    formData.append('fileUrl', fileUrl)
+    formData.append('fileName', fileName)
 
     const res = editingDoc
       ? await updateDocumentAction(editingDoc.id, formData)
@@ -140,14 +188,48 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
             Folhas de Registo (FR), Instruções de Trabalho (IT) e Base de Conhecimento (manuais/normas) da empresa.
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="h-10 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2"
-        >
-          <Plus size={16} />
-          <span>{tab === 'FR' ? 'Nova Folha de Registo' : tab === 'IT' ? 'Nova Instrução de Trabalho' : 'Novo Manual/Norma'}</span>
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            multiple
+            accept={IMPORT_ACCEPT}
+            onChange={handleImportFiles}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => importInputRef.current?.click()}
+            disabled={!!importStatus && importStatus.startsWith('A importar')}
+            className="h-10 px-4 border border-industrial-blue text-industrial-blue dark:text-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-slate-800 font-bold text-xs rounded-xl transition-all flex items-center gap-2"
+            title="Escolher um ou vários ficheiros (PDF, Word, Excel, imagem) — cria um documento por ficheiro"
+          >
+            <Upload size={16} />
+            <span>Importar ficheiros</span>
+          </button>
+          <button
+            onClick={openCreate}
+            className="h-10 px-4 bg-safety-orange hover:bg-safety-orange/90 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2"
+          >
+            <Plus size={16} />
+            <span>{tab === 'FR' ? 'Nova Folha de Registo' : tab === 'IT' ? 'Nova Instrução de Trabalho' : 'Novo Manual/Norma'}</span>
+          </button>
+        </div>
       </div>
+
+      {(importStatus || importErrors.length > 0) && (
+        <div className="mb-4 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-xs space-y-1">
+          {importStatus && <p className="font-semibold text-slate-700 dark:text-slate-200">{importStatus}</p>}
+          {tab === 'FR' && importStatus && !importStatus.startsWith('A importar') && (
+            <p className="text-slate-500 dark:text-slate-400">
+              Abre cada Folha de Registo em "Editar" para definir os campos que o técnico tem de preencher.
+            </p>
+          )}
+          {importErrors.map((msg) => (
+            <p key={msg} className="text-red-600 dark:text-red-400">{msg}</p>
+          ))}
+        </div>
+      )}
 
       <div className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700 mb-5">
         <button
@@ -203,13 +285,17 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
                   </span>
                 </div>
                 <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 mb-1">{d.title}</h3>
-                {d.type === 'FR' && d.fieldLabels && d.fieldLabels.length > 0 && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{d.fieldLabels.length} campo(s) a preencher</p>
+                {d.type === 'FR' && (
+                  d.fieldLabels && d.fieldLabels.length > 0 ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{d.fieldLabels.length} campo(s) a preencher</p>
+                  ) : (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">Sem campos definidos — o técnico preenche "Registo / Observações"</p>
+                  )
                 )}
                 {d.type === 'IT' && d.content && (
                   <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{d.content}</p>
                 )}
-                {d.type === 'MANUAL' && d.fileUrl && (
+                {d.fileUrl && (
                   <a
                     href={d.fileUrl}
                     target="_blank"
@@ -292,32 +378,7 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
                     className="input text-xs w-full h-28 resize-none"
                   />
                 </div>
-              ) : tab === 'MANUAL' ? (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Ficheiro (PDF, imagem...)
-                  </label>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingFile}
-                    className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg py-3 text-xs font-bold text-slate-600 dark:text-slate-300 hover:border-industrial-blue hover:text-industrial-blue transition-colors"
-                  >
-                    <Paperclip size={14} />
-                    {uploadingFile ? 'A enviar...' : fileName ? `Trocar ficheiro (${fileName})` : 'Escolher ficheiro'}
-                  </button>
-                  {fileUrl && !uploadingFile && (
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5 font-semibold">✓ Ficheiro anexado</p>
-                  )}
-                </div>
-              ) : (
+              ) : tab === 'MANUAL' ? null : (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Campos a preencher pelo técnico
@@ -352,6 +413,43 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
                   </button>
                 </div>
               )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  {tab === 'MANUAL' ? 'Ficheiro (PDF, imagem...) *' : 'Documento original (opcional — PDF, Word, Excel, imagem)'}
+                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={IMPORT_ACCEPT}
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingFile}
+                    className="flex-1 flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg py-3 text-xs font-bold text-slate-600 dark:text-slate-300 hover:border-industrial-blue hover:text-industrial-blue transition-colors"
+                  >
+                    <Paperclip size={14} />
+                    {uploadingFile ? 'A enviar...' : fileName ? `Trocar ficheiro (${fileName})` : 'Escolher ficheiro'}
+                  </button>
+                  {fileUrl && tab !== 'MANUAL' && !uploadingFile && (
+                    <button
+                      type="button"
+                      onClick={() => { setFileUrl(''); setFileName('') }}
+                      className="p-2 text-slate-400 hover:text-red-500"
+                      title="Remover ficheiro"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                {fileUrl && !uploadingFile && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5 font-semibold">✓ Ficheiro anexado</p>
+                )}
+              </div>
 
               <div className="flex items-center gap-2">
                 <input

@@ -226,7 +226,8 @@ export interface DocumentoObrigatorio {
   category?: string | null
   active: boolean
   createdAt: string
-  // Só para type === 'MANUAL':
+  // Ficheiro do documento (importado). Obrigatório em MANUAL; opcional em FR/IT — o
+  // técnico abre o original a partir da OT (FR: preenche os campos; IT: "Tomei conhecimento").
   fileUrl?: string | null
   fileName?: string | null
 }

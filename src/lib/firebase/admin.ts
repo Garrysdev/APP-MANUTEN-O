@@ -34,6 +34,18 @@ function getAdminApp(): App {
   })
 }
 
+/** Token OAuth da conta de serviço (para APIs REST do Google — ex. criar bases de dados). */
+export async function adminAccessToken(): Promise<string> {
+  const credential = getAdminApp().options.credential
+  if (!credential) throw new Error('Firebase Admin sem credencial.')
+  const { access_token } = await credential.getAccessToken()
+  return access_token
+}
+
+export function adminProjectId(): string {
+  return getServiceAccount().projectId
+}
+
 export function adminAuth(): Auth {
   return getAuth(getAdminApp())
 }

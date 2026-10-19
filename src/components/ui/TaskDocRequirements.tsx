@@ -13,20 +13,41 @@ import type { DocumentoObrigatorio } from '@/types/models'
 // — convertidos para esta mesma forma (todos tipo 'text') em docToFRShape(), para
 // reutilizar sem duplicar a UI de preenchimento.
 type FRField = { name: string; label: string; type: 'number' | 'select' | 'text'; placeholder?: string; options?: string[] }
-type FRShape = { id: string; title: string; desc: string; fields: FRField[] }
-type ITShape = { id: string; title: string; content: string }
+type FRShape = { id: string; title: string; desc: string; fields: FRField[]; fileUrl?: string | null; fileName?: string | null }
+type ITShape = { id: string; title: string; content: string; fileUrl?: string | null; fileName?: string | null }
+
+// FR importada sem campos definidos: o técnico regista pelo menos isto (senão a "folha"
+// ficava preenchida sem nada escrito).
+const DEFAULT_FR_FIELD: FRField = { name: 'registo', label: 'Registo / Observações', type: 'text', placeholder: 'Valores registados, observações...' }
 
 function docToFRShape(d: DocumentoObrigatorio): FRShape {
+  const fields = (d.fieldLabels || []).map((label, i) => ({ name: `f${i}`, label, type: 'text' as const }))
   return {
     id: d.id,
     title: d.code ? `${d.code}: ${d.title}` : d.title,
     desc: d.content || '',
-    fields: (d.fieldLabels || []).map((label, i) => ({ name: `f${i}`, label, type: 'text' as const })),
+    fields: fields.length > 0 ? fields : [DEFAULT_FR_FIELD],
+    fileUrl: d.fileUrl,
+    fileName: d.fileName,
   }
 }
 
 function docToITShape(d: DocumentoObrigatorio): ITShape {
-  return { id: d.id, title: d.code ? `${d.code}: ${d.title}` : d.title, content: d.content || '' }
+  return { id: d.id, title: d.code ? `${d.code}: ${d.title}` : d.title, content: d.content || '', fileUrl: d.fileUrl, fileName: d.fileName }
+}
+
+function OriginalDocLink({ url, name }: { url?: string | null; name?: string | null }) {
+  if (!url) return null
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 text-xs font-bold text-industrial-blue dark:text-blue-400 hover:underline"
+    >
+      <FileText className="h-3.5 w-3.5" /> Abrir documento original{name ? ` (${name})` : ''}
+    </a>
+  )
 }
 
 export const AVAILABLE_FRS = [
@@ -420,7 +441,7 @@ export function TaskDocRequirementsTechnician({
                   <div className="min-w-0 pr-2">
                     <span className="text-xs font-bold block truncate">{itDef.title}</span>
                     <span className="text-[10px] font-semibold opacity-80">
-                      {isAck ? '✔️ Lida & Confirmada' : '📖 Clique para ler e aprovar'}
+                      {isAck ? '✔️ Tomei conhecimento' : '📖 Clique para ler e tomar conhecimento'}
                     </span>
                   </div>
                   <Eye className={`h-4 w-4 shrink-0 ${isAck ? 'text-teal-600' : 'text-blue-600'}`} />
@@ -448,6 +469,7 @@ export function TaskDocRequirementsTechnician({
 
             <form onSubmit={handleSaveFR} className="space-y-4">
               <p className="text-xs text-slate-500 dark:text-slate-400">{activeFRPopup.desc}</p>
+              <OriginalDocLink url={activeFRPopup.fileUrl} name={activeFRPopup.fileName} />
 
               <div className="space-y-3">
                 {activeFRPopup.fields.map((field: any) => (
@@ -511,9 +533,12 @@ export function TaskDocRequirementsTechnician({
             </div>
 
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-mono whitespace-pre-wrap leading-relaxed text-slate-800 dark:text-slate-200">
-                {activeITPopup.content}
-              </div>
+              {activeITPopup.content && (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-mono whitespace-pre-wrap leading-relaxed text-slate-800 dark:text-slate-200">
+                  {activeITPopup.content}
+                </div>
+              )}
+              <OriginalDocLink url={activeITPopup.fileUrl} name={activeITPopup.fileName} />
 
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setActiveITPopup(null)} className="btn-secondary text-xs py-2 px-4">
@@ -525,7 +550,7 @@ export function TaskDocRequirementsTechnician({
                   disabled={saving}
                   className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs py-2 px-4 rounded-xl flex items-center gap-1.5 shadow-md"
                 >
-                  <CheckCircle2 className="h-4 w-4" /> {saving ? 'A registar...' : 'Li e Confirmo o Procedimento'}
+                  <CheckCircle2 className="h-4 w-4" /> {saving ? 'A registar...' : 'Tomei conhecimento'}
                 </button>
               </div>
             </div>

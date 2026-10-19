@@ -7,6 +7,7 @@ import {
   listPlanTaskRefs, type PlanTaskRef,
   listStockItems, listAssetRefs, listTasks,
   calculateTaskCost,
+  findOwnedPlanForOccurrence,
 } from '@/lib/firebase/data'
 import { adminDbFor } from '@/lib/firebase/tenant-db'
 import { LIMITS } from '@/lib/plans'
@@ -282,14 +283,12 @@ export async function updateProjectTaskDatesAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   try {
-    const db = adminDbFor(profile.companyId)
     if (taskId.startsWith('plan_')) {
-      const parts = taskId.split('_')
-      const planId = parts[1]
-      const planDoc = planId ? await db.collection('maintenance_plans').doc(planId).get().catch(() => null) : null
       // Só planos desta empresa (antes gravava em qualquer plano pelo id).
-      if (planDoc?.exists && planDoc.data()?.companyId === profile.companyId) {
-        await planDoc.ref.update({
+      const owned = await findOwnedPlanForOccurrence(profile.companyId, taskId)
+      if (owned?.hasDoc) {
+        const db = await adminDbFor(profile.companyId)
+        await db.collection('maintenance_plans').doc(owned.planId).update({
           calendarStartDate: plannedStartDate,
           nextDueDate: dueDate,
           scheduledDate: plannedStartDate,

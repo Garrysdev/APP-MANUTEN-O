@@ -36,15 +36,33 @@ type ProfileDocs = {
 // desativar uma conta) e 'companies' (plano, nome/logótipo, créditos IA).
 // Erros são lançados (não devolvidos) para nunca ficar uma falha guardada em cache;
 // um utilizador sem documento devolve null (perfil de reserva, como antes).
-function loadProfileDocs(uid: string, email: string): Promise<ProfileDocs | null> {
+// Documentos de utilizador legados da UR cujo ID não é o uid do login (criados antes de
+// createUserDirect/convites usarem doc.id = uid). Só estes podem ser encontrados por
+// email sem email verificado — ver loadProfileDocs.
+const LEGACY_EMAIL_LOGIN_DOC_IDS = new Set([
+  'MEGjjvqtGqv3Oosxvlrx', // Leandro Maia
+  'nAcCSm4E3tNnPLr72UPl', // Marco Silva
+  'zmDAeoGTzIWPavraKu0f', // Carlos Branco
+  'CUodZKziOwo128GLK66i', // registo antigo do Rui Garrido
+])
+
+function loadProfileDocs(uid: string, email: string, emailVerified: boolean): Promise<ProfileDocs | null> {
   return unstable_cache(
-    async (uid: string, email: string): Promise<ProfileDocs | null> => {
+    async (uid: string, email: string, emailVerified: boolean): Promise<ProfileDocs | null> => {
       const db = adminDb()
       let userSnap: DocumentSnapshot = await db.collection('users').doc(uid).get()
-      // Se o documento por uid não existir no Firestore, procurar por email
+      // Se o documento por uid não existir no Firestore, procurar por email. Só com email
+      // verificado ou para os registos legados da UR: sem isto, quem criasse uma conta
+      // com o email de um técnico externo de outra empresa (fichas sem login próprio)
+      // entrava nessa empresa como esse técnico.
       if (!userSnap.exists && email) {
         const emailSnap = await db.collection('users').where('email', '==', email).limit(1).get()
-        if (!emailSnap.empty) userSnap = emailSnap.docs[0]
+        const match = emailSnap.empty ? null : emailSnap.docs[0]
+        const m = match?.data() || {}
+        // Registos internos antigos da UR (criados por script, sem conta ligada ao doc).
+        // Externos ficam de fora: são fichas sem login, criadas pelo gestor com qualquer email.
+        const isLegacyUrInternal = (m.companyId || DEMO_COMPANY_ID) === DEMO_COMPANY_ID && m.isExternal !== true
+        if (match && (emailVerified || LEGACY_EMAIL_LOGIN_DOC_IDS.has(match.id) || isLegacyUrInternal)) userSnap = match
       }
       if (!userSnap.exists) return null
 
@@ -59,7 +77,7 @@ function loadProfileDocs(uid: string, email: string): Promise<ProfileDocs | null
     },
     ['profile-docs'],
     { revalidate: 300, tags: ['users', 'companies'] }
-  )(uid, email)
+  )(uid, email, emailVerified)
 }
 
 // Último perfil lido com sucesso, por uid, nesta instância do servidor. Numa falha
@@ -128,10 +146,11 @@ export const getCurrentProfile = cache(async function (): Promise<UserProfile | 
   }
 
   try {
-    let docs = await firestoreWithTimeout(() => loadProfileDocs(session.uid, userEmail), null, 2000)
+    const emailVerified = session.email_verified === true
+    let docs = await firestoreWithTimeout(() => loadProfileDocs(session.uid, userEmail, emailVerified), null, 2000)
     // Sem perfil de reserva para estas contas: dar mais tempo antes de as mandar ao login.
     if (!docs && !isURAccount && !lastGoodProfile.has(session.uid) && !isQuotaExhausted()) {
-      docs = await firestoreWithTimeout(() => loadProfileDocs(session.uid, userEmail), null, 3000)
+      docs = await firestoreWithTimeout(() => loadProfileDocs(session.uid, userEmail, emailVerified), null, 3000)
     }
     if (!docs) {
       return fallbackOrNull()

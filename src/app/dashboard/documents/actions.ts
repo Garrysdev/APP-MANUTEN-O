@@ -6,6 +6,13 @@ import { listDocuments, createDocument, updateDocument, deleteDocument } from '@
 import { LIMITS } from '@/lib/plans'
 import type { PlanName } from '@/types/models'
 
+// O URL vai para um <a href> visto por toda a empresa: só aceitar ficheiros carregados
+// pela app (Cloudinary, https) — nunca javascript:/data: ou sites externos.
+function safeFileUrl(raw: FormDataEntryValue | null): string | null {
+  const url = String(raw ?? '').trim()
+  return /^https:\/\/res\.cloudinary\.com\//.test(url) ? url : null
+}
+
 function parseFieldLabels(formData: FormData): string[] {
   return formData.getAll('fieldLabels').map((v) => String(v).trim()).filter(Boolean)
 }
@@ -32,8 +39,9 @@ export async function createDocumentAction(formData: FormData) {
   const code = String(formData.get('code') ?? '').trim() || `${type}-${Date.now().toString().slice(-4)}`
   const content = String(formData.get('content') ?? '').trim() || null
   const category = String(formData.get('category') ?? 'Geral').trim()
-  const fileUrl = type === 'MANUAL' ? (String(formData.get('fileUrl') ?? '').trim() || null) : null
-  const fileName = type === 'MANUAL' ? (String(formData.get('fileName') ?? '').trim() || null) : null
+  // Ficheiro importado: obrigatório em MANUAL, opcional em FR/IT.
+  const fileUrl = safeFileUrl(formData.get('fileUrl'))
+  const fileName = fileUrl ? (String(formData.get('fileName') ?? '').trim() || null) : null
   if (type === 'MANUAL' && !fileUrl) return { error: 'É obrigatório anexar um ficheiro.' }
 
   const plan = (profile.company?.plan ?? 'free') as PlanName
@@ -73,7 +81,7 @@ export async function updateDocumentAction(id: string, formData: FormData) {
   const category = String(formData.get('category') ?? 'Geral').trim()
   const active = formData.get('active') !== 'false'
   const fileUrlRaw = formData.get('fileUrl')
-  const fileUrl = fileUrlRaw !== null ? (String(fileUrlRaw).trim() || null) : undefined
+  const fileUrl = fileUrlRaw !== null ? safeFileUrl(fileUrlRaw) : undefined
   const fileNameRaw = formData.get('fileName')
   const fileName = fileNameRaw !== null ? (String(fileNameRaw).trim() || null) : undefined
 

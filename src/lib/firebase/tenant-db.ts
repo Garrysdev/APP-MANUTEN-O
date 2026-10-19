@@ -1,21 +1,23 @@
-// Encaminhamento da base de dados por empresa (Fase 1 do "Firebase por cliente").
+// Encaminhamento da base de dados por empresa ("uma base por cliente").
 //
-// Coleções CENTRAIS — ficam sempre no projeto principal (adminDb()): companies, users,
+// Coleções CENTRAIS — ficam sempre na base partilhada (adminDb()): companies, users,
 // invites, deleted_users, stripe_events. São as necessárias para login, convites,
 // faturação e para saber a que empresa pertence um utilizador ANTES de escolher a base.
 //
 // Coleções da EMPRESA — tudo o resto (OTs, planos, equipamentos, intervenções, stocks,
 // materiais, armazéns, regras, documentos, mensagens, notificações, empresas externas)
-// vai para adminDbFor(companyId). Uma empresa com base dedicada tem os dados num projeto
-// Firebase só seu: isolamento físico (um bug deixa de conseguir misturar empresas) e
-// quota própria.
+// vai para `await adminDbFor(companyId)`.
 //
-// Configuração: variável de ambiente TENANT_DATABASES (JSON, marcar como Sensitive no
-// Vercel), por exemplo:
-//   {"<companyId>": {"projectId": "...", "clientEmail": "...", "privateKey": "-----BEGIN..."}}
-// Empresa sem entrada → base partilhada (o comportamento de sempre). Sem a variável,
-// todas as empresas ficam na base partilhada.
+// De onde vem a base de cada empresa (por esta ordem):
+//  1. TENANT_DATABASES (variável de ambiente, JSON) — empresa num PROJETO Firebase à
+//     parte, com credenciais próprias: {"<companyId>": {projectId, clientEmail, privateKey}}
+//  2. companies/<companyId>.databaseId — base com nome no MESMO projeto, criada
+//     automaticamente por tenant-provision.ts (precisa do plano Blaze).
+//  3. Nenhum dos dois → base partilhada "(default)" — o comportamento de sempre.
+// O databaseId só é gravado na empresa DEPOIS de os dados estarem copiados, por isso uma
+// empresa nunca é encaminhada para uma base vazia/incompleta.
 import 'server-only'
+import { unstable_cache } from 'next/cache'
 import { initializeApp, getApps, getApp, cert, type App } from 'firebase-admin/app'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import { adminDb } from './admin'
@@ -60,19 +62,67 @@ function tenantApp(companyId: string, creds: TenantCredentials): App {
   return initializeApp({ credential: cert(creds), projectId: creds.projectId }, name)
 }
 
-/** Base de dados com os dados de negócio desta empresa (dedicada ou partilhada). */
-export function adminDbFor(companyId: string): Firestore {
-  const creds = companyId ? loadTenantConfig()[companyId] : undefined
-  if (!creds) return adminDb()
-  return getFirestore(tenantApp(companyId, creds))
+// databaseId gravado na empresa. Data Cache da Vercel (partilhada entre instâncias,
+// invalidada por revalidateTag('companies')) + memória por instância durante 60 s, para
+// não ler a empresa a cada acesso a dados. Lança em erro: nunca adivinhar a base.
+const readCompanyDatabaseId = unstable_cache(
+  async (companyId: string): Promise<string | null> => {
+    const snap = await adminDb().collection('companies').doc(companyId).get()
+    const id = snap.exists ? snap.data()?.databaseId : null
+    return typeof id === 'string' && id ? id : null
+  },
+  ['company-database-id'],
+  { revalidate: 3600, tags: ['companies'] }
+)
+
+const MEMO_TTL_MS = 60 * 1000
+const memo = new Map<string, { databaseId: string | null; at: number }>()
+
+async function resolveNamedDatabase(companyId: string): Promise<string | null> {
+  // Desligado até existirem bases com nome (ativar com TENANT_NAMED_DATABASES=1 quando o
+  // plano Blaze estiver ativo e a criação automática correr): sem isto, cada acesso a
+  // dados dependia de ler a empresa, com mais um ponto de falha e sem nenhum ganho.
+  if (process.env.TENANT_NAMED_DATABASES !== '1') return null
+  const hit = memo.get(companyId)
+  if (hit && Date.now() - hit.at < MEMO_TTL_MS) return hit.databaseId
+  try {
+    const databaseId = await readCompanyDatabaseId(companyId)
+    memo.set(companyId, { databaseId, at: Date.now() })
+    return databaseId
+  } catch (err) {
+    // Sem resposta: usar o último valor conhecido nesta instância; sem nenhum, falhar
+    // (as funções de dados já tratam erros e caem para a reserva quando a há).
+    if (hit) return hit.databaseId
+    throw err
+  }
 }
 
-/** true se a empresa tem base de dados dedicada. */
-export function hasDedicatedDb(companyId: string): boolean {
+/** Esquecer o valor em memória (após migrar a empresa para a base própria). */
+export function forgetTenantDatabase(companyId: string): void {
+  memo.delete(companyId)
+}
+
+/** Base de dados com os dados de negócio desta empresa (dedicada ou partilhada). */
+export async function adminDbFor(companyId: string): Promise<Firestore> {
+  if (!companyId) return adminDb()
+  const creds = loadTenantConfig()[companyId]
+  if (creds) return getFirestore(tenantApp(companyId, creds))
+  const databaseId = await resolveNamedDatabase(companyId)
+  return databaseId ? getFirestore(getApp(), databaseId) : adminDb()
+}
+
+/** Base com nome (mesmo projeto) — usado pelo backup e pela migração. */
+export function namedDb(databaseId: string): Firestore {
+  adminDb() // garante que a app por defeito está inicializada
+  return getFirestore(getApp(), databaseId)
+}
+
+/** true se a empresa está num projeto Firebase à parte (TENANT_DATABASES). */
+export function hasDedicatedProject(companyId: string): boolean {
   return !!companyId && !!loadTenantConfig()[companyId]
 }
 
-/** Empresas com base dedicada (para o backup percorrer também essas bases). */
+/** Empresas em projetos Firebase à parte (para o backup percorrer também essas bases). */
 export function dedicatedCompanyIds(): string[] {
   return Object.keys(loadTenantConfig())
 }

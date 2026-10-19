@@ -13,20 +13,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ email: trimmed })
     }
 
-    // 1. Tentar resolver no Firestore por abreviatura, email prefix ou nome
+    // 1. Tentar resolver no Firestore por abreviatura ou prefixo do email. Consultas exatas
+    // (antes lia TODOS os utilizadores de todas as empresas a cada tentativa de login —
+    // gastava quota e permitia percorrer a lista). Só aceita uma correspondência única.
     try {
-      const snap = await adminDb().collection('users').get()
-      const match = snap.docs.find(d => {
-        const u = d.data()
-        return (
-          u.abbreviation?.toLowerCase() === trimmed ||
-          u.email?.toLowerCase().startsWith(trimmed + '@') ||
-          u.email?.toLowerCase() === trimmed ||
-          u.name?.toLowerCase().replace(/\s+/g, '') === trimmed
-        )
-      })
-      if (match && match.data().email) {
-        return NextResponse.json({ email: match.data().email })
+      const users = adminDb().collection('users')
+      const [byAbbr, byPrefix] = await Promise.all([
+        users.where('abbreviation', '==', trimmed.toUpperCase()).limit(2).get(),
+        // Intervalo [prefixo@, prefixoA): 'A' é o carácter a seguir a '@' — apanha
+        // qualquer "prefixo@dominio".
+        users.where('email', '>=', `${trimmed}@`).where('email', '<', `${trimmed}A`).limit(2).get(),
+      ])
+      const matches = byAbbr.size === 1 ? byAbbr.docs : byPrefix.size === 1 ? byPrefix.docs : []
+      const email = matches[0]?.data()?.email
+      if (email) {
+        return NextResponse.json({ email })
       }
     } catch (err) {
       console.error('[resolve-email] Firestore lookup error:', err)

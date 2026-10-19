@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { listTasks, listMaintenancePlans, DEMO_COMPANY_ID } from '@/lib/firebase/data'
+import { listTasks, listMaintenancePlans } from '@/lib/firebase/data'
 
 export const runtime = 'nodejs'
 
@@ -18,9 +18,17 @@ function escapeICalText(str: string): string {
   return str.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
 }
 
-function generateCompanyCalendarToken(companyId: string): string {
-  const secret = process.env.FIREBASE_PRIVATE_KEY || 'rg-calendar-secret-2026'
+function generateCompanyCalendarToken(companyId: string): string | null {
+  // Sem segredo configurado não há tokens válidos (antes caía para um segredo fixo no código).
+  const secret = process.env.FIREBASE_PRIVATE_KEY
+  if (!secret) return null
   return crypto.createHmac('sha256', secret).update(`calendar_${companyId}`).digest('hex').slice(0, 32)
+}
+
+function tokensMatch(a: string, b: string): boolean {
+  const ab = Buffer.from(a)
+  const bb = Buffer.from(b)
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb)
 }
 
 export async function GET(request: NextRequest) {
@@ -32,8 +40,10 @@ export async function GET(request: NextRequest) {
 
   // 1. Validar via token de calendário seguro enviado na URL (para clientes iCal de terceiros)
   if (companyIdParam && tokenParam) {
+    // Removido o token fixo 'demo', que dava as OTs e planos da Empresa UR a qualquer
+    // pessoa sem login.
     const expectedToken = generateCompanyCalendarToken(companyIdParam)
-    if (tokenParam === expectedToken || (companyIdParam === DEMO_COMPANY_ID && tokenParam === 'demo')) {
+    if (expectedToken && tokensMatch(tokenParam, expectedToken)) {
       targetCompanyId = companyIdParam
     }
   }
