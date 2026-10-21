@@ -4,6 +4,7 @@ import { listNotifications } from '@/lib/firebase/data'
 import LayoutShell from '@/components/layout/LayoutShell'
 import { LanguageProvider } from '@/components/providers/LanguageProvider'
 import MustChangePasswordBanner from '@/components/ui/MustChangePasswordBanner'
+import RefreshOnFocus from '@/components/layout/RefreshOnFocus'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,7 @@ export default async function DashboardLayout({
     <div className="flex h-screen bg-background transition-colors">
       <LanguageProvider lang={profile.language || 'pt'}>
         <MustChangePasswordBanner mustChange={profile.mustChangePassword} />
+        <RefreshOnFocus />
         <LayoutShell user={userForHeader}>
           {children}
         </LayoutShell>
