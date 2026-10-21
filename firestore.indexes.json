@@ -51,5 +51,11 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "materialized",
+      "fieldPath": "items",
+      "indexes": []
+    }
+  ]
 }

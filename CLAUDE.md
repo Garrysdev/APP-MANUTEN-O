@@ -127,6 +127,14 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   aparecer um bug parecido noutra coleção com camada de reserva
   (`safety_rules`, `documents`, `stock_items`...), é provavelmente a
   mesma causa.
+- **Listas materializadas (Out/2026)**: `tasks`, `assets` e
+  `maintenance_plans` leem-se de uma cópia por empresa em
+  `materialized/*` (`src/lib/firebase/materialized.ts`). Qualquer
+  escrita nova nestas coleções tem de chamar `touch(...)` ou
+  `patch(...)` em `data.ts`. Senão, a lista só a mostra na
+  reconstrução semanal. Nunca voltar a "invalidar e reler a coleção
+  inteira" depois de uma escrita (pedido explícito do Rui: ler só o
+  que mudou).
 - **Cross-tenant**: ao fazer merge Firestore+reserva/fallback por
   `companyId`, nunca uses uma condição tipo `isDemoCompany(x.companyId)`
   sozinha (sem também exigir `x.companyId === companyId`) — já causou

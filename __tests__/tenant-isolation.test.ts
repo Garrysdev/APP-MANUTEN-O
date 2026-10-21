@@ -14,7 +14,7 @@ jest.mock('react', () => ({ ...jest.requireActual('react'), cache: (fn: unknown)
 jest.mock('next/cache', () => ({ unstable_cache: (fn: unknown) => fn, revalidateTag: () => {}, revalidatePath: () => {} }))
 jest.mock('@/lib/notifications', () => ({ sendTaskAssignedEmail: async () => {}, sendUrgentTaskEmail: async () => {} }))
 jest.mock('@/lib/webpush-server', () => ({ sendWebPush: async () => {} }))
-jest.mock('firebase-admin/firestore', () => ({ FieldValue: require('../test-utils/fake-firestore').FieldValue, getFirestore: () => { throw new Error('getFirestore não deve ser usado') } }))
+jest.mock('firebase-admin/firestore', () => ({ FieldValue: require('../test-utils/fake-firestore').FieldValue, FieldPath: require('../test-utils/fake-firestore').FieldPath, getFirestore: () => { throw new Error('getFirestore não deve ser usado') } }))
 
 const db = new FakeFirestore()
 jest.mock('@/lib/firebase/admin', () => ({

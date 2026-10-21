@@ -125,6 +125,19 @@ export async function stopTechnicianReplication() {
 // OFFLINE_UID_KEY: último utilizador identificado neste browser — permite abrir a base
 // offline certa sem rede (a app instalada pode arrancar offline). Apagado no logout.
 
+// Caches do service worker (next-pwa) guardadas pelo ENDEREÇO, sem saber de que conta são:
+// páginas, dados das páginas e respostas da API. Sem rede, outra conta no mesmo browser
+// podia ver as páginas da anterior. Apagadas ao trocar de conta e no logout; ficam as
+// caches de ficheiros estáticos (JS, CSS, imagens, fontes), que são iguais para todos.
+const ACCOUNT_CACHES = ['pages', 'pages-rsc', 'pages-rsc-prefetch', 'apis', 'start-url', 'next-data', 'others', 'cross-origin']
+
+async function clearAccountCaches() {
+  try {
+    if (typeof caches === 'undefined') return
+    await Promise.all(ACCOUNT_CACHES.map((name) => caches.delete(name)))
+  } catch { /* sem Cache Storage (ex. janela privada) */ }
+}
+
 /** uid do utilizador atual: da sessão (online) ou o último guardado (offline). */
 export async function resolveOfflineUid(): Promise<string | null> {
   try {
@@ -132,12 +145,16 @@ export async function resolveOfflineUid(): Promise<string | null> {
     if (res.ok) {
       const { uid } = (await res.json()) as { uid?: string }
       if (uid) {
+        let previous: string | null = null
+        try { previous = localStorage.getItem(OFFLINE_UID_KEY) } catch {}
+        if (previous !== uid) await clearAccountCaches()
         try { localStorage.setItem(OFFLINE_UID_KEY, uid) } catch {}
         return uid
       }
     }
     if (res.status === 401) {
       try { localStorage.removeItem(OFFLINE_UID_KEY) } catch {}
+      await clearAccountCaches()
       return null
     }
   } catch { /* sem rede */ }
@@ -148,6 +165,7 @@ export async function resolveOfflineUid(): Promise<string | null> {
 export async function signOutOffline() {
   await stopTechnicianReplication()
   try { localStorage.removeItem(OFFLINE_UID_KEY) } catch {}
+  await clearAccountCaches()
   const { setOfflineUser } = await import('./rxdb')
   await setOfflineUser(null)
 }

@@ -180,7 +180,9 @@ export async function bulkDeleteAssetsAction(ids: string[]): Promise<AssetFormSt
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   try {
-    await Promise.all(ids.map(id => deleteAsset(profile.companyId, id)))
+    // Uma a uma: em paralelo disputavam o índice da lista materializada (transações
+    // repetidas = leituras extra, e no limite a lista era reconstruída inteira).
+    for (const id of ids) await deleteAsset(profile.companyId, id)
     revalidatePath('/dashboard/assets')
     return { ok: true }
   } catch (e) {
@@ -192,7 +194,8 @@ export async function bulkUpdateAssetsAction(ids: string[], updates: Partial<Pic
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   try {
-    await Promise.all(ids.map(id => updateAsset(profile.companyId, id, updates)))
+    // Uma a uma (ver bulkDeleteAssetsAction).
+    for (const id of ids) await updateAsset(profile.companyId, id, updates)
     revalidatePath('/dashboard/assets')
     return { ok: true }
   } catch (e) {

@@ -5,10 +5,11 @@ import { unstable_cache, revalidateTag } from 'next/cache'
 import fs from 'fs'
 import path from 'path'
 import type { DocumentSnapshot } from 'firebase-admin/firestore'
-import { adminDb, adminAuth, firestoreWithTimeout, isQuotaExhausted, markQuotaExhausted, logReads } from './admin'
+import { adminDb, adminAuth, firestoreWithTimeout, isQuotaExhausted, markQuotaExhausted } from './admin'
 // adminDb() = coleções centrais (companies, users, invites, deleted_users);
 // (await adminDbFor(companyId)) = dados de negócio da empresa (ver tenant-db.ts).
 import { adminDbFor } from './tenant-db'
+import { readMaterialized, rebuildMaterialized, touchMaterialized, patchMaterialized, patchFieldsMaterialized, type MaterializedCollection, type MaterializedItem } from './materialized'
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
@@ -47,6 +48,52 @@ function withFallback<A extends unknown[], R>(
   }
 }
 
+// ── LISTAS MATERIALIZADAS (ver materialized.ts) ──────────────────────────────
+// OTs, equipamentos e planos leem-se de uma cópia em poucos documentos: depois de uma
+// edição, reler a lista custa 1-2 leituras (o índice e a fatia alterada), não as
+// milhares de documentos da coleção. Cada escrita tem de chamar touch/patch.
+async function readAll(coll: MaterializedCollection, companyId: string, timeoutMs: number, label: string): Promise<MaterializedItem[]> {
+  if (isQuotaExhausted()) throw new FirestoreUnavailable()
+  const items = await firestoreWithTimeout(
+    async () => readMaterialized(await adminDbFor(companyId), coll, companyId),
+    null,
+    timeoutMs,
+    label
+  )
+  if (!items) throw new FirestoreUnavailable()
+  return items
+}
+
+async function touch(coll: MaterializedCollection, companyId: string, ids: string[]): Promise<void> {
+  try {
+    await touchMaterialized(await adminDbFor(companyId), coll, companyId, ids)
+  } catch (err) {
+    console.error(`[touch ${coll}] Error:`, err)
+  }
+}
+
+async function patch(coll: MaterializedCollection, companyId: string, entries: { id: string; data: Record<string, any> | null }[]): Promise<void> {
+  try {
+    await patchMaterialized(await adminDbFor(companyId), coll, companyId, entries)
+  } catch (err) {
+    console.error(`[patch ${coll}] Error:`, err)
+  }
+}
+
+/** Escritas em lote de só alguns campos (não repõe o resto do item a partir da cópia). */
+async function patchFields(coll: MaterializedCollection, companyId: string, entries: { id: string; fields: Record<string, any> }[]): Promise<void> {
+  try {
+    await patchFieldsMaterialized(await adminDbFor(companyId), coll, companyId, entries)
+  } catch (err) {
+    console.error(`[patchFields ${coll}] Error:`, err)
+  }
+}
+
+// Tempo máximo de uma leitura de lista. Folgado de propósito: quando a cópia tem de ser
+// (re)construída lê a coleção inteira, e cortar a meio deixava a cópia por gravar (a
+// leitura seguinte pagaria outra vez as N leituras). Com a cópia feita, demora ~100 ms.
+const LIST_TIMEOUT_MS = 25000
+
 // ── ETIQUETAS DE CACHE DAS OTs, POR EMPRESA ──────────────────────────────────
 // Uma escrita numa empresa nunca deve invalidar a cache das outras: com uma etiqueta
 // global ('tasks'), cada OT editada em qualquer empresa obrigava TODAS a reler as suas
@@ -59,6 +106,10 @@ const tasksHistoryTag = (companyId: string) => `tasks-history:${companyId}`
 // quando uma OT entra ou sai desses estados, não a cada edição de uma OT ativa.
 const tasksCompletedTag = (companyId: string) => `tasks-completed:${companyId}`
 const notificationsTag = (companyId: string) => `notifications:${companyId}`
+// Equipamentos e planos também por empresa (eram 'assets'/'plans' globais: editar um
+// equipamento numa empresa obrigava todas as outras a reler os seus).
+const assetsTag = (companyId: string) => `assets:${companyId}`
+const plansTag = (companyId: string) => `plans:${companyId}`
 
 function isClosedStatus(status: unknown): boolean {
   return status === 'done' || status === 'cancelled'
@@ -416,28 +467,23 @@ function getFallbackExternalCompanies(): ExternalCompany[] {
 }
 
 // // ── ASSETS ──────────────────────────────────────────────────────────────────
-const listAssetsCached = withFallback(unstable_cache(
-  async (companyId: string, limitCount: number): Promise<Asset[]> => {
-    if (isQuotaExhausted()) throw new FirestoreUnavailable()
-    const snap = await firestoreWithTimeout(
-      async () => (await adminDbFor(companyId)).collection('assets').where('companyId', '==', companyId).limit(limitCount).get(),
-      null,
-      // 1s era pouco para ~900 equipamentos: um timeout caía para a reserva/lista vazia.
-      4000,
-      'listAssets'
-    )
-    if (!snap || !snap.docs) throw new FirestoreUnavailable()
-    if (snap.docs.length > 0) {
-      const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
-      return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-    }
-    return isDemoCompany(companyId) ? getFallbackAssets() : []
-  },
-  ['assets'],
-  // 1h (era 300s): as escritas já fazem revalidateTag('assets'); o tempo é só uma rede
-  // de segurança e com 300s forçava releituras (até 2000 ativos) a cada 5 min.
-  { revalidate: 3600, tags: ['assets'] }
-), (companyId: string) => (isDemoCompany(companyId) ? getFallbackAssets() : []), 'listAssets')
+async function fetchAssets(companyId: string, limitCount: number): Promise<Asset[]> {
+  // 1s era pouco para ~900 equipamentos: um timeout caía para a reserva/lista vazia.
+  const dbDocs = (await readAll('assets', companyId, LIST_TIMEOUT_MS, 'listAssets')) as Asset[]
+  if (dbDocs.length > 0) {
+    return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limitCount)
+  }
+  return isDemoCompany(companyId) ? getFallbackAssets() : []
+}
+
+// 1h (era 300s): as escritas invalidam a etiqueta da empresa; o tempo é só uma rede de
+// segurança e com 300s forçava releituras (até 2000 ativos) a cada 5 min.
+const listAssetsCached = withFallback(
+  (companyId: string, limitCount: number) =>
+    unstable_cache(fetchAssets, ['assets'], { revalidate: 3600, tags: [assetsTag(companyId)] })(companyId, limitCount),
+  (companyId: string) => (isDemoCompany(companyId) ? getFallbackAssets() : []),
+  'listAssets'
+)
 export const listAssets = cache(async function(companyId: string, limitCount = 2000): Promise<Asset[]> {
   return listAssetsCached(companyId, limitCount)
 })
@@ -446,30 +492,27 @@ export const listAssets = cache(async function(companyId: string, limitCount = 2
 const fallbackAssetRefs = (companyId: string) =>
   isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
 
-const listAssetRefsCached = withFallback(unstable_cache(
-  async (companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> => {
-    if (isQuotaExhausted()) throw new FirestoreUnavailable()
-    const snap = await firestoreWithTimeout(
-      async () => (await adminDbFor(companyId)).collection('assets').where('companyId', '==', companyId).select('name', 'tag', 'area').get(),
-      null,
-      4000
-    )
-    if (!snap || !snap.docs) throw new FirestoreUnavailable()
-    if (snap.docs.length > 0) {
-      const dbDocs = snap.docs.map((d) => ({
-        id: d.id,
-        name: (d.data().name as string) ?? '',
-        tag: (d.data().tag as string) ?? null,
-        area: (d.data().area as string) ?? null,
-      }))
-      return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
-    }
-    return fallbackAssetRefs(companyId)
-  },
-  ['asset-refs'],
-  // 1h (era 300s): as escritas fazem revalidateTag('assets').
-  { revalidate: 3600, tags: ['assets'] }
-), fallbackAssetRefs, 'listAssetRefs')
+async function fetchAssetRefs(companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> {
+  const items = await readAll('assets', companyId, LIST_TIMEOUT_MS, 'listAssetRefs')
+  if (items.length > 0) {
+    const dbDocs = items.map((d) => ({
+      id: d.id,
+      name: (d.name as string) ?? '',
+      tag: (d.tag as string) ?? null,
+      area: (d.area as string) ?? null,
+    }))
+    return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
+  }
+  return fallbackAssetRefs(companyId)
+}
+
+// 1h (era 300s): as escritas invalidam a etiqueta da empresa.
+const listAssetRefsCached = withFallback(
+  (companyId: string) =>
+    unstable_cache(fetchAssetRefs, ['asset-refs'], { revalidate: 3600, tags: [assetsTag(companyId)] })(companyId),
+  fallbackAssetRefs,
+  'listAssetRefs'
+)
 export const listAssetRefs = cache(async function(companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> {
   return listAssetRefsCached(companyId)
 })
@@ -490,18 +533,13 @@ export type PlanTaskRef = {
 export const listPlanTaskRefs = cache(async function(companyId: string): Promise<PlanTaskRef[]> {
   if (isQuotaExhausted()) return []
   try {
-    const snap = await firestoreWithTimeout(
-      async () => (await adminDbFor(companyId)).collection('maintenance_plans').where('companyId', '==', companyId).select('title', 'assetId', 'criticidade', 'periodicidade', 'periodicidadeLabel', 'executor', 'legal', 'months', 'safetyRules', 'active').get(),
-      null,
-      800
-    )
-    if (!snap || !snap.docs) return []
-    return snap.docs
-      .filter((d) => d.data().active !== false && d.data().assetId)
-      .map((d) => {
-        const x = d.data()
+    // Antes era uma query sem cache: cada abertura do modal de OT custava ~600 leituras.
+    const items = await readAll('maintenance_plans', companyId, LIST_TIMEOUT_MS, 'listPlanTaskRefs')
+    return items
+      .filter((x) => x.active !== false && x.assetId && !x.deleted)
+      .map((x) => {
         return {
-          id: d.id,
+          id: x.id,
           title: x.title ?? '',
           assetId: x.assetId ?? null,
           criticidade: x.criticidade ?? 'verde',
@@ -571,10 +609,12 @@ export async function createAsset(
   companyId: string,
   data: Omit<Asset, 'id' | 'companyId' | 'createdAt'>
 ): Promise<string> {
+  const doc = { ...data, companyId, createdAt: new Date().toISOString() }
   const ref = await (await adminDbFor(companyId))
     .collection('assets')
-    .add({ ...data, companyId, createdAt: new Date().toISOString() })
-  revalidateTag('assets')
+    .add(doc)
+  await patch('assets', companyId, [{ id: ref.id, data: doc }])
+  revalidateTag(assetsTag(companyId))
   return ref.id
 }
 
@@ -587,7 +627,8 @@ export async function updateAsset(
   const doc = await ref.get()
   if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Ativo não encontrado')
   await ref.update(data)
-  revalidateTag('assets')
+  await touch('assets', companyId, [id])
+  revalidateTag(assetsTag(companyId))
 }
 
 export async function deleteAsset(companyId: string, id: string): Promise<void> {
@@ -595,7 +636,8 @@ export async function deleteAsset(companyId: string, id: string): Promise<void> 
   const doc = await ref.get()
   if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Ativo não encontrado')
   await ref.delete()
-  revalidateTag('assets')
+  await patch('assets', companyId, [{ id, data: null }])
+  revalidateTag(assetsTag(companyId))
 }
 
 // // ── TASKS ───────────────────────────────────────────────────────────────────
@@ -604,44 +646,25 @@ async function fetchTasksList(companyId: string, limitCount: number, includeComp
       throw new Error('Firestore indisponível (listTasks)')
     }
     try {
-      let query = (await adminDbFor(companyId))
-        .collection('tasks')
-        .where('companyId', '==', companyId)
+      // Timeout alargado: a primeira leitura (ou uma reconstrução da lista materializada)
+      // lê a coleção inteira; um timeout curto cai para o fallback vazio (empresas reais
+      // não usam o JSON de reserva), pior do que esperar mais um pouco.
+      const allDocs = (await readAll('tasks', companyId, LIST_TIMEOUT_MS, `listTasks(includeCompleted=${includeCompleted})`)) as (Task & { deleted?: boolean })[]
 
-      if (!includeCompleted) {
-        // 'prazo' é um estado ativo real (OT que só arranca numa data futura, ex. PM
-        // agendado) — faltava aqui, por isso uma OT nesse estado ficava invisível assim
-        // que qualquer página passasse a pedir só as ativas (includeCompleted=false).
-        query = query.where('status', 'in', ['pending', 'in_progress', 'prazo']) as any
-      } else {
-        // Sem orderBy, o .limit() abaixo devolve um subconjunto arbitrário (por ID do
-        // documento) em vez dos mais recentes — com o histórico importado (~6700 OTs na
-        // UR) isto faz OTs novas nunca aparecerem, por ficarem fora desse subconjunto.
-        // Só se aplica quando includeCompleted=true (sem o "in" acima) para não exigir
-        // um índice composto que pode não existir em produção.
-        query = query.orderBy('createdAt', 'desc') as any
-      }
-
-      // Timeout alargado (vs. o padrão de 1.2s usado noutras queries pequenas): com o
-      // histórico importado esta query pode devolver milhares de documentos, e um
-      // timeout curto aqui cai para o fallback vazio (empresas reais não usam o JSON
-      // de reserva), pior do que esperar mais um pouco.
-      const snap = await firestoreWithTimeout(
-        () => query.limit(limitCount).get(),
-        null,
-        8000,
-        `listTasks(includeCompleted=${includeCompleted})`
-      )
-      if (!snap || !snap.docs) {
-        throw new Error('Firestore indisponível (listTasks)')
-      }
-
-      const rawDocs = snap.docs.map((d) => serialize<Task & { deleted?: boolean }>(d))
+      // 'prazo' é um estado ativo real (OT que só arranca numa data futura, ex. PM
+      // agendado) — faltava aqui, por isso uma OT nesse estado ficava invisível assim
+      // que qualquer página passasse a pedir só as ativas (includeCompleted=false).
+      // Com todas as OTs: as mais recentes por createdAt (com o histórico importado, ~6700
+      // na UR, um subconjunto arbitrário deixava OTs novas de fora).
+      const newestFirst = (a: Task, b: Task) => (b.createdAt || '').localeCompare(a.createdAt || '')
+      const rawDocs = !includeCompleted
+        ? allDocs.filter((t) => ['pending', 'in_progress', 'prazo'].includes(t.status as string)).sort(newestFirst).slice(0, limitCount)
+        : allDocs.filter((t) => t.createdAt).sort(newestFirst).slice(0, limitCount)
       // Tarefas só existentes na camada de reserva (scripts/import/tasks.json) não têm
       // documento no Firestore para apagar — deleteTask() grava aqui um "marcador de
       // eliminado" em vez de falhar; tem de ser excluído do resultado E impedir que o
       // merge com a reserva mais abaixo faça a tarefa reaparecer.
-      const deletedIds = new Set(rawDocs.filter((d) => d.deleted).map((d) => d.id))
+      const deletedIds = new Set(allDocs.filter((d) => d.deleted).map((d) => d.id))
 
       const dbDocs = rawDocs
         .filter((t) => !t.deleted)
@@ -672,32 +695,12 @@ async function fetchTasksList(companyId: string, limitCount: number, includeComp
         // Uma OT importada (só na reserva, "Pendente") que o utilizador fecha passa a ter um
         // documento Firestore "Concluída" — mas a query acima só traz as ATIVAS, por isso
         // esse documento não vinha e a versão da reserva voltava a aparecer como Pendente.
-        // Ler o documento das OT da reserva ainda ativas (~100) e esconder as fechadas.
-        const seenIds = new Set(rawDocs.map((d) => d.id))
-        const unseenActive = fallbacks.filter(
-          (f) => !seenIds.has(f.id) && f.status !== 'done' && f.status !== 'cancelled'
+        // Esconder as OT da reserva cujo documento já está fechado (a lista materializada
+        // tem todos os documentos, por isso não custa leituras extra).
+        const closedIds = new Set(
+          allDocs.filter((d) => d.deleted === true || d.status === 'done' || d.status === 'cancelled').map((d) => d.id)
         )
-        if (unseenActive.length > 0) {
-          const db = await adminDbFor(companyId)
-          // Falha/timeout → [] (mostra como antes, sem esconder nada), em vez de deitar
-          // abaixo a lista inteira.
-          const snaps = await firestoreWithTimeout(
-            () => db.getAll(...unseenActive.map((f) => db.collection('tasks').doc(f.id))),
-            [],
-            3000,
-            'listTasks(reserva fechada)'
-          )
-          const closedIds = new Set(
-            snaps
-              .filter((s) => s.exists && s.data()?.companyId === companyId)
-              .filter((s) => {
-                const d = s.data() || {}
-                return d.deleted === true || d.status === 'done' || d.status === 'cancelled'
-              })
-              .map((s) => s.id)
-          )
-          fallbacks = fallbacks.filter((f) => !closedIds.has(f.id))
-        }
+        fallbacks = fallbacks.filter((f) => !(closedIds.has(f.id) && f.status !== 'done' && f.status !== 'cancelled'))
       }
       let result: Task[]
       if (dbDocs.length === 0) {
@@ -768,22 +771,10 @@ async function fetchTasksForYear(companyId: string, year: number): Promise<Task[
   const endIso = `${year + 1}-01-01`
   // Falha/timeout/quota → lança (não devolve a reserva): um resultado de reserva
   // guardado em cache ficaria até 7 dias nos anos passados (ver getTasksForYearStats).
-  const snap = await firestoreWithTimeout(
-    async () => (await adminDbFor(companyId))
-      .collection('tasks')
-      .where('companyId', '==', companyId)
-      .where('createdAt', '>=', startIso)
-      .where('createdAt', '<', endIso)
-      .limit(5000)
-      .get(),
-    null,
-    5000,
-    `getTasksForYearStats(${year})`
-  )
-  if (!snap || !snap.docs) {
+  const all = await readAll('tasks', companyId, LIST_TIMEOUT_MS, `getTasksForYearStats(${year})`).catch(() => {
     throw new Error(`Firestore indisponível ao ler as OTs de ${year}`)
-  }
-  const dbDocs = snap.docs.map((d) => serialize<Task>(d))
+  })
+  const dbDocs = (all as Task[]).filter((t) => (t.createdAt || '') >= startIso && (t.createdAt || '') < endIso)
 
   if (isDemoCompany(companyId)) {
     const fallbackForYear = getFallbackTasksForYear(year)
@@ -868,15 +859,10 @@ async function fetchCompletedTasksPage(
   page: number,
   pageSize: number
 ): Promise<{ tasks: Task[]; total: number }> {
-  const snap = await (await adminDbFor(companyId))
-    .collection('tasks')
-    .where('companyId', '==', companyId)
-    .where('status', 'in', ['done', 'cancelled'])
-    .get()
-  logReads('listCompletedTasksPaged', snap.size)
+  const all = (await readAll('tasks', companyId, LIST_TIMEOUT_MS, 'listCompletedTasksPaged')) as Task[]
 
-  const dbDocs = snap.docs
-    .map((d) => serialize<Task>(d))
+  const dbDocs = all
+    .filter((t) => t.status === 'done' || t.status === 'cancelled')
     .sort((a, b) => (b.completedAt || b.updatedAt || b.createdAt || '').localeCompare(a.completedAt || a.updatedAt || a.createdAt || ''))
 
   const offset = (page - 1) * pageSize
@@ -921,35 +907,10 @@ export const listTasksByAsset = cache(async function(companyId: string, assetId:
       assetTag = assetId
     }
 
-    const queries: Promise<any>[] = [
-      (await adminDbFor(companyId))
-        .collection('tasks')
-        .where('companyId', '==', companyId)
-        .where('assetId', '==', assetId)
-        .limit(200)
-        .get()
-        .catch(() => ({ docs: [] }))
-    ]
-
-    if (assetTag && assetTag !== assetId) {
-      queries.push(
-        (await adminDbFor(companyId))
-          .collection('tasks')
-          .where('companyId', '==', companyId)
-          .where('tag', '==', assetTag)
-          .limit(200)
-          .get()
-          .catch(() => ({ docs: [] }))
-      )
-    }
-
-    const results = await Promise.all(queries)
-    const dbDocs: Task[] = []
-    results.forEach((snap) => {
-      if (snap.docs) {
-        snap.docs.forEach((d: any) => dbDocs.push(serialize<Task>(d)))
-      }
-    })
+    // Da lista materializada (antes: 2 queries de até 200 leituras por cada visita à
+    // página de um equipamento).
+    const all = (await readAll('tasks', companyId, LIST_TIMEOUT_MS, 'listTasksByAsset').catch(() => [])) as Task[]
+    const dbDocs = all.filter((t) => t.assetId === assetId || (!!assetTag && assetTag !== assetId && t.tag === assetTag))
 
     const filterFn = (t: Task) => {
       if (t.assetId && (t.assetId === assetId || t.assetId.toLowerCase() === cleanId || normAlphaNumData(t.assetId) === idAlpha)) return true
@@ -1193,18 +1154,27 @@ export async function backfillOtNumbers(
   if (counter.backfillDone === true) {
     // Fase 2: só OTs criadas sem número (createTask grava otNumber: null nesse caso).
     const snap = await db.collection('tasks').where('companyId', '==', companyId).where('otNumber', '==', null).limit(maxPerRun).get()
+    const numbered: { id: string; fields: Record<string, any> }[] = []
     for (const d of snap.docs) {
       const n = await nextOtNumber(companyId)
       await d.ref.update({ otNumber: n })
+      numbered.push({ id: d.id, fields: { otNumber: n } })
       numberedDates.push(...taskDates(d.data() as Partial<Task>))
     }
+    await patchFields('tasks', companyId, numbered)
     if (snap.docs.length > 0) invalidateTasks(companyId, { historyYears: pastYearsOf(numberedDates), completed: true })
     return { numbered: snap.docs.length, remaining: 0 }
   }
 
-  // Fase 1: OTs antigas.
-  const snap = await db.collection('tasks').where('companyId', '==', companyId).get()
-  const docs = snap.docs.map((d) => serialize<Task & { deleted?: boolean }>(d))
+  // Fase 1: OTs antigas. Da lista materializada (antes: ~6700 leituras por noite na UR),
+  // mas só se tiver tantos documentos como a coleção real (contagem: ~1 leitura por 1000
+  // docs) — OTs importadas por script depois da última reconstrução ficariam sem número
+  // ou com um número repetido.
+  let docs = (await readMaterialized(db, 'tasks', companyId)) as (Task & { deleted?: boolean })[]
+  const realCount = Number((await db.collection('tasks').where('companyId', '==', companyId).count().get()).data().count) || 0
+  if (realCount !== docs.length) {
+    docs = (await rebuildMaterialized(db, 'tasks', companyId)) as (Task & { deleted?: boolean })[]
+  }
   const byId = new Map(docs.map((d) => [d.id, d]))
   const all: (Task & { deleted?: boolean })[] = [...docs]
   if (isDemoCompany(companyId)) {
@@ -1221,6 +1191,8 @@ export async function backfillOtNumbers(
   const items = pending.slice(0, maxPerRun)
   let batch = db.batch()
   let inBatch = 0
+  const numbered: { id: string; fields: Record<string, any> }[] = []
+  const created: { id: string; data: Record<string, any> }[] = []
   for (const t of items) {
     while (used.has(cursor)) cursor++
     // Mais OTs antigas do que o intervalo reservado (estimativa curta): as que sobram
@@ -1230,9 +1202,12 @@ export async function backfillOtNumbers(
     const docRef = db.collection('tasks').doc(t.id)
     if (byId.has(t.id)) {
       batch.update(docRef, { otNumber: n })
+      numbered.push({ id: t.id, fields: { otNumber: n } })
     } else {
       // OT só da reserva: grava-a com o número (mesma forma que updateTask usa).
-      batch.set(docRef, JSON.parse(JSON.stringify({ ...t, companyId, otNumber: n })), { merge: true })
+      const doc = JSON.parse(JSON.stringify({ ...t, companyId, otNumber: n }))
+      batch.set(docRef, doc, { merge: true })
+      created.push({ id: t.id, data: doc })
     }
     numberedDates.push(...taskDates(t))
     if (++inBatch >= 400) {
@@ -1242,6 +1217,8 @@ export async function backfillOtNumbers(
     }
   }
   if (inBatch > 0) await batch.commit()
+  await patchFields('tasks', companyId, numbered)
+  await patch('tasks', companyId, created)
   const remaining = pending.length - items.length
   await ref.set({ backfillNext: cursor, backfillDone: remaining === 0, updatedAt: new Date().toISOString() }, { merge: true })
   if (items.length > 0) invalidateTasks(companyId, { historyYears: pastYearsOf(numberedDates), completed: true })
@@ -1277,6 +1254,7 @@ export async function createTask(
     const cleanObj = JSON.parse(JSON.stringify(rawDoc))
     const ref = await (await adminDbFor(companyId)).collection('tasks').add(cleanObj)
     generatedId = ref.id
+    await patch('tasks', companyId, [{ id: generatedId, data: cleanObj }])
 
     // Notificar os técnicos atribuídos via Web Push e Notificação Interna
     await notifyAssignedTechnicians(
@@ -1498,8 +1476,12 @@ export async function updateTask(
         if (data.assignedTo) updatePlan.assignedTo = data.assignedTo
         await planRef.update(updatePlan).catch(() => null)
       }
+      // Também apanha a escrita direta ao plano em updateProjectTaskDatesAction (Gantt).
+      await touch('maintenance_plans', companyId, [owned.planId])
+      revalidateTag(plansTag(companyId))
     }
   }
+  await touch('tasks', companyId, [id])
   const before = (doc && doc.exists)
     ? (doc.data() as Partial<Task>)
     : (isDemoCompany(companyId) ? getFallbackTasks().find((t) => t.id === id) : null)
@@ -1520,6 +1502,7 @@ export async function deleteTask(companyId: string, id: string): Promise<void> {
     // não encontrada" e a OT reaparecia na lista.
     await ref.set({ id, companyId, deleted: true, updatedAt: new Date().toISOString() })
   }
+  await touch('tasks', companyId, [id])
   const before = doc.exists
     ? (doc.data() as Partial<Task>)
     : (isDemoCompany(companyId) ? getFallbackTasks().find((t) => t.id === id) : null)
@@ -1537,6 +1520,7 @@ export async function deleteTasksByMaintenancePlan(companyId: string, planId: st
     const batch = (await adminDbFor(companyId)).batch()
     snap.docs.forEach((doc) => batch.delete(doc.ref))
     await batch.commit()
+    await patch('tasks', companyId, snap.docs.map((d) => ({ id: d.id, data: null })))
     const deleted = snap.docs.map((d) => d.data() as Partial<Task>)
     invalidateTasks(companyId, {
       historyYears: pastYearsOf(deleted.flatMap(taskDates)),
@@ -2279,24 +2263,27 @@ export async function updateUserProfile(
 
     try {
       // Atualizar no Firestore tasks
-      const taskBatch = (await adminDbFor(finalCompanyId)).batch()
-      const tSnap = await (await adminDbFor(finalCompanyId)).collection('tasks').where('companyId', '==', finalCompanyId).get().catch(() => null)
-      if (tSnap && !tSnap.empty) {
-        let batchCount = 0
-        tSnap.docs.forEach((d) => {
-          const tData = d.data()
-          const ids = (tData.assignedToIds || []) as string[]
-          const isAssigned = tData.assignedTo === userId || ids.includes(userId)
+      const tdb = await adminDbFor(finalCompanyId)
+      const taskBatch = tdb.batch()
+      // Da lista materializada (antes: todas as OTs da empresa, ~6700 leituras na UR).
+      const tasksNow = await readMaterialized(tdb, 'tasks', finalCompanyId).catch(() => null)
+      if (tasksNow && tasksNow.length > 0) {
+        const patched: { id: string; fields: Record<string, any> }[] = []
+        tasksNow.forEach((t) => {
+          if (t.deleted) return
+          const ids = (t.assignedToIds || []) as string[]
+          const isAssigned = t.assignedTo === userId || ids.includes(userId)
           if (isAssigned) {
             const taskUpdate: any = { updatedAt: new Date().toISOString() }
             if (newName) taskUpdate.assignedTechnicianName = newName
             if (newAbbr) taskUpdate.assignedTechnicianAbbr = newAbbr
-            taskBatch.update(d.ref, taskUpdate)
-            batchCount++
+            taskBatch.update(tdb.collection('tasks').doc(t.id), taskUpdate)
+            patched.push({ id: t.id, fields: taskUpdate })
           }
         })
-        if (batchCount > 0) {
-          await taskBatch.commit().catch(() => {})
+        if (patched.length > 0) {
+          const ok = await taskBatch.commit().then(() => true, () => false)
+          if (ok) await patchFields('tasks', finalCompanyId, patched)
         }
       }
     } catch {}
@@ -2376,19 +2363,9 @@ const fallbackPlansFor = (companyId: string): MaintenancePlan[] =>
     ? [...getFallbackPlans()].sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
     : []
 
-const listMaintenancePlansCached = withFallback(unstable_cache(
-  async (companyId: string): Promise<MaintenancePlan[]> => {
-    if (isQuotaExhausted()) throw new FirestoreUnavailable()
+async function fetchMaintenancePlans(companyId: string): Promise<MaintenancePlan[]> {
     {
-      const snap = await firestoreWithTimeout(
-        async () => (await adminDbFor(companyId)).collection('maintenance_plans').where('companyId', '==', companyId).get(),
-        null,
-        4000,
-        'listMaintenancePlans'
-      )
-      if (!snap || !snap.docs) throw new FirestoreUnavailable()
-      const dbDocs = snap.docs
-        .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
+      const dbDocs = ((await readAll('maintenance_plans', companyId, LIST_TIMEOUT_MS, 'listMaintenancePlans')) as (MaintenancePlan & { deleted?: boolean })[])
         .filter((p) => !p.deleted)
 
       // Mesclar com os planos de reserva (JSON) em vez de os ignorar assim que
@@ -2411,12 +2388,16 @@ const listMaintenancePlansCached = withFallback(unstable_cache(
       }
       return uniquePlans.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
     }
-  },
-  ['maintenance-plans'],
-  // 1h (era 5min): o Plano de Manutenção (definições, não as OTs geradas) muda raramente
-  // — escritas já chamam revalidateTag('plans').
-  { revalidate: 3600, tags: ['plans'] }
-), fallbackPlansFor, 'listMaintenancePlans')
+}
+
+// 1h (era 5min): o Plano de Manutenção (definições, não as OTs geradas) muda raramente
+// — as escritas invalidam a etiqueta da empresa.
+const listMaintenancePlansCached = withFallback(
+  (companyId: string) =>
+    unstable_cache(fetchMaintenancePlans, ['maintenance-plans'], { revalidate: 3600, tags: [plansTag(companyId)] })(companyId),
+  fallbackPlansFor,
+  'listMaintenancePlans'
+)
 export const listMaintenancePlans = cache(async function(companyId: string): Promise<MaintenancePlan[]> {
   return listMaintenancePlansCached(companyId)
 })
@@ -2480,14 +2461,17 @@ export async function createMaintenancePlan(
       { ...data, updatedAt: now },
       { merge: true }
     )
-    revalidateTag('plans')
+    await touch('maintenance_plans', companyId, [existingDocId])
+    revalidateTag(plansTag(companyId))
     return existingDocId
   }
 
+  const newDoc = { ...data, companyId, createdBy, createdAt: now, updatedAt: now, lastGeneratedAt: null }
   const ref = await (await adminDbFor(companyId))
     .collection('maintenance_plans')
-    .add({ ...data, companyId, createdBy, createdAt: now, updatedAt: now, lastGeneratedAt: null })
-  revalidateTag('plans')
+    .add(newDoc)
+  await patch('maintenance_plans', companyId, [{ id: ref.id, data: newDoc }])
+  revalidateTag(plansTag(companyId))
   return ref.id
 }
 
@@ -2519,7 +2503,8 @@ export async function updateMaintenancePlan(
     const baseObj = fallback ? { ...fallback, ...data, companyId, updatedAt: now } : { ...data, companyId, createdAt: now, updatedAt: now }
     await ref.set(baseObj, { merge: true })
   }
-  revalidateTag('plans')
+  await touch('maintenance_plans', companyId, [id])
+  revalidateTag(plansTag(companyId))
 }
 
 /**
@@ -2555,6 +2540,7 @@ export async function setMaintenancePlanOccurrenceStatus(
       updatedAt: now,
       ...(status === 'done' ? { completedAt: now } : {}),
     })
+    await touch('tasks', companyId, [existing.id])
   } else {
     await createTask(companyId, userId, {
       title: plan.title,
@@ -2588,7 +2574,7 @@ export async function setMaintenancePlanOccurrenceStatus(
   }
 
   invalidateTasksForChange(companyId, existing ? (existing.data() as Partial<Task>) : null, { status })
-  revalidateTag('plans')
+  revalidateTag(plansTag(companyId))
 }
 
 export async function deleteMaintenancePlan(companyId: string, id: string): Promise<void> {
@@ -2606,7 +2592,8 @@ export async function deleteMaintenancePlan(companyId: string, id: string): Prom
   } else {
     await ref.set({ id, companyId, deleted: true, updatedAt: now })
   }
-  revalidateTag('plans')
+  await touch('maintenance_plans', companyId, [id])
+  revalidateTag(plansTag(companyId))
 }
 
 export const getUsersByCompany = cache(async function(companyId: string): Promise<User[]> {
@@ -3022,6 +3009,7 @@ export async function calculateTaskCost(companyId: string, taskId: string): Prom
     // Só OTs desta empresa (antes escrevia o custo em qualquer OT pelo id).
     if ((await taskRef.get()).data()?.companyId !== companyId) return
     await taskRef.update({ totalCost })
+    await touch('tasks', companyId, [taskId])
     // Grava depois do updateTask que lhe deu origem: sem isto, uma releitura entretanto
     // ficava com o custo antigo em cache até 1h.
     invalidateTasks(companyId, { completed: true })
