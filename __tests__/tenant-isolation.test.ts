@@ -219,6 +219,73 @@ describe('escritas por id: A não altera nem apaga dados da B', () => {
   })
 })
 
+describe('número da OT', () => {
+  it('é sequencial, único (também em simultâneo) e separado por empresa', async () => {
+    const created = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => data.createTask(A, 'mgrA', anyData({ title: `Seq ${i}`, status: 'pending', tipo: 'curativa', criticidade: 'verde' })))
+    )
+    const nums = created.map((id) => db.raw('tasks', id)?.otNumber)
+    expect(nums.every((n) => typeof n === 'number' && n > 0)).toBe(true)
+    expect(new Set(nums).size).toBe(5)
+    const sorted = [...nums].sort((a, b) => a - b)
+    expect(sorted[4] - sorted[0]).toBe(4) // consecutivos
+    const bId = await data.createTask(B, 'mgrB', anyData({ title: 'Seq B', status: 'pending', tipo: 'curativa', criticidade: 'verde' }))
+    // A empresa B tem a sua própria contagem (não continua a da A): o número nunca passa
+    // o total de OTs da B.
+    const totalB = (await db.collection('tasks').where('companyId', '==', B).get()).size
+    expect(db.raw('tasks', bId)?.otNumber).toBeLessThanOrEqual(totalB)
+  })
+
+  it('empresa com OTs antigas: numera-as por ordem de criação (1..N) e as novas seguem depois', async () => {
+    const C = 'companyCCCCCCCCCCCCC'
+    db.seed('tasks', 'c-old2', { companyId: C, title: 'Antiga 2', status: 'done', createdAt: '2021-01-01T00:00:00Z' })
+    db.seed('tasks', 'c-old1', { companyId: C, title: 'Antiga 1', status: 'done', createdAt: '2020-01-01T00:00:00Z' })
+    db.seed('tasks', 'c-old3', { companyId: C, title: 'Antiga 3', status: 'done', createdAt: '2022-01-01T00:00:00Z' })
+    // Uma OT nova criada ANTES do backfill fica já fora do intervalo das antigas.
+    const nova = await data.createTask(C, 'mgrC', anyData({ title: 'Nova', status: 'pending', tipo: 'curativa', criticidade: 'verde' }))
+    expect(db.raw('tasks', nova)?.otNumber).toBe(4)
+    const res = await data.backfillOtNumbers(C)
+    expect(res).toEqual({ numbered: 3, remaining: 0 })
+    expect(['c-old1', 'c-old2', 'c-old3'].map((id) => db.raw('tasks', id)?.otNumber)).toEqual([1, 2, 3])
+  })
+
+  it('OT criada com a quota esgotada fica com número null e é numerada depois, sem repetir', async () => {
+    db.failReads = true
+    const semNumero = await data.createTask(B, 'mgrB', anyData({ title: 'Sem número', status: 'pending', tipo: 'curativa', criticidade: 'verde' }))
+    db.failReads = false
+    expect(db.raw('tasks', semNumero)?.otNumber).toBeNull()
+    await data.backfillOtNumbers(B)
+    const nums = (await db.collection('tasks').where('companyId', '==', B).get()).docs.map((d) => d.data()?.otNumber)
+    expect(nums.every((n) => typeof n === 'number' && n > 0)).toBe(true)
+    expect(new Set(nums).size).toBe(nums.length)
+  })
+
+  it('o número de uma OT apagada nunca é reutilizado', async () => {
+    const x = await data.createTask(B, 'mgrB', anyData({ title: 'Vai ser apagada', status: 'pending', tipo: 'curativa', criticidade: 'verde' }))
+    const n = db.raw('tasks', x)?.otNumber
+    await data.deleteTask(B, x)
+    const y = await data.createTask(B, 'mgrB', anyData({ title: 'Seguinte', status: 'pending', tipo: 'curativa', criticidade: 'verde' }))
+    expect(db.raw('tasks', y)?.otNumber).toBe(n + 1)
+  })
+})
+
+describe('Firestore em baixo (quota esgotada)', () => {
+  afterEach(() => { db.failReads = false })
+
+  it('empresa cliente recebe listas vazias (nunca a reserva da UR); a UR recebe a sua reserva', async () => {
+    db.failReads = true
+    const [assetsA, plansA, usersA, tasksA] = await Promise.all([
+      data.listAssets(A), data.listMaintenancePlans(A), data.listUsers(A), data.listTasks(A),
+    ])
+    for (const rows of [assetsA, plansA, usersA, tasksA] as any[][]) {
+      expect(rows.some((r) => r.companyId && r.companyId !== A)).toBe(false)
+    }
+    const assetsUR = await data.listAssets(UR)
+    expect(assetsUR.length).toBeGreaterThan(0)
+    expect(assetsUR.every((a) => a.companyId === UR)).toBe(true)
+  })
+})
+
 describe('FR/IT obrigatórias', () => {
   it('não deixa concluir uma OT com FR por preencher; deixa depois de preenchida', async () => {
     const id = await data.createTask(A, 'mgrA', anyData({

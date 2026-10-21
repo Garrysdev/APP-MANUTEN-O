@@ -1,6 +1,7 @@
-import { redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { getAsset, listTasksByAsset, listUsers } from '@/lib/firebase/data'
+import { isQuotaExhausted } from '@/lib/firebase/admin'
 import AssetDetailClient from './AssetDetailClient'
 
 export const dynamic = 'force-dynamic'
@@ -17,8 +18,19 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   ])
 
   let asset = assetRes
-  if (!asset) {
+  let tasks: Awaited<ReturnType<typeof listTasksByAsset>>
+  if (asset) {
+    tasks = await listTasksByAsset(profile.companyId, id, asset.tag).catch(() => [])
+  } else {
+    // Sem equipamento com este id: pode ser um link por TAG (OTs antigas importadas
+    // referem a TAG em texto, sem ficha de equipamento). Só mostra a página se ESTA
+    // empresa tiver OTs com essa TAG — senão é um id desconhecido ou de outra empresa
+    // (antes inventava sempre um equipamento a partir do endereço).
     const tagOrName = decodeURIComponent(id)
+    tasks = await listTasksByAsset(profile.companyId, id, tagOrName).catch(() => [])
+    // Com o Firestore em baixo não dá para saber se a TAG é desta empresa: mostra a
+    // página (vazia) em vez de "Acesso não autorizado" para um link legítimo.
+    if (tasks.length === 0 && !isQuotaExhausted()) notFound()
     const areaMatch = tagOrName.match(/^(\d+[A-Za-z0-9]*)/)
     asset = {
       id,
@@ -30,8 +42,6 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
       createdAt: new Date().toISOString(),
     }
   }
-
-  const tasks = await listTasksByAsset(profile.companyId, id, asset.tag).catch(() => [])
 
   return <AssetDetailClient asset={asset} tasks={tasks} users={users} />
 }

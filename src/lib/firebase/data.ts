@@ -24,6 +24,29 @@ export function isDemoCompany(companyId: string): boolean {
   return companyId === DEMO_COMPANY_ID || companyId === 'demo' || companyId === 'demo_company'
 }
 
+// ── CACHE SEM GUARDAR A RESERVA ──────────────────────────────────────────────
+// Firestore indisponível (quota/timeout/erro) dentro de uma função com unstable_cache:
+// lança FirestoreUnavailable em vez de devolver a reserva. O unstable_cache não guarda
+// erros, e a reserva aplica-se cá fora (withFallback). Antes, as listas devolviam a
+// reserva DENTRO da cache e ela ficava lá até 1h depois de o Firestore voltar — a UR via
+// só a reserva estática e as empresas clientes viam listas vazias.
+class FirestoreUnavailable extends Error {}
+
+function withFallback<A extends unknown[], R>(
+  cached: (...args: A) => Promise<R>,
+  fallback: (...args: A) => R,
+  label: string
+): (...args: A) => Promise<R> {
+  return async (...args: A) => {
+    try {
+      return await cached(...args)
+    } catch (err) {
+      if (!(err instanceof FirestoreUnavailable)) console.error(`[${label}] Error:`, err)
+      return fallback(...args)
+    }
+  }
+}
+
 // ── ETIQUETAS DE CACHE DAS OTs, POR EMPRESA ──────────────────────────────────
 // Uma escrita numa empresa nunca deve invalidar a cache das outras: com uma etiqueta
 // global ('tasks'), cada OT editada em qualquer empresa obrigava TODAS a reler as suas
@@ -46,28 +69,40 @@ function taskDates(t: Partial<Task> | null | undefined): (string | null | undefi
   return [t.createdAt, t.plannedStartDate, t.dueDate, (t as any).completedAt]
 }
 
-function touchesPastYear(dates: (string | null | undefined)[]): boolean {
+/** Anos passados tocados por estas datas. */
+function pastYearsOf(dates: (string | null | undefined)[]): number[] {
   const currentYear = new Date().getFullYear()
-  return dates.some((d) => {
-    const year = parseInt(String(d || '').slice(0, 4), 10)
-    return Number.isFinite(year) && year < currentYear
-  })
+  return Array.from(new Set(
+    dates
+      .map((d) => parseInt(String(d || '').slice(0, 4), 10))
+      .filter((y) => Number.isFinite(y) && y < currentYear)
+  ))
 }
 
-function invalidateTasks(companyId: string, opts: { history?: boolean; completed?: boolean } = {}): void {
+// Etiqueta de UM ano passado: editar uma OT de 2019 só obriga a reler 2019 (~600 OTs),
+// não os ~11 anos de histórico (~6700). Foi isto que esgotou a quota a 20/10/2026: fechar
+// várias OTs antigas importadas, cada uma a invalidar o histórico inteiro.
+const tasksHistoryYearTag = (companyId: string, year: number) => `${tasksHistoryTag(companyId)}:${year}`
+
+function invalidateTasks(
+  companyId: string,
+  opts: { history?: boolean; historyYears?: number[]; completed?: boolean } = {}
+): void {
   revalidateTag(tasksTag(companyId))
   if (opts.history) revalidateTag(tasksHistoryTag(companyId))
+  for (const year of opts.historyYears || []) revalidateTag(tasksHistoryYearTag(companyId, year))
   if (opts.completed) revalidateTag(tasksCompletedTag(companyId))
 }
 
-// Invalidação a partir do estado da OT antes e depois de uma escrita.
+// Invalidação a partir do estado da OT antes e depois de uma escrita: só os anos
+// passados em que a OT está (antes/depois), não o histórico inteiro.
 function invalidateTasksForChange(
   companyId: string,
   before: Partial<Task> | null | undefined,
   after: Partial<Task> | null | undefined
 ): void {
   invalidateTasks(companyId, {
-    history: touchesPastYear([...taskDates(before), ...taskDates(after)]),
+    historyYears: pastYearsOf([...taskDates(before), ...taskDates(after)]),
     completed: isClosedStatus(before?.status) || isClosedStatus(after?.status),
   })
 }
@@ -235,35 +270,27 @@ function getFallbackUsers(): User[] {
   return cachedFallbackUsers
 }
 
-const listExternalCompaniesCached = unstable_cache(
+const listExternalCompaniesCached = withFallback(unstable_cache(
   async (companyId: string): Promise<ExternalCompany[]> => {
-    if (isQuotaExhausted()) {
-      return isDemoCompany(companyId) ? getFallbackExternalCompanies() : []
-    }
-    try {
-      const snap = await firestoreWithTimeout(
-        async () => (await adminDbFor(companyId)).collection('external_companies').where('companyId', '==', companyId).get(),
-        null,
-        1000
-      )
-      if (snap && snap.docs) {
-        const rawDocs = snap.docs.map((d) => serialize<ExternalCompany & { deleted?: boolean }>(d))
-        const deletedIds = new Set(rawDocs.filter((d) => d.deleted).map((d) => d.id))
-        const realDocs = rawDocs.filter((d) => !d.deleted)
-        if (realDocs.length > 0) return realDocs
-        if (!isDemoCompany(companyId)) return []
-        // Sem empresas reais ainda — mostra as empresas de exemplo, exceto as que
-        // já foram eliminadas (marcador "deleted", ver deleteExternalCompanyAction).
-        return getFallbackExternalCompanies().filter((f) => !deletedIds.has(f.id))
-      }
-    } catch (err) {
-      console.error('[listExternalCompanies] Error:', err)
-    }
-    return isDemoCompany(companyId) ? getFallbackExternalCompanies() : []
+    if (isQuotaExhausted()) throw new FirestoreUnavailable()
+    const snap = await firestoreWithTimeout(
+      async () => (await adminDbFor(companyId)).collection('external_companies').where('companyId', '==', companyId).get(),
+      null,
+      1000
+    )
+    if (!snap || !snap.docs) throw new FirestoreUnavailable()
+    const rawDocs = snap.docs.map((d) => serialize<ExternalCompany & { deleted?: boolean }>(d))
+    const deletedIds = new Set(rawDocs.filter((d) => d.deleted).map((d) => d.id))
+    const realDocs = rawDocs.filter((d) => !d.deleted)
+    if (realDocs.length > 0) return realDocs
+    if (!isDemoCompany(companyId)) return []
+    // Sem empresas reais ainda — mostra as empresas de exemplo, exceto as que
+    // já foram eliminadas (marcador "deleted", ver deleteExternalCompanyAction).
+    return getFallbackExternalCompanies().filter((f) => !deletedIds.has(f.id))
   },
   ['external-companies'],
-  { revalidate: 60, tags: ['external-companies'] }
-)
+  { revalidate: 3600, tags: ['external-companies'] }
+), (companyId: string) => (isDemoCompany(companyId) ? getFallbackExternalCompanies() : []), 'listExternalCompanies')
 export const listExternalCompanies = cache(async function(companyId: string): Promise<ExternalCompany[]> {
   return listExternalCompaniesCached(companyId)
 })
@@ -389,25 +416,20 @@ function getFallbackExternalCompanies(): ExternalCompany[] {
 }
 
 // // ── ASSETS ──────────────────────────────────────────────────────────────────
-const listAssetsCached = unstable_cache(
+const listAssetsCached = withFallback(unstable_cache(
   async (companyId: string, limitCount: number): Promise<Asset[]> => {
-    if (isQuotaExhausted()) {
-      return isDemoCompany(companyId) ? getFallbackAssets() : []
-    }
-    try {
-      const snap = await firestoreWithTimeout(
-        async () => (await adminDbFor(companyId)).collection('assets').where('companyId', '==', companyId).limit(limitCount).get(),
-        null,
-        1000,
-        'listAssets'
-      )
-      if (snap && snap.docs && snap.docs.length > 0) {
-        const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
-        return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      }
-      return isDemoCompany(companyId) ? getFallbackAssets() : []
-    } catch (err) {
-      console.error('[listAssets] Error:', err)
+    if (isQuotaExhausted()) throw new FirestoreUnavailable()
+    const snap = await firestoreWithTimeout(
+      async () => (await adminDbFor(companyId)).collection('assets').where('companyId', '==', companyId).limit(limitCount).get(),
+      null,
+      // 1s era pouco para ~900 equipamentos: um timeout caía para a reserva/lista vazia.
+      4000,
+      'listAssets'
+    )
+    if (!snap || !snap.docs) throw new FirestoreUnavailable()
+    if (snap.docs.length > 0) {
+      const dbDocs = snap.docs.map((d) => serialize<Asset>(d))
+      return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     }
     return isDemoCompany(companyId) ? getFallbackAssets() : []
   },
@@ -415,41 +437,39 @@ const listAssetsCached = unstable_cache(
   // 1h (era 300s): as escritas já fazem revalidateTag('assets'); o tempo é só uma rede
   // de segurança e com 300s forçava releituras (até 2000 ativos) a cada 5 min.
   { revalidate: 3600, tags: ['assets'] }
-)
+), (companyId: string) => (isDemoCompany(companyId) ? getFallbackAssets() : []), 'listAssets')
 export const listAssets = cache(async function(companyId: string, limitCount = 2000): Promise<Asset[]> {
   return listAssetsCached(companyId, limitCount)
 })
 
 /** Versão LEVE: id + name + tag (para dropdowns e mapa id→nome/tag). */
-const listAssetRefsCached = unstable_cache(
+const fallbackAssetRefs = (companyId: string) =>
+  isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
+
+const listAssetRefsCached = withFallback(unstable_cache(
   async (companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> => {
-    if (isQuotaExhausted()) {
-      return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
+    if (isQuotaExhausted()) throw new FirestoreUnavailable()
+    const snap = await firestoreWithTimeout(
+      async () => (await adminDbFor(companyId)).collection('assets').where('companyId', '==', companyId).select('name', 'tag', 'area').get(),
+      null,
+      4000
+    )
+    if (!snap || !snap.docs) throw new FirestoreUnavailable()
+    if (snap.docs.length > 0) {
+      const dbDocs = snap.docs.map((d) => ({
+        id: d.id,
+        name: (d.data().name as string) ?? '',
+        tag: (d.data().tag as string) ?? null,
+        area: (d.data().area as string) ?? null,
+      }))
+      return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
     }
-    try {
-      const snap = await firestoreWithTimeout(
-        async () => (await adminDbFor(companyId)).collection('assets').where('companyId', '==', companyId).select('name', 'tag', 'area').get(),
-        null,
-        800
-      )
-      if (snap && snap.docs && snap.docs.length > 0) {
-        const dbDocs = snap.docs.map((d) => ({
-          id: d.id,
-          name: (d.data().name as string) ?? '',
-          tag: (d.data().tag as string) ?? null,
-          area: (d.data().area as string) ?? null,
-        }))
-        return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
-      }
-      return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
-    } catch (err) {
-      console.error('[listAssetRefs] Error:', err)
-    }
-    return isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
+    return fallbackAssetRefs(companyId)
   },
   ['asset-refs'],
-  { revalidate: 300, tags: ['assets'] }
-)
+  // 1h (era 300s): as escritas fazem revalidateTag('assets').
+  { revalidate: 3600, tags: ['assets'] }
+), fallbackAssetRefs, 'listAssetRefs')
 export const listAssetRefs = cache(async function(companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> {
   return listAssetRefsCached(companyId)
 })
@@ -803,7 +823,9 @@ export async function getTasksForYearStats(companyId: string, year: number): Pro
   try {
     return await unstable_cache(fetchTasksForYear, [isPastYear ? 'tasks-by-year-past' : 'tasks-by-year'], {
       revalidate: isPastYear ? 7 * 86400 : 3600,
-      tags: isPastYear ? [tasksHistoryTag(companyId)] : ['tasks', tasksTag(companyId)],
+      tags: isPastYear
+        ? [tasksHistoryTag(companyId), tasksHistoryYearTag(companyId, year)]
+        : ['tasks', tasksTag(companyId)],
     })(companyId, year)
   } catch (err) {
     console.error('[getTasksForYearStats] Error:', err)
@@ -1076,6 +1098,156 @@ export async function notifyAssignedTechnicians(
   }
 }
 
+// ── NÚMERO DA OT (sequencial, único por empresa) ──────────────────────────────
+// Antes não havia número: o "ID" mostrado eram os últimos dígitos do id do documento
+// cortados a 3 (mod 1000), por isso repetiam-se (1123 e 2123 → "123") e as OTs novas
+// (id aleatório) recebiam números arbitrários. Agora cada OT tem `otNumber`, atribuído
+// por um contador numa transação (duas OTs criadas ao mesmo tempo nunca partilham número).
+const otCounterRef = async (companyId: string) =>
+  (await adminDbFor(companyId)).collection('counters').doc(`ot_${companyId}`)
+
+// Contador (counters/ot_<companyId>):
+//  - value:           último número dado a uma OT NOVA (as novas recebem value+1);
+//  - backfillCeiling: números 1..ceiling ficam reservados às OTs que já existiam quando o
+//                     contador foi criado (numeradas pelo backfill, por ordem de criação);
+//  - backfillNext:    próximo número a dar no backfill — só avança, por isso um número
+//                     nunca é reutilizado (nem o de uma OT entretanto apagada);
+//  - backfillDone:    todas as OTs antigas já numeradas (a partir daí o cron só procura
+//                     OTs criadas sem número, `otNumber == null`, que é uma leitura barata).
+
+/** Quantas OTs existem antes do contador — tamanho do intervalo reservado ao backfill. */
+async function countExistingTasks(companyId: string): Promise<number> {
+  const db = await adminDbFor(companyId)
+  const tasks = db.collection('tasks').where('companyId', '==', companyId)
+  const [all, tombstones] = await Promise.all([
+    tasks.count().get(),
+    tasks.where('deleted', '==', true).count().get(),
+  ])
+  let total = (Number(all.data().count) || 0) - (Number(tombstones.data().count) || 0)
+  if (isDemoCompany(companyId)) {
+    // OTs só da reserva (sem documento) — as que já têm documento já foram contadas.
+    const fallback = getFallbackTasks()
+    const snaps = fallback.length ? await db.getAll(...fallback.map((f) => db.collection('tasks').doc(f.id))) : []
+    total += snaps.filter((s) => !s.exists).length
+  }
+  return Math.max(0, total)
+}
+
+/** Cria o contador uma única vez (se duas OTs o tentarem criar ao mesmo tempo, ganha uma). */
+async function ensureOtCounter(companyId: string): Promise<void> {
+  const db = await adminDbFor(companyId)
+  const ref = await otCounterRef(companyId)
+  const ceiling = await countExistingTasks(companyId)
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref)
+    if (snap.exists) return
+    tx.set(ref, {
+      companyId,
+      value: ceiling,
+      backfillCeiling: ceiling,
+      backfillNext: 1,
+      backfillDone: ceiling === 0,
+      updatedAt: new Date().toISOString(),
+    })
+  })
+}
+
+class OtCounterMissing extends Error {}
+
+export async function nextOtNumber(companyId: string): Promise<number> {
+  const db = await adminDbFor(companyId)
+  const ref = await otCounterRef(companyId)
+  const issue = () => db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref)
+    if (!snap.exists) throw new OtCounterMissing()
+    const next = (Number(snap.data()?.value) || 0) + 1
+    tx.set(ref, { value: next, updatedAt: new Date().toISOString() }, { merge: true })
+    return next
+  })
+  try {
+    return await issue()
+  } catch (err) {
+    if (!(err instanceof OtCounterMissing)) throw err
+    await ensureOtCounter(companyId)
+    return issue()
+  }
+}
+
+/**
+ * Numera OTs sem número. Enquanto houver OTs antigas por numerar (`backfillDone` falso),
+ * lê a coleção da empresa e dá-lhes os números reservados 1..ceiling por ordem de
+ * criação, a partir de `backfillNext` (lotes de `maxPerRun`, para não gastar a quota de
+ * uma vez). Depois disso só procura OTs criadas sem número (falha a numerar, ex. quota
+ * esgotada) e dá-lhes números novos do contador. OTs só da reserva da UR ganham documento.
+ */
+export async function backfillOtNumbers(
+  companyId: string,
+  maxPerRun = 3000
+): Promise<{ numbered: number; remaining: number }> {
+  const db = await adminDbFor(companyId)
+  const ref = await otCounterRef(companyId)
+  if (!(await ref.get()).exists) await ensureOtCounter(companyId)
+  const counter = (await ref.get()).data() || {}
+  const numberedDates: (string | null | undefined)[] = []
+
+  if (counter.backfillDone === true) {
+    // Fase 2: só OTs criadas sem número (createTask grava otNumber: null nesse caso).
+    const snap = await db.collection('tasks').where('companyId', '==', companyId).where('otNumber', '==', null).limit(maxPerRun).get()
+    for (const d of snap.docs) {
+      const n = await nextOtNumber(companyId)
+      await d.ref.update({ otNumber: n })
+      numberedDates.push(...taskDates(d.data() as Partial<Task>))
+    }
+    if (snap.docs.length > 0) invalidateTasks(companyId, { historyYears: pastYearsOf(numberedDates), completed: true })
+    return { numbered: snap.docs.length, remaining: 0 }
+  }
+
+  // Fase 1: OTs antigas.
+  const snap = await db.collection('tasks').where('companyId', '==', companyId).get()
+  const docs = snap.docs.map((d) => serialize<Task & { deleted?: boolean }>(d))
+  const byId = new Map(docs.map((d) => [d.id, d]))
+  const all: (Task & { deleted?: boolean })[] = [...docs]
+  if (isDemoCompany(companyId)) {
+    for (const f of getFallbackTasks()) if (!byId.has(f.id)) all.push(f)
+  }
+  const live = all.filter((t) => !t.deleted)
+  const used = new Set(live.map((t) => Number(t.otNumber)).filter((n) => Number.isFinite(n) && n > 0))
+  const pending = live
+    .filter((t) => !(Number(t.otNumber) > 0))
+    .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '') || a.id.localeCompare(b.id))
+
+  const ceiling = Number(counter.backfillCeiling) || 0
+  let cursor = Number(counter.backfillNext) || 1
+  const items = pending.slice(0, maxPerRun)
+  let batch = db.batch()
+  let inBatch = 0
+  for (const t of items) {
+    while (used.has(cursor)) cursor++
+    // Mais OTs antigas do que o intervalo reservado (estimativa curta): as que sobram
+    // recebem números novos do contador — nunca um número abaixo do cursor.
+    const n = cursor <= ceiling ? cursor++ : await nextOtNumber(companyId)
+    used.add(n)
+    const docRef = db.collection('tasks').doc(t.id)
+    if (byId.has(t.id)) {
+      batch.update(docRef, { otNumber: n })
+    } else {
+      // OT só da reserva: grava-a com o número (mesma forma que updateTask usa).
+      batch.set(docRef, JSON.parse(JSON.stringify({ ...t, companyId, otNumber: n })), { merge: true })
+    }
+    numberedDates.push(...taskDates(t))
+    if (++inBatch >= 400) {
+      await batch.commit()
+      batch = db.batch()
+      inBatch = 0
+    }
+  }
+  if (inBatch > 0) await batch.commit()
+  const remaining = pending.length - items.length
+  await ref.set({ backfillNext: cursor, backfillDone: remaining === 0, updatedAt: new Date().toISOString() }, { merge: true })
+  if (items.length > 0) invalidateTasks(companyId, { historyYears: pastYearsOf(numberedDates), completed: true })
+  return { numbered: items.length, remaining }
+}
+
 export async function createTask(
   companyId: string,
   createdBy: string,
@@ -1084,6 +1256,13 @@ export async function createTask(
   const now = new Date().toISOString()
   let generatedId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
   try {
+    // Falha a numerar (ex. quota de leituras esgotada) não impede criar a OT: fica com
+    // otNumber null e o cron noturno numera-a (procura exatamente `otNumber == null`).
+    const otNumber = await nextOtNumber(companyId).catch((err) => {
+      console.error('[createTask] Falha a atribuir número de OT:', err)
+      return null
+    })
+    ;(data as any).otNumber = otNumber
     if (!data.assetId) {
       (data as any).assetId = data.tag || data.area || 'Geral'
     }
@@ -1236,12 +1415,15 @@ export async function updateTask(
     }
     const rawDoc = {
       id,
-      companyId,
       createdAt: now,
-      updatedAt: now,
       status: 'pending',
       tipo: 'plano',
       criticidade: 'verde',
+      // OT da reserva: o documento parte dos dados dela (incl. a data de criação original).
+      // Antes ficava com createdAt = agora e uma OT antiga fechada "mudava" para este ano.
+      ...(current || {}),
+      companyId,
+      updatedAt: now,
       ...data,
     }
     await ref.set(JSON.parse(JSON.stringify(rawDoc)), { merge: true }).catch(console.error)
@@ -1357,7 +1539,7 @@ export async function deleteTasksByMaintenancePlan(companyId: string, planId: st
     await batch.commit()
     const deleted = snap.docs.map((d) => d.data() as Partial<Task>)
     invalidateTasks(companyId, {
-      history: touchesPastYear(deleted.flatMap(taskDates)),
+      historyYears: pastYearsOf(deleted.flatMap(taskDates)),
       completed: deleted.some((t) => isClosedStatus(t.status)),
     })
   } catch (err) {
@@ -1366,21 +1548,21 @@ export async function deleteTasksByMaintenancePlan(companyId: string, planId: st
 }
 
 // // ── USERS (para atribuição de tarefas) ────────────────────────────────────────
-const listUsersCached = unstable_cache(
+const listUsersCached = withFallback(unstable_cache(
   async (companyId: string): Promise<User[]> => {
     const finalCompanyId = companyId || DEMO_COMPANY_ID
-    if (isQuotaExhausted()) {
-      return isDemoCompany(finalCompanyId) ? getFallbackUsers() : []
-    }
-    try {
+    if (isQuotaExhausted()) throw new FirestoreUnavailable()
+    {
+      // Só a UR precisa de ler a coleção inteira (registos legados sem companyId são
+      // dela); as outras empresas leem só os seus utilizadores.
       const snap = await firestoreWithTimeout(
-        () => adminDb().collection('users').get(),
+        () => isDemoCompany(finalCompanyId)
+          ? adminDb().collection('users').get()
+          : adminDb().collection('users').where('companyId', '==', finalCompanyId).get(),
         null,
-        1000
+        3000
       )
-      if (!snap || !snap.docs) {
-        return isDemoCompany(finalCompanyId) ? getFallbackUsers() : []
-      }
+      if (!snap || !snap.docs) throw new FirestoreUnavailable()
       const allDbDocs = snap.docs.map((d) => serialize<User>(d))
 
       const PROTECTED_IDS = new Set([
@@ -1415,15 +1597,17 @@ const listUsersCached = unstable_cache(
 
       let deletedIds = new Set<string>()
       let deletedEmails = new Set<string>()
-      try {
+      {
         const delSnap = await firestoreWithTimeout(
           // Só as eliminações DESTA empresa (gravadas sempre com companyId) — antes lia as
           // de todas e uma eliminação noutra empresa escondia o utilizador aqui também.
           () => adminDb().collection('deleted_users').where('companyId', '==', finalCompanyId).get(),
           null,
-          600
+          3000
         )
-        if (delSnap && delSnap.docs) {
+        // Sem esta leitura, utilizadores apagados voltariam a aparecer — e ficava em cache.
+        if (!delSnap) throw new FirestoreUnavailable()
+        if (delSnap.docs) {
           delSnap.docs.forEach((d) => {
             if (!PROTECTED_IDS.has(d.id)) {
               deletedIds.add(d.id)
@@ -1432,7 +1616,7 @@ const listUsersCached = unstable_cache(
             }
           })
         }
-      } catch { /* ignore */ }
+      }
 
       const isDeleted = (u: { id: string; email?: string | null }) => {
         if (PROTECTED_IDS.has(u.id)) return false
@@ -1447,16 +1631,13 @@ const listUsersCached = unstable_cache(
       // técnicos que aparece ao atribuir uma OT tem de vir só das fichas reais.
       let hasRealExternalCompany = false
       if (isDemoCompany(finalCompanyId)) {
-        try {
-          const compSnap = await firestoreWithTimeout(
-            async () => (await adminDbFor(companyId)).collection('external_companies').where('companyId', '==', finalCompanyId).get(),
-            null,
-            600
-          )
-          if (compSnap && compSnap.docs) {
-            hasRealExternalCompany = compSnap.docs.some((d) => !d.data()?.deleted)
-          }
-        } catch { /* ignore */ }
+        const compSnap = await firestoreWithTimeout(
+          async () => (await adminDbFor(companyId)).collection('external_companies').where('companyId', '==', finalCompanyId).get(),
+          null,
+          3000
+        )
+        if (!compSnap) throw new FirestoreUnavailable()
+        hasRealExternalCompany = compSnap.docs.some((d) => !d.data()?.deleted)
       }
 
       // Merge fallback users with DB users: DB doc with matching ID or email takes precedence
@@ -1487,16 +1668,13 @@ const listUsersCached = unstable_cache(
       })
 
       return Array.from(userMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'))
-    } catch (err) {
-      console.error('[listUsers] Error:', err)
     }
-    return isDemoCompany(companyId) ? getFallbackUsers() : []
   },
   ['users'],
   // 1h (era 30s): a lista de utilizadores/técnicos (atribuições, permissões de gestor)
   // muda pouco no dia a dia — qualquer criação/edição/remoção já chama revalidateTag('users').
   { revalidate: 3600, tags: ['users'] }
-)
+), (companyId: string) => (isDemoCompany(companyId || DEMO_COMPANY_ID) ? getFallbackUsers() : []), 'listUsers')
 export const listUsers = cache(async function(companyId: string): Promise<User[]> {
   return listUsersCached(companyId)
 })
@@ -1544,30 +1722,25 @@ export async function createCompanyWithManager(
 // ── INTERVENTIONS (execução / histórico) ──────────────────────────────────────
 // unstable_cache: sem isto, era uma leitura Firestore nova (coleção completa desta
 // empresa) em CADA visita ao Dashboard, uma das páginas mais visitadas da app.
-const listInterventionsCached = unstable_cache(
+const listInterventionsCached = withFallback(unstable_cache(
   async (companyId: string): Promise<Intervention[]> => {
-    if (isQuotaExhausted()) return []
-    try {
-      const snap = await firestoreWithTimeout(
-        async () => (await adminDbFor(companyId)).collection('interventions').where('companyId', '==', companyId).get(),
-        null,
-        1200,
-        'listInterventions'
-      )
-      if (!snap || !snap.docs) return []
-      return snap.docs
-        .map((d) => serialize<Intervention>(d))
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    } catch (err) {
-      console.error('[listInterventions] Error:', err)
-      return []
-    }
+    if (isQuotaExhausted()) throw new FirestoreUnavailable()
+    const snap = await firestoreWithTimeout(
+      async () => (await adminDbFor(companyId)).collection('interventions').where('companyId', '==', companyId).get(),
+      null,
+      3000,
+      'listInterventions'
+    )
+    if (!snap || !snap.docs) throw new FirestoreUnavailable()
+    return snap.docs
+      .map((d) => serialize<Intervention>(d))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
   },
   ['interventions'],
   // 1h (era 300s): as escritas já fazem revalidateTag('interventions'); o tempo é só
   // uma rede de segurança e com 300s forçava releituras a cada 5 min sem nada mudar.
   { revalidate: 3600, tags: ['interventions'] }
-)
+), () => [] as Intervention[], 'listInterventions')
 export const listInterventions = cache(async function(companyId: string): Promise<Intervention[]> {
   return listInterventionsCached(companyId)
 })
@@ -2198,25 +2371,25 @@ export const listInterventionsByTechnician = cache(async function(
 
 // ── MAINTENANCE PLANS ─────────────────────────────────────────────────────────
 
-const listMaintenancePlansCached = unstable_cache(
+const fallbackPlansFor = (companyId: string): MaintenancePlan[] =>
+  isDemoCompany(companyId)
+    ? [...getFallbackPlans()].sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
+    : []
+
+const listMaintenancePlansCached = withFallback(unstable_cache(
   async (companyId: string): Promise<MaintenancePlan[]> => {
-    if (isQuotaExhausted()) {
-      return isDemoCompany(companyId)
-        ? getFallbackPlans().sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
-        : []
-    }
-    try {
+    if (isQuotaExhausted()) throw new FirestoreUnavailable()
+    {
       const snap = await firestoreWithTimeout(
         async () => (await adminDbFor(companyId)).collection('maintenance_plans').where('companyId', '==', companyId).get(),
         null,
-        1000,
+        4000,
         'listMaintenancePlans'
       )
-      const dbDocs = (snap && snap.docs)
-        ? snap.docs
-            .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
-            .filter((p) => !p.deleted)
-        : []
+      if (!snap || !snap.docs) throw new FirestoreUnavailable()
+      const dbDocs = snap.docs
+        .map((d) => serialize<MaintenancePlan & { deleted?: boolean }>(d))
+        .filter((p) => !p.deleted)
 
       // Mesclar com os planos de reserva (JSON) em vez de os ignorar assim que
       // exista QUALQUER documento no Firestore — um único "Concluir PM" grava
@@ -2237,16 +2410,13 @@ const listMaintenancePlansCached = unstable_cache(
         }
       }
       return uniquePlans.sort((a, b) => (a.area || '').localeCompare(b.area || '', undefined, { numeric: true }) || a.title.localeCompare(b.title))
-    } catch (err) {
-      console.error('[listMaintenancePlans] Error:', err)
     }
-    return isDemoCompany(companyId) ? getFallbackPlans() : []
   },
   ['maintenance-plans'],
   // 1h (era 5min): o Plano de Manutenção (definições, não as OTs geradas) muda raramente
   // — escritas já chamam revalidateTag('plans').
   { revalidate: 3600, tags: ['plans'] }
-)
+), fallbackPlansFor, 'listMaintenancePlans')
 export const listMaintenancePlans = cache(async function(companyId: string): Promise<MaintenancePlan[]> {
   return listMaintenancePlansCached(companyId)
 })
@@ -2487,18 +2657,17 @@ function getFallbackStockItems(): StockItem[] {
 // existisse UM único documento em `stock_items` no Firestore para esta empresa, a
 // reserva inteira desaparecia da app — mesmo bug já documentado no CLAUDE.md para
 // `maintenance_plans` ("605 planos a cair para 1"), desta vez no Inventário.
-const listStockItemsCached = unstable_cache(
+const listStockItemsCached = withFallback(unstable_cache(
   async (companyId: string): Promise<StockItem[]> => {
-    if (isQuotaExhausted()) {
-      return isDemoCompany(companyId) ? getFallbackStockItems() : []
-    }
-    try {
+    if (isQuotaExhausted()) throw new FirestoreUnavailable()
+    {
       const snap = await firestoreWithTimeout(
         async () => (await adminDbFor(companyId)).collection('stock_items').where('companyId', '==', companyId).get(),
         null,
-        1200
+        3000
       )
-      const dbDocs = (snap && snap.docs) ? snap.docs.map((d) => serialize<StockItem & { deleted?: boolean }>(d)).filter((s) => !s.deleted) : []
+      if (!snap || !snap.docs) throw new FirestoreUnavailable()
+      const dbDocs = snap.docs.map((d) => serialize<StockItem & { deleted?: boolean }>(d)).filter((s) => !s.deleted)
 
       if (!isDemoCompany(companyId)) {
         return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
@@ -2507,14 +2676,11 @@ const listStockItemsCached = unstable_cache(
       getFallbackStockItems().forEach((s) => byId.set(s.id, s))
       dbDocs.forEach((s) => byId.set(s.id, s)) // Firestore substitui a versão de reserva quando existe
       return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name))
-    } catch (err) {
-      console.error('[listStockItems] Error:', err)
     }
-    return isDemoCompany(companyId) ? getFallbackStockItems() : []
   },
   ['stock-items'],
-  { revalidate: 300, tags: ['stocks'] }
-)
+  { revalidate: 3600, tags: ['stocks'] }
+), (companyId: string) => (isDemoCompany(companyId) ? getFallbackStockItems() : []), 'listStockItems')
 export const listStockItems = cache(async function(companyId: string): Promise<StockItem[]> {
   return listStockItemsCached(companyId)
 })
@@ -2618,17 +2784,20 @@ const DEFAULT_WAREHOUSES: Warehouse[] = [
 // revalidateTag('warehouses') sem esta função alguma vez ter passado a usar
 // unstable_cache — não fazia nada. Corrigido para a cache ser real (10 min: os
 // armazéns mudam muito raramente).
-const listWarehousesCached = unstable_cache(
+const listWarehousesCached = withFallback(unstable_cache(
   async (finalCompanyId: string): Promise<Warehouse[]> => {
-    let docs: (Warehouse & { deleted?: boolean })[] = []
-    if (!isQuotaExhausted()) {
-      try {
-        const snap = await firestoreWithTimeout(async () => (await adminDbFor(finalCompanyId)).collection('warehouses').get(), null, 800)
-        if (snap && snap.docs) docs = snap.docs.map((d) => serialize<Warehouse & { deleted?: boolean }>(d))
-      } catch (err) {
-        console.warn('[listWarehouses] Firestore query failed / quota exceeded, using só os por omissão:', err)
-      }
-    }
+    if (isQuotaExhausted()) throw new FirestoreUnavailable()
+    // A UR lê a coleção toda (armazéns legados sem companyId são dela); as outras só os seus.
+    const snap = await firestoreWithTimeout(
+      async () => {
+        const col = (await adminDbFor(finalCompanyId)).collection('warehouses')
+        return isDemoCompany(finalCompanyId) ? col.get() : col.where('companyId', '==', finalCompanyId).get()
+      },
+      null,
+      3000
+    )
+    if (!snap || !snap.docs) throw new FirestoreUnavailable()
+    const docs = snap.docs.map((d) => serialize<Warehouse & { deleted?: boolean }>(d))
 
     // Só os marcadores de eliminado DESTA empresa — antes um marcador de outra empresa com
     // o id de um armazém por omissão (wh_central) escondia-o aqui também.
@@ -2651,8 +2820,8 @@ const listWarehousesCached = unstable_cache(
     return filtered.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'))
   },
   ['warehouses'],
-  { revalidate: 600, tags: ['warehouses'] }
-)
+  { revalidate: 3600, tags: ['warehouses'] }
+), (finalCompanyId: string) => (isDemoCompany(finalCompanyId) ? DEFAULT_WAREHOUSES : []), 'listWarehouses')
 export const listWarehouses = cache(async function(companyId: string): Promise<Warehouse[]> {
   return listWarehousesCached(companyId || DEMO_COMPANY_ID)
 })
@@ -2881,25 +3050,22 @@ const DEFAULT_SAFETY_RULES: SafetyRule[] = [
 // de cada vez que abre — sem cache persistente entre pedidos, cada abertura do modal
 // era uma leitura Firestore nova. Já apanhado em produção a esgotar a quota
 // (RESOURCE_EXHAUSTED nos logs do Vercel).
-const listSafetyRulesCached = unstable_cache(
+const listSafetyRulesCached = withFallback(unstable_cache(
   async (companyId: string): Promise<SafetyRule[]> => {
-    if (isQuotaExhausted()) return DEFAULT_SAFETY_RULES
-    try {
-      const snap = await firestoreWithTimeout(
-        async () => (await adminDbFor(companyId)).collection('safety_rules').where('companyId', '==', companyId).get(),
-        null,
-        800
-      )
-      const docs = (snap && snap.docs) ? snap.docs.map((d) => serialize<SafetyRule>(d)) : []
-      if (docs.length > 0) return docs.sort((a, b) => a.title.localeCompare(b.title))
-    } catch (err) {
-      console.error('[listSafetyRules] Error / Quota Exceeded:', err)
-    }
+    if (isQuotaExhausted()) throw new FirestoreUnavailable()
+    const snap = await firestoreWithTimeout(
+      async () => (await adminDbFor(companyId)).collection('safety_rules').where('companyId', '==', companyId).get(),
+      null,
+      3000
+    )
+    if (!snap || !snap.docs) throw new FirestoreUnavailable()
+    const docs = snap.docs.map((d) => serialize<SafetyRule>(d))
+    if (docs.length > 0) return docs.sort((a, b) => (a.title || '').localeCompare(b.title || ''))
     return DEFAULT_SAFETY_RULES
   },
   ['safety-rules'],
-  { revalidate: 1800, tags: ['safety-rules'] }
-)
+  { revalidate: 3600, tags: ['safety-rules'] }
+), () => DEFAULT_SAFETY_RULES, 'listSafetyRules')
 export const listSafetyRules = cache(async function(companyId: string): Promise<SafetyRule[]> {
   return listSafetyRulesCached(companyId)
 })
@@ -2956,27 +3122,22 @@ export async function deleteSafetyRule(companyId: string, id: string): Promise<v
 // TaskDocRequirements.tsx) — cada empresa passa a ter os seus próprios documentos,
 // sem base gratuita (ao contrário de Regras de Segurança): o limite do plano é 0 no
 // Free, por isso não há fallback de defeito aqui.
-const listDocumentsCached = unstable_cache(
+const listDocumentsCached = withFallback(unstable_cache(
   async (companyId: string): Promise<DocumentoObrigatorio[]> => {
-    if (isQuotaExhausted()) return []
-    try {
-      const snap = await firestoreWithTimeout(
-        async () => (await adminDbFor(companyId)).collection('documents').where('companyId', '==', companyId).get(),
-        null,
-        800
-      )
-      if (!snap || !snap.docs) return []
-      return snap.docs
-        .map((d) => serialize<DocumentoObrigatorio>(d))
-        .sort((a, b) => a.code.localeCompare(b.code, 'pt', { numeric: true }))
-    } catch (err) {
-      console.error('[listDocuments] Error:', err)
-      return []
-    }
+    if (isQuotaExhausted()) throw new FirestoreUnavailable()
+    const snap = await firestoreWithTimeout(
+      async () => (await adminDbFor(companyId)).collection('documents').where('companyId', '==', companyId).get(),
+      null,
+      3000
+    )
+    if (!snap || !snap.docs) throw new FirestoreUnavailable()
+    return snap.docs
+      .map((d) => serialize<DocumentoObrigatorio>(d))
+      .sort((a, b) => (a.code || '').localeCompare(b.code || '', 'pt', { numeric: true }))
   },
   ['documents'],
-  { revalidate: 1800, tags: ['documents'] }
-)
+  { revalidate: 3600, tags: ['documents'] }
+), () => [] as DocumentoObrigatorio[], 'listDocuments')
 export const listDocuments = cache(async function(companyId: string, type?: 'FR' | 'IT' | 'MANUAL'): Promise<DocumentoObrigatorio[]> {
   const docs = await listDocumentsCached(companyId)
   return type ? docs.filter((d) => d.type === type) : docs

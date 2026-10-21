@@ -802,7 +802,9 @@ export default function TasksClient({
 
         // Filtros por coluna na tabela
         if (colF.id) {
-          const idStr = String(t.id || '').toLowerCase()
+          // Filtra pelo número mostrado (otNumber) e também pelo id interno.
+          const shownId = format3DigitId(t.id, 0, t.otNumber)
+          const idStr = `${shownId} ${String(t.id || '')}`.toLowerCase()
           if (!idStr.includes(colF.id.trim().toLowerCase())) return false
         }
         if (colF.data) {
@@ -1352,7 +1354,7 @@ export default function TasksClient({
         ) : (
           currentShown.map((t, idx) => {
             const asset = assets.find((a) => a.id === t.assetId)
-            const formattedId = format3DigitId(t.id, idx)
+            const formattedId = format3DigitId(t.id, idx, t.otNumber)
             const tag = (asset as any)?.tag || asset?.name || (t as any).tag || '—'
             const area = (t as any).area || (asset as any)?.area || '—'
             const ids = (t.assignedToIds && t.assignedToIds.length > 0)
@@ -1537,7 +1539,7 @@ export default function TasksClient({
               ) : (
                 currentShown.map((t, idx) => {
                   const asset = assets.find((a) => a.id === t.assetId)
-                  const formattedId = format3DigitId(t.id, idx)
+                  const formattedId = format3DigitId(t.id, idx, t.otNumber)
                   return (
                     <tr
                       key={t.id}

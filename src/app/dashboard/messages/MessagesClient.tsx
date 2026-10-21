@@ -61,7 +61,11 @@ export default function MessagesClient({
   isManager: boolean
 }) {
   const router = useRouter()
-  const STORAGE_KEY = 'rg_internal_messages_cache'
+  // Uma cópia local POR UTILIZADOR. Era uma chave única no browser: quem entrasse a seguir
+  // no mesmo browser/telemóvel via as mensagens da conta anterior (de outra empresa) e o
+  // sync enviava-as para o servidor como se fossem suas.
+  const LEGACY_STORAGE_KEY = 'rg_internal_messages_cache'
+  const STORAGE_KEY = `rg_internal_messages_cache:${currentUserId}`
   const STORAGE_RESET_KEY = 'rg_msgs_cleared_v3'
   const [localMessages, setLocalMessages] = useState<InternalMessage[]>(messages)
 
@@ -145,13 +149,18 @@ export default function MessagesClient({
 
   useEffect(() => {
     try {
+      if (typeof window !== 'undefined') localStorage.removeItem(LEGACY_STORAGE_KEY)
       const stored = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
       let storedList: InternalMessage[] = []
       if (stored) {
         try {
           const parsed = JSON.parse(stored)
           if (Array.isArray(parsed)) {
-            storedList = parsed.filter((m) => !isSeedMessage(m))
+            // Só mensagens da mesma empresa das que vieram do servidor (defesa extra).
+            const companyIds = new Set(messages.map((m) => m.companyId).filter(Boolean))
+            storedList = parsed.filter(
+              (m) => !isSeedMessage(m) && (companyIds.size === 0 || (m.companyId && companyIds.has(m.companyId)))
+            )
           }
         } catch {}
       }

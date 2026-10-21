@@ -31,7 +31,10 @@ function snapshot(ref: FakeDocRef, data: Data | undefined) {
 export class FakeDocRef {
   constructor(private db: FakeFirestore, readonly collectionName: string, readonly id: string) {}
   private get table() { return this.db.table(this.collectionName) }
-  async get() { return snapshot(this, this.table.get(this.id)) }
+  async get() {
+    if (this.db.failReads) throw new Error('8 RESOURCE_EXHAUSTED: Quota exceeded (simulado)')
+    return snapshot(this, this.table.get(this.id))
+  }
   async set(data: Data, opts?: { merge?: boolean }) {
     const base = opts?.merge ? this.table.get(this.id) ?? {} : {}
     this.table.set(this.id, applyWrite(base, data))
@@ -62,7 +65,11 @@ class FakeQuery {
   }
   limit(n: number) { return new FakeQuery(this.db, this.name, this.filters, this.order, n) }
   select() { return this }
+  count() {
+    return { get: async () => { const s = await this.get(); return { data: () => ({ count: s.size }) } } }
+  }
   async get() {
+    if (this.db.failReads) throw new Error('8 RESOURCE_EXHAUSTED: Quota exceeded (simulado)')
     let rows = Array.from(this.db.table(this.name).entries()).filter(([, d]) =>
       this.filters.every(({ field, op, value }) => {
         const v = d[field]
@@ -98,6 +105,8 @@ class FakeCollection extends FakeQuery {
 }
 
 export class FakeFirestore {
+  /** true → todas as leituras falham (simula quota esgotada / Firestore em baixo). */
+  failReads = false
   private tables = new Map<string, Map<string, Data>>()
   private counter = 0
   table(name: string) {
@@ -107,6 +116,17 @@ export class FakeFirestore {
   nextId() { return `auto${++this.counter}` }
   collection(name: string) { return new FakeCollection(this, name) }
   async getAll(...refs: FakeDocRef[]) { return Promise.all(refs.map((r) => r.get())) }
+  // Transações em série (os testes não correm em paralelo): suficiente para o contador.
+  private txQueue: Promise<unknown> = Promise.resolve()
+  runTransaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
+    const run = this.txQueue.then(() => fn({
+      get: (ref: FakeDocRef) => ref.get(),
+      set: (ref: FakeDocRef, d: Data, o?: { merge?: boolean }) => ref.set(d, o),
+      update: (ref: FakeDocRef, d: Data) => ref.update(d),
+    }))
+    this.txQueue = run.catch(() => {})
+    return run
+  }
   batch() {
     const ops: (() => Promise<void>)[] = []
     return {

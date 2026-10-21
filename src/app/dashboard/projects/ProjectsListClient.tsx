@@ -347,7 +347,7 @@ export default function ProjectsListClient({
         ) : (
           currentShown.map((t, idx) => {
             const asset = assets.find((a) => a.id === t.assetId)
-            const formattedId = format3DigitId(t.id, idx)
+            const formattedId = format3DigitId(t.id, idx, t.otNumber)
             const tag = (asset as any)?.tag || asset?.name || (t as any).tag || '—'
             const area = (t as any).area || (asset as any)?.area || '—'
             return (
@@ -406,7 +406,7 @@ export default function ProjectsListClient({
               <tbody>
                 {currentShown.map((t, idx) => {
                   const asset = assets.find((a) => a.id === t.assetId)
-                  const formattedId = format3DigitId(t.id, idx)
+                  const formattedId = format3DigitId(t.id, idx, t.otNumber)
                   const sDateStr = t.plannedStartDate ? t.plannedStartDate.slice(0, 10) : (t.createdAt ? t.createdAt.slice(0, 10) : '')
                   const eDateStr = t.dueDate ? t.dueDate.slice(0, 10) : sDateStr
                   return (

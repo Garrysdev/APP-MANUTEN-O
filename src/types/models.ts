@@ -137,6 +137,8 @@ export interface Asset {
 export interface Task {
   id: string
   companyId: string
+  /** Número sequencial da OT na empresa (1, 2, 3...) — ver nextOtNumber em data.ts. */
+  otNumber?: number | null
   title: string
   description?: string | null
   assetId?: string | null
@@ -355,7 +357,7 @@ export interface Invite {
 
 // Rótulos PT para apresentação
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  prazo: 'Prazo',
+  prazo: 'PRAZO',
   pending: 'Pendente',
   in_progress: 'Em curso',
   done: 'Concluída',

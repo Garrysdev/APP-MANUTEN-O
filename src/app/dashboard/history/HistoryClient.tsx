@@ -47,15 +47,25 @@ const emptyCol = {
   causa: ''
 }
 
-export function format3DigitId(rawId: string | number | undefined | null, index: number = 0): string {
-  if (!rawId) return String(index + 1).padStart(3, '0')
-  const str = String(rawId).trim()
-  const numMatch = str.match(/\d+$/)
-  if (numMatch) {
-    const num = parseInt(numMatch[0], 10)
-    return String(num % 1000).padStart(3, '0')
-  }
-  return String(index + 1).padStart(3, '0')
+/**
+ * Número da OT para mostrar. Usa o `otNumber` sequencial da empresa (ver nextOtNumber em
+ * data.ts). Sem ele (OT antiga ainda não numerada pelo cron noturno), usa o número no
+ * fim do id — sem o antigo corte a 3 dígitos (mod 1000), que fazia 1123 e 2123
+ * aparecerem ambos como "123".
+ */
+export function format3DigitId(
+  rawId: string | number | undefined | null,
+  index: number = 0,
+  otNumber?: number | null
+): string {
+  if (otNumber && otNumber > 0) return String(otNumber).padStart(3, '0')
+  // Ainda sem número: só usa o fim do id se for um número "de verdade" separado por _ ou -
+  // (ex. "task_excel_ur_123"); ids aleatórios do Firestore ou com timestamp davam números
+  // sem sentido (e que podiam coincidir com números reais).
+  const numMatch = String(rawId ?? '').trim().match(/[_-](\d{1,6})$/)
+  if (numMatch) return String(parseInt(numMatch[1], 10)).padStart(3, '0')
+  void index
+  return '—'
 }
 
 const formatTiCode = (rawTipo?: string | null) => {
@@ -150,7 +160,7 @@ export default function HistoryClient({
     for (const iv of interventions) {
       const t = taskMap.get(iv.taskId)
       const asset = t?.assetId ? assetObjMap.get(t.assetId) : null
-      const formattedId = format3DigitId(t?.id || iv.id, index++)
+      const formattedId = format3DigitId(t?.id || iv.id, index++, t?.otNumber)
       list.push({
         id: formattedId,
         rawId: t?.id || iv.id,
@@ -172,7 +182,7 @@ export default function HistoryClient({
     for (const t of tasks) {
       if (!existingTaskIds.has(t.id)) {
         const asset = t.assetId ? assetObjMap.get(t.assetId) : null
-        const formattedId = format3DigitId(t.id, index++)
+        const formattedId = format3DigitId(t.id, index++, t.otNumber)
         list.push({
           id: formattedId,
           rawId: t.id,

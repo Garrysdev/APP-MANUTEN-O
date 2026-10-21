@@ -83,7 +83,7 @@ export default function TaskSummaryModal({
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const formattedId = format3DigitId(task.id, 0)
+  const formattedId = format3DigitId(task.id, 0, task.otNumber)
 
   const ids = (task.assignedToIds && task.assignedToIds.length > 0)
     ? task.assignedToIds

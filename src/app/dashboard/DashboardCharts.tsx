@@ -11,7 +11,7 @@ import type { Task, TipoTarefa } from '@/types/models'
 import { TIPO_LABELS } from '@/types/models'
 
 const COLORS_STATUS = {
-  prazo: '#6366f1', // indigo-500
+  prazo: '#fde047', // yellow-300 (mesma cor do badge PRAZO)
   pending: '#f59e0b', // amber-500
   in_progress: '#2563eb', // blue-600
   done: '#10b981', // emerald-500
@@ -19,7 +19,7 @@ const COLORS_STATUS = {
 }
 
 const STATUS_LABELS = {
-  prazo: 'Prazo',
+  prazo: 'PRAZO',
   pending: 'Pendentes',
   in_progress: 'Em Curso',
   done: 'Concluídas',
