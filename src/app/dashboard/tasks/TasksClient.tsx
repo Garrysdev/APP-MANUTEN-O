@@ -768,7 +768,7 @@ export default function TasksClient({
       .filter(({ task: t, text }) => {
         if (!filterByExcelDate(t.createdAt || t.plannedStartDate || (t as any).completedAt, excelDateFilter)) return false
         if (!filterByExcelDate(t.startedAt || t.plannedStartDate || t.createdAt, excelInicioFilter)) return false
-        if (!filterByExcelDate(t.dueDate || t.completedAt, excelFimFilter)) return false
+        if (!filterByExcelDate(t.completedAt, excelFimFilter)) return false
 
         // Filtro de Estado Multi-seleção
         if (selectedStatuses.length > 0 && selectedStatuses.length < 4) {
@@ -929,7 +929,7 @@ export default function TasksClient({
       title: (t) => String(t.title || '').toLowerCase(),
       assignee: (t) => String(resolveTechInitials(t.assignedTo) || '').toLowerCase(),
       inicio: (t) => parseDateToTs(t.startedAt || t.plannedStartDate || t.createdAt),
-      fim: (t) => parseDateToTs(t.dueDate || t.completedAt),
+      fim: (t) => parseDateToTs(t.completedAt),
       obs: (t) => String(t.observacoes || (t as any).causa || '').toLowerCase(),
       status: (t) => STATUS_LABELS[t.status] || t.status,
     },
@@ -980,7 +980,7 @@ export default function TasksClient({
       const tec = userName(t.assignedTo) || (t as any).assignedToText || '—'
       const dt = t.createdAt ? formatDate(t.createdAt) : '—'
       const inDate = t.startedAt || t.plannedStartDate ? formatDate(t.startedAt || t.plannedStartDate) : '—'
-      const fmDate = t.dueDate || t.completedAt ? formatDate(t.dueDate || t.completedAt) : '—'
+      const fmDate = t.completedAt ? formatDate(t.completedAt) : '—'
       const statusLabel = STATUS_LABELS[t.status] || t.status
 
       const row = sheet.addRow([
