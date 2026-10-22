@@ -111,6 +111,7 @@ export default async function TaskReportPage({
   const assetMap = Object.fromEntries(assets.map((a) => [a.id, a.name]))
   const userMap = Object.fromEntries(users.map((u) => [u.id, u.name]))
   const companyName = profile.company?.name ?? 'Empresa'
+  const companyLogo = profile.company?.logoUrl ?? null
   const generatedAt = new Date().toLocaleString('pt-PT')
 
   const totalCost = allMaterials.reduce((s, m) => s + (m.unitCost ?? 0) * m.quantity, 0)
@@ -137,8 +138,15 @@ export default async function TaskReportPage({
         {/* Cabeçalho */}
         <div className="rh">
           <div>
-            <div className="logo">RG</div>
-            <div className="logo-sub">RG Maintenance</div>
+            {companyLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={companyLogo} alt={companyName} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
+            ) : (
+              <>
+                <div className="logo">RG</div>
+                <div className="logo-sub">RG Maintenance</div>
+              </>
+            )}
           </div>
           <div className="header-meta">
             <strong>{companyName}</strong>

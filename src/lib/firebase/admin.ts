@@ -9,6 +9,9 @@ import {
 } from 'firebase-admin/app'
 import { getAuth, type Auth } from 'firebase-admin/auth'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
+import { installReadMeter } from './read-meter'
+
+installReadMeter()
 
 function getServiceAccount() {
   const projectId = process.env.FIREBASE_PROJECT_ID

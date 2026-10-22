@@ -192,6 +192,7 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
                   <Link
                     key={href}
                     href={href}
+                    prefetch={false}
                     onClick={() => setOpen(false)}
                     className={linkClassName}
                   >
@@ -212,6 +213,7 @@ export default function Sidebar({ user, open: externalOpen, onOpenChange }: Side
               <Link
                 key={href}
                 href={href}
+                prefetch={false}
                 onClick={() => setOpen(false)}
                 className={cn(
                   'flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium transition-all duration-200 group',

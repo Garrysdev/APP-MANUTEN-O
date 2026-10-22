@@ -5,6 +5,7 @@ import { FileText, Loader2, ShieldCheck } from 'lucide-react'
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
 import { formatDate, formatDateTime } from '@/lib/utils'
+import { useBranding } from '@/components/providers/BrandingProvider'
 
 type Props = {
   task: any
@@ -18,6 +19,7 @@ type Props = {
 export default function CompliancePDFExport({ task, interventions, materialsByIntervention, assetName, companyName, hasComplianceModule }: Props) {
   const [isExporting, setIsExporting] = useState(false)
   const printRef = useRef<HTMLDivElement>(null)
+  const { logoUrl } = useBranding()
 
   if (!hasComplianceModule) return null
 
@@ -25,7 +27,8 @@ export default function CompliancePDFExport({ task, interventions, materialsByIn
     if (!printRef.current) return
     setIsExporting(true)
     try {
-      const canvas = await html2canvas(printRef.current, { scale: 2 })
+      // useCORS: o logótipo vem do Cloudinary (outro domínio) — sem isto o canvas fica "sujo".
+      const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true })
       const imgData = canvas.toDataURL('image/png')
       const pdf = new jsPDF('p', 'mm', 'a4')
       
@@ -67,6 +70,10 @@ export default function CompliancePDFExport({ task, interventions, materialsByIn
               <p className="text-gray-500 font-medium mt-1">Conformidade ISO 9001 - Registo de Auditoria</p>
             </div>
             <div className="text-right">
+              {logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt={companyName} crossOrigin="anonymous" className="h-14 w-auto object-contain ml-auto mb-2" />
+              )}
               <p className="font-bold text-xl">{companyName}</p>
               <p className="text-gray-500 text-sm mt-1">Ref: OT-{task.id.slice(-6).toUpperCase()}</p>
               <p className="text-gray-500 text-sm">Data Doc: {formatDate(new Date().toISOString())}</p>

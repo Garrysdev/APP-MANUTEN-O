@@ -232,6 +232,9 @@ export interface DocumentoObrigatorio {
   // técnico abre o original a partir da OT (FR: preenche os campos; IT: "Tomei conhecimento").
   fileUrl?: string | null
   fileName?: string | null
+  // Estrutura do Word original (FR importada de .doc/.docx), em JSON — ver src/lib/fr-layout.ts.
+  // Texto e não objeto: o Firestore não aceita arrays dentro de arrays (linhas das tabelas).
+  layoutJson?: string | null
 }
 
 export interface ChecklistItem {

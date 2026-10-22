@@ -9,8 +9,11 @@ import { TIPO_LABELS } from '@/types/models'
 import { compareDates, toNormalizedIsoDate, formatDate } from '@/lib/utils'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import type { HistoryRow } from './HistoryClient'
+import { addLogoToWorkbook } from '@/lib/export-logo'
+import { useBranding } from '@/components/providers/BrandingProvider'
 
-async function downloadXLSX(workbook: ExcelJS.Workbook, filename: string) {
+async function downloadXLSX(workbook: ExcelJS.Workbook, filename: string, logoUrl: string | null) {
+  await addLogoToWorkbook(workbook, logoUrl)
   const buffer = await workbook.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: 'application/vnd.ms-excel' })
   const url = URL.createObjectURL(blob)
@@ -52,6 +55,7 @@ export default function HistoryExportModal({
   }) => void
 }) {
   const { lang } = useLanguage()
+  const { logoUrl } = useBranding()
   const [mode, setMode] = useState<'print' | 'export'>(initialMode)
   const [contentType, setContentType] = useState<'interventions' | 'materials' | 'backup'>('interventions')
 
@@ -194,7 +198,7 @@ export default function HistoryExportModal({
         })
 
         const date = new Date().toISOString().split('T')[0]
-        await downloadXLSX(workbook, `HISTORICO_MATERIAIS_${date}.xls`)
+        await downloadXLSX(workbook, `HISTORICO_MATERIAIS_${date}.xls`, logoUrl)
       } else {
         // Intervenções (Padrão)
         const sheet = workbook.addWorksheet('Histórico de Intervenções', { views: [{ showGridLines: true }] })
@@ -263,7 +267,7 @@ export default function HistoryExportModal({
         })
 
         const date = new Date().toISOString().split('T')[0]
-        await downloadXLSX(workbook, `FR-MAN-09_HISTORICO_INTERVENCOES_${date}.xls`)
+        await downloadXLSX(workbook, `FR-MAN-09_HISTORICO_INTERVENCOES_${date}.xls`, logoUrl)
       }
 
       onApplyFiltersToPage({ dateFrom, dateTo, area, equiTag, ti, tecnicos })

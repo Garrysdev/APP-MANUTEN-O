@@ -4,6 +4,8 @@ import { useState, useEffect, useTransition, useId, useMemo, useRef } from 'reac
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ExcelJS from 'exceljs'
+import { addLogoToWorkbook } from '@/lib/export-logo'
+import { useBranding } from '@/components/providers/BrandingProvider'
 import {
   Plus, Pencil, Trash2, ClipboardList, X, Play, CheckCircle2,
   ShieldAlert, Package, CalendarClock, Building2, Scale, Eye,
@@ -221,6 +223,7 @@ export default function TasksClient({
   userId: string
 }) {
   const router = useRouter()
+  const { logoUrl } = useBranding()
   const searchParams = useSearchParams()
   const { dict } = useLanguage()
   // Planos carregados sob demanda (só quando o tipo passa a "Plano") — não pesam em cada visita.
@@ -1017,6 +1020,7 @@ export default function TasksClient({
       { width: 16 },
     ]
 
+    await addLogoToWorkbook(workbook, logoUrl)
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     const url = window.URL.createObjectURL(blob)

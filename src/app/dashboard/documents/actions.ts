@@ -5,6 +5,49 @@ import { getCurrentProfile } from '@/lib/firebase/session'
 import { listDocuments, createDocument, updateDocument, deleteDocument } from '@/lib/firebase/data'
 import { LIMITS } from '@/lib/plans'
 import type { PlanName } from '@/types/models'
+import { readFrLayout } from '@/lib/fr-layout'
+import { readDocumentFile, importKind, type DocumentImport } from '@/lib/document-import'
+
+const MAX_IMPORT_BYTES = 10 * 1024 * 1024
+const MAX_LAYOUT_CHARS = 200_000
+
+// Estrutura enviada pelo browser (vinda de parseFrFileAction): só aceitar JSON válido e de
+// tamanho razoável — fica gravada no documento e é desenhada para toda a empresa.
+function parseLayoutJson(formData: FormData): string | null | undefined {
+  if (!formData.has('layoutJson')) return undefined
+  const raw = String(formData.get('layoutJson') ?? '')
+  if (!raw || raw.length > MAX_LAYOUT_CHARS) return null
+  const layout = readFrLayout(raw)
+  return layout ? JSON.stringify(layout) : null
+}
+
+/**
+ * Lê um ficheiro de FR/IT já carregado no Cloudinary (Word, Excel ou PDF) e devolve o que
+ * se consegue preencher automaticamente: estrutura (cópia fiel), campos, título, código e
+ * texto. Imagens e formatos desconhecidos: nada (o original vê-se tal e qual).
+ */
+export async function parseDocumentFileAction(
+  fileUrl: string,
+  fileName: string
+): Promise<Partial<DocumentImport> & { error?: string }> {
+  const profile = await getCurrentProfile()
+  if (!profile || profile.role !== 'manager') return { error: 'Sem permissão.' }
+  const url = safeFileUrl(fileUrl)
+  if (!url) return { error: 'Ficheiro inválido.' }
+  const name = importKind(fileName) ? fileName : url
+  if (!importKind(name)) return {}
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
+    if (!res.ok) return { error: `Não foi possível ler o ficheiro (${res.status}).` }
+    const bytes = Buffer.from(await res.arrayBuffer())
+    if (bytes.length > MAX_IMPORT_BYTES) return { error: 'Ficheiro demasiado grande para ler o conteúdo (máx. 10 MB).' }
+    return await readDocumentFile(bytes, name)
+  } catch (err) {
+    console.error('[parseDocumentFileAction] Erro a ler o ficheiro:', err)
+    return { error: 'Não foi possível ler o conteúdo do ficheiro.' }
+  }
+}
 
 // O URL vai para um <a href> visto por toda a empresa: só aceitar ficheiros carregados
 // pela app (Cloudinary, https) — nunca javascript:/data: ou sites externos.
@@ -63,6 +106,7 @@ export async function createDocumentAction(formData: FormData) {
     active: true,
     fileUrl,
     fileName,
+    layoutJson: type !== 'MANUAL' ? (parseLayoutJson(formData) ?? null) : null,
   })
   revalidatePath('/dashboard/documents')
   revalidatePath('/dashboard/tasks')
@@ -84,8 +128,10 @@ export async function updateDocumentAction(id: string, formData: FormData) {
   const fileUrl = fileUrlRaw !== null ? safeFileUrl(fileUrlRaw) : undefined
   const fileNameRaw = formData.get('fileName')
   const fileName = fileNameRaw !== null ? (String(fileNameRaw).trim() || null) : undefined
+  const layoutJson = type !== 'MANUAL' ? parseLayoutJson(formData) : undefined
 
   await updateDocument(profile.companyId, id, {
+    ...(layoutJson !== undefined ? { layoutJson } : {}),
     code,
     title,
     content,

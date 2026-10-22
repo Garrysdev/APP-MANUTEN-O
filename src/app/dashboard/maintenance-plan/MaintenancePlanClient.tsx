@@ -16,6 +16,8 @@ import {
   PERIODICIDADE_LABELS, EXECUTOR_LABELS,
 } from '@/types/models'
 import ExcelJS from 'exceljs'
+import { addLogoToWorkbook } from '@/lib/export-logo'
+import { useBranding } from '@/components/providers/BrandingProvider'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
 import { compareDates, toNormalizedIsoDate } from '@/lib/utils'
 import {
@@ -132,6 +134,7 @@ export default function MaintenancePlanClient({
   plan: PlanName
 }) {
   const router = useRouter()
+  const { logoUrl } = useBranding()
   const { dict } = useLanguage()
   const [editing, setEditing] = useState<MaintenancePlan | null>(null)
   const [creating, setCreating] = useState(false)
@@ -549,6 +552,7 @@ export default function MaintenancePlanClient({
       col.width = Math.max(maxLen + 4, 10)
     })
 
+    await addLogoToWorkbook(workbook, logoUrl)
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], { type: 'application/vnd.ms-excel' })
     const url = URL.createObjectURL(blob)
