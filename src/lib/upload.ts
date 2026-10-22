@@ -46,9 +46,16 @@ export async function uploadImage(file: File, folder: string): Promise<string> {
  * qualquer tipo. Usado na Gestão Documental para anexar manuais/normas/PDFs aos
  * documentos do tipo 'MANUAL'.
  */
+// Limite por ficheiro do plano gratuito do Cloudinary (10 MB).
+const MAX_FILE_BYTES = 10 * 1024 * 1024
+
 export async function uploadFile(file: File, folder: string): Promise<string> {
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
     throw new Error('Cloudinary não configurado (NEXT_PUBLIC_CLOUDINARY_*).')
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    const mb = (file.size / 1024 / 1024).toFixed(1)
+    throw new Error(`ficheiro com ${mb} MB — o máximo é 10 MB. Guarda-o em PDF (Ficheiro → Guardar como → PDF) e importa o PDF.`)
   }
 
   const body = new FormData()

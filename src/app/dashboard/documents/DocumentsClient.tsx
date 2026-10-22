@@ -8,6 +8,7 @@ import { FileText, ClipboardList, BookOpen, Plus, Trash2, Edit2, X, Paperclip, D
 import type { DocumentoObrigatorio } from '@/types/models'
 import { uploadFile } from '@/lib/upload'
 import { originalDocViewUrl } from '@/components/ui/TaskDocRequirements'
+import { normalizeDocCode, isValidDocCode } from '@/lib/doc-code'
 import { createDocumentAction, updateDocumentAction, deleteDocumentAction } from './actions'
 
 type DocTab = 'FR' | 'IT' | 'MANUAL'
@@ -18,7 +19,7 @@ const IMPORT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,image/*'
 function docFromFileName(fileName: string): { code: string; title: string } {
   const base = fileName.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s+rev\b.*$/i, '').trim()
   const m = base.match(/^((?:FR|IT|MAN)(?:[\s.-]*[A-Z]{2,4})?[\s.-]*\d+[A-Za-z]?)\s*[-–:.]?\s*(.*)$/i)
-  if (m) return { code: m[1].toUpperCase().replace(/\s+/g, '-'), title: m[2].trim() || base }
+  if (m) return { code: normalizeDocCode(m[1]), title: m[2].trim() || base }
   return { code: '', title: base }
 }
 /**
@@ -105,9 +106,14 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
     let created = 0
     for (const [i, file] of files.entries()) {
       setImportStatus(`A importar ${i + 1} de ${files.length}: ${file.name}`)
+      const { code: fileCode, title: fileTitle } = docFromFileName(file.name)
+      // Validar antes de enviar o ficheiro, para não carregar à toa um que vai ser recusado.
+      if (tab !== 'MANUAL' && !isValidDocCode(fileCode, tab)) {
+        failures.push(`${file.name}: o nome do ficheiro tem de começar pela referência (ex.: ${tab === 'FR' ? 'FR-MAN-16' : 'IT-MAN-02'}).`)
+        continue
+      }
       try {
         const url = await uploadFile(file, tab === 'MANUAL' ? 'manuals' : 'documents')
-        const { code: fileCode, title: fileTitle } = docFromFileName(file.name)
         const formData = new FormData()
         formData.append('type', tab)
         formData.append('code', fileCode)
@@ -336,7 +342,8 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
                     type="text"
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
-                    placeholder={tab === 'FR' ? 'FR-04' : tab === 'IT' ? 'IT-04' : 'MAN-01'}
+                    onBlur={() => tab !== 'MANUAL' && setCode(normalizeDocCode(code))}
+                    placeholder={tab === 'FR' ? 'FR-MAN-16' : tab === 'IT' ? 'IT-MAN-02' : 'MAN-01'}
                     className="input text-xs w-full"
                   />
                 </div>

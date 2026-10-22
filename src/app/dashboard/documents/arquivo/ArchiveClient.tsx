@@ -29,15 +29,34 @@ type Filters = { ref: string; ot: string; area: string; tag: string; doc: string
 const EMPTY_FILTERS: Filters = { ref: '', ot: '', area: '', tag: '', doc: '', kind: '', signedBy: '', from: '', to: '' }
 
 const norm = (s: unknown) => String(s ?? '').toLowerCase().trim()
+// "FR/MAN/18", "fr man 18" e "FR-MAN-18" encontram o mesmo documento.
+const refKey = (s: unknown) => norm(s).replace(/[\s/\\._–—-]+/g, '-')
 
-export default function ArchiveClient({ records, docInfo }: { records: DocRecord[]; docInfo: Record<string, DocInfo> }) {
+const byPt = (a: string, b: string) => a.localeCompare(b, 'pt', { numeric: true })
+
+export default function ArchiveClient({ records, docInfo, areaTags, signers }: {
+  records: DocRecord[]
+  docInfo: Record<string, DocInfo>
+  areaTags: { area: string; tag: string }[]
+  signers: string[]
+}) {
   const { logoUrl } = useBranding()
   const [f, setF] = useState<Filters>(EMPTY_FILTERS)
   const [page, setPage] = useState(1)
 
   const infoOf = (id: string): DocInfo => docInfo[id] || LEGACY_INFO[id] || { code: '', title: id }
   const titleOf = (id: string) => { const i = infoOf(id); return i.code ? `${i.code} · ${i.title}` : i.title }
-  const set = (key: keyof Filters, value: string) => { setF((prev) => ({ ...prev, [key]: value })); setPage(1) }
+  // Mudar a Área limpa a TAG (a lista de TAGs passa a ser só a dessa área).
+  const set = (key: keyof Filters, value: string) => {
+    setF((prev) => ({ ...prev, [key]: value, ...(key === 'area' ? { tag: '' } : {}) }))
+    setPage(1)
+  }
+
+  const areaOptions = useMemo(() => Array.from(new Set(areaTags.map((x) => x.area).filter(Boolean))).sort(byPt), [areaTags])
+  const tagOptions = useMemo(
+    () => Array.from(new Set(areaTags.filter((x) => !f.area || norm(x.area) === norm(f.area)).map((x) => x.tag).filter(Boolean))).sort(byPt),
+    [areaTags, f.area]
+  )
 
   const docOptions = useMemo(
     () => Array.from(new Set(records.map((r) => r.docId))).map((id) => ({ id, title: titleOf(id) })).sort((a, b) => a.title.localeCompare(b.title, 'pt')),
@@ -47,13 +66,13 @@ export default function ArchiveClient({ records, docInfo }: { records: DocRecord
 
   const shown = useMemo(() => records.filter((r) => {
     const day = (r.date || '').slice(0, 10)
-    return (!f.ref || norm(infoOf(r.docId).code).includes(norm(f.ref)))
+    return (!f.ref || refKey(infoOf(r.docId).code).includes(refKey(f.ref)))
       && (!f.ot || norm(r.otNumber ?? r.taskId).includes(norm(f.ot)) || norm(r.taskTitle).includes(norm(f.ot)))
-      && (!f.area || norm(r.area).includes(norm(f.area)))
-      && (!f.tag || norm(r.tag).includes(norm(f.tag)))
+      && (!f.area || norm(r.area) === norm(f.area))
+      && (!f.tag || norm(r.tag) === norm(f.tag))
       && (!f.doc || r.docId === f.doc)
       && (!f.kind || r.kind === f.kind)
-      && (!f.signedBy || norm(r.signedBy).includes(norm(f.signedBy)))
+      && (!f.signedBy || norm(r.signedBy) === norm(f.signedBy))
       && (!f.from || day >= f.from)
       && (!f.to || day <= f.to)
   // infoOf só depende de docInfo
@@ -114,10 +133,16 @@ export default function ArchiveClient({ records, docInfo }: { records: DocRecord
       </div>
 
       <div className="card p-3 mb-4 grid grid-cols-2 md:grid-cols-5 lg:grid-cols-9 gap-2">
-        <input value={f.ref} onChange={(e) => set('ref', e.target.value)} placeholder="Referência (FR/MAN/18)" className={input} />
+        <input value={f.ref} onChange={(e) => set('ref', e.target.value)} placeholder="Referência (FR-MAN-18)" className={input} />
         <input value={f.ot} onChange={(e) => set('ot', e.target.value)} placeholder="OT nº / descrição" className={input} />
-        <input value={f.area} onChange={(e) => set('area', e.target.value)} placeholder="Área" className={input} />
-        <input value={f.tag} onChange={(e) => set('tag', e.target.value)} placeholder="TAG" className={input} />
+        <select value={f.area} onChange={(e) => set('area', e.target.value)} className={input}>
+          <option value="">Todas as áreas</option>
+          {areaOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select value={f.tag} onChange={(e) => set('tag', e.target.value)} className={input}>
+          <option value="">Todas as TAGs</option>
+          {tagOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
         <select value={f.doc} onChange={(e) => set('doc', e.target.value)} className={input}>
           <option value="">Todos os documentos</option>
           {docOptions.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
@@ -127,7 +152,10 @@ export default function ArchiveClient({ records, docInfo }: { records: DocRecord
           <option value="FR">Só FR</option>
           <option value="IT">Só IT</option>
         </select>
-        <input value={f.signedBy} onChange={(e) => set('signedBy', e.target.value)} placeholder="Assinado por" className={input} />
+        <select value={f.signedBy} onChange={(e) => set('signedBy', e.target.value)} className={input}>
+          <option value="">Assinado por (todos)</option>
+          {signers.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
         <input type="date" value={f.from} onChange={(e) => set('from', e.target.value)} className={input} title="Desde" />
         <input type="date" value={f.to} onChange={(e) => set('to', e.target.value)} className={input} title="Até" />
       </div>
