@@ -8,7 +8,7 @@ import { FileText, ClipboardList, BookOpen, Plus, Trash2, Edit2, X, Paperclip, D
 import type { DocumentoObrigatorio } from '@/types/models'
 import { uploadFile } from '@/lib/upload'
 import { originalDocViewUrl } from '@/components/ui/TaskDocRequirements'
-import { normalizeDocCode, isValidDocCode } from '@/lib/doc-code'
+import { normalizeDocCode, isValidDocCode, cleanDocTitle } from '@/lib/doc-code'
 import { createDocumentAction, updateDocumentAction, deleteDocumentAction } from './actions'
 
 type DocTab = 'FR' | 'IT' | 'MANUAL'
@@ -19,8 +19,8 @@ const IMPORT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,image/*'
 function docFromFileName(fileName: string): { code: string; title: string } {
   const base = fileName.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s+rev\b.*$/i, '').trim()
   const m = base.match(/^((?:FR|IT|MAN)(?:[\s.-]*[A-Z]{2,4})?[\s.-]*\d+[A-Za-z]?)\s*[-–:.]?\s*(.*)$/i)
-  if (m) return { code: normalizeDocCode(m[1]), title: m[2].trim() || base }
-  return { code: '', title: base }
+  if (m) return { code: normalizeDocCode(m[1]), title: cleanDocTitle(m[2]) || cleanDocTitle(base) }
+  return { code: '', title: cleanDocTitle(base) }
 }
 /**
  * Gestão Documental — Folhas de Registo (FR), Instruções de Trabalho (IT) e, desde
@@ -51,6 +51,12 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
   const [importErrors, setImportErrors] = useState<string[]>([])
 
   const shown = initialDocs.filter((d) => d.type === tab)
+  const countOf = (t: DocTab) => initialDocs.filter((d) => d.type === t).length
+  const countBadge = (t: DocTab) => (
+    <span className={`ml-0.5 px-1.5 rounded-full text-[10px] font-extrabold ${tab === t ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+      {countOf(t)}
+    </span>
+  )
 
   function openCreate() {
     setEditingDoc(null)
@@ -250,7 +256,7 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
             tab === 'FR' ? 'bg-industrial-blue text-white shadow-sm' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
           }`}
         >
-          <ClipboardList className="h-3.5 w-3.5" /> Folhas de Registo (FR)
+          <ClipboardList className="h-3.5 w-3.5" /> Folhas de Registo (FR) {countBadge('FR')}
         </button>
         <button
           type="button"
@@ -259,7 +265,7 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
             tab === 'IT' ? 'bg-industrial-blue text-white shadow-sm' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
           }`}
         >
-          <FileText className="h-3.5 w-3.5" /> Instruções de Trabalho (IT)
+          <FileText className="h-3.5 w-3.5" /> Instruções de Trabalho (IT) {countBadge('IT')}
         </button>
         <button
           type="button"
@@ -268,7 +274,7 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
             tab === 'MANUAL' ? 'bg-industrial-blue text-white shadow-sm' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
           }`}
         >
-          <BookOpen className="h-3.5 w-3.5" /> Manuais & Normas
+          <BookOpen className="h-3.5 w-3.5" /> Manuais & Normas {countBadge('MANUAL')}
         </button>
       </div>
 

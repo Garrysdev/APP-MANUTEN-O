@@ -10,6 +10,19 @@ export function normalizeDocCode(raw: unknown): string {
   return parts.join('-')
 }
 
+/**
+ * Tira do fim do título a data/revisão que vem do nome do ficheiro:
+ * "LUBRIFICAÇÃO PASTILHADOR ESTER 25 11 2025" → "LUBRIFICAÇÃO PASTILHADOR ESTER".
+ */
+export function cleanDocTitle(raw: unknown): string {
+  const title = String(raw ?? '').replace(/_+/g, ' ').replace(/\s+/g, ' ').trim()
+  const cleaned = title
+    .replace(/[\s,;:–—-]*\(?\b(?:rev\.?\s*)?\d{1,2}[\s./-]\d{1,2}[\s./-](?:\d{4}|\d{2})\)?$/i, '')
+    .replace(/[\s,;:–—-]*\brev\.?\s*\d*$/i, '')
+    .trim()
+  return cleaned || title
+}
+
 /** "FR-MAN-16" / "IT-MAN-02" (o tipo tem de bater com o prefixo). */
 export function isValidDocCode(code: string, type: 'FR' | 'IT'): boolean {
   return new RegExp(`^${type}-[A-Z]{2,4}-\\d{2,}[A-Z]?$`).test(code)

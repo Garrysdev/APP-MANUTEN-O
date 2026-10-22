@@ -14,7 +14,7 @@ import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
 import { docRecordsFromTasks, type DocRecord } from '../doc-archive'
-import { normalizeDocCode } from '../doc-code'
+import { normalizeDocCode, cleanDocTitle } from '../doc-code'
 import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus, type TaskStatus, type DocumentoObrigatorio } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
@@ -3123,8 +3123,9 @@ const listDocumentsCached = withFallback(unstable_cache(
     if (!snap || !snap.docs) throw new FirestoreUnavailable()
     return snap.docs
       .map((d) => serialize<DocumentoObrigatorio>(d))
-      // Registos antigos gravados como "FR/MAN/07" aparecem já como "FR-MAN-07".
-      .map((d) => (d.type === 'MANUAL' ? d : { ...d, code: normalizeDocCode(d.code) }))
+      // Registos antigos gravados como "FR/MAN/07" aparecem já como "FR-MAN-07", e sem a
+      // data do nome do ficheiro no fim do título ("... 02 01 2025").
+      .map((d) => ({ ...d, title: cleanDocTitle(d.title), ...(d.type === 'MANUAL' ? {} : { code: normalizeDocCode(d.code) }) }))
       .sort((a, b) => (a.code || '').localeCompare(b.code || '', 'pt', { numeric: true }))
   },
   ['documents'],

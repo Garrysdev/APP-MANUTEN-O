@@ -1,4 +1,4 @@
-import { normalizeDocCode, isValidDocCode } from './doc-code'
+import { normalizeDocCode, isValidDocCode, cleanDocTitle } from './doc-code'
 
 describe('normalizeDocCode', () => {
   it.each([
@@ -14,6 +14,23 @@ describe('normalizeDocCode', () => {
     [null, ''],
   ])('%p → %p', (raw, expected) => {
     expect(normalizeDocCode(raw)).toBe(expected)
+  })
+})
+
+describe('cleanDocTitle', () => {
+  it.each([
+    ['LUBRIFICAÇÃO EMPANQUES AGITADORES 02 01 2025', 'LUBRIFICAÇÃO EMPANQUES AGITADORES'],
+    ['LUBRIFICAÇÃO PASTILHADOR ESTER 25 11 2025', 'LUBRIFICAÇÃO PASTILHADOR ESTER'],
+    ['LIMPEZA REACTOR_02_01_2025', 'LIMPEZA REACTOR'],
+    ['LIGAÇÃO CONSOLA DE PESAGEM 130INK 08 04 2024', 'LIGAÇÃO CONSOLA DE PESAGEM 130INK'],
+    ['EFLUENTES SECUNDARIOS rev 02 01 2025', 'EFLUENTES SECUNDARIOS'],
+    ['CONTROLO UPS 02-01-25', 'CONTROLO UPS'],
+    ['CONTROLO UPS rev 3', 'CONTROLO UPS'],
+    ['LIMPEZA REACTOR (LICENÇA TRABALHO)', 'LIMPEZA REACTOR (LICENÇA TRABALHO)'],
+    ['TERMOMETROS', 'TERMOMETROS'],
+    ['CALDEIRA 2 3', 'CALDEIRA 2 3'],
+  ])('%p → %p', (raw, expected) => {
+    expect(cleanDocTitle(raw)).toBe(expected)
   })
 })
 

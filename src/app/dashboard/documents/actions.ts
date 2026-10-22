@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { getCurrentProfile } from '@/lib/firebase/session'
 import { listDocuments, createDocument, updateDocument, deleteDocument } from '@/lib/firebase/data'
 import { LIMITS } from '@/lib/plans'
-import { normalizeDocCode, isValidDocCode } from '@/lib/doc-code'
+import { normalizeDocCode, isValidDocCode, cleanDocTitle } from '@/lib/doc-code'
 import type { PlanName } from '@/types/models'
 
 // O URL vai para um <a href> visto por toda a empresa: só aceitar ficheiros carregados
@@ -40,7 +40,7 @@ export async function createDocumentAction(formData: FormData) {
   const type = String(formData.get('type') ?? '').trim() as 'FR' | 'IT' | 'MANUAL'
   if (type !== 'FR' && type !== 'IT' && type !== 'MANUAL') return { error: 'Tipo de documento inválido.' }
 
-  const title = String(formData.get('title') ?? '').trim()
+  const title = cleanDocTitle(formData.get('title'))
   if (!title) return { error: 'O título é obrigatório.' }
   const code = normalizeDocCode(formData.get('code')) || (type === 'MANUAL' ? `${type}-${Date.now().toString().slice(-4)}` : '')
   const codeError = checkCode(code, type)
@@ -82,7 +82,7 @@ export async function updateDocumentAction(id: string, formData: FormData) {
   if (!profile || profile.role !== 'manager') return { error: 'Sem permissão.' }
 
   const type = String(formData.get('type') ?? '').trim() as 'FR' | 'IT' | 'MANUAL'
-  const title = String(formData.get('title') ?? '').trim()
+  const title = cleanDocTitle(formData.get('title'))
   if (!title) return { error: 'O título é obrigatório.' }
   const code = normalizeDocCode(formData.get('code'))
   const codeError = checkCode(code, type)
