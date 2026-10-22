@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   X, Play, CheckCircle2, RotateCcw, Clock, ShieldAlert,
   Camera, Image as ImageIcon, FileText, CheckSquare, Square,
-  Save, ExternalLink, Wrench
+  Save, ExternalLink, Wrench, Copy, Trash2
 } from 'lucide-react'
 import type { Task, TaskStatus } from '@/types/models'
 import { STATUS_LABELS, CRITICIDADE_LABELS, statusBadgeClass } from '@/types/models'
@@ -24,11 +24,15 @@ const DEFAULT_SAFETY_RULES = [
   'Verificação de ausência de tensão e pressão'
 ]
 
+const STATUS_OPTIONS: TaskStatus[] = ['prazo', 'pending', 'in_progress', 'done', 'cancelled']
+
 export default function TaskSummaryModal({
   task,
   onClose,
   onStatusChanged,
   onOpenFullEdit,
+  onDuplicate,
+  onDelete,
   isManager,
   resolveTechInitials,
   resolveTechLabel,
@@ -40,6 +44,8 @@ export default function TaskSummaryModal({
   onClose: () => void
   onStatusChanged: (taskId: string, newStatus: TaskStatus) => void
   onOpenFullEdit?: (task: Task) => void
+  onDuplicate?: (task: Task) => void
+  onDelete?: (task: Task) => void
   isManager: boolean
   resolveTechInitials: (id?: string | null) => string
   resolveTechLabel: (id?: string | null) => string
@@ -194,14 +200,38 @@ export default function TaskSummaryModal({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors shrink-0"
-            title="Fechar"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {isManager && onDuplicate && (
+              <button
+                type="button"
+                onClick={() => onDuplicate(task)}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Criar uma OT nova com os mesmos dados"
+              >
+                <Copy className="h-4 w-4" />
+                <span className="hidden sm:inline">Duplicar</span>
+              </button>
+            )}
+            {isManager && onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(task)}
+                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:hover:bg-red-900/60 dark:text-red-300 border border-red-200 dark:border-red-800 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Eliminar esta OT"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Eliminar</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
+              title="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Corpo do Resumo */}
@@ -231,6 +261,21 @@ export default function TaskSummaryModal({
                   <span className={`${statusBadgeClass(status)} text-xs font-extrabold px-3 py-1 rounded-full`}>
                     {STATUS_LABELS[status] || status}
                   </span>
+                  <select
+                    value={status}
+                    disabled={changingStatus}
+                    onChange={(e) => {
+                      const next = e.target.value as TaskStatus
+                      if (next !== status) void handleToggleStatus(next)
+                    }}
+                    className="input !w-auto !py-1 !px-2 !text-xs cursor-pointer"
+                    title="Alterar o estado da OT"
+                    aria-label="Alterar estado"
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                    ))}
+                  </select>
                   {task.plannedStartDate && (
                     <span className="text-xs text-slate-500 font-mono font-medium">
                       Agendada: {formatDate(task.plannedStartDate)}

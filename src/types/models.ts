@@ -357,7 +357,7 @@ export interface Invite {
 
 // Rótulos PT para apresentação
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  prazo: 'PRAZO',
+  prazo: 'Prazo',
   pending: 'Pendente',
   in_progress: 'Em curso',
   done: 'Concluída',

@@ -398,9 +398,13 @@ export default function TasksClient({
     setCreating(true)
   }
 
+  // true = o modal abre já em "Duplicar" (botão Duplicar da janela de resumo)
+  const [duplicatingFromSummary, setDuplicatingFromSummary] = useState(false)
+
   function closeModal() {
     setEditing(null)
     setCreating(false)
+    setDuplicatingFromSummary(false)
     setError('')
     setSharedPhotoUrl('')
   }
@@ -1677,6 +1681,8 @@ export default function TasksClient({
         stockRefs={stockRefs}
         isManager={isManager}
         deleteAction={deleteTaskAction}
+        startDuplicating={duplicatingFromSummary}
+        hideHeaderActions
         onSuccess={() => {
           closeModal()
           router.refresh()
@@ -1695,6 +1701,21 @@ export default function TasksClient({
           onOpenFullEdit={isManager ? (t) => {
             setSummaryTask(null)
             openEdit(t)
+          } : undefined}
+          onDuplicate={isManager ? (t) => {
+            setSummaryTask(null)
+            setDuplicatingFromSummary(true)
+            openEdit(t)
+          } : undefined}
+          onDelete={isManager ? async (t) => {
+            if (!confirm(`Eliminar "${t.title}"?`)) return
+            const res = await deleteTaskAction(t.id)
+            if (res?.error) {
+              alert(res.error)
+              return
+            }
+            setSummaryTask(null)
+            router.refresh()
           } : undefined}
           isManager={isManager}
           resolveTechInitials={resolveTechInitials}

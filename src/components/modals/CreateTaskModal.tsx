@@ -248,6 +248,12 @@ export interface CreateTaskModalProps {
    * OT (pedido do Rui): esconde Tipo de OT, Criticidade, Legal, FR/IT obrigatórias e
    * Criar/Incluir no PM; Equipamento deixa de ser obrigatório. tipo fica sempre 'projeto'. */
   isProjectForm?: boolean
+  /** Abre já em modo "Duplicar" a partir de editingTask (botão Duplicar da janela de resumo
+   * da OT, sem ter de abrir a edição primeiro). */
+  startDuplicating?: boolean
+  /** Esconde Duplicar/Eliminar do cabeçalho — na lista de OT essas ações estão na janela de
+   * resumo (TaskSummaryModal). */
+  hideHeaderActions?: boolean
 }
 
 export default function CreateTaskModal({
@@ -273,6 +279,8 @@ export default function CreateTaskModal({
   showDependencies = false,
   allowDuplicate = true,
   isProjectForm = false,
+  startDuplicating = false,
+  hideHeaderActions = false,
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState(initialTitle || '')
   const [tipo, setTipo] = useState<TipoTarefa>(initialTipo || 'curativa')
@@ -380,7 +388,8 @@ export default function CreateTaskModal({
 
       if (editingTask) {
         applyTaskToForm(editingTask)
-        setDuplicating(false)
+        if (startDuplicating) handleDuplicateClick()
+        else setDuplicating(false)
       } else {
         // Sempre (não só quando vêm preenchidos): o reset ao fechar usa os initial* desse
         // momento, e depois de editar/duplicar uma OT a página ainda passava a TAG dessa OT
@@ -422,7 +431,7 @@ export default function CreateTaskModal({
       setError('')
       setBusy(false)
     }
-  }, [isOpen, initialAssetId, initialTitle, initialDescription, initialTipo, initialPhotoUrl, editingTask])
+  }, [isOpen, initialAssetId, initialTitle, initialDescription, initialTipo, initialPhotoUrl, editingTask, startDuplicating])
 
   // O modal é enviado para o <body> por portal. Sem isto, o `fixed inset-0` deixa de se
   // posicionar pelo ecrã: as páginas usam `animate-fade-in-up`, que acaba em
@@ -655,7 +664,7 @@ export default function CreateTaskModal({
         </div>
 
         <div className="flex items-center gap-2">
-          {canDuplicate && (
+          {canDuplicate && !hideHeaderActions && (
             <button
               type="button"
               onClick={handleDuplicateClick}
@@ -666,7 +675,7 @@ export default function CreateTaskModal({
               <span className="hidden sm:inline">Duplicar</span>
             </button>
           )}
-          {canDelete && (
+          {canDelete && !hideHeaderActions && (
             <button
               type="button"
               onClick={handleDelete}
