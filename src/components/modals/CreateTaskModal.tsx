@@ -251,9 +251,9 @@ export interface CreateTaskModalProps {
   /** Abre já em modo "Duplicar" a partir de editingTask (botão Duplicar da janela de resumo
    * da OT, sem ter de abrir a edição primeiro). */
   startDuplicating?: boolean
-  /** Esconde Duplicar/Eliminar do cabeçalho — na lista de OT essas ações estão na janela de
-   * resumo (TaskSummaryModal). */
-  hideHeaderActions?: boolean
+  /** Esconde Duplicar/Eliminar (cabeçalho e barras do fundo) — na lista de OT essas ações
+   * estão na janela de resumo (TaskSummaryModal). */
+  hideDuplicateDelete?: boolean
 }
 
 export default function CreateTaskModal({
@@ -280,7 +280,7 @@ export default function CreateTaskModal({
   allowDuplicate = true,
   isProjectForm = false,
   startDuplicating = false,
-  hideHeaderActions = false,
+  hideDuplicateDelete = false,
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState(initialTitle || '')
   const [tipo, setTipo] = useState<TipoTarefa>(initialTipo || 'curativa')
@@ -635,8 +635,8 @@ export default function CreateTaskModal({
     setError('')
   }
 
-  const canDelete = Boolean(isManager && isEditingExisting && (deleteAction || onDelete))
-  const canDuplicate = Boolean(isManager && isEditingExisting && allowDuplicate)
+  const canDelete = Boolean(isManager && isEditingExisting && (deleteAction || onDelete) && !hideDuplicateDelete)
+  const canDuplicate = Boolean(isManager && isEditingExisting && allowDuplicate && !hideDuplicateDelete)
 
   return createPortal(
     <div className="fixed inset-0 z-[200] bg-slate-50 dark:bg-slate-950 overflow-y-auto flex flex-col">
@@ -664,7 +664,7 @@ export default function CreateTaskModal({
         </div>
 
         <div className="flex items-center gap-2">
-          {canDuplicate && !hideHeaderActions && (
+          {canDuplicate && (
             <button
               type="button"
               onClick={handleDuplicateClick}
@@ -675,7 +675,7 @@ export default function CreateTaskModal({
               <span className="hidden sm:inline">Duplicar</span>
             </button>
           )}
-          {canDelete && !hideHeaderActions && (
+          {canDelete && (
             <button
               type="button"
               onClick={handleDelete}

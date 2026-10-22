@@ -1682,7 +1682,7 @@ export default function TasksClient({
         isManager={isManager}
         deleteAction={deleteTaskAction}
         startDuplicating={duplicatingFromSummary}
-        hideHeaderActions
+        hideDuplicateDelete
         onSuccess={() => {
           closeModal()
           router.refresh()
