@@ -7,14 +7,18 @@ import { updateTaskFRsAndITsAction } from '@/app/dashboard/tasks/actions'
 import { useRouter } from 'next/navigation'
 import { useOfflineAction } from '@/hooks/useOfflineAction'
 import type { DocumentoObrigatorio } from '@/types/models'
+import { readFrLayout, type FrLayout } from '@/lib/fr-layout'
+import { frSignature, itSignature } from '@/lib/doc-signatures'
+import FrDocumentPreview from '@/components/ui/FrDocumentPreview'
+import { useBranding } from '@/components/providers/BrandingProvider'
 
 // Campo tipado (number/select/text) do sistema antigo (3 FR hardcoded abaixo). Os
 // documentos reais (Gestão Documental, ver listDocuments) só têm `fieldLabels: string[]`
 // — convertidos para esta mesma forma (todos tipo 'text') em docToFRShape(), para
 // reutilizar sem duplicar a UI de preenchimento.
 type FRField = { name: string; label: string; type: 'number' | 'select' | 'text'; placeholder?: string; options?: string[] }
-type FRShape = { id: string; title: string; desc: string; fields: FRField[]; fileUrl?: string | null; fileName?: string | null }
-type ITShape = { id: string; title: string; content: string; fileUrl?: string | null; fileName?: string | null }
+type FRShape = { id: string; title: string; desc: string; fields: FRField[]; fileUrl?: string | null; fileName?: string | null; code?: string; layout?: FrLayout | null }
+type ITShape = { id: string; title: string; content: string; fileUrl?: string | null; fileName?: string | null; code?: string; layout?: FrLayout | null }
 
 // FR importada sem campos definidos: o técnico regista pelo menos isto (senão a "folha"
 // ficava preenchida sem nada escrito).
@@ -29,11 +33,13 @@ function docToFRShape(d: DocumentoObrigatorio): FRShape {
     fields: fields.length > 0 ? fields : [DEFAULT_FR_FIELD],
     fileUrl: d.fileUrl,
     fileName: d.fileName,
+    code: d.code,
+    layout: readFrLayout(d.layoutJson),
   }
 }
 
 function docToITShape(d: DocumentoObrigatorio): ITShape {
-  return { id: d.id, title: d.code ? `${d.code}: ${d.title}` : d.title, content: d.content || '', fileUrl: d.fileUrl, fileName: d.fileName }
+  return { id: d.id, title: d.code ? `${d.code}: ${d.title}` : d.title, content: d.content || '', fileUrl: d.fileUrl, fileName: d.fileName, code: d.code, layout: readFrLayout(d.layoutJson) }
 }
 
 function OriginalDocLink({ url, name }: { url?: string | null; name?: string | null }) {
@@ -305,6 +311,8 @@ export function TaskDocRequirementsTechnician({
   const [activeITPopup, setActiveITPopup] = useState<any | null>(null)
   const [formData, setFormData] = useState<Record<string, any>>({})
   const [saving, setSaving] = useState(false)
+  const [frError, setFrError] = useState('')
+  const { userName } = useBranding()
 
   const liveFRShapes = liveFRs.map(docToFRShape)
   const liveITShapes = liveITs.map(docToITShape)
@@ -321,7 +329,10 @@ export function TaskDocRequirementsTechnician({
     const frDef = allFRs.find(f => f.id === frId)
     if (!frDef) return
     setActiveFRPopup(frDef)
-    setFormData(completedFRs?.[frId] || {})
+    // Só os valores preenchidos — a assinatura (_signedBy..., _savedAt) é do servidor.
+    const saved = (completedFRs?.[frId] || {}) as Record<string, unknown>
+    setFormData(Object.fromEntries(Object.entries(saved).filter(([k]) => !k.startsWith('_'))))
+    setFrError('')
   }
 
   function openIT(itId: string) {
@@ -333,6 +344,12 @@ export function TaskDocRequirementsTechnician({
   async function handleSaveFR(e: React.FormEvent) {
     e.preventDefault()
     if (!activeFRPopup) return
+    // Folha com a estrutura do original: os campos são as células vazias, e uma folha mensal
+    // (ex. 28 dias) preenche-se uma linha por OT — basta haver pelo menos um valor.
+    if (activeFRPopup.layout && !Object.values(formData).some((v) => String(v ?? '').trim())) {
+      setFrError('Preenche pelo menos um campo antes de guardar.')
+      return
+    }
     setSaving(true)
     try {
       const nextCompleted = {
@@ -405,7 +422,9 @@ export function TaskDocRequirementsTechnician({
                   <div className="min-w-0 pr-2">
                     <span className="text-xs font-bold block truncate">{frDef.title}</span>
                     <span className="text-[10px] font-semibold opacity-80">
-                      {isFilled ? '✔️ Preenchida & Registada' : '⚠️ Clique para preencher no Popup'}
+                      {isFilled
+                        ? `✔️ Preenchida${frSignature(completedFRs?.[frId]) ? ` por ${frSignature(completedFRs?.[frId])!.name}` : ' & Registada'}`
+                        : '⚠️ Clique para preencher'}
                     </span>
                   </div>
                   <Edit3 className={`h-4 w-4 shrink-0 ${isFilled ? 'text-emerald-600' : 'text-amber-600'}`} />
@@ -441,7 +460,9 @@ export function TaskDocRequirementsTechnician({
                   <div className="min-w-0 pr-2">
                     <span className="text-xs font-bold block truncate">{itDef.title}</span>
                     <span className="text-[10px] font-semibold opacity-80">
-                      {isAck ? '✔️ Tomei conhecimento' : '📖 Clique para ler e tomar conhecimento'}
+                      {isAck
+                        ? `✔️ Tomei conhecimento${itSignature(completedFRs, itId) ? ` — ${itSignature(completedFRs, itId)!.byName}` : ''}`
+                        : '📖 Clique para ler e tomar conhecimento'}
                     </span>
                   </div>
                   <Eye className={`h-4 w-4 shrink-0 ${isAck ? 'text-teal-600' : 'text-blue-600'}`} />
@@ -452,8 +473,42 @@ export function TaskDocRequirementsTechnician({
         </div>
       )}
 
-      {/* Popup Modal para Preenchimento de Folha de Registo (FR) */}
-      {activeFRPopup && createPortal(
+      {/* Janela da FR com a estrutura do documento original: preenche-se no próprio documento */}
+      {activeFRPopup?.layout && createPortal(
+        <div className="fixed inset-0 z-[300] bg-slate-200 dark:bg-slate-950 overflow-y-auto">
+          <form onSubmit={handleSaveFR}>
+            <div className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between gap-3 shadow-sm">
+              <div className="min-w-0">
+                <h3 className="font-extrabold text-sm text-industrial-blue dark:text-slate-100 truncate">{activeFRPopup.title}</h3>
+                <p className="text-[11px] text-slate-500">Preenche as caixas a amarelo. A assinatura é a de quem tem a sessão iniciada.</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button type="button" onClick={() => setActiveFRPopup(null)} className="btn-outline text-xs py-2 px-3">Cancelar</button>
+                <button type="submit" disabled={saving} className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5">
+                  <Check className="h-4 w-4" /> {saving ? 'A guardar...' : 'Guardar e assinar'}
+                </button>
+              </div>
+            </div>
+            {frError && (
+              <div className="max-w-[794px] mx-auto mt-4 px-4 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">{frError}</div>
+            )}
+            <div className="p-3 sm:p-6">
+              <FrDocumentPreview
+                layout={activeFRPopup.layout}
+                fallbackCode={activeFRPopup.code}
+                values={formData}
+                onChange={(key, value) => setFormData((prev) => ({ ...prev, [key]: value }))}
+                signature={frSignature(completedFRs?.[activeFRPopup.id])}
+                pendingSignerName={userName}
+              />
+            </div>
+          </form>
+        </div>,
+        document.body
+      )}
+
+      {/* Popup Modal para Preenchimento de Folha de Registo (FR) sem estrutura (PDF/imagem/manual) */}
+      {activeFRPopup && !activeFRPopup.layout && createPortal(
         <div className="fixed inset-0 z-[300] flex items-start justify-center p-4 pt-6 sm:pt-10 overflow-y-auto">
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setActiveFRPopup(null)} />
           <div className="card relative w-full max-w-lg p-6 shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-auto sm:my-4">
@@ -521,7 +576,7 @@ export function TaskDocRequirementsTechnician({
       {activeITPopup && createPortal(
         <div className="fixed inset-0 z-[300] flex items-start justify-center p-4 pt-6 sm:pt-10 overflow-y-auto">
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setActiveITPopup(null)} />
-          <div className="card relative w-full max-w-lg p-6 shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-auto sm:my-4">
+          <div className={`card relative w-full ${activeITPopup.layout ? 'max-w-4xl' : 'max-w-lg'} p-6 shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-auto sm:my-4`}>
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100 flex items-center gap-2">
                 <ShieldCheck className="text-teal-600" size={20} />
@@ -533,7 +588,16 @@ export function TaskDocRequirementsTechnician({
             </div>
 
             <div className="space-y-4">
-              {activeITPopup.content && (
+              {activeITPopup.layout ? (
+                <div className="bg-slate-100 dark:bg-slate-950 -mx-2 p-2 rounded-xl max-h-[65vh] overflow-y-auto">
+                  <FrDocumentPreview
+                    layout={activeITPopup.layout}
+                    fallbackCode={activeITPopup.code}
+                    signature={itSignature(completedFRs, activeITPopup.id) ? { name: itSignature(completedFRs, activeITPopup.id)!.byName, at: itSignature(completedFRs, activeITPopup.id)!.at } : null}
+                    pendingSignerName={(acknowledgedITs || []).includes(activeITPopup.id) ? null : userName}
+                  />
+                </div>
+              ) : activeITPopup.content && (
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-mono whitespace-pre-wrap leading-relaxed text-slate-800 dark:text-slate-200">
                   {activeITPopup.content}
                 </div>

@@ -18,7 +18,7 @@ interface LayoutShellProps {
 
 export default function LayoutShell({ user, children }: LayoutShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const branding = { companyName: user.company?.name ?? null, logoUrl: user.company?.logoUrl ?? null }
+  const branding = { companyName: user.company?.name ?? null, logoUrl: user.company?.logoUrl ?? null, userName: user.name }
 
   return (
     <BrandingProvider value={branding}>

@@ -167,7 +167,10 @@ export async function POST(request: NextRequest) {
             companyId: profile.companyId, profile, taskId, newStatus: op.payload.newStatus, expectedUpdatedAt,
           })
         } else if (op?.type === 'frsIts') {
-          result = await updateTaskFRsAndITs({ companyId: profile.companyId, taskId, data: op.payload, expectedUpdatedAt })
+          result = await updateTaskFRsAndITs({
+            companyId: profile.companyId, taskId, data: op.payload, expectedUpdatedAt,
+            signer: { id: profile.id, name: profile.name },
+          })
         } else if (op?.type === 'execDetails') {
           result = await updateTaskExecutionDetails({ companyId: profile.companyId, taskId, data: op.payload, expectedUpdatedAt })
         }

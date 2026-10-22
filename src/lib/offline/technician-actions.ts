@@ -1,4 +1,8 @@
-'use server'
+// Só servidor — e NÃO 'use server': isso tornava cada função exportada uma Server Action
+// chamável do browser com qualquer companyId/taskId (sem passar pelas verificações de
+// sessão das ações em src/app/dashboard/tasks/*). Os pontos de entrada são essas ações e
+// a rota de sync, que obtêm o perfil da sessão e passam o companyId certo.
+import 'server-only'
 
 /**
  * Núcleo partilhado das ações de técnico que também precisam de funcionar a partir da
@@ -25,6 +29,7 @@ import {
 import { isTechnicianAllowedOnTask } from '@/lib/task-assignment'
 import { LIMITS } from '@/lib/plans'
 import { STATUS_LABELS } from '@/types/models'
+import { signCompletedFRs, type Signer } from '@/lib/doc-signatures'
 import type { ChecklistItem, PlanName, TaskStatus, UserProfile } from '@/types/models'
 
 export type GuardedResult =
@@ -69,14 +74,24 @@ export async function updateTaskFRsAndITs(params: {
   taskId: string
   data: { completedFRs?: Record<string, any> | null; acknowledgedITs?: string[] | null }
   expectedUpdatedAt?: string
+  /** Utilizador da sessão — assina as FR preenchidas e as ITs confirmadas (doc-signatures.ts). */
+  signer: Signer
 }): Promise<GuardedResult> {
-  const { companyId, taskId, data, expectedUpdatedAt } = params
-  if (expectedUpdatedAt) {
-    const task = await getTask(companyId, taskId)
-    if (!task) return { ok: false, error: 'Tarefa não encontrada.' }
-    if (isStale(task, expectedUpdatedAt)) return { ok: false, error: CONFLICT_MSG, conflict: true }
-  }
-  await updateTask(companyId, taskId, data)
+  const { companyId, taskId, data, expectedUpdatedAt, signer } = params
+  const task = await getTask(companyId, taskId)
+  if (!task) return { ok: false, error: 'Tarefa não encontrada.' }
+  if (expectedUpdatedAt && isStale(task, expectedUpdatedAt)) return { ok: false, error: CONFLICT_MSG, conflict: true }
+
+  const prevAcks = task.acknowledgedITs || []
+  const nextAcks = data.acknowledgedITs !== undefined ? (data.acknowledgedITs || []) : prevAcks
+  const completedFRs = signCompletedFRs(
+    task.completedFRs,
+    data.completedFRs !== undefined ? data.completedFRs : task.completedFRs,
+    signer,
+    new Date().toISOString(),
+    { prev: prevAcks, next: nextAcks }
+  )
+  await updateTask(companyId, taskId, { ...data, completedFRs })
   return { ok: true }
 }
 

@@ -181,7 +181,9 @@ export async function updateTaskFRsAndITsAction(
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   try {
-    const result = await updateTaskFRsAndITs({ companyId: profile.companyId, taskId, data })
+    const result = await updateTaskFRsAndITs({
+      companyId: profile.companyId, taskId, data, signer: { id: profile.id, name: profile.name },
+    })
     if (!result.ok) return { error: result.error }
     revalidatePath('/dashboard/tasks')
     revalidatePath(`/dashboard/tasks/${taskId}`)

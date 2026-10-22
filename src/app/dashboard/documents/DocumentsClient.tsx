@@ -3,7 +3,8 @@
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import { FileText, ClipboardList, BookOpen, Plus, Trash2, Edit2, X, Paperclip, Download, Upload, Eye, RefreshCw } from 'lucide-react'
+import Link from 'next/link'
+import { FileText, ClipboardList, BookOpen, Plus, Trash2, Edit2, X, Paperclip, Download, Upload, Eye, RefreshCw, Archive } from 'lucide-react'
 import type { DocumentoObrigatorio } from '@/types/models'
 import { uploadFile } from '@/lib/upload'
 import { readFrLayout } from '@/lib/fr-layout'
@@ -271,6 +272,14 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <Link
+            href="/dashboard/documents/arquivo"
+            className="h-10 px-4 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 font-bold text-xs rounded-xl transition-all flex items-center gap-2"
+            title="FR/IT preenchidas por OT, Área e TAG — para auditorias"
+          >
+            <Archive size={16} />
+            <span>Arquivo (preenchidas)</span>
+          </Link>
           <input
             ref={importInputRef}
             type="file"

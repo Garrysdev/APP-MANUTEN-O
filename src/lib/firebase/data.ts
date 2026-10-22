@@ -13,6 +13,7 @@ import { readMaterialized, rebuildMaterialized, touchMaterialized, patchMaterial
 import { sendTaskAssignedEmail, sendUrgentTaskEmail } from '../notifications'
 import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
+import { docRecordsFromTasks, type DocRecord } from '../doc-archive'
 import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus, type TaskStatus, type DocumentoObrigatorio } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
@@ -3129,6 +3130,13 @@ const listDocumentsCached = withFallback(unstable_cache(
 export const listDocuments = cache(async function(companyId: string, type?: 'FR' | 'IT' | 'MANUAL'): Promise<DocumentoObrigatorio[]> {
   const docs = await listDocumentsCached(companyId)
   return type ? docs.filter((d) => d.type === type) : docs
+})
+
+/** Arquivo de FR/IT preenchidas (auditorias) — da lista materializada das OTs (inclui o
+ * histórico), sem ler a coleção inteira. Ver src/lib/doc-archive.ts. */
+export const listDocRecords = cache(async function(companyId: string): Promise<DocRecord[]> {
+  const tasks = (await readAll('tasks', companyId, LIST_TIMEOUT_MS, 'listDocRecords')) as (Task & { deleted?: boolean })[]
+  return docRecordsFromTasks(tasks.filter((t) => !t.deleted && (t.completedFRs || t.acknowledgedITs?.length)))
 })
 
 export async function createDocument(
