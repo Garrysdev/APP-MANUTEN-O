@@ -8,9 +8,6 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUILD_VERSION:
       process.env.VERCEL_GIT_COMMIT_SHA || `local-${Date.now()}`,
   },
-  // Leitura de FR/IT importadas (src/lib/document-import.ts): o pdf-parse faz require()
-  // dinâmico do pdf.js por versão — fica fora do bundle e é carregado do node_modules.
-  serverExternalPackages: ['pdf-parse', 'word-extractor'],
   images: {
     remotePatterns: [
       {

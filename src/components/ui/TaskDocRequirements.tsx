@@ -2,58 +2,55 @@
 
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FileText, CheckCircle2, AlertCircle, Eye, Edit3, X, Check, Lock, ShieldCheck, ClipboardList } from 'lucide-react'
+import { FileText, CheckCircle2, Eye, X, ShieldCheck, ClipboardList } from 'lucide-react'
 import { updateTaskFRsAndITsAction } from '@/app/dashboard/tasks/actions'
 import { useRouter } from 'next/navigation'
 import { useOfflineAction } from '@/hooks/useOfflineAction'
 import type { DocumentoObrigatorio } from '@/types/models'
-import { readFrLayout, type FrLayout } from '@/lib/fr-layout'
 import { frSignature, itSignature } from '@/lib/doc-signatures'
-import FrDocumentPreview from '@/components/ui/FrDocumentPreview'
-import { useBranding } from '@/components/providers/BrandingProvider'
 
-// Campo tipado (number/select/text) do sistema antigo (3 FR hardcoded abaixo). Os
-// documentos reais (Gestão Documental, ver listDocuments) só têm `fieldLabels: string[]`
-// — convertidos para esta mesma forma (todos tipo 'text') em docToFRShape(), para
-// reutilizar sem duplicar a UI de preenchimento.
-type FRField = { name: string; label: string; type: 'number' | 'select' | 'text'; placeholder?: string; options?: string[] }
-type FRShape = { id: string; title: string; desc: string; fields: FRField[]; fileUrl?: string | null; fileName?: string | null; code?: string; layout?: FrLayout | null }
-type ITShape = { id: string; title: string; content: string; fileUrl?: string | null; fileName?: string | null; code?: string; layout?: FrLayout | null }
+// FR/IT da OT: as FR preenchem-se em papel — na app o técnico só marca "Preenchida em
+// papel" e o servidor grava quem marcou e quando (doc-signatures.ts). As IT leem-se e
+// confirmam-se com "Tomei conhecimento", também assinado.
+type DocShape = { id: string; title: string; desc: string; fileUrl?: string | null; fileName?: string | null }
 
-// FR importada sem campos definidos: o técnico regista pelo menos isto (senão a "folha"
-// ficava preenchida sem nada escrito).
-const DEFAULT_FR_FIELD: FRField = { name: 'registo', label: 'Registo / Observações', type: 'text', placeholder: 'Valores registados, observações...' }
-
-function docToFRShape(d: DocumentoObrigatorio): FRShape {
-  const fields = (d.fieldLabels || []).map((label, i) => ({ name: `f${i}`, label, type: 'text' as const }))
-  return {
-    id: d.id,
-    title: d.code ? `${d.code}: ${d.title}` : d.title,
-    desc: d.content || '',
-    fields: fields.length > 0 ? fields : [DEFAULT_FR_FIELD],
-    fileUrl: d.fileUrl,
-    fileName: d.fileName,
-    code: d.code,
-    layout: readFrLayout(d.layoutJson),
-  }
+function docToFRShape(d: DocumentoObrigatorio): DocShape {
+  return { id: d.id, title: d.code ? `${d.code}: ${d.title}` : d.title, desc: d.content || '', fileUrl: d.fileUrl, fileName: d.fileName }
 }
 
-function docToITShape(d: DocumentoObrigatorio): ITShape {
-  return { id: d.id, title: d.code ? `${d.code}: ${d.title}` : d.title, content: d.content || '', fileUrl: d.fileUrl, fileName: d.fileName, code: d.code, layout: readFrLayout(d.layoutJson) }
+function docToITShape(d: DocumentoObrigatorio): DocShape & { content: string } {
+  return { ...docToFRShape(d), content: d.content || '' }
 }
 
-function OriginalDocLink({ url, name }: { url?: string | null; name?: string | null }) {
+/**
+ * Link para abrir o original no telemóvel: PDF/imagem abrem no browser; Word/Excel não —
+ * passam pelo visualizador online da Microsoft (o URL do Cloudinary já é público).
+ */
+export function originalDocViewUrl(url: string, fileName?: string | null): string {
+  const name = fileName || url
+  return /\.(docx?|xlsx?|pptx?)$/i.test(name)
+    ? `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`
+    : url
+}
+
+function OriginalDocLink({ url, name, label = 'Abrir documento original' }: { url?: string | null; name?: string | null; label?: string }) {
   if (!url) return null
   return (
     <a
-      href={url}
+      href={originalDocViewUrl(url, name)}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
       className="inline-flex items-center gap-1.5 text-xs font-bold text-industrial-blue dark:text-blue-400 hover:underline"
     >
-      <FileText className="h-3.5 w-3.5" /> Abrir documento original{name ? ` (${name})` : ''}
+      <FileText className="h-3.5 w-3.5" /> {label}
     </a>
   )
+}
+
+function formatSignedAt(iso: string): string {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 export const AVAILABLE_FRS = [
@@ -284,7 +281,7 @@ export function TaskDocPickerManager({
   )
 }
 
-// Secção Interativa para o Técnico na página da OT
+// Secção da OT para o técnico: FR com "Preenchida em papel", IT com "Tomei conhecimento".
 export function TaskDocRequirementsTechnician({
   taskId,
   requiredFRs = [],
@@ -307,82 +304,53 @@ export function TaskDocRequirementsTechnician({
 }) {
   const router = useRouter()
   const offline = useOfflineAction()
-  const [activeFRPopup, setActiveFRPopup] = useState<any | null>(null)
-  const [activeITPopup, setActiveITPopup] = useState<any | null>(null)
-  const [formData, setFormData] = useState<Record<string, any>>({})
-  const [saving, setSaving] = useState(false)
-  const [frError, setFrError] = useState('')
-  const { userName } = useBranding()
+  const [activeITPopup, setActiveITPopup] = useState<(DocShape & { content: string }) | null>(null)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [error, setError] = useState('')
 
   const liveFRShapes = liveFRs.map(docToFRShape)
   const liveITShapes = liveITs.map(docToITShape)
   const liveFRIds = new Set(liveFRShapes.map((f) => f.id))
   const liveITIds = new Set(liveITShapes.map((i) => i.id))
-  const allFRs = [...liveFRShapes, ...AVAILABLE_FRS.filter((f) => !liveFRIds.has(f.id))]
-  const allITs = [...liveITShapes, ...AVAILABLE_ITS.filter((i) => !liveITIds.has(i.id))]
+  const allFRs: DocShape[] = [...liveFRShapes, ...AVAILABLE_FRS.filter((f) => !liveFRIds.has(f.id))]
+  const allITs: (DocShape & { content: string })[] = [
+    ...liveITShapes,
+    ...AVAILABLE_ITS.filter((i) => !liveITIds.has(i.id)).map((i) => ({ ...i, desc: '' })),
+  ]
 
   if ((!requiredFRs || requiredFRs.length === 0) && (!requiredITs || requiredITs.length === 0)) {
     return null
   }
 
-  function openFR(frId: string) {
-    const frDef = allFRs.find(f => f.id === frId)
-    if (!frDef) return
-    setActiveFRPopup(frDef)
-    // Só os valores preenchidos — a assinatura (_signedBy..., _savedAt) é do servidor.
-    const saved = (completedFRs?.[frId] || {}) as Record<string, unknown>
-    setFormData(Object.fromEntries(Object.entries(saved).filter(([k]) => !k.startsWith('_'))))
-    setFrError('')
-  }
-
-  function openIT(itId: string) {
-    const itDef = allITs.find(i => i.id === itId)
-    if (!itDef) return
-    setActiveITPopup(itDef)
-  }
-
-  async function handleSaveFR(e: React.FormEvent) {
-    e.preventDefault()
-    if (!activeFRPopup) return
-    // Folha com a estrutura do original: os campos são as células vazias, e uma folha mensal
-    // (ex. 28 dias) preenche-se uma linha por OT — basta haver pelo menos um valor.
-    if (activeFRPopup.layout && !Object.values(formData).some((v) => String(v ?? '').trim())) {
-      setFrError('Preenche pelo menos um campo antes de guardar.')
-      return
-    }
-    setSaving(true)
+  async function save(id: string, data: { completedFRs?: Record<string, any> | null; acknowledgedITs?: string[] }) {
+    setSavingId(id)
+    setError('')
     try {
-      const nextCompleted = {
-        ...(completedFRs || {}),
-        [activeFRPopup.id]: {
-          ...formData,
-          _savedAt: new Date().toISOString()
-        }
-      }
-      await offline.updateFRsAndITs(taskId, { completedFRs: nextCompleted }, () => updateTaskFRsAndITsAction(taskId, { completedFRs: nextCompleted }))
-      setActiveFRPopup(null)
+      const res = await offline.updateFRsAndITs(taskId, data, () => updateTaskFRsAndITsAction(taskId, data))
+      if (res.error) setError(res.error)
       onUpdate?.()
       router.refresh()
     } catch (err) {
       console.error(err)
+      setError('Não foi possível gravar. Tenta de novo.')
     } finally {
-      setSaving(false)
+      setSavingId(null)
     }
+  }
+
+  // Marcar: grava { paper: true } — o servidor junta quem marcou e quando. Desmarcar apaga
+  // o registo (pede confirmação, porque a assinatura perde-se).
+  async function togglePaper(frId: string, checked: boolean) {
+    const rest = Object.fromEntries(Object.entries(completedFRs || {}).filter(([k]) => k !== frId))
+    if (!checked && !confirm('Desmarcar apaga o registo de quem preencheu esta FR. Continuar?')) return
+    const next = checked ? { ...rest, [frId]: { paper: true } } : rest
+    await save(frId, { completedFRs: Object.keys(next).length > 0 ? next : null })
   }
 
   async function handleAcknowledgeIT(itId: string) {
-    setSaving(true)
-    try {
-      const nextAck = Array.from(new Set([...(acknowledgedITs || []), itId]))
-      await offline.updateFRsAndITs(taskId, { acknowledgedITs: nextAck }, () => updateTaskFRsAndITsAction(taskId, { acknowledgedITs: nextAck }))
-      setActiveITPopup(null)
-      onUpdate?.()
-      router.refresh()
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setSaving(false)
-    }
+    const nextAck = Array.from(new Set([...(acknowledgedITs || []), itId]))
+    await save(itId, { acknowledgedITs: nextAck })
+    setActiveITPopup(null)
   }
 
   return (
@@ -397,60 +365,74 @@ export function TaskDocRequirementsTechnician({
         </span>
       </div>
 
-      {/* Lista de FRs */}
+      {error && (
+        <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+      )}
+
+      {/* FR: preenchidas em papel */}
       {requiredFRs && requiredFRs.length > 0 && (
         <div className="space-y-2">
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-            Folhas de Registo (FR)
+            Folhas de Registo (FR) — preencher em papel
           </span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {requiredFRs.map(frId => {
-              const frDef = allFRs.find(f => f.id === frId) || { id: frId, title: frId, desc: '' }
-              const isFilled = !!completedFRs?.[frId]
-
+          <div className="space-y-2">
+            {requiredFRs.map((frId) => {
+              const frDef = allFRs.find((f) => f.id === frId) || { id: frId, title: frId, desc: '' }
+              const entry = completedFRs?.[frId]
+              const isFilled = !!entry
+              const sig = frSignature(entry)
               return (
-                <button
+                <label
                   key={frId}
-                  type="button"
-                  onClick={() => openFR(frId)}
-                  className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all ${
+                  className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
                     isFilled
                       ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200'
-                      : 'bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-200 hover:bg-amber-100'
+                      : 'bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-200'
                   }`}
                 >
-                  <div className="min-w-0 pr-2">
-                    <span className="text-xs font-bold block truncate">{frDef.title}</span>
-                    <span className="text-[10px] font-semibold opacity-80">
-                      {isFilled
-                        ? `✔️ Preenchida${frSignature(completedFRs?.[frId]) ? ` por ${frSignature(completedFRs?.[frId])!.name}` : ' & Registada'}`
-                        : '⚠️ Clique para preencher'}
+                  <input
+                    type="checkbox"
+                    checked={isFilled}
+                    disabled={savingId === frId}
+                    onChange={(e) => togglePaper(frId, e.target.checked)}
+                    className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600 cursor-pointer"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-xs font-bold block">{frDef.title}</span>
+                    <span className="text-[11px] font-semibold opacity-80 block">
+                      {savingId === frId
+                        ? 'A gravar...'
+                        : isFilled
+                          ? `Preenchida em papel${sig ? ` — ${sig.name}, ${formatSignedAt(sig.at)}` : ''}`
+                          : 'Marcar quando a folha estiver preenchida em papel'}
+                    </span>
+                    <span className="block mt-1">
+                      <OriginalDocLink url={frDef.fileUrl} name={frDef.fileName} label="Abrir folha (para imprimir)" />
                     </span>
                   </div>
-                  <Edit3 className={`h-4 w-4 shrink-0 ${isFilled ? 'text-emerald-600' : 'text-amber-600'}`} />
-                </button>
+                </label>
               )
             })}
           </div>
         </div>
       )}
 
-      {/* Lista de ITs */}
+      {/* IT: ler e tomar conhecimento */}
       {requiredITs && requiredITs.length > 0 && (
         <div className="space-y-2 pt-2">
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
             Instruções de Trabalho (IT)
           </span>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {requiredITs.map(itId => {
-              const itDef = allITs.find(i => i.id === itId) || { id: itId, title: itId, content: '' }
+            {requiredITs.map((itId) => {
+              const itDef = allITs.find((i) => i.id === itId) || { id: itId, title: itId, desc: '', content: '' }
               const isAck = (acknowledgedITs || []).includes(itId)
-
+              const sig = itSignature(completedFRs, itId)
               return (
                 <button
                   key={itId}
                   type="button"
-                  onClick={() => openIT(itId)}
+                  onClick={() => setActiveITPopup(itDef)}
                   className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all ${
                     isAck
                       ? 'bg-teal-50 dark:bg-teal-950/20 border-teal-300 dark:border-teal-800 text-teal-950 dark:text-teal-200'
@@ -461,7 +443,7 @@ export function TaskDocRequirementsTechnician({
                     <span className="text-xs font-bold block truncate">{itDef.title}</span>
                     <span className="text-[10px] font-semibold opacity-80">
                       {isAck
-                        ? `✔️ Tomei conhecimento${itSignature(completedFRs, itId) ? ` — ${itSignature(completedFRs, itId)!.byName}` : ''}`
+                        ? `✔️ Tomei conhecimento${sig ? ` — ${sig.byName}, ${formatSignedAt(sig.at)}` : ''}`
                         : '📖 Clique para ler e tomar conhecimento'}
                     </span>
                   </div>
@@ -473,110 +455,11 @@ export function TaskDocRequirementsTechnician({
         </div>
       )}
 
-      {/* Janela da FR com a estrutura do documento original: preenche-se no próprio documento */}
-      {activeFRPopup?.layout && createPortal(
-        <div className="fixed inset-0 z-[300] bg-slate-200 dark:bg-slate-950 overflow-y-auto">
-          <form onSubmit={handleSaveFR}>
-            <div className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between gap-3 shadow-sm">
-              <div className="min-w-0">
-                <h3 className="font-extrabold text-sm text-industrial-blue dark:text-slate-100 truncate">{activeFRPopup.title}</h3>
-                <p className="text-[11px] text-slate-500">Preenche as caixas a amarelo. A assinatura é a de quem tem a sessão iniciada.</p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button type="button" onClick={() => setActiveFRPopup(null)} className="btn-outline text-xs py-2 px-3">Cancelar</button>
-                <button type="submit" disabled={saving} className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5">
-                  <Check className="h-4 w-4" /> {saving ? 'A guardar...' : 'Guardar e assinar'}
-                </button>
-              </div>
-            </div>
-            {frError && (
-              <div className="max-w-[794px] mx-auto mt-4 px-4 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">{frError}</div>
-            )}
-            <div className="p-3 sm:p-6">
-              <FrDocumentPreview
-                layout={activeFRPopup.layout}
-                fallbackCode={activeFRPopup.code}
-                values={formData}
-                onChange={(key, value) => setFormData((prev) => ({ ...prev, [key]: value }))}
-                signature={frSignature(completedFRs?.[activeFRPopup.id])}
-                pendingSignerName={userName}
-              />
-            </div>
-          </form>
-        </div>,
-        document.body
-      )}
-
-      {/* Popup Modal para Preenchimento de Folha de Registo (FR) sem estrutura (PDF/imagem/manual) */}
-      {activeFRPopup && !activeFRPopup.layout && createPortal(
-        <div className="fixed inset-0 z-[300] flex items-start justify-center p-4 pt-6 sm:pt-10 overflow-y-auto">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setActiveFRPopup(null)} />
-          <div className="card relative w-full max-w-lg p-6 shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-auto sm:my-4">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100 flex items-center gap-2">
-                <Edit3 className="text-safety-orange" size={20} />
-                {activeFRPopup.title}
-              </h3>
-              <button onClick={() => setActiveFRPopup(null)} className="text-slate-400 hover:text-slate-600 p-1">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveFR} className="space-y-4">
-              <p className="text-xs text-slate-500 dark:text-slate-400">{activeFRPopup.desc}</p>
-              <OriginalDocLink url={activeFRPopup.fileUrl} name={activeFRPopup.fileName} />
-
-              <div className="space-y-3">
-                {activeFRPopup.fields.map((field: any) => (
-                  <div key={field.name}>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      {field.label} *
-                    </label>
-                    {field.type === 'select' ? (
-                      <select
-                        value={formData[field.name] || ''}
-                        onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
-                        className="input text-xs font-bold"
-                        required
-                      >
-                        <option value="">-- Selecionar estado --</option>
-                        {field.options.map((opt: string) => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type={field.type}
-                        value={formData[field.name] || ''}
-                        onChange={(e) => setFormData({ ...formData, [field.name]: e.target.value })}
-                        placeholder={field.placeholder}
-                        className="input text-xs font-bold"
-                        required
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button type="button" onClick={() => setActiveFRPopup(null)} className="btn-secondary text-xs py-2 px-4">
-                  Cancelar
-                </button>
-                <button type="submit" disabled={saving} className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5">
-                  <Check className="h-4 w-4" /> {saving ? 'A guardar...' : 'Guardar Folha de Registo'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* Popup Modal para Leitura e Aprovação de Instrução de Trabalho (IT) */}
+      {/* Popup da Instrução de Trabalho (IT) */}
       {activeITPopup && createPortal(
         <div className="fixed inset-0 z-[300] flex items-start justify-center p-4 pt-6 sm:pt-10 overflow-y-auto">
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setActiveITPopup(null)} />
-          <div className={`card relative w-full ${activeITPopup.layout ? 'max-w-4xl' : 'max-w-lg'} p-6 shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-auto sm:my-4`}>
+          <div className="card relative w-full max-w-lg p-6 shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-auto sm:my-4">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100 flex items-center gap-2">
                 <ShieldCheck className="text-teal-600" size={20} />
@@ -588,17 +471,8 @@ export function TaskDocRequirementsTechnician({
             </div>
 
             <div className="space-y-4">
-              {activeITPopup.layout ? (
-                <div className="bg-slate-100 dark:bg-slate-950 -mx-2 p-2 rounded-xl max-h-[65vh] overflow-y-auto">
-                  <FrDocumentPreview
-                    layout={activeITPopup.layout}
-                    fallbackCode={activeITPopup.code}
-                    signature={itSignature(completedFRs, activeITPopup.id) ? { name: itSignature(completedFRs, activeITPopup.id)!.byName, at: itSignature(completedFRs, activeITPopup.id)!.at } : null}
-                    pendingSignerName={(acknowledgedITs || []).includes(activeITPopup.id) ? null : userName}
-                  />
-                </div>
-              ) : activeITPopup.content && (
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-mono whitespace-pre-wrap leading-relaxed text-slate-800 dark:text-slate-200">
+              {activeITPopup.content && (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-mono whitespace-pre-wrap leading-relaxed text-slate-800 dark:text-slate-200 max-h-[50vh] overflow-y-auto">
                   {activeITPopup.content}
                 </div>
               )}
@@ -608,14 +482,16 @@ export function TaskDocRequirementsTechnician({
                 <button type="button" onClick={() => setActiveITPopup(null)} className="btn-secondary text-xs py-2 px-4">
                   Fechar
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleAcknowledgeIT(activeITPopup.id)}
-                  disabled={saving}
-                  className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs py-2 px-4 rounded-xl flex items-center gap-1.5 shadow-md"
-                >
-                  <CheckCircle2 className="h-4 w-4" /> {saving ? 'A registar...' : 'Tomei conhecimento'}
-                </button>
+                {!(acknowledgedITs || []).includes(activeITPopup.id) && (
+                  <button
+                    type="button"
+                    onClick={() => handleAcknowledgeIT(activeITPopup.id)}
+                    disabled={savingId === activeITPopup.id}
+                    className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs py-2 px-4 rounded-xl flex items-center gap-1.5 shadow-md"
+                  >
+                    <CheckCircle2 className="h-4 w-4" /> {savingId === activeITPopup.id ? 'A registar...' : 'Tomei conhecimento'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

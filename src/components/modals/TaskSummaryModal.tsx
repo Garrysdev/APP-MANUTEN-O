@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import {
@@ -10,10 +10,14 @@ import {
 } from 'lucide-react'
 import type { Task, TaskStatus } from '@/types/models'
 import { STATUS_LABELS, CRITICIDADE_LABELS, statusBadgeClass } from '@/types/models'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatDateTime } from '@/lib/utils'
 import { TipoBadge } from '@/components/ui/TipoBadge'
 import { format3DigitId } from '@/app/dashboard/history/HistoryClient'
-import { updateTaskStatusAction, updateTaskExecutionDetailsAction } from '@/app/dashboard/tasks/actions'
+import { updateTaskStatusAction, updateTaskExecutionDetailsAction, updateTaskFRsAndITsAction, loadDocumentsAction } from '@/app/dashboard/tasks/actions'
+import { frSignature, itSignature } from '@/lib/doc-signatures'
+import { originalDocViewUrl } from '@/components/ui/TaskDocRequirements'
+import { useBranding } from '@/components/providers/BrandingProvider'
+import type { DocumentoObrigatorio } from '@/types/models'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
 
@@ -74,12 +78,22 @@ export default function TaskSummaryModal({
   // Folhas de Registo e Instruções de Trabalho
   const frList = task.requiredFRs || []
   const itList = task.requiredITs || []
-  const [checkedFRs, setCheckedFRs] = useState<string[]>(() => {
-    if ((task as any).frsChecked && Array.isArray((task as any).frsChecked)) {
-      return (task as any).frsChecked
-    }
-    return []
-  })
+  // FR "Preenchida em papel": o mesmo registo assinado da página da OT (completedFRs, ver
+  // doc-signatures.ts) — é o que alimenta o Arquivo de FR/IT. Antes usava frsChecked, sem
+  // nome/hora e fora do Arquivo.
+  const [completedFRs, setCompletedFRs] = useState<Record<string, any>>(() => task.completedFRs || {})
+  const [acknowledgedITs, setAcknowledgedITs] = useState<string[]>(() => task.acknowledgedITs || [])
+  const [savingDoc, setSavingDoc] = useState<string | null>(null)
+  const { userName: currentUserName } = useBranding()
+  // Nomes dos documentos (requiredFRs/ITs guardam o ID): lista em cache da Gestão Documental.
+  const [docsById, setDocsById] = useState<Record<string, DocumentoObrigatorio>>({})
+  useEffect(() => {
+    if (frList.length === 0 && itList.length === 0) return
+    loadDocumentsAction().then((docs) => setDocsById(Object.fromEntries(docs.map((d) => [d.id, d])))).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const docLabel = (id: string) => { const d = docsById[id]; return d ? (d.code ? `${d.code} · ${d.title}` : d.title) : id }
+  const checkedFRs = frList.filter((fr) => Boolean(completedFRs[fr]))
 
   // Fotos
   const existingPhotos = Array.isArray((task as any).photos)
@@ -118,7 +132,6 @@ export default function TaskSummaryModal({
       const res = await updateTaskExecutionDetailsAction(task.id, {
         observacoes,
         safetyRulesChecked: checkedRules,
-        frsChecked: checkedFRs,
       })
       setSavingObs(false)
       if (res.error) {
@@ -160,12 +173,32 @@ export default function TaskSummaryModal({
     void updateTaskExecutionDetailsAction(task.id, { safetyRulesChecked: next })
   }
 
-  function toggleFR(frCode: string) {
-    const next = checkedFRs.includes(frCode)
-      ? checkedFRs.filter((f) => f !== frCode)
-      : [...checkedFRs, frCode]
-    setCheckedFRs(next)
-    void updateTaskExecutionDetailsAction(task.id, { frsChecked: next })
+  async function saveDocs(id: string, data: { completedFRs?: Record<string, any> | null; acknowledgedITs?: string[] }) {
+    setSavingDoc(id)
+    try {
+      const res = await updateTaskFRsAndITsAction(task.id, data)
+      if (res.error) alert(res.error)
+      return !res.error
+    } finally {
+      setSavingDoc(null)
+    }
+  }
+
+  async function toggleFR(frCode: string) {
+    const isChecked = Boolean(completedFRs[frCode])
+    if (isChecked && !confirm('Desmarcar apaga o registo de quem preencheu esta FR. Continuar?')) return
+    const rest = Object.fromEntries(Object.entries(completedFRs).filter(([k]) => k !== frCode))
+    const next = isChecked ? rest : { ...rest, [frCode]: { paper: true } }
+    if (await saveDocs(frCode, { completedFRs: Object.keys(next).length > 0 ? next : null })) {
+      // A assinatura (nome/hora) é gravada pelo servidor; aqui mostra-se já quem marcou.
+      setCompletedFRs(isChecked ? rest : { ...rest, [frCode]: { paper: true, _signedByName: currentUserName, _signedAt: new Date().toISOString() } })
+    }
+  }
+
+  async function acknowledgeIT(itCode: string) {
+    if (acknowledgedITs.includes(itCode)) return
+    const next = [...acknowledgedITs, itCode]
+    if (await saveDocs(itCode, { acknowledgedITs: next })) setAcknowledgedITs(next)
   }
 
   return createPortal(
@@ -408,41 +441,76 @@ export default function TaskSummaryModal({
                 </h3>
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-400 mb-2.5">
-                Documentos associados a esta OT para preenchimento e cumprimento técnico:
+                FR: marcar quando estiver preenchida em papel. IT: ler e confirmar. Fica registado quem marcou e quando.
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-1.5">
                 {frList.map((fr) => {
                   const isChecked = checkedFRs.includes(fr)
+                  const sig = frSignature(completedFRs[fr])
+                  const doc = docsById[fr]
                   return (
-                    <button
+                    <label
                       key={fr}
-                      type="button"
-                      onClick={() => toggleFR(fr)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      className={`flex items-start gap-2.5 p-2 rounded-lg text-xs border transition-all cursor-pointer ${
                         isChecked
-                          ? 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-200'
-                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-400'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                          : 'bg-white dark:bg-slate-800/70 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      {isChecked ? <CheckSquare className="h-3.5 w-3.5 text-emerald-600" /> : <Square className="h-3.5 w-3.5 text-slate-400" />}
-                      <span>{fr}</span>
-                      {isChecked && <span className="text-[10px] text-emerald-700 font-extrabold">(Validada)</span>}
-                    </button>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        disabled={savingDoc === fr}
+                        onChange={() => toggleFR(fr)}
+                        className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600 cursor-pointer"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="font-bold block">{docLabel(fr)}</span>
+                        <span className="text-[11px] opacity-80">
+                          {savingDoc === fr ? 'A gravar...' : isChecked ? `Preenchida em papel${sig ? ` — ${sig.name}, ${formatDateTime(sig.at)}` : ''}` : 'Preenchida em papel?'}
+                        </span>
+                        {doc?.fileUrl && (
+                          <a href={originalDocViewUrl(doc.fileUrl, doc.fileName)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="block text-[11px] font-bold text-industrial-blue dark:text-sky-400 hover:underline mt-0.5">
+                            Abrir folha (para imprimir)
+                          </a>
+                        )}
+                      </span>
+                    </label>
                   )
                 })}
-                {itList.map((it) => (
-                  <span
-                    key={it}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
-                  >
-                    <FileText className="h-3 w-3 text-slate-500" />
-                    <span>{it}</span>
-                  </span>
-                ))}
+                {itList.map((it) => {
+                  const isAck = acknowledgedITs.includes(it)
+                  const sig = itSignature(completedFRs, it)
+                  const doc = docsById[it]
+                  return (
+                    <div
+                      key={it}
+                      className={`flex items-start gap-2.5 p-2 rounded-lg text-xs border ${
+                        isAck ? 'bg-teal-50 dark:bg-teal-950/40 border-teal-300 dark:border-teal-800 text-teal-900 dark:text-teal-200' : 'bg-white dark:bg-slate-800/70 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <FileText className="h-4 w-4 shrink-0 mt-0.5 text-teal-600" />
+                      <span className="min-w-0 flex-1">
+                        <span className="font-bold block">{docLabel(it)}</span>
+                        {isAck ? (
+                          <span className="text-[11px] opacity-80">Tomei conhecimento{sig ? ` — ${sig.byName}, ${formatDateTime(sig.at)}` : ''}</span>
+                        ) : (
+                          <button type="button" disabled={savingDoc === it} onClick={() => acknowledgeIT(it)} className="text-[11px] font-bold text-teal-700 dark:text-teal-300 hover:underline">
+                            {savingDoc === it ? 'A registar...' : 'Li a instrução — Tomei conhecimento'}
+                          </button>
+                        )}
+                        {doc?.fileUrl && (
+                          <a href={originalDocViewUrl(doc.fileUrl, doc.fileName)} target="_blank" rel="noopener noreferrer" className="block text-[11px] font-bold text-industrial-blue dark:text-sky-400 hover:underline mt-0.5">
+                            Abrir instrução
+                          </a>
+                        )}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
-
           {/* Observacoes / Trabalho Efetuado */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
