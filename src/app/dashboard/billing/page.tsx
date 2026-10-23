@@ -65,6 +65,7 @@ const FEATURE_NAMES: Record<string, { label: string; minPlan: string }> = {
   safetyRules: { label: 'Regras de Segurança', minPlan: 'Starter' },
   messages: { label: 'Mensagens Internas', minPlan: 'Starter' },
   documents: { label: 'Gestão Documental (FR/IT)', minPlan: 'Pro' },
+  predictive: { label: 'Manutenção Preditiva (vibrações)', minPlan: 'Business' },
 }
 
 export default async function BillingPage({

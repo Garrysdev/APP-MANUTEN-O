@@ -22,6 +22,7 @@ const FEATURE_LABELS: Record<FeatureKey, string> = {
   safetyRules:         'Regras de Segurança',
   messages:            'Mensagens Internas',
   documents:           'Gestão Documental (FR/IT)',
+  predictive:          'Manutenção Preditiva',
 }
 
 interface UpgradeModalProps {

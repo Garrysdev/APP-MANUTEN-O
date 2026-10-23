@@ -1,6 +1,6 @@
 import type { PlanName } from '@/types/models'
 
-export type FeatureKey = 'assets' | 'history' | 'users' | 'reports' | 'maintenance-plan' | 'calendar' | 'stocks' | 'finance' | 'aiConsultant' | 'reliability' | 'compliance' | 'projects' | 'warehouses' | 'safetyRules' | 'messages' | 'documents'
+export type FeatureKey = 'assets' | 'history' | 'users' | 'reports' | 'maintenance-plan' | 'calendar' | 'stocks' | 'finance' | 'aiConsultant' | 'reliability' | 'compliance' | 'projects' | 'warehouses' | 'safetyRules' | 'messages' | 'documents' | 'predictive'
 
 export interface PlanLimits {
   maxUsers: number
@@ -27,11 +27,11 @@ const GATES: Record<PlanName, Record<FeatureKey, boolean>> = {
   // 'free' passou a ser o Módulo Base, pago (deixou de ser grátis) — a chave interna
   // mantém-se 'free' para não obrigar a migrar o campo `plan` já gravado em todas as
   // empresas existentes; só o que o utilizador vê (label, preço) mudou (ver PLAN_LABELS).
-  free:       { assets: true,  history: true,  users: true,  reports: false, 'maintenance-plan': false, calendar: false, stocks: false, finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false, warehouses: false, safetyRules: false, messages: false, documents: false },
-  starter:    { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': false, calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false, warehouses: true,  safetyRules: true,  messages: true,  documents: false },
-  pro:        { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: true,  compliance: false, projects: true,  warehouses: true,  safetyRules: true,  messages: true,  documents: true  },
-  business:   { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: false, projects: true,  warehouses: true,  safetyRules: true,  messages: true,  documents: true  },
-  enterprise: { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: true,  projects: true,  warehouses: true,  safetyRules: true,  messages: true,  documents: true  },
+  free:       { assets: true,  history: true,  users: true,  reports: false, 'maintenance-plan': false, calendar: false, stocks: false, finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false, warehouses: false, safetyRules: false, messages: false, documents: false, predictive: false },
+  starter:    { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': false, calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: false, compliance: false, projects: false, warehouses: true,  safetyRules: true,  messages: true,  documents: false, predictive: false },
+  pro:        { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: false, aiConsultant: false, reliability: true,  compliance: false, projects: true,  warehouses: true,  safetyRules: true,  messages: true,  documents: true,  predictive: false },
+  business:   { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: false, projects: true,  warehouses: true,  safetyRules: true,  messages: true,  documents: true,  predictive: true  },
+  enterprise: { assets: true,  history: true,  users: true,  reports: true,  'maintenance-plan': true,  calendar: true,  stocks: true,  finance: true,  aiConsultant: true,  reliability: true,  compliance: true,  projects: true,  warehouses: true,  safetyRules: true,  messages: true,  documents: true,  predictive: true  },
 }
 
 export const LIMITS: Record<PlanName, PlanLimits> = {
@@ -59,6 +59,7 @@ export const TEASER_LIMITS: Record<FeatureKey, number> = {
   safetyRules: 0,
   messages: 0,
   documents: 0,
+  predictive: 0,
 }
 
 export const PLAN_LABELS: Record<PlanName, string> = {

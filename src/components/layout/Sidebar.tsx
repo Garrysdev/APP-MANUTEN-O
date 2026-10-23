@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, ClipboardList, Package, History, LogOut, X, MessageSquare,
   Users, FileBarChart, CreditCard, Lock, UserCircle, Calendar, Wrench, Boxes, Activity, DollarSign, Brain, BookOpen,
-  Plus, ShieldCheck, FolderKanban, Warehouse, BarChart3, FileText
+  Plus, ShieldCheck, FolderKanban, Warehouse, BarChart3, FileText, Gauge
 } from 'lucide-react'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import type { PlanName } from '@/types/models'
@@ -79,6 +79,7 @@ const managerNavGroups: NavGroup[] = [
       { href: '/dashboard/finance',            key: 'finance',         icon: DollarSign,     feature: 'finance' },
       { href: '/dashboard/ai',                 key: 'aiConsultant',    icon: Brain,          feature: 'aiConsultant' },
       { href: '/dashboard/knowledge',          key: 'knowledgeBase',   icon: BookOpen,       feature: 'aiConsultant' },
+      { href: '/dashboard/predictive',         key: 'predictive',      icon: Gauge,          feature: 'predictive' },
     ]
   },
   {
