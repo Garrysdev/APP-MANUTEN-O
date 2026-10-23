@@ -9,6 +9,8 @@
 
 const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
 const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
+// Limite por ficheiro do plano gratuito do Cloudinary (10 MB).
+const MAX_FILE_BYTES = 10 * 1024 * 1024
 
 /**
  * Faz upload de uma imagem e devolve o secure_url.
@@ -18,6 +20,10 @@ const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
 export async function uploadImage(file: File, folder: string): Promise<string> {
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
     throw new Error('Cloudinary não configurado (NEXT_PUBLIC_CLOUDINARY_*).')
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    const mb = (file.size / 1024 / 1024).toFixed(1)
+    throw new Error(`foto com ${mb} MB (máximo 10 MB) que não foi possível reduzir. Tira a foto com menor resolução ou escolhe outra.`)
   }
 
   const body = new FormData()
@@ -32,7 +38,9 @@ export async function uploadImage(file: File, folder: string): Promise<string> {
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
-    throw new Error(`Upload falhou (${res.status}). ${detail}`)
+    let reason = detail
+    try { reason = (JSON.parse(detail) as { error?: { message?: string } }).error?.message || detail } catch {}
+    throw new Error(`o serviço de imagens recusou a foto (${res.status}${reason ? `: ${reason}` : ''}).`)
   }
 
   const data = (await res.json()) as { secure_url?: string }
@@ -46,9 +54,6 @@ export async function uploadImage(file: File, folder: string): Promise<string> {
  * qualquer tipo. Usado na Gestão Documental para anexar manuais/normas/PDFs aos
  * documentos do tipo 'MANUAL'.
  */
-// Limite por ficheiro do plano gratuito do Cloudinary (10 MB).
-const MAX_FILE_BYTES = 10 * 1024 * 1024
-
 export async function uploadFile(file: File, folder: string): Promise<string> {
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
     throw new Error('Cloudinary não configurado (NEXT_PUBLIC_CLOUDINARY_*).')

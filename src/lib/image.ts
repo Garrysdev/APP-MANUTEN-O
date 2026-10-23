@@ -12,7 +12,8 @@ export async function compressImage(
   maxDimension = MAX_DIMENSION,
   quality = JPEG_QUALITY,
 ): Promise<File> {
-  if (!file || !file.type.startsWith('image/')) return file
+  // Algumas apps de câmara entregam a foto sem tipo (''): tenta-se comprimir na mesma.
+  if (!file || (file.type && !file.type.startsWith('image/'))) return file
   if (file.type === 'image/gif' || file.type === 'image/svg+xml') return file
 
   // Se o ficheiro já for extremamente pequeno (< 150KB), devolve diretamente
@@ -20,60 +21,60 @@ export async function compressImage(
 
   return new Promise((resolve) => {
     try {
-      const reader = new FileReader()
-      reader.onerror = () => resolve(file)
-      reader.onload = (e) => {
-        const img = new Image()
-        img.onerror = () => resolve(file)
-        img.onload = () => {
-          try {
-            let w = img.width
-            let h = img.height
+      // Endereço temporário do ficheiro em vez de o ler como texto base64: uma foto de
+      // 48 MP+ em base64 ocupava muito mais memória e o telemóvel podia falhar a
+      // descodificação, ficando a foto original (> 10 MB, recusada pelo serviço de imagens).
+      const src = URL.createObjectURL(file)
+      const img = new Image()
+      const done = (f: File) => { URL.revokeObjectURL(src); resolve(f) }
+      img.onerror = () => done(file)
+      img.onload = () => {
+        try {
+          let w = img.width
+          let h = img.height
 
-            if (w > maxDimension || h > maxDimension) {
-              if (w > h) {
-                h = Math.round((h * maxDimension) / w)
-                w = maxDimension
-              } else {
-                w = Math.round((w * maxDimension) / h)
-                h = maxDimension
-              }
+          if (w > maxDimension || h > maxDimension) {
+            if (w > h) {
+              h = Math.round((h * maxDimension) / w)
+              w = maxDimension
+            } else {
+              w = Math.round((w * maxDimension) / h)
+              h = maxDimension
             }
-
-            const canvas = document.createElement('canvas')
-            canvas.width = w
-            canvas.height = h
-            const ctx = canvas.getContext('2d')
-            if (!ctx) {
-              resolve(file)
-              return
-            }
-
-            ctx.drawImage(img, 0, 0, w, h)
-
-            canvas.toBlob(
-              (blob) => {
-                if (!blob) {
-                  resolve(file)
-                  return
-                }
-                const novoNome = file.name.replace(/\.[^/.]+$/, '') + '.jpg'
-                const compressedFile = new File([blob], novoNome, {
-                  type: 'image/jpeg',
-                  lastModified: Date.now(),
-                })
-                resolve(compressedFile)
-              },
-              'image/jpeg',
-              quality
-            )
-          } catch {
-            resolve(file)
           }
+
+          const canvas = document.createElement('canvas')
+          canvas.width = w
+          canvas.height = h
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            done(file)
+            return
+          }
+
+          ctx.drawImage(img, 0, 0, w, h)
+
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                done(file)
+                return
+              }
+              const novoNome = (file.name || 'foto').replace(/\.[^/.]+$/, '') + '.jpg'
+              const compressedFile = new File([blob], novoNome, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              })
+              done(compressedFile)
+            },
+            'image/jpeg',
+            quality
+          )
+        } catch {
+          done(file)
         }
-        img.src = e.target?.result as string
       }
-      reader.readAsDataURL(file)
+      img.src = src
     } catch {
       resolve(file)
     }

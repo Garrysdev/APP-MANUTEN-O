@@ -343,7 +343,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
     setBusy(true)
     setError('')
     const formData = new FormData(e.currentTarget)
-    let photoFailed = false
+    let photoFailed: string | null = null
 
     try {
       // A foto NÃO bloqueia a gravação: se o upload ao Storage falhar, o
@@ -352,8 +352,8 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
         try {
           const url = await uploadImage(photoFile, 'assets')
           formData.set('photoUrl', url)
-        } catch {
-          photoFailed = true
+        } catch (err) {
+          photoFailed = err instanceof Error ? err.message : 'erro desconhecido'
           if (editing?.photoUrl) formData.set('photoUrl', editing.photoUrl)
         }
       } else if (editing?.photoUrl) {
@@ -370,7 +370,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
         setError(result.error)
       } else {
         if (photoFailed) {
-          setNotice('Equipamento guardado, mas a foto não foi carregada (serviço de imagens indisponível). Podes adicioná-la mais tarde.')
+          setNotice(`Equipamento guardado, mas a foto não foi carregada: ${photoFailed} Podes adicioná-la mais tarde.`)
         }
         closeModal()
         router.refresh()
