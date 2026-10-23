@@ -6,14 +6,14 @@ import Link from 'next/link'
 import {
   X, Play, CheckCircle2, RotateCcw, Clock, ShieldAlert,
   Camera, Image as ImageIcon, FileText, CheckSquare, Square,
-  Save, ExternalLink, Wrench, Copy, Trash2
+  Save, ExternalLink, Wrench, Copy, Trash2, CalendarPlus
 } from 'lucide-react'
 import type { Task, TaskStatus } from '@/types/models'
 import { STATUS_LABELS, CRITICIDADE_LABELS, statusBadgeClass } from '@/types/models'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { TipoBadge } from '@/components/ui/TipoBadge'
 import { format3DigitId } from '@/app/dashboard/history/HistoryClient'
-import { updateTaskStatusAction, updateTaskExecutionDetailsAction, updateTaskFRsAndITsAction, loadDocumentsAction } from '@/app/dashboard/tasks/actions'
+import { updateTaskStatusAction, updateTaskExecutionDetailsAction, updateTaskFRsAndITsAction, loadDocumentsAction, setTaskCalendarDateAction } from '@/app/dashboard/tasks/actions'
 import { frSignature, itSignature } from '@/lib/doc-signatures'
 import { originalDocViewUrl } from '@/components/ui/TaskDocRequirements'
 import { useBranding } from '@/components/providers/BrandingProvider'
@@ -63,6 +63,22 @@ export default function TaskSummaryModal({
   const [savingObs, setSavingObs] = useState(false)
   const [obsSaved, setObsSaved] = useState(false)
   const [changingStatus, setChangingStatus] = useState(false)
+  // Calendário PM: data em que a OT aparece (null = não aparece)
+  const [calendarDate, setCalendarDate] = useState<string | null>(task.calendarDate ?? null)
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const [calendarDraft, setCalendarDraft] = useState(task.calendarDate || (task.plannedStartDate || task.dueDate || new Date().toISOString()).slice(0, 10))
+  const [calendarMsg, setCalendarMsg] = useState<string | null>(null)
+  const [savingCalendar, setSavingCalendar] = useState(false)
+
+  async function saveCalendar(date: string | null) {
+    setSavingCalendar(true)
+    setCalendarMsg(null)
+    const res = await setTaskCalendarDateAction(task.id, date)
+    setSavingCalendar(false)
+    if (res?.error) { setCalendarMsg(res.error); return }
+    setCalendarDate(date)
+    setCalendarOpen(false)
+  }
 
   // Checklist de Regras de Segurança
   const rules = (task.safetyRules && task.safetyRules.length > 0)
@@ -235,6 +251,17 @@ export default function TaskSummaryModal({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {isManager && (
+              <button
+                type="button"
+                onClick={() => setCalendarOpen((v) => !v)}
+                className={`px-3 py-1.5 border text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer ${calendarDate ? 'bg-blue-50 hover:bg-blue-100 text-industrial-blue border-blue-200 dark:bg-blue-950/40 dark:text-sky-300 dark:border-blue-800' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'}`}
+                title={calendarDate ? `No Calendário PM a ${formatDate(calendarDate)}` : 'Colocar esta OT no Calendário PM'}
+              >
+                <CalendarPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">{calendarDate ? formatDate(calendarDate) : 'Calendário'}</span>
+              </button>
+            )}
             {isManager && onDuplicate && (
               <button
                 type="button"
@@ -267,6 +294,21 @@ export default function TaskSummaryModal({
             </button>
           </div>
         </div>
+
+        {calendarOpen && (
+          <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-blue-50/60 dark:bg-blue-950/30 flex flex-wrap items-center gap-2 text-sm shrink-0">
+            <span className="font-semibold text-slate-700 dark:text-slate-200">Mostrar no Calendário PM em</span>
+            <input type="date" value={calendarDraft} onChange={(e) => setCalendarDraft(e.target.value)}
+              className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm" />
+            <button type="button" disabled={!calendarDraft || savingCalendar} onClick={() => saveCalendar(calendarDraft)}
+              className="px-3 py-1.5 bg-industrial-blue text-white text-xs font-bold rounded-lg disabled:opacity-50">Guardar</button>
+            {calendarDate && (
+              <button type="button" disabled={savingCalendar} onClick={() => saveCalendar(null)}
+                className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-lg">Retirar do calendário</button>
+            )}
+            {calendarMsg && <span className="text-xs text-red-600">{calendarMsg}</span>}
+          </div>
+        )}
 
         {/* Corpo do Resumo */}
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4 custom-scrollbar min-h-0 flex-1 text-slate-800 dark:text-slate-200 text-sm">

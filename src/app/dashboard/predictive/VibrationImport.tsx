@@ -80,8 +80,7 @@ export default function VibrationImport({
       }
       all.days = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
       setParsed(all)
-      // Por defeito só os sensores de vibração; as outras grandezas (ex.: correntes) ficam à escolha.
-      setSelected(new Set(all.series.filter((m) => m.sensor !== 'OUTROS').map((m) => m.key)))
+      setSelected(new Set(all.series.map((m) => m.key)))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Não foi possível ler o ficheiro.')
     } finally {
@@ -160,12 +159,12 @@ export default function VibrationImport({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {groups.map((g) => (
               <div key={g.sensor} className="text-xs">
-                <p className="font-semibold text-gray-700 dark:text-slate-200 mb-1">{g.sensor === 'OUTROS' ? 'Outras grandezas' : g.sensor}</p>
+                <p className="font-semibold text-gray-700 dark:text-slate-200 mb-1">{g.sensor}</p>
                 {g.items.map((m) => (
                   <label key={m.key} className="flex items-center gap-2 py-0.5 text-gray-600 dark:text-slate-300">
                     <input type="checkbox" checked={selected.has(m.key)}
                       onChange={(e) => setSelected((prev) => { const n = new Set(prev); if (e.target.checked) n.add(m.key); else n.delete(m.key); return n })} />
-                    {g.sensor === 'OUTROS' ? m.label : m.label.replace(`${g.sensor} · `, '')}{m.unit ? ` (${m.unit})` : ''}
+                    {m.label.replace(`${g.sensor} · `, '')}{m.unit ? ` (${m.unit})` : ''}
                   </label>
                 ))}
               </div>

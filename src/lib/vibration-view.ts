@@ -69,6 +69,8 @@ export interface SensorSummary {
   zone: Zone | null
   temperature: number | null
   crest: number | null
+  friction: number | null // Fricção (aRMS, m/s²)
+  shock: number | null // Choque (aPeak, m/s²)
   changePct: number | null // média dos últimos 7 dias vs. 7 anteriores
   daysToAlert: number | null // projeção até à fronteira B/C
   lastAt: number | null
@@ -106,6 +108,8 @@ export function summarizeSensor(days: VibDayPayload[], sensor: string, limits: V
     zone: v ? zoneOf(v.value, limits) : null,
     temperature: temp?.value ?? null,
     crest: crest?.value ?? null,
+    friction: lastValue(days, `${sensor}__aRMS`)?.value ?? null,
+    shock: lastValue(days, `${sensor}__aPeak`)?.value ?? null,
     changePct,
     daysToAlert,
     lastAt: v?.t ?? temp?.t ?? null,

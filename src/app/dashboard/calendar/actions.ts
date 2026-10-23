@@ -31,6 +31,8 @@ export async function rescheduleCalendarItemAction(
       dueDate: targetDate,
       plannedStartDate: newPlannedStart,
       ...(planId ? { maintenancePlanId: planId } : {}),
+      // OT colocada à mão no calendário: arrastar muda o dia em que aparece.
+      ...(!planId && task?.calendarDate ? { calendarDate: targetDate } : {}),
     })
 
     if (planId) {

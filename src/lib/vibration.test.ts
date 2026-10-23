@@ -19,8 +19,8 @@ describe('vibration', () => {
 
   it('agrega em intervalos de 10 min e converte vRMS de m/s para mm/s', () => {
     const agg = createVibrationAggregator()
-    agg.push('﻿"Trend_X_VIB1_vRMS_Valor Time";"Trend_X_VIB1_vRMS_Valor ValueY";"Trend_X_VIB1_Temperatura_Valor Time";"Trend_X_VIB1_Temperatura_Valor ValueY"')
-    agg.push('7/1/2026 4:00:10 PM;0.0010;7/1/2026 4:00:10 PM;34')
+    agg.push('﻿"Trend_X_VIB1_vRMS_Valor Time";"Trend_X_VIB1_vRMS_Valor ValueY";"Trend_X_VIB1_Temperatura_Valor Time";"Trend_X_VIB1_Temperatura_Valor ValueY";"Trend_X_VIB1_aRMS_Valor Time";"Trend_X_VIB1_aRMS_Valor ValueY";"Trend_E_B_Agua.I_Corrente_L1 Time";"Trend_E_B_Agua.I_Corrente_L1 ValueY"')
+    agg.push('7/1/2026 4:00:10 PM;0.0010;7/1/2026 4:00:10 PM;34;7/1/2026 4:00:10 PM;0.3;7/1/2026 4:00:10 PM;108')
     agg.push('7/1/2026 4:05:10 PM;0.0020;7/1/2026 4:05:10 PM;36')
     agg.push('7/1/2026 4:12:00 PM;0.0030;;')
     const r = agg.finish()
@@ -34,6 +34,9 @@ describe('vibration', () => {
     expect(v.avg[b + 1]).toBe(3)
     expect(v.avg).toHaveLength(BUCKETS_PER_DAY)
     expect(r.days[0].series.VIB1__Temperatura.avg[b]).toBe(35)
+    expect(r.days[0].series.VIB1__aRMS.avg[b]).toBeCloseTo(2.942, 3) // g → m/s²
+    expect(r.series.some((m) => m.sensor === 'OUTROS')).toBe(false)
+    expect(Object.keys(r.days[0].series).some((k) => /Corrente/.test(k))).toBe(false)
   })
 
   it('merge mantém os intervalos antigos que o ficheiro novo não traz', () => {

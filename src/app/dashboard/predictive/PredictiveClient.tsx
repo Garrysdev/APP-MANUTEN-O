@@ -48,7 +48,6 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
   const assetName = (id: string) => { const a = assets.find((x) => x.id === id); return a ? `${a.tag ? `${a.tag} — ` : ''}${a.name}` : id }
   const limits = cfg?.limits ?? ISO_PRESETS.rigid
   const sensors = useMemo(() => [...new Set((cfg?.series ?? []).filter((m) => m.sensor !== 'OUTROS').map((m) => m.sensor))].sort(), [cfg])
-  const others = useMemo(() => (cfg?.series ?? []).filter((m) => m.sensor === 'OUTROS'), [cfg])
   const labelOf = (s: string) => (cfg?.sensorLabels?.[s] ? `${s} · ${cfg.sensorLabels[s]}` : s)
   const colorOf = (s: string) => SENSOR_COLORS[Math.max(0, sensors.indexOf(s)) % SENSOR_COLORS.length]
 
@@ -195,6 +194,8 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
                 <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-gray-600 dark:text-slate-300">
                   <span className="flex items-center gap-1"><Thermometer className="h-3 w-3" />{s.temperature !== null ? `${s.temperature.toFixed(1)} °C` : '—'}</span>
                   <span>Crista {s.crest !== null ? s.crest.toFixed(1) : '—'}</span>
+                  <span>Fricção {s.friction !== null ? `${s.friction.toFixed(1)} m/s²` : '—'}</span>
+                  <span>Choque {s.shock !== null ? `${s.shock.toFixed(1)} m/s²` : '—'}</span>
                   <span className="flex items-center gap-1">
                     {s.changePct !== null && (s.changePct >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />)}
                     {s.changePct !== null ? `${s.changePct >= 0 ? '+' : ''}${s.changePct.toFixed(0)}% vs. antes` : 'sem histórico'}
@@ -206,16 +207,16 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
           </div>
 
           {hasMetric('vRMS') && (
-            <MetricChart title="Velocidade de vibração RMS" unit="mm/s" points={metricPoints('vRMS')} series={metricSeries('vRMS')} zones={limits}
-              subtitle="Indicador principal de desequilíbrio, desalinhamento e folgas (zonas ISO 10816-3 a cores)" />
+            <MetricChart title="Fadiga — velocidade de vibração RMS" unit="mm/s" points={metricPoints('vRMS')} series={metricSeries('vRMS')} zones={limits}
+              subtitle="Desequilíbrio, desalinhamento e folgas — zonas ISO 10816-3 a cores (0,2 mm/s = 0,0002 m/s no SCADA)" />
           )}
           <div className="grid gap-4 lg:grid-cols-2">
             {hasMetric('aRMS') && (
-              <MetricChart title={metricLabel('aRMS')} unit="g" points={metricPoints('aRMS')} series={metricSeries('aRMS')}
+              <MetricChart title={`${metricLabel('aRMS')} — aceleração RMS`} unit="m/s²" points={metricPoints('aRMS')} series={metricSeries('aRMS')}
                 subtitle="Sobe com desgaste de rolamentos e engrenagens (alta frequência)" />
             )}
             {hasMetric('aPeak') && (
-              <MetricChart title={metricLabel('aPeak')} unit="g" points={metricPoints('aPeak')} series={metricSeries('aPeak')}
+              <MetricChart title={`${metricLabel('aPeak')} — aceleração de pico`} unit="m/s²" points={metricPoints('aPeak')} series={metricSeries('aPeak')}
                 subtitle="Impactos — picos isolados indicam defeitos localizados" />
             )}
             {hasMetric('Crista') && (
@@ -228,12 +229,6 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
                 subtitle="Aquecimento progressivo acompanha lubrificação deficiente ou sobrecarga" />
             )}
           </div>
-          {others.length > 0 && (
-            <MetricChart title="Outras grandezas" unit={others.every((m) => m.unit === others[0].unit) ? others[0].unit : ''}
-              points={buildPoints(days, others.map((m) => m.key), group)}
-              series={others.map((m, i) => ({ key: m.key, label: m.label, color: SENSOR_COLORS[(i + 4) % SENSOR_COLORS.length] }))}
-              subtitle="Para cruzar com a vibração (ex.: carga/corrente)" />
-          )}
 
           <div className={card}>
             <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100 mb-2">Alertas</h3>

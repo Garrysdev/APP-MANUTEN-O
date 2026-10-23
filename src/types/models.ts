@@ -150,6 +150,7 @@ export interface Task {
   status: TaskStatus
   dueDate?: string | null // ISO date
   plannedStartDate?: string | null // ISO date/datetime: Data Planeada
+  calendarDate?: string | null // AAAA-MM-DD: OT colocada à mão no Calendário PM
   startedAt?: string | null // ISO date/datetime: Data de Início real (quando o trabalho arrancou de facto)
   completedAt?: string | null // ISO date/datetime: Data de Fim real (Data de conclusão)
   tag?: string | null // TAG do equipamento

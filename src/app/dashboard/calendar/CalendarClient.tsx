@@ -138,6 +138,15 @@ function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end
       }
     })
 
+  // OTs colocadas à mão no calendário (botão "Calendário" na janela de resumo da OT).
+  tasks
+    .filter((t) => t.calendarDate)
+    .forEach((t) => {
+      const d = t.calendarDate!.slice(0, 10)
+      const dd = new Date(d + 'T12:00:00')
+      if (dd >= start && dd <= end) add(d, { date: d, type: 'task', task: t, label: t.title, criticidade: t.criticidade })
+    })
+
   return map
 }
 
@@ -412,7 +421,7 @@ export default function CalendarClient({
       setTaskList((prev) => {
         const exists = prev.some((t) => t.id === targetTaskId)
         if (exists) {
-          return prev.map((t) => (t.id === targetTaskId ? { ...t, dueDate: targetDate, plannedStartDate: `${targetDate}T09:00` } : t))
+          return prev.map((t) => (t.id === targetTaskId ? { ...t, dueDate: targetDate, plannedStartDate: `${targetDate}T09:00`, ...(t.calendarDate ? { calendarDate: targetDate } : {}) } : t))
         }
         const p = targetPlanId ? planList.find((pl) => pl.id === targetPlanId) : null
         const newTask: Task = {

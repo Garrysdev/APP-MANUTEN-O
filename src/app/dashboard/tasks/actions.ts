@@ -365,3 +365,20 @@ export async function updateTaskExecutionDetailsAction(
     return { error: e instanceof Error ? e.message : 'Erro ao guardar dados de execução.' }
   }
 }
+
+/** Coloca (data AAAA-MM-DD) ou retira (null) uma OT do Calendário PM. */
+export async function setTaskCalendarDateAction(taskId: string, date: string | null): Promise<TaskFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Só o gestor pode agendar OTs no calendário.' }
+  if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Data inválida.' }
+
+  try {
+    await updateTask(profile.companyId, taskId, { calendarDate: date })
+    revalidatePath('/dashboard/tasks')
+    revalidatePath('/dashboard/calendar')
+    return { ok: true }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erro ao agendar no calendário.' }
+  }
+}

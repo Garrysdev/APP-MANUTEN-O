@@ -47,16 +47,17 @@ export const ISO_PRESETS: Record<'rigid' | 'flexible', VibLimits> = {
 
 const METRIC_UNITS: Record<string, string> = {
   vRMS: 'mm/s',
-  aRMS: 'g',
-  aPeak: 'g',
+  aRMS: 'm/s²',
+  aPeak: 'm/s²',
   Crista: '',
   Temperatura: '°C',
 }
 
 const METRIC_LABELS: Record<string, string> = {
-  vRMS: 'Velocidade RMS',
-  aRMS: 'Aceleração RMS',
-  aPeak: 'Aceleração de pico',
+  // Nomes usados no Sistema de Monitorização de Vibrações (SCADA).
+  vRMS: 'Fadiga',
+  aRMS: 'Fricção',
+  aPeak: 'Choque',
   Crista: 'Fator de crista',
   Temperatura: 'Temperatura',
 }
@@ -123,6 +124,7 @@ function newAcc(): Acc {
 }
 
 const round = (v: number) => Math.round(v * 10000) / 10000
+const G = 9.80665
 
 /**
  * Agregador por linhas: `push(linha)` para cada linha do ficheiro (a 1ª é o cabeçalho),
@@ -179,15 +181,20 @@ export function createVibrationAggregator() {
     const all = metas ?? []
     // vRMS exportado em m/s (valores < 0,1) → mm/s, a unidade das zonas ISO.
     const scale = new Map<string, number>()
+    // Aceleração exportada em g (o SCADA mostra m/s²) → m/s².
     for (const m of all) {
       if (m.metric === 'vRMS' && (peak.get(m.key) ?? 0) < 0.1) scale.set(m.key, 1000)
+      if ((m.metric === 'aRMS' || m.metric === 'aPeak') && (peak.get(m.key) ?? 0) < 5) scale.set(m.key, G)
     }
-    const series = all
+    // Só vibrações — outras grandezas do mesmo ficheiro (ex.: correntes) não entram.
+    const series = all.filter((m) => m.sensor !== 'OUTROS')
+    const keep = new Set(series.map((m) => m.key))
     const out: VibDayPayload[] = []
     for (const date of [...days.keys()].sort()) {
       const day = days.get(date)!
       const s: Record<string, VibSeriesDay> = {}
       for (const [key, acc] of day) {
+        if (!keep.has(key)) continue
         const f = scale.get(key) ?? 1
         const min: (number | null)[] = []
         const avg: (number | null)[] = []
@@ -200,7 +207,7 @@ export function createVibrationAggregator() {
         }
         s[key] = { min, avg, max }
       }
-      out.push({ date, series: s })
+      if (Object.keys(s).length) out.push({ date, series: s })
     }
     return {
       series,
