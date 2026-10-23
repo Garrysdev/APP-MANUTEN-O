@@ -4,23 +4,26 @@ import { useState } from 'react'
 import { Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import SearchableAssetSelect, { type AssetOption } from '@/components/ui/SearchableAssetSelect'
 import { createVibrationAggregator, mergeSeriesDay, type VibDayPayload, type VibSeriesMeta } from '@/lib/vibration'
+import { listZipEntries } from '@/lib/zip-entries'
 import { importVibrationDayAction } from './actions'
 
 type Parsed = { series: VibSeriesMeta[]; days: VibDayPayload[]; rows: number; from: number | null; to: number | null; files: string[] }
 
-/** Lê o ficheiro aos bocados (UTF-16 ou UTF-8), sem o carregar inteiro como texto. */
-async function readLines(file: File, onLine: (line: string) => void, onProgress: (pct: number) => void) {
-  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer())
-  const encoding = head[0] === 0xff && head[1] === 0xfe ? 'utf-16le' : head[0] === 0xfe && head[1] === 0xff ? 'utf-16be' : 'utf-8'
-  const bytesPerChar = encoding === 'utf-8' ? 1 : 2
-  const reader = file.stream().pipeThrough(new TextDecoderStream(encoding)).getReader()
+/** Lê um ficheiro de texto aos bocados (UTF-16 ou UTF-8), sem o carregar inteiro em memória. */
+async function readLines(stream: ReadableStream<Uint8Array>, size: number, onLine: (line: string) => void, onProgress: (pct: number) => void) {
+  const reader = stream.getReader()
+  let decoder: TextDecoder | null = null
   let buf = ''
-  let chars = 0
+  let bytes = 0
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
-    buf += value
-    chars += value.length
+    if (!decoder) {
+      const enc = value[0] === 0xff && value[1] === 0xfe ? 'utf-16le' : value[0] === 0xfe && value[1] === 0xff ? 'utf-16be' : 'utf-8'
+      decoder = new TextDecoder(enc)
+    }
+    buf += decoder.decode(value, { stream: true })
+    bytes += value.length
     let start = 0
     let i: number
     while ((i = buf.indexOf('\n', start)) >= 0) {
@@ -28,9 +31,25 @@ async function readLines(file: File, onLine: (line: string) => void, onProgress:
       start = i + 1
     }
     buf = buf.slice(start)
-    onProgress(Math.min(99, Math.round(((chars * bytesPerChar) / file.size) * 100)))
+    if (size > 0) onProgress(Math.min(99, Math.round((bytes / size) * 100)))
   }
+  if (decoder) buf += decoder.decode()
   if (buf) onLine(buf)
+}
+
+/** Ficheiros a ler: os .csv diretamente; de um .zip, cada .csv/.txt lá dentro. */
+async function sources(files: File[]): Promise<{ name: string; size: number; open: () => ReadableStream<Uint8Array> }[]> {
+  const out: { name: string; size: number; open: () => ReadableStream<Uint8Array> }[] = []
+  for (const file of files) {
+    if (/\.zip$/i.test(file.name)) {
+      const entries = (await listZipEntries(file)).filter((e) => /\.(csv|txt)$/i.test(e.name))
+      if (entries.length === 0) throw new Error(`${file.name}: o .zip não tem nenhum .csv.`)
+      out.push(...entries)
+    } else {
+      out.push({ name: file.name, size: file.size, open: () => file.stream() as ReadableStream<Uint8Array> })
+    }
+  }
+  return out
 }
 
 const fmt = (t: number | null) => (t ? new Date(t).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }) : '—')
@@ -60,9 +79,9 @@ export default function VibrationImport({
       // Vários ficheiros (ex.: um por semana) juntam-se num só agregado por ficheiro e depois por dia.
       const all: Parsed = { series: [], days: [], rows: 0, from: null, to: null, files: [] }
       const byDate = new Map<string, VibDayPayload>()
-      for (const file of Array.from(files)) {
+      for (const file of await sources(Array.from(files))) {
         const agg = createVibrationAggregator()
-        await readLines(file, agg.push, (pct) => setProgress({ label: `A ler ${file.name}`, pct }))
+        await readLines(file.open(), file.size, agg.push, (pct) => setProgress({ label: `A ler ${file.name}`, pct }))
         const r = agg.finish()
         if (r.series.length === 0 || r.rows === 0) throw new Error(`${file.name}: não encontrei colunas "Time"/"ValueY" com dados.`)
         for (const m of r.series) if (!all.series.some((s) => s.key === m.key)) all.series.push(m)
@@ -125,11 +144,11 @@ export default function VibrationImport({
           <SearchableAssetSelect value={assetId} onChange={setAssetId} assets={assets} placeholder="Escolhe o equipamento monitorizado" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Ficheiro(s) .csv exportado(s)</label>
+          <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Ficheiro(s) .csv ou .zip exportado(s)</label>
           <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2 text-sm text-gray-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
             <Upload className="h-4 w-4" />
             Escolher ficheiro(s)…
-            <input type="file" accept=".csv,.txt,text/csv" multiple className="hidden" disabled={!!progress}
+            <input type="file" accept=".csv,.txt,.zip,text/csv,application/zip" multiple className="hidden" disabled={!!progress}
               onChange={(e) => { void handleFiles(e.target.files); e.target.value = '' }} />
           </label>
         </div>
