@@ -3434,6 +3434,10 @@ async function assertMessageInCompany(companyId: string, messageId: string): Pro
   } catch {}
   const local = [...cachedInternalMessages, ...fileMessages].find((m) => m?.id === messageId)
   if (local && messageBelongsTo(local, companyId)) return
+  // Mensagens que só existem no feed da empresa (migradas do feed antigo) — sem isto não
+  // se conseguiam apagar nem mudar de estado ("não pertence a esta empresa").
+  const feed = await readMessagesFeed(companyId).catch(() => [] as InternalMessage[])
+  if (feed.some((m) => m.id === messageId)) return
   throw new Error('Mensagem não pertence a esta empresa.')
 }
 

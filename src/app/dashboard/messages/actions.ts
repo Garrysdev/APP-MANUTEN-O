@@ -138,6 +138,23 @@ export async function deleteInternalMessageAction(
   }
 }
 
+/** Apagar uma conversa inteira (todas as mensagens do fio). Mesmas regras que apagar uma. */
+export async function deleteInternalMessagesAction(
+  messageIds: string[]
+): Promise<{ ok: boolean; error?: string }> {
+  if (!Array.isArray(messageIds) || messageIds.length === 0) return { ok: true }
+  if (messageIds.length > 200) return { ok: false, error: 'Demasiadas mensagens de uma vez.' }
+  const failures: string[] = []
+  for (const id of messageIds) {
+    const res = await deleteInternalMessageAction(String(id))
+    if (!res.ok) {
+      if (res.error?.startsWith('Apenas') || res.error === 'Sessão expirada.') return res
+      failures.push(res.error || id)
+    }
+  }
+  return failures.length ? { ok: false, error: `${failures.length} mensagem(ns) não apagada(s): ${failures[0]}` } : { ok: true }
+}
+
 export async function markMessagesReadAction(messageIds: string[]): Promise<{ ok: boolean }> {
   const profile = await getCurrentProfile()
   if (!profile) return { ok: false }

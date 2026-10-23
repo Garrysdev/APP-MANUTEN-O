@@ -12,7 +12,7 @@ import {
 import type { InternalMessage, MessageStatus } from '@/types/models'
 import { MESSAGE_STATUS_LABELS } from '@/types/models'
 import { formatDateTime } from '@/lib/utils'
-import { sendInternalMessageAction, updateMessageStatusAction, deleteInternalMessageAction, markMessagesReadAction } from './actions'
+import { sendInternalMessageAction, updateMessageStatusAction, deleteInternalMessageAction, deleteInternalMessagesAction, markMessagesReadAction } from './actions'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
 import Select from '@/components/ui/Select'
@@ -159,8 +159,15 @@ export default function MessagesClient({
           if (Array.isArray(parsed)) {
             // Só mensagens da mesma empresa das que vieram do servidor (defesa extra).
             const companyIds = new Set(messages.map((m) => m.companyId).filter(Boolean))
+            // O servidor é a fonte de verdade: uma mensagem guardada no browser que o servidor
+            // já não devolve foi apagada (aqui ou noutro dispositivo) — não a repor. Só se
+            // mantém a que é muito recente (acabada de enviar, ainda a propagar).
+            const serverIds = new Set(messages.map((m) => m.id))
+            const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString()
             storedList = parsed.filter(
-              (m) => !isSeedMessage(m) && (companyIds.size === 0 || (m.companyId && companyIds.has(m.companyId)))
+              (m) => !isSeedMessage(m)
+                && (companyIds.size === 0 || (m.companyId && companyIds.has(m.companyId)))
+                && (serverIds.has(m.id) || (m.createdAt || '') > recentCutoff)
             )
           }
         } catch {}
@@ -680,6 +687,25 @@ export default function MessagesClient({
     } else {
       router.refresh()
     }
+  }
+
+  // Apagar a conversa toda (todas as mensagens do fio), não só a última.
+  async function handleDeleteThread(messageIds: string[]) {
+    if (!isManager || messageIds.length === 0) return
+    const label = messageIds.length === 1 ? 'esta conversa' : `esta conversa (${messageIds.length} mensagens)`
+    if (!window.confirm(`Tem a certeza que deseja apagar ${label} permanentemente?`)) return
+
+    const ids = new Set(messageIds)
+    const updated = localMessages.filter((m) => !ids.has(m.id))
+    setLocalMessages(updated)
+    persistMessages(updated)
+    setSelectedMessage(null)
+
+    const res = await deleteInternalMessagesAction(messageIds)
+    if (!res.ok && res.error) {
+      alert(`Erro ao apagar conversa: ${res.error}`)
+    }
+    router.refresh()
   }
 
   async function handleClearAll() {
@@ -1271,9 +1297,9 @@ export default function MessagesClient({
                   {isManager && (
                     <button
                       type="button"
-                      onClick={() => handleDeleteMessage(selectedThread.last.id)}
+                      onClick={() => handleDeleteThread(selectedThread.messages.map((m) => m.id))}
                       className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition-colors cursor-pointer"
-                      title="Apagar última mensagem (Admin)"
+                      title="Apagar a conversa inteira"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
