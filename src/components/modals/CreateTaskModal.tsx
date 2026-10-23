@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { deriveTaskStatus } from '@/lib/task-status'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import {
@@ -303,13 +304,14 @@ export default function CreateTaskModal({
   // A data de Fim da OT é o sinal real de conclusão — ao preenchê-la o estado passa
   // automaticamente a 'done' (exceto se a OT estiver 'cancelled'); ao limpá-la, se
   // estava 'done' volta a 'pending'. Mesma regra aplicada no servidor (parseTask).
+  // Estado derivado das datas reais (deriveTaskStatus): Início → Em Curso, Fim → Concluída.
   function setCompletedAtAndStatus(value: string) {
     setCompletedAt(value)
-    if (value.trim() && status !== 'cancelled') {
-      setStatus('done')
-    } else if (!value.trim() && status === 'done') {
-      setStatus('pending')
-    }
+    setStatus((s) => deriveTaskStatus(s, startedAt, value))
+  }
+  function setStartedAtAndStatus(value: string) {
+    setStartedAt(value)
+    setStatus((s) => deriveTaskStatus(s, value, completedAt))
   }
   const [safetyRules, setSafetyRules] = useState<string[]>([])
   const [dynamicSafetyRules, setDynamicSafetyRules] = useState<string[]>(PREDEFINED_SAFETY_RULES)
@@ -526,15 +528,9 @@ export default function CreateTaskModal({
       if (editingTask?.requesterEmail) {
         formData.set('requesterEmail', editingTask.requesterEmail)
       }
-      // Mesma regra do servidor (parseTask): a data de Fim da OT é o sinal real de
-      // conclusão, não o Prazo — mantém o dropdown e o valor submetido coerentes.
-      if (completedAt.trim() && status !== 'cancelled') {
-        formData.set('status', 'done')
-      } else if (!completedAt.trim() && status === 'done') {
-        formData.set('status', 'pending')
-      } else {
-        formData.set('status', status)
-      }
+      // Mesma regra do servidor (parseTask): as datas reais de Início/Fim definem o estado,
+      // não o Prazo — mantém o dropdown e o valor submetido coerentes.
+      formData.set('status', deriveTaskStatus(status, startedAt, completedAt))
 
       if (isEditingExisting) {
         formData.set('id', editingTask.id)
@@ -922,9 +918,9 @@ export default function CreateTaskModal({
               label="Início da OT"
               name="startedAt"
               value={startedAt}
-              onStamp={() => setStartedAt(nowForInput())}
-              onClear={() => setStartedAt('')}
-              onChangeValue={setStartedAt}
+              onStamp={() => setStartedAtAndStatus(nowForInput())}
+              onClear={() => setStartedAtAndStatus('')}
+              onChangeValue={setStartedAtAndStatus}
               actionLabel="Iniciar OT"
               tone="blue"
               editable={isManager}

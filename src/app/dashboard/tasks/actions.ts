@@ -10,6 +10,7 @@ import {
 } from '@/lib/firebase/data'
 import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, Executor, DocumentoObrigatorio } from '@/types/models'
 import { TIPOS_TAREFA } from '@/types/models'
+import { deriveTaskStatus } from '@/lib/task-status'
 import {
   changeTaskStatus,
   updateTaskFRsAndITs,
@@ -104,10 +105,13 @@ function parseTask(formData: FormData) {
   // importadas/sem prazo formal). Antes disto, a regra usava dueDate: guardar um estado
   // 'concluída' escolhido no formulário era silenciosamente revertido para 'pendente' só
   // por a OT não ter Prazo — mesmo já tendo Fim da OT preenchido.
-  if (completedAtRaw && status !== 'cancelled') {
+  // O Início da OT (startedAt) passa-a a Em Curso da mesma forma (deriveTaskStatus). Só
+  // quando o formulário traz o campo — outros formulários (ex.: calendário) não o têm.
+  if (formData.has('startedAt')) {
+    status = deriveTaskStatus(status, String(formData.get('startedAt') ?? '').trim(), completedAtRaw)
+  } else if (completedAtRaw && status !== 'cancelled') {
     status = 'done'
-  }
-  if (!completedAtRaw && status === 'done') {
+  } else if (!completedAtRaw && status === 'done') {
     status = 'pending'
   }
 
