@@ -37,6 +37,26 @@ export default withPWA({
   customWorkerSrc: 'worker',
   cacheOnFrontEndNav: false,
   aggressiveFrontEndNavCaching: false,
-  reloadOnOnline: true,
+  // false: recarregar a página inteira quando a rede volta fazia a app "reiniciar" (logo
+  // incluído) ao regressar a ela no telemóvel. A sincronização offline já retoma sozinha.
+  reloadOnOnline: false,
   disable: process.env.NODE_ENV === 'development',
+  extendDefaultRuntimeCaching: true,
+  workboxOptions: {
+    runtimeCaching: [
+      {
+        // Abrir páginas (navegação): como a regra "pages" de origem, mas com rede lenta
+        // (> 4 s) abre a última versão guardada em vez de ficar no ecrã do logo; o
+        // AppResume pede logo os dados frescos. Limpa ao trocar de conta (replication.ts).
+        urlPattern: ({ request, url: { pathname }, sameOrigin }: { request: Request; url: URL; sameOrigin: boolean }) =>
+          sameOrigin && request.mode === 'navigate' && !pathname.startsWith('/api/'),
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'pages-nav',
+          expiration: { maxEntries: 32, maxAgeSeconds: 86400 },
+          networkTimeoutSeconds: 4,
+        },
+      },
+    ],
+  },
 })(nextConfig)

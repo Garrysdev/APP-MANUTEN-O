@@ -104,9 +104,16 @@ export async function refreshReferenceData() {
   }
 }
 
+// Equipamentos/regras de segurança quase nunca mudam: voltar à app não os volta a descarregar
+// (até 2000 equipamentos de cada vez) mais do que uma vez a cada 30 min.
+const REFERENCE_REFRESH_MS = 30 * 60 * 1000
+let lastReferenceRefresh = Date.now()
+
 /** Força uma sincronização imediata (ao reconectar / voltar a app a primeiro plano). */
 export async function resyncNow() {
   await Promise.all(replicationStates.map((r) => r.reSync()))
+  if (Date.now() - lastReferenceRefresh < REFERENCE_REFRESH_MS) return
+  lastReferenceRefresh = Date.now()
   await refreshReferenceData().catch((err) => console.error('[Sync] dados de referência:', err))
 }
 
@@ -129,7 +136,7 @@ export async function stopTechnicianReplication() {
 // páginas, dados das páginas e respostas da API. Sem rede, outra conta no mesmo browser
 // podia ver as páginas da anterior. Apagadas ao trocar de conta e no logout; ficam as
 // caches de ficheiros estáticos (JS, CSS, imagens, fontes), que são iguais para todos.
-const ACCOUNT_CACHES = ['pages', 'pages-rsc', 'pages-rsc-prefetch', 'apis', 'start-url', 'next-data', 'others', 'cross-origin']
+const ACCOUNT_CACHES = ['pages', 'pages-nav','pages-rsc', 'pages-rsc-prefetch', 'apis', 'start-url', 'next-data', 'others', 'cross-origin']
 
 async function clearAccountCaches() {
   try {
@@ -164,7 +171,7 @@ export async function resolveOfflineUid(): Promise<string | null> {
 /** Logout: pára a sincronização, fecha a base e esquece o utilizador neste browser. */
 export async function signOutOffline() {
   await stopTechnicianReplication()
-  try { localStorage.removeItem(OFFLINE_UID_KEY) } catch {}
+  try { localStorage.removeItem(OFFLINE_UID_KEY); localStorage.removeItem('rgm_last_page') } catch {}
   await clearAccountCaches()
   const { setOfflineUser } = await import('./rxdb')
   await setOfflineUser(null)

@@ -84,6 +84,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false
     let unsubTasks: (() => void) | undefined
     let unsubIv: (() => void) | undefined
+    let removeListeners: (() => void) | undefined
 
     ;(async () => {
       const [
@@ -103,19 +104,28 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       if (cancelled) return
 
       const db = await getTechnicianDB()
+      // Só os documentos com alterações por enviar/recusadas — não carregar a base inteira
+      // para memória a cada documento sincronizado.
+      const flagged = { selector: { _localSyncState: { $in: ['pending', 'rejected'] } } } as any
       const refreshCounts = async () => {
         const [tasks, ivs] = await Promise.all([
-          db.tasks.find().exec(),
-          db.interventions.find().exec(),
+          db.tasks.find(flagged).exec(),
+          db.interventions.find(flagged).exec(),
         ])
         const all = [...tasks, ...ivs]
         setPendingCount(all.filter((d) => (d as any)._localSyncState === 'pending').length)
         setRejectedCount(all.filter((d) => (d as any)._localSyncState === 'rejected').length)
       }
       await refreshCounts()
-      const sub1 = db.tasks.$.subscribe(refreshCounts)
-      const sub2 = db.interventions.$.subscribe(refreshCounts)
-      unsubTasks = () => sub1.unsubscribe()
+      // Uma sincronização traz dezenas de documentos seguidos: recontar uma vez no fim.
+      let countTimer: ReturnType<typeof setTimeout> | undefined
+      const scheduleCounts = () => {
+        clearTimeout(countTimer)
+        countTimer = setTimeout(() => { refreshCounts().catch(() => {}) }, 500)
+      }
+      const sub1 = db.tasks.$.subscribe(scheduleCounts)
+      const sub2 = db.interventions.$.subscribe(scheduleCounts)
+      unsubTasks = () => { sub1.unsubscribe(); clearTimeout(countTimer) }
       unsubIv = () => sub2.unsubscribe()
 
       const states = getReplicationStates()
@@ -124,16 +134,20 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       })
 
       const handleReconnect = () => { resyncNow().catch(() => {}) }
+      const handleVisible = () => { if (document.visibilityState === 'visible') handleReconnect() }
       window.addEventListener('online', handleReconnect)
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') handleReconnect()
-      })
+      document.addEventListener('visibilitychange', handleVisible)
+      removeListeners = () => {
+        window.removeEventListener('online', handleReconnect)
+        document.removeEventListener('visibilitychange', handleVisible)
+      }
     })().catch((err) => console.error('[OfflineProvider] Erro a iniciar sincronização:', err))
 
     return () => {
       cancelled = true
       unsubTasks?.()
       unsubIv?.()
+      removeListeners?.()
     }
   }, [withinDashboard])
 
