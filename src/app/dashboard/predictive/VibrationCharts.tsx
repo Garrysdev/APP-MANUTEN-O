@@ -22,6 +22,8 @@ export default function MetricChart({
   series,
   zones,
   limitLine,
+  rightSeries = [],
+  rightUnit = '',
 }: {
   title: string
   subtitle?: string
@@ -30,6 +32,9 @@ export default function MetricChart({
   series: ChartSeries[]
   zones?: { ab: number; bc: number; cd: number }
   limitLine?: number
+  /** Segundo eixo (direita) — ex.: corrente e rpm para comparar com a vibração. */
+  rightSeries?: ChartSeries[]
+  rightUnit?: string
 }) {
   if (points.length === 0 || series.length === 0) return null
   const spanDays = (points[points.length - 1].t - points[0].t) / 86_400_000
@@ -59,14 +64,24 @@ export default function MetricChart({
             {limitLine !== undefined && <ReferenceLine y={limitLine} stroke="#ef4444" strokeDasharray="4 4" label={{ value: 'Limite', position: 'insideTopRight', fontSize: 10, fill: '#ef4444' }} />}
             <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={(t) => fmtTick(t, spanDays)} tick={{ fontSize: 10 }} minTickGap={30} />
             <YAxis tick={{ fontSize: 10 }} domain={[0, top ?? 'auto']} allowDataOverflow={false} />
+            {rightSeries.length > 0 && (
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} label={rightUnit ? { value: rightUnit, angle: 90, position: 'insideRight', fontSize: 10 } : undefined} />
+            )}
             <Tooltip
               labelFormatter={(t) => new Date(Number(t)).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })}
-              formatter={(v, name) => [`${v}${unit ? ` ${unit}` : ''}`, name]}
+              formatter={(v, name) => {
+                const right = rightSeries.find((s) => s.label === name)
+                const u = right ? rightUnit : unit
+                return [`${v}${u ? ` ${u}` : ''}`, name]
+              }}
               contentStyle={{ fontSize: 12 }}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             {series.map((s) => (
               <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} dot={false} strokeWidth={1.5} connectNulls={false} isAnimationActive={false} />
+            ))}
+            {rightSeries.map((s) => (
+              <Line key={s.key} yAxisId="right" type="monotone" dataKey={s.key} name={s.label} stroke={s.color} dot={false} strokeWidth={1.5} strokeDasharray="5 3" connectNulls={false} isAnimationActive={false} />
             ))}
           </LineChart>
         </ResponsiveContainer>

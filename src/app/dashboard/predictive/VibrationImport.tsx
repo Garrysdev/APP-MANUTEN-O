@@ -159,12 +159,12 @@ export default function VibrationImport({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {groups.map((g) => (
               <div key={g.sensor} className="text-xs">
-                <p className="font-semibold text-gray-700 dark:text-slate-200 mb-1">{g.sensor}</p>
+                <p className="font-semibold text-gray-700 dark:text-slate-200 mb-1">{g.sensor === 'OUTROS' ? 'Motor (corrente / rpm)' : g.sensor}</p>
                 {g.items.map((m) => (
                   <label key={m.key} className="flex items-center gap-2 py-0.5 text-gray-600 dark:text-slate-300">
                     <input type="checkbox" checked={selected.has(m.key)}
                       onChange={(e) => setSelected((prev) => { const n = new Set(prev); if (e.target.checked) n.add(m.key); else n.delete(m.key); return n })} />
-                    {m.label.replace(`${g.sensor} · `, '')}{m.unit ? ` (${m.unit})` : ''}
+                    {g.sensor === 'OUTROS' ? `${m.metric} — ${m.label}` : m.label.replace(`${g.sensor} · `, '')}{m.unit ? ` (${m.unit})` : ''}
                   </label>
                 ))}
               </div>

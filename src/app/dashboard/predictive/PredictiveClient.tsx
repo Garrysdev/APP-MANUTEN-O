@@ -7,7 +7,7 @@ import Select from '@/components/ui/Select'
 import type { AssetOption } from '@/components/ui/SearchableAssetSelect'
 import type { VibrationConfig } from '@/lib/firebase/vibration-data'
 import { ISO_PRESETS, metricLabel, type VibDayPayload, type VibSeriesMeta, type Zone } from '@/lib/vibration'
-import { buildPoints, summarizeSensor, findAlerts, lastDates } from '@/lib/vibration-view'
+import { buildPoints, summarizeSensor, findAlerts, lastDates, correlation } from '@/lib/vibration-view'
 import { loadVibrationDaysAction } from './actions'
 import VibrationImport from './VibrationImport'
 import VibrationSettings, { type SettingsValue } from './VibrationSettings'
@@ -48,6 +48,11 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
   const assetName = (id: string) => { const a = assets.find((x) => x.id === id); return a ? `${a.tag ? `${a.tag} — ` : ''}${a.name}` : id }
   const limits = cfg?.limits ?? ISO_PRESETS.rigid
   const sensors = useMemo(() => [...new Set((cfg?.series ?? []).filter((m) => m.sensor !== 'OUTROS').map((m) => m.sensor))].sort(), [cfg])
+  // Corrente / rpm / … do motor (só as do mesmo equipamento entram na importação).
+  const processGroups = useMemo(() => {
+    const extras = (cfg?.series ?? []).filter((m) => m.sensor === 'OUTROS')
+    return [...new Set(extras.map((m) => m.metric))].map((metric) => ({ metric, unit: extras.find((m) => m.metric === metric)?.unit ?? '', items: extras.filter((m) => m.metric === metric) }))
+  }, [cfg])
   const labelOf = (s: string) => (cfg?.sensorLabels?.[s] ? `${s} · ${cfg.sensorLabels[s]}` : s)
   const colorOf = (s: string) => SENSOR_COLORS[Math.max(0, sensors.indexOf(s)) % SENSOR_COLORS.length]
 
@@ -210,6 +215,27 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
             <MetricChart title="Fadiga — velocidade de vibração RMS" unit="mm/s" points={metricPoints('vRMS')} series={metricSeries('vRMS')} zones={limits}
               subtitle="Desequilíbrio, desalinhamento e folgas — zonas ISO 10816-3 a cores (0,2 mm/s = 0,0002 m/s no SCADA)" />
           )}
+          {processGroups.map((g) => (
+            <div key={g.metric} className="space-y-2">
+              <MetricChart title={`Fadiga × ${g.metric}`} unit="mm/s" points={buildPoints(days, [...sensors.map((s) => `${s}__vRMS`), ...g.items.map((m) => m.key)], group)}
+                series={metricSeries('vRMS')} rightUnit={g.unit}
+                rightSeries={g.items.map((m, i) => ({ key: m.key, label: `${g.metric} ${g.items.length > 1 ? m.label : ''}`.trim(), color: SENSOR_COLORS[(sensors.length + i) % SENSOR_COLORS.length] }))}
+                subtitle={`Vibração (linhas contínuas, eixo esquerdo) e ${g.metric.toLowerCase()} (tracejado, eixo direito, ${g.unit})`} />
+              <div className="flex flex-wrap gap-2 text-[11px]">
+                {sensors.flatMap((s) => g.items.map((m) => {
+                  const r = correlation(days, `${s}__vRMS`, m.key)
+                  if (r === null) return null
+                  const strong = Math.abs(r) >= 0.7, mid = Math.abs(r) >= 0.4
+                  return (
+                    <span key={`${s}-${m.key}`} title="Correlação de Pearson entre a Fadiga do sensor e esta grandeza (−1 a 1)"
+                      className={`rounded px-2 py-0.5 border ${strong ? 'border-orange-300 bg-orange-50 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300' : mid ? 'border-amber-200 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300' : 'border-slate-200 bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}>
+                      {labelOf(s)} × {g.metric}{g.items.length > 1 ? ` (${m.label})` : ''}: r = {r.toFixed(2)} · {strong ? 'relação forte' : mid ? 'relação moderada' : 'pouca relação'}
+                    </span>
+                  )
+                }))}
+              </div>
+            </div>
+          ))}
           <div className="grid gap-4 lg:grid-cols-2">
             {hasMetric('aRMS') && (
               <MetricChart title={`${metricLabel('aRMS')} — aceleração RMS`} unit="m/s²" points={metricPoints('aRMS')} series={metricSeries('aRMS')}

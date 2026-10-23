@@ -170,6 +170,20 @@ function eventTooltip(ev: CalendarEvent): string {
   return desc || ev.label
 }
 
+// OTs no calendário com a cor do estado (as mesmas cores dos badges da lista de OTs).
+const STATUS_CHIP: Record<string, string> = {
+  prazo: 'bg-purple-700 text-white border-purple-800',
+  pending: 'bg-slate-500 text-white border-slate-600',
+  in_progress: 'bg-amber-500 text-slate-950 border-amber-600',
+  done: 'bg-emerald-600 text-white border-emerald-700',
+  completed: 'bg-emerald-600 text-white border-emerald-700',
+  cancelled: 'bg-red-800 text-white border-red-900',
+}
+function eventChipClass(ev: CalendarEvent): string {
+  if (ev.type === 'task' && ev.task) return STATUS_CHIP[String(ev.task.status || '').toLowerCase()] ?? STATUS_CHIP.pending
+  return getTipoBadgeClass(resolveEventType(ev))
+}
+
 function resolveEventType(ev: CalendarEvent): string {
   if (ev.type === 'plan') return 'plano'
   const t = ev.task
@@ -927,7 +941,6 @@ export default function CalendarClient({
                     </div>
                     <div className="space-y-1">
                       {events.slice(0, 4).map((ev, j) => {
-                        const isTaskDone = ev.type === 'task' && ev.task && (ev.task.status === 'done' || (ev.task.status as string) === 'completed')
                         return (
                           <div
                             key={j}
@@ -943,7 +956,7 @@ export default function CalendarClient({
                             }}
                             title={`Clique para abrir e ver/editar: ${eventTooltip(ev)}`}
                             className={`text-[11px] font-medium rounded-md px-1.5 py-1 truncate transition-all hover:scale-[1.02] active:scale-95 shadow-sm border cursor-pointer flex items-center justify-between gap-1 ${
-                              isTaskDone ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border-emerald-300 line-through opacity-85' : getTipoBadgeClass(resolveEventType(ev))
+                              eventChipClass(ev)
                             }`}
                           >
                             <div className="flex items-center gap-1 min-w-0 flex-1">
@@ -1022,7 +1035,7 @@ export default function CalendarClient({
                           }}
                           title={`Arraste para alterar a data: ${eventTooltip(ev)}`}
                           className={`text-[10px] rounded px-1 py-0.5 leading-tight cursor-grab active:cursor-grabbing flex items-center justify-between gap-1 ${
-                            isTaskDone ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 line-through opacity-85' : getTipoBadgeClass(resolveEventType(ev))
+                            `border ${eventChipClass(ev)}`
                           }`}
                         >
                           <div className="flex items-center gap-1 min-w-0 flex-1">

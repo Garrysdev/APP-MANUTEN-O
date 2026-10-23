@@ -82,8 +82,33 @@ export function parseSeriesName(raw: string): VibSeriesMeta {
   }
   // Outras grandezas (ex.: correntes "…_B_Agua.I_Corrente_L1") — o fim do nome chega.
   const short = name.split(/[_.]/).slice(-4).join(' ').trim() || name
-  const unit = /corrente/i.test(name) ? 'A' : ''
-  return { key: safeKey(name), sensor: 'OUTROS', metric: short, label: short, unit }
+  const kind = PROCESS_KINDS.find((k) => k.re.test(name))
+  return { key: safeKey(name), sensor: 'OUTROS', metric: kind?.metric ?? short, label: short, unit: kind?.unit ?? '' }
+}
+
+// Grandezas de processo do motor, para relacionar com a vibração.
+const PROCESS_KINDS = [
+  { re: /corrente|current|(^|[_.])I_?L?\d?([_.]|$)/i, metric: 'Corrente', unit: 'A' },
+  { re: /rpm|rota[cç]|veloc|speed/i, metric: 'Velocidade', unit: 'rpm' },
+  { re: /freq|hz/i, metric: 'Frequência', unit: 'Hz' },
+  { re: /pot[eê]ncia|power|kw/i, metric: 'Potência', unit: 'kW' },
+]
+
+/** "SGM_SGM_R3_VIB1_vRMS_Valor" → "R3": o identificador do equipamento junto aos sensores. */
+function equipmentToken(rawVibName: string): string | null {
+  const m = rawVibName.replace(/"/g, '').match(/([A-Za-z0-9]+)_VIB\d+_/i)
+  return m ? m[1] : null
+}
+
+/**
+ * Uma grandeza de processo (corrente, rpm…) só entra se for do mesmo equipamento dos
+ * sensores de vibração (ex.: tem "R3" ou "Agitador" no nome) — as correntes de outras
+ * máquinas exportadas no mesmo ficheiro (bombas de Água/Descarga/Termofluido) ficam de fora.
+ */
+export function belongsToEquipment(rawName: string, tokens: string[]): boolean {
+  const name = rawName.replace(/"/g, '')
+  if (/agitador/i.test(name)) return true
+  return tokens.some((t) => new RegExp(`(^|[^A-Za-z0-9])${t}([^A-Za-z0-9]|$)`, 'i').test(name))
 }
 
 /** Devolve o instante (ms, hora local) ou null se o texto não for uma data reconhecida. */
@@ -133,6 +158,7 @@ const G = 9.80665
 export function createVibrationAggregator() {
   let sep = ';'
   let metas: VibSeriesMeta[] | null = null
+  let use: boolean[] = []
   const days = new Map<string, Map<string, Acc>>()
   const peak = new Map<string, number>()
   let rows = 0
@@ -146,12 +172,17 @@ export function createVibrationAggregator() {
       sep = clean.split(';').length >= clean.split(',').length ? ';' : ','
       const cols = clean.split(sep)
       metas = []
-      for (let i = 1; i < cols.length; i += 2) metas.push(parseSeriesName(cols[i]))
+      const raws: string[] = []
+      for (let i = 1; i < cols.length; i += 2) { raws.push(cols[i]); metas.push(parseSeriesName(cols[i])) }
+      // Vibrações sempre; corrente/rpm/… só se forem do mesmo equipamento (ver belongsToEquipment).
+      const tokens = [...new Set(raws.map(equipmentToken).filter((t): t is string => !!t))]
+      use = metas.map((m, i) => m.sensor !== 'OUTROS' || belongsToEquipment(raws[i], tokens))
       return
     }
     rows++
     const c = clean.split(sep)
     for (let k = 0; k < metas.length; k++) {
+      if (!use[k]) continue
       const tRaw = c[2 * k]
       const vRaw = c[2 * k + 1]
       if (!tRaw || vRaw === undefined || vRaw === '') continue
@@ -186,8 +217,7 @@ export function createVibrationAggregator() {
       if (m.metric === 'vRMS' && (peak.get(m.key) ?? 0) < 0.1) scale.set(m.key, 1000)
       if ((m.metric === 'aRMS' || m.metric === 'aPeak') && (peak.get(m.key) ?? 0) < 5) scale.set(m.key, G)
     }
-    // Só vibrações — outras grandezas do mesmo ficheiro (ex.: correntes) não entram.
-    const series = all.filter((m) => m.sensor !== 'OUTROS')
+    const series = all.filter((_, i) => use[i])
     const keep = new Set(series.map((m) => m.key))
     const out: VibDayPayload[] = []
     for (const date of [...days.keys()].sort()) {

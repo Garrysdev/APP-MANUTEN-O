@@ -19,6 +19,7 @@ import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 
 import jsQR from 'jsqr'
 import Select from '@/components/ui/Select'
+import AssetAreaTagFields from './AssetAreaTagFields'
 
 export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: PlanName }) {
   const router = useRouter()
@@ -1066,16 +1067,14 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 <input name="name" defaultValue={editing ? editing.name : copyFrom ? `${copyFrom.name} (cópia)` : ''} className="input" required />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formTag}</label>
-                  <input name="tag" defaultValue={prefill?.tag ?? ''} className="input" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formArea}</label>
-                  <input name="area" defaultValue={prefill?.area ?? ''} className="input" />
-                </div>
-              </div>
+              <AssetAreaTagFields
+                key={`${editing ? 'edit' : copyFrom ? 'copy' : 'new'}-${prefill?.id ?? ''}`}
+                assets={assets}
+                defaultArea={prefill?.area ?? ''}
+                defaultTag={prefill?.tag ?? ''}
+                areaLabel={dict.assets.formArea}
+                tagLabel={dict.assets.formTag}
+              />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

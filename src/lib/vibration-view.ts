@@ -146,3 +146,31 @@ export function lastDates(end: string, n: number): string[] {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   })
 }
+
+/** Correlação de Pearson entre duas séries, intervalo a intervalo (média de 10 min). */
+export function correlation(days: VibDayPayload[], keyA: string, keyB: string): number | null {
+  const xs: number[] = []
+  const ys: number[] = []
+  for (const day of days) {
+    const a = day.series[keyA]
+    const b = day.series[keyB]
+    if (!a || !b) continue
+    for (let i = 0; i < BUCKETS_PER_DAY; i++) {
+      const x = a.avg[i]
+      const y = b.avg[i]
+      if (x !== null && x !== undefined && y !== null && y !== undefined) { xs.push(x); ys.push(y) }
+    }
+  }
+  const n = xs.length
+  if (n < 12) return null
+  const mx = xs.reduce((s, v) => s + v, 0) / n
+  const my = ys.reduce((s, v) => s + v, 0) / n
+  let sxy = 0, sxx = 0, syy = 0
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i] - mx
+    const dy = ys[i] - my
+    sxy += dx * dy; sxx += dx * dx; syy += dy * dy
+  }
+  if (sxx === 0 || syy === 0) return null
+  return sxy / Math.sqrt(sxx * syy)
+}
