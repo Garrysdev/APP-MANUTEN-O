@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Copy, Trash2, Package, X, Tag, Camera, ImageOff, Upload, Filter, Search, ChevronLeft, ChevronRight, QrCode, Printer, History } from 'lucide-react'
+import { Plus, Pencil, Copy, Wrench, Trash2, Package, X, Tag, Camera, ImageOff, Upload, Filter, Search, ChevronLeft, ChevronRight, QrCode, Printer, History } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
@@ -766,6 +766,17 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 >
                   <Copy className="h-4 w-4" />
                 </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    router.push(`/dashboard/tasks?create=true&assetId=${encodeURIComponent(a.id)}`)
+                  }}
+                  className="p-1.5 text-slate-500 hover:text-[#2E86C1] hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
+                  title="Criar OT para este equipamento"
+                >
+                  <Wrench className="h-4 w-4" />
+                </button>
               </div>
             </div>
           ))
@@ -901,6 +912,15 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                       >
                         <Copy className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Duplicar</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/dashboard/tasks?create=true&assetId=${encodeURIComponent(a.id)}`)}
+                        className="ml-1.5 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#2E86C1] hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors border border-slate-200 dark:border-slate-700"
+                        title="Criar OT para este equipamento"
+                      >
+                        <Wrench className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Criar OT</span>
                       </button>
                     </td>
                   </tr>
