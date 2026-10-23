@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, Package, X, Tag, Camera, ImageOff, Upload, Filter, Search, ChevronLeft, ChevronRight, QrCode, Printer, History } from 'lucide-react'
+import { Plus, Pencil, Copy, Trash2, Package, X, Tag, Camera, ImageOff, Upload, Filter, Search, ChevronLeft, ChevronRight, QrCode, Printer, History } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
@@ -25,6 +25,9 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
   const { dict } = useLanguage()
   const [editing, setEditing] = useState<Asset | null>(null)
   const [creating, setCreating] = useState(false)
+  // Duplicar: formulário de criação já preenchido com os dados deste equipamento.
+  const [copyFrom, setCopyFrom] = useState<Asset | null>(null)
+  const prefill = editing ?? copyFrom
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
@@ -299,6 +302,18 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
     setError('')
   }
 
+  function openDuplicate(asset: Asset) {
+    if (!planHas(plan, 'assets') && assets.length >= TEASER_LIMITS['assets']) {
+      setLockedFeature('assets')
+      return
+    }
+    setCopyFrom(asset)
+    setCreating(true)
+    setPhotoFile(null)
+    setPhotoPreview(asset.photoUrl ?? null)
+    setError('')
+  }
+
   function openEdit(asset: Asset) {
     setEditing(asset)
     setPhotoFile(null)
@@ -309,6 +324,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
   function closeModal() {
     setEditing(null)
     setCreating(false)
+    setCopyFrom(null)
     setError('')
     setPhotoFile(null)
     setPhotoPreview(null)
@@ -342,6 +358,8 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
         }
       } else if (editing?.photoUrl) {
         formData.set('photoUrl', editing.photoUrl)
+      } else if (copyFrom?.photoUrl && photoPreview) {
+        formData.set('photoUrl', copyFrom.photoUrl)
       }
 
       const result = editing
@@ -737,6 +755,17 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openDuplicate(a)
+                  }}
+                  className="p-1.5 text-slate-500 hover:text-[#2E86C1] hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
+                  title="Duplicar equipamento"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
               </div>
             </div>
           ))
@@ -864,6 +893,15 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                         <Pencil className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Editar</span>
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => openDuplicate(a)}
+                        className="ml-1.5 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#2E86C1] hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors border border-slate-200 dark:border-slate-700"
+                        title="Duplicar equipamento"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Duplicar</span>
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -926,7 +964,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
           <div className="card relative w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100">
-                {editing ? dict.assets.modalEdit : dict.assets.modalNew}
+                {editing ? dict.assets.modalEdit : copyFrom ? 'Duplicar equipamento' : dict.assets.modalNew}
               </h2>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
                 <X className="h-5 w-5" />
@@ -1005,35 +1043,35 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formName}</label>
-                <input name="name" defaultValue={editing?.name ?? ''} className="input" required />
+                <input name="name" defaultValue={editing ? editing.name : copyFrom ? `${copyFrom.name} (cópia)` : ''} className="input" required />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formTag}</label>
-                  <input name="tag" defaultValue={editing?.tag ?? ''} className="input" required />
+                  <input name="tag" defaultValue={prefill?.tag ?? ''} className="input" required />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formArea}</label>
-                  <input name="area" defaultValue={editing?.area ?? ''} className="input" />
+                  <input name="area" defaultValue={prefill?.area ?? ''} className="input" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formLocation}</label>
-                  <input name="location" defaultValue={editing?.location ?? ''} className="input" />
+                  <input name="location" defaultValue={prefill?.location ?? ''} className="input" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formType}</label>
-                  <input name="type" defaultValue={editing?.type ?? ''} className="input" />
+                  <input name="type" defaultValue={prefill?.type ?? ''} className="input" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formManufacturer}</label>
-                  <input name="manufacturer" defaultValue={editing?.manufacturer ?? ''} className="input" />
+                  <input name="manufacturer" defaultValue={prefill?.manufacturer ?? ''} className="input" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formSerialNumber}</label>
@@ -1043,25 +1081,25 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formCharacteristics}</label>
-                <textarea name="characteristics" defaultValue={editing?.characteristics ?? ''} className="input" rows={2} />
+                <textarea name="characteristics" defaultValue={prefill?.characteristics ?? ''} className="input" rows={2} />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formTags}</label>
                 <input
                   name="tags"
-                  defaultValue={editing?.tags?.join(', ') ?? ''}
+                  defaultValue={prefill?.tags?.join(', ') ?? ''}
                   className="input"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.assets.formNotes}</label>
-                <textarea name="notes" defaultValue={editing?.notes ?? ''} className="input" rows={2} />
+                <textarea name="notes" defaultValue={prefill?.notes ?? ''} className="input" rows={2} />
               </div>
 
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
-                <input type="checkbox" name="active" value="true" defaultChecked={editing?.active ?? true} className="rounded border-gray-300 dark:border-slate-700 dark:bg-slate-800" />
+                <input type="checkbox" name="active" value="true" defaultChecked={prefill?.active ?? true} className="rounded border-gray-300 dark:border-slate-700 dark:bg-slate-800" />
                 {dict.assets.lblActive}
               </label>
 

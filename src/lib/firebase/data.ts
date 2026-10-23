@@ -471,11 +471,26 @@ function getFallbackExternalCompanies(): ExternalCompany[] {
 // // ── ASSETS ──────────────────────────────────────────────────────────────────
 async function fetchAssets(companyId: string, limitCount: number): Promise<Asset[]> {
   // 1s era pouco para ~900 equipamentos: um timeout caía para a reserva/lista vazia.
-  const dbDocs = (await readAll('assets', companyId, LIST_TIMEOUT_MS, 'listAssets')) as Asset[]
-  if (dbDocs.length > 0) {
-    return dbDocs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limitCount)
-  }
-  return isDemoCompany(companyId) ? getFallbackAssets() : []
+  const dbDocs = (await readAll('assets', companyId, LIST_TIMEOUT_MS, 'listAssets')) as (Asset & { deleted?: boolean })[]
+  return mergeFallbackAssets(companyId, dbDocs)
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    .slice(0, limitCount)
+}
+
+// Firestore + reserva (scripts/import/assets.json, só a Empresa UR), juntos pelo id. Antes
+// a reserva só aparecia com o Firestore vazio: criar UM equipamento escondia os ~900 da
+// reserva. Um equipamento da reserva editado passa a ter documento (que prevalece);
+// apagado fica com um marcador `deleted` (ver deleteAsset), que o esconde aqui.
+function mergeFallbackAssets(companyId: string, dbDocs: (Asset & { deleted?: boolean })[]): Asset[] {
+  const live = dbDocs.filter((d) => !d.deleted && d.companyId === companyId)
+  if (!isDemoCompany(companyId)) return live
+  const known = new Set(dbDocs.map((d) => d.id))
+  return [...live, ...getFallbackAssets().filter((a) => !known.has(a.id))]
+}
+
+function fallbackAssetById(companyId: string, id: string): Asset | null {
+  if (!isDemoCompany(companyId)) return null
+  return getFallbackAssets().find((a) => a.id === id) ?? null
 }
 
 // 1h (era 300s): as escritas invalidam a etiqueta da empresa; o tempo é só uma rede de
@@ -495,17 +510,15 @@ const fallbackAssetRefs = (companyId: string) =>
   isDemoCompany(companyId) ? getFallbackAssets().map(a => ({ id: a.id, name: a.name, tag: a.tag, area: a.area })) : []
 
 async function fetchAssetRefs(companyId: string): Promise<{ id: string; name: string; tag?: string | null; area?: string | null }[]> {
-  const items = await readAll('assets', companyId, LIST_TIMEOUT_MS, 'listAssetRefs')
-  if (items.length > 0) {
-    const dbDocs = items.map((d) => ({
+  const items = (await readAll('assets', companyId, LIST_TIMEOUT_MS, 'listAssetRefs')) as (Asset & { deleted?: boolean })[]
+  return mergeFallbackAssets(companyId, items)
+    .map((d) => ({
       id: d.id,
       name: (d.name as string) ?? '',
       tag: (d.tag as string) ?? null,
       area: (d.area as string) ?? null,
     }))
-    return dbDocs.sort((a, b) => a.name.localeCompare(b.name))
-  }
-  return fallbackAssetRefs(companyId)
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 // 1h (era 300s): as escritas invalidam a etiqueta da empresa.
@@ -566,6 +579,7 @@ export const getAsset = cache(async function(companyId: string, id: string): Pro
 
     const doc = await (await adminDbFor(companyId)).collection('assets').doc(rawId).get()
     if (doc.exists && doc.data()?.companyId === companyId) {
+      if (doc.data()?.deleted) return null // equipamento da reserva apagado
       return serialize<Asset>(doc)
     }
 
@@ -627,7 +641,17 @@ export async function updateAsset(
 ): Promise<void> {
   const ref = (await adminDbFor(companyId)).collection('assets').doc(id)
   const doc = await ref.get()
-  if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Ativo não encontrado')
+  if (!doc.exists || doc.data()?.companyId !== companyId || doc.data()?.deleted) {
+    // Equipamento só da reserva: a primeira edição cria-lhe o documento (com o mesmo id).
+    const fb = doc.exists ? null : fallbackAssetById(companyId, id)
+    if (!fb) throw new Error('Ativo não encontrado')
+    const { id: _id, ...rest } = fb
+    const full = JSON.parse(JSON.stringify({ ...rest, ...data, companyId }))
+    await ref.set(full)
+    await patch('assets', companyId, [{ id, data: full }])
+    revalidateTag(assetsTag(companyId))
+    return
+  }
   await ref.update(data)
   await touch('assets', companyId, [id])
   revalidateTag(assetsTag(companyId))
@@ -636,9 +660,17 @@ export async function updateAsset(
 export async function deleteAsset(companyId: string, id: string): Promise<void> {
   const ref = (await adminDbFor(companyId)).collection('assets').doc(id)
   const doc = await ref.get()
-  if (!doc.exists || doc.data()?.companyId !== companyId) throw new Error('Ativo não encontrado')
-  await ref.delete()
-  await patch('assets', companyId, [{ id, data: null }])
+  const inFallback = fallbackAssetById(companyId, id) !== null
+  if (doc.exists ? doc.data()?.companyId !== companyId : !inFallback) throw new Error('Ativo não encontrado')
+  if (inFallback) {
+    // Também existe na reserva: apagar o documento fazia-o voltar da reserva — fica um marcador.
+    const tombstone = { companyId, deleted: true, deletedAt: new Date().toISOString() }
+    await ref.set(tombstone)
+    await patch('assets', companyId, [{ id, data: tombstone }])
+  } else {
+    await ref.delete()
+    await patch('assets', companyId, [{ id, data: null }])
+  }
   revalidateTag(assetsTag(companyId))
 }
 
