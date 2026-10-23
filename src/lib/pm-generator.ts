@@ -49,6 +49,24 @@ export function calculatePlanAnnualDates(
     return dates
   }
 
+  // Bimensal / Quadrimestral antes de "mensal" (o texto "bimensal" contém "mensal").
+  if (pLow === 'bimensal' || combo.includes('bimensal')) {
+    return [2, 4, 6, 8, 10, 12].map((m) => `${y}-${String(m).padStart(2, '0')}-15`)
+  }
+  if (pLow === 'quadrimestral' || combo.includes('quadrimestral')) {
+    return [`${y}-04-15`, `${y}-08-15`, `${y}-12-15`]
+  }
+  if (pLow === 'quinzenal' || combo.includes('quinzenal')) {
+    const dates: string[] = []
+    const d = new Date(Date.UTC(y, 0, 1))
+    while (d.getUTCDay() !== 1) d.setUTCDate(d.getUTCDate() + 1)
+    while (d.getUTCFullYear() === y) {
+      dates.push(d.toISOString().slice(0, 10))
+      d.setUTCDate(d.getUTCDate() + 14)
+    }
+    return dates
+  }
+
   // 2. Mensal - Todos os meses (dia 15 de cada mês)
   if (pLow === 'mensal' || combo.includes('mensal') || combo.includes('1x/mes') || combo.includes('1x mes') || combo.includes('1x/mês')) {
     const dates: string[] = []

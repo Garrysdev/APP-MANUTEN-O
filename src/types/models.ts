@@ -38,6 +38,11 @@ export type Periodicidade =
   | 'trianual' // de 3 em 3 anos
   | 'horas' // por horas de funcionamento / condição
   | 'pontual' // ficha de registo / plano avulso
+  // Opções do formulário da OT ("Incluir no PM"):
+  | 'quinzenal' // de 2 em 2 semanas
+  | 'bimensal' // de 2 em 2 meses
+  | 'quadrimestral' // de 4 em 4 meses
+  | 'semestral' // de 6 em 6 meses
 
 /** Tipos de técnico / especialidades padrão. */
 export const DEFAULT_TECHNICIAN_TYPES = [
@@ -438,6 +443,10 @@ export const PERIODICIDADE_LABELS: Record<Periodicidade, string> = {
   trianual: 'Trianual (3/3 anos)',
   horas: 'Por horas de funcionamento',
   pontual: 'Pontual / Ficha de registo',
+  quinzenal: 'Quinzenal',
+  bimensal: 'Bimensal',
+  quadrimestral: 'Quadrimestral',
+  semestral: 'Semestral',
 }
 
 export const EXECUTOR_LABELS: Record<Executor, string> = {
@@ -462,6 +471,12 @@ export function periodicidadeToRecurrence(
     case 'trianual': return { recurrence: 'annual', recurrenceValue: 3 }
     case 'horas': return { recurrence: 'monthly', recurrenceValue: 1 }
     case 'pontual': return { recurrence: 'annual', recurrenceValue: 1 }
+    case 'quinzenal': return { recurrence: 'weekly', recurrenceValue: 2 }
+    case 'bimensal': return { recurrence: 'monthly', recurrenceValue: 2 }
+    case 'quadrimestral': return { recurrence: 'monthly', recurrenceValue: 4 }
+    case 'semestral': return { recurrence: 'monthly', recurrenceValue: 6 }
+    // Valor desconhecido (ex.: gravado por versões antigas) — nunca devolver undefined.
+    default: return { recurrence: 'monthly', recurrenceValue: 1 }
   }
 }
 
