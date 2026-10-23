@@ -15,6 +15,7 @@ import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
 import MaterialsSelector from '@/components/ui/MaterialsSelector'
 import { TaskDocPickerManager } from '@/components/ui/TaskDocRequirements'
 import { createTaskAction, updateTaskAction, loadSafetyRulesAction, loadDocumentsAction, type StockMaterialRef } from '@/app/dashboard/tasks/actions'
+import Select from '@/components/ui/Select'
 
 export const PREDEFINED_SAFETY_RULES = [
   'EPI: Capacete',
@@ -731,14 +732,14 @@ export default function CreateTaskModal({
                     <span>⚖️ Legal</span>
                   </label>
                 </div>
-                <select
+                <Select
                   name="tipo"
                   value={tipo}
                   onChange={(e) => setTipo(e.target.value as TipoTarefa)}
                   className="input"
                 >
                   {/* Registos antigos importados podem trazer um tipo fora da lista canónica
-                      (ex. "melhoria"). Sem esta opção sintética, o <select> controlado mostrava
+                      (ex. "melhoria"). Sem esta opção sintética, o <Select> controlado mostrava
                       e submetia silenciosamente a primeira opção da lista, corrompendo o campo
                       em qualquer gravação em que o utilizador não mexesse no tipo. */}
                   {!TIPO_OPTIONS.some((opt) => opt.value === tipo) && (
@@ -747,11 +748,11 @@ export default function CreateTaskModal({
                   {TIPO_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Criticidade *</label>
-                <select
+                <Select sort={false}
                   name="criticidade"
                   value={criticidade}
                   onChange={(e) => setCriticidade(e.target.value as TaskCriticidade)}
@@ -760,7 +761,7 @@ export default function CreateTaskModal({
                   {CRITICIDADE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
-                </select>
+                </Select>
               </div>
             </div>
           )}
@@ -769,7 +770,7 @@ export default function CreateTaskModal({
           {isPmTipo && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Periodicidade</label>
-              <select
+              <Select sort={false}
                 name="periodicidade"
                 value={periodicidadeModal}
                 onChange={(e) => setPeriodicidadeModal(e.target.value)}
@@ -778,7 +779,7 @@ export default function CreateTaskModal({
                 {PERIODICIDADE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
 
@@ -895,17 +896,20 @@ export default function CreateTaskModal({
                 />
               </div>
             )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data Limite</label>
-              <input
-                type="date"
-                name="dueDate"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="input"
-                placeholder="Opcional"
-              />
-            </div>
+            {/* Data Limite só nos Projetos (fim da barra no Gantt); nas OTs não faz sentido. */}
+            {isProjectForm && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data Limite</label>
+                <input
+                  type="date"
+                  name="dueDate"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="input"
+                  placeholder="Opcional"
+                />
+              </div>
+            )}
           </div>
 
           {/* Início e Fim reais: por omissão carimbados por botão (o técnico regista no
@@ -1044,7 +1048,7 @@ export default function CreateTaskModal({
           <div className="grid grid-cols-1 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Estado</label>
-              <select
+              <Select
                 name="status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
@@ -1053,7 +1057,7 @@ export default function CreateTaskModal({
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
@@ -1237,7 +1241,7 @@ export default function CreateTaskModal({
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                       Periodicidade do PM *
                     </label>
-                    <select
+                    <Select sort={false}
                       value={periodicidadeModal}
                       onChange={(e) => setPeriodicidadeModal(e.target.value)}
                       className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-700"
@@ -1245,7 +1249,7 @@ export default function CreateTaskModal({
                       {PERIODICIDADE_PM_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 )
               )}

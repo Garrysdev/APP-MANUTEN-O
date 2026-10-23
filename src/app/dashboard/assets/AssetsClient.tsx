@@ -18,6 +18,7 @@ import { useLanguage } from '@/components/providers/LanguageProvider'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 
 import jsQR from 'jsqr'
+import Select from '@/components/ui/Select'
 
 export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: PlanName }) {
   const router = useRouter()
@@ -636,7 +637,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 ml-auto">
               <span>Por página:</span>
-              <select
+              <Select sort={false}
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
                 className="input text-xs py-1 px-2 w-auto"
@@ -646,7 +647,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 <option value={100}>100</option>
                 <option value={250}>250</option>
                 <option value={-1}>Todos ({assets.length})</option>
-              </select>
+              </Select>
             </div>
             {temFiltro && (
               <button onClick={limparFiltros} className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400">
@@ -787,11 +788,11 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                   />
                 </td>
                 <td className="p-1">
-                  <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value as any)} className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded">
+                  <Select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value as any)} className="input !text-[11px] !py-0.5 !px-1 w-full font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded">
                     <option value="all">Estado (Todos)</option>
                     <option value="active">Ativo</option>
                     <option value="inactive">Inativo</option>
-                  </select>
+                  </Select>
                 </td>
                 <td className="p-1" />
               </tr>
@@ -877,7 +878,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
           <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3 bg-gray-50/50 dark:bg-slate-900/50 rounded-xl">
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
               <span>{dict.common.rowsPerPage}</span>
-              <select 
+              <Select sort={false} 
                 value={pageSize} 
                 onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
                 className="bg-transparent border border-gray-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#2E86C1]"
@@ -888,7 +889,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                 <option value={100}>100</option>
                 <option value={500}>500</option>
                 <option value={-1}>Todos ({shown.length})</option>
-              </select>
+              </Select>
             </div>
             
             <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-slate-300">
@@ -1194,7 +1195,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 shrink-0 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Filtrar por Área:</label>
-                <select
+                <Select
                   value={batchArea}
                   onChange={(e) => {
                     const areaVal = e.target.value
@@ -1210,7 +1211,7 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
                   {uniqueAreas.map(a => (
                     <option key={String(a)} value={String(a)}>Área {String(a)}</option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <div className="sm:col-span-2 flex items-end justify-between gap-2">

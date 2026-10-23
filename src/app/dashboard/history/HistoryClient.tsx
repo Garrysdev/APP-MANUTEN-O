@@ -12,6 +12,7 @@ import { useTableSort, SortableTh } from '@/lib/useTableSort'
 import { importHistoryAction } from './actions'
 import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
+import Select from '@/components/ui/Select'
 
 type Ref = { id: string; name: string; area?: string | null; tag?: string | null }
 type UserRef = Ref & { avatarUrl?: string | null; abbreviation?: string | null; active?: boolean; role?: string | null }
@@ -408,7 +409,7 @@ export default function HistoryClient({
           <div className="flex items-center gap-3 flex-wrap text-xs font-bold text-slate-800 dark:text-slate-200">
             <div className="flex items-center gap-1.5">
               <span>Área:</span>
-              <select
+              <Select
                 value={colF.area}
                 onChange={(e) => setCol('area', e.target.value)}
                 className="input !text-xs !py-1 !px-2 !w-auto font-semibold bg-white border border-slate-300 rounded"
@@ -417,11 +418,11 @@ export default function HistoryClient({
                 {Array.from(new Set(rows.map((r) => r.area).filter(Boolean))).sort().map((a) => (
                   <option key={a} value={a}>{a}</option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div className="flex items-center gap-1.5">
               <span>TAG / Equipamento:</span>
-              <select
+              <Select
                 value={colF.equiTag}
                 onChange={(e) => setCol('equiTag', e.target.value)}
                 className="input !text-xs !py-1 !px-2 !w-auto font-semibold bg-white border border-slate-300 rounded max-w-[200px]"
@@ -430,7 +431,7 @@ export default function HistoryClient({
                 {Array.from(new Set(rows.map((r) => r.equiTag).filter(Boolean))).sort().map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
           {anyFilter && (
@@ -446,7 +447,7 @@ export default function HistoryClient({
         <div className="flex items-center gap-2" />
         <div className="flex items-center gap-1.5 text-xs text-slate-900 font-bold">
           <span>Linhas por página:</span>
-          <select
+          <Select sort={false}
             value={pageSize}
             onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
             className="input text-xs py-1 px-2 w-auto font-bold text-slate-900"
@@ -456,7 +457,7 @@ export default function HistoryClient({
             <option value={100}>100</option>
             <option value={250}>250</option>
             <option value={-1}>Todos ({rows.length})</option>
-          </select>
+          </Select>
         </div>
       </div>
 
@@ -486,23 +487,23 @@ export default function HistoryClient({
                 <ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} />
               </th>
               <th className="px-1.5 py-1">
-                <select value={colF.area} onChange={(e) => setCol('area', e.target.value)} className={colFilterCls}>
+                <Select value={colF.area} onChange={(e) => setCol('area', e.target.value)} className={colFilterCls}>
                   <option value="">Área...</option>
                   {Array.from(new Set(rows.map((r) => r.area).filter(Boolean))).sort().map((a) => (
                     <option key={a} value={a}>{a}</option>
                   ))}
-                </select>
+                </Select>
               </th>
               <th className="px-1.5 py-1">
-                <select value={colF.equiTag} onChange={(e) => setCol('equiTag', e.target.value)} className={colFilterCls}>
+                <Select value={colF.equiTag} onChange={(e) => setCol('equiTag', e.target.value)} className={colFilterCls}>
                   <option value="">TAG...</option>
                   {Array.from(new Set(rows.map((r) => r.equiTag).filter(Boolean))).sort().map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
-                </select>
+                </Select>
               </th>
               <th className="px-1.5 py-1">
-                <select value={colF.ti} onChange={(e) => setCol('ti', e.target.value)} className={colFilterCls}>
+                <Select value={colF.ti} onChange={(e) => setCol('ti', e.target.value)} className={colFilterCls}>
                   <option value="">TI...</option>
                   <option value="MC">MC</option>
                   <option value="MP">MP</option>
@@ -514,18 +515,18 @@ export default function HistoryClient({
                   <option value="LUB">LUB</option>
                   <option value="CAL">CAL</option>
                   <option value="OUT">OUT</option>
-                </select>
+                </Select>
               </th>
               <th className="px-1.5 py-1">
                 <input value={colF.avaria} onChange={(e) => setCol('avaria', e.target.value)} placeholder="Avaria…" className={colFilterCls} />
               </th>
               <th className="px-1.5 py-1">
-                <select value={colF.tecnicos} onChange={(e) => setCol('tecnicos', e.target.value)} className={colFilterCls}>
+                <Select value={colF.tecnicos} onChange={(e) => setCol('tecnicos', e.target.value)} className={colFilterCls}>
                   <option value="">Técnico…</option>
                   {uniqueTechnicians.map(([val, label]) => (
                     <option key={val} value={val}>{label}</option>
                   ))}
-                </select>
+                </Select>
               </th>
               <th className="px-1.5 py-1 relative">
                 <ExcelColumnDateFilter values={excelInicioFilter} onChange={setExcelInicioFilter} />

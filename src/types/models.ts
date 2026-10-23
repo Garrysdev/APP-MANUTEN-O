@@ -101,6 +101,7 @@ export interface User {
   externalCompanyId?: string | null // ID da Empresa Prestadora de Serviços
   externalCompanyName?: string | null // Nome da Empresa Prestadora de Serviços
   phone?: string | null
+  appAccess?: boolean // false = técnico sem acesso à app (sem conta de login)
 }
 
 /** Perfil enriquecido usado na UI (user + empresa resolvida). */

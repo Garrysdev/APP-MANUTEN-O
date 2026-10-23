@@ -15,6 +15,7 @@ import { TipoBadge, getTipoBadgeClass } from '@/components/ui/TipoBadge'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
+import Select from '@/components/ui/Select'
 
 type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
 type UserRef = Ref & {
@@ -1076,7 +1077,7 @@ export default function CalendarClient({
               {selectedEvents.length > 0 && (
                 <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                   <span>Por página:</span>
-                  <select
+                  <Select sort={false}
                     value={dayPageSize}
                     onChange={(e) => setDayPageSize(Number(e.target.value))}
                     className="input text-xs py-1 px-2 w-auto"
@@ -1084,7 +1085,7 @@ export default function CalendarClient({
                     <option value={20}>20</option>
                     <option value={50}>50</option>
                     <option value={100}>100</option>
-                  </select>
+                  </Select>
                 </div>
               )}
             </div>
@@ -1364,40 +1365,40 @@ export default function CalendarClient({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Tipo *</label>
-                  <select value={ntTipo} onChange={(e) => setNtTipo(e.target.value as TipoTarefa)} className="input">
+                  <Select value={ntTipo} onChange={(e) => setNtTipo(e.target.value as TipoTarefa)} className="input">
                     {TIPOS_CREATION.map((t) => <option key={t} value={t}>{TIPO_LABELS[t]}</option>)}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Criticidade</label>
-                  <select value={ntCriticidade} onChange={(e) => setNtCriticidade(e.target.value as TaskCriticidade)} className="input">
+                  <Select sort={false} value={ntCriticidade} onChange={(e) => setNtCriticidade(e.target.value as TaskCriticidade)} className="input">
                     {CRITICIDADES.map((c) => <option key={c} value={c}>{CRITICIDADE_LABELS[c]}</option>)}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Equipamento</label>
-                  <select value={ntAsset} onChange={(e) => setNtAsset(e.target.value)} className="input">
+                  <Select value={ntAsset} onChange={(e) => setNtAsset(e.target.value)} className="input">
                     <option value="">— Nenhum —</option>
                     {assets.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.tag ? `[${a.tag}] ${a.name}` : a.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Responsável (Ativos)</label>
-                  <select value={ntAssigned} onChange={(e) => setNtAssigned(e.target.value)} className="input">
+                  <Select value={ntAssigned} onChange={(e) => setNtAssigned(e.target.value)} className="input">
                     <option value="">— Ninguém —</option>
                     {users.filter((u) => u.active !== false).map((u) => (
                       <option key={u.id} value={u.id}>
                         {(u as any).abbreviation ? `[${(u as any).abbreviation}] ${u.name}` : u.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
@@ -1503,10 +1504,10 @@ export default function CalendarClient({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Atribuir a</label>
-                <select value={assignTo} onChange={(e) => setAssignTo(e.target.value)} className="input">
+                <Select value={assignTo} onChange={(e) => setAssignTo(e.target.value)} className="input">
                   <option value="">— nenhum —</option>
                   {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
+                </Select>
               </div>
             </div>
 

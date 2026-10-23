@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
+import Select from '@/components/ui/Select'
 
 export type CriticalAssetRow = {
   id: string
@@ -74,11 +75,11 @@ export default function CriticalAssetsTable({ rows }: { rows: CriticalAssetRow[]
         </p>
         <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
           <span>Por página:</span>
-          <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="input text-xs py-1 px-2 w-auto">
+          <Select sort={false} value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="input text-xs py-1 px-2 w-auto">
             <option value={20}>20</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
-          </select>
+          </Select>
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -98,21 +99,21 @@ export default function CriticalAssetsTable({ rows }: { rows: CriticalAssetRow[]
               <th className="px-1 py-1"><input value={colF.tag} onChange={(e) => setCol('tag', e.target.value)} placeholder="filtrar…" className={colFilterCls} /></th>
               <th className="px-1 py-1"><input value={colF.name} onChange={(e) => setCol('name', e.target.value)} placeholder="filtrar…" className={colFilterCls} /></th>
               <th className="px-1 py-1">
-                <select value={colF.crit} onChange={(e) => setCol('crit', e.target.value)} className={colFilterCls}>
+                <Select sort={false} value={colF.crit} onChange={(e) => setCol('crit', e.target.value)} className={colFilterCls}>
                   <option value="">Todas</option>
                   <option value="A">Classe A</option>
                   <option value="B">Classe B</option>
                   <option value="C">Classe C</option>
-                </select>
+                </Select>
               </th>
               <th className="px-1 py-1" />
               <th className="px-1 py-1" />
               <th className="px-1 py-1">
-                <select value={colF.estado} onChange={(e) => setCol('estado', e.target.value)} className={colFilterCls}>
+                <Select value={colF.estado} onChange={(e) => setCol('estado', e.target.value)} className={colFilterCls}>
                   <option value="">Todos</option>
                   <option value="ativo">Ativo</option>
                   <option value="inativo">Inativo</option>
-                </select>
+                </Select>
               </th>
             </tr>
           </thead>

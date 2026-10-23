@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Tag, MapPin, Wrench, QrCode, Camera, X, CheckCircle2, Upload } from 'lucide-react'
 import jsQR from 'jsqr'
+import Select from '@/components/ui/Select'
 
 export interface AssetOption {
   id: string
@@ -368,7 +369,7 @@ const DEFAULT_FALLBACK_ASSETS: AssetOption[] = [
             <MapPin className="h-3.5 w-3.5 text-safety-orange shrink-0" />
             Área *
           </label>
-          <select
+          <Select
             value={selectedArea}
             onChange={(e) => handleAreaChange(e.target.value)}
             className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
@@ -380,7 +381,7 @@ const DEFAULT_FALLBACK_ASSETS: AssetOption[] = [
                 {area}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* 2. TAG */}
@@ -389,7 +390,7 @@ const DEFAULT_FALLBACK_ASSETS: AssetOption[] = [
             <Tag className="h-3.5 w-3.5 text-industrial-blue dark:text-blue-400 shrink-0" />
             TAG *
           </label>
-          <select
+          <Select
             value={selectedTag || value}
             onChange={(e) => handleTagChange(e.target.value)}
             disabled={!selectedArea || selectedArea === 'varios'}
@@ -410,7 +411,7 @@ const DEFAULT_FALLBACK_ASSETS: AssetOption[] = [
                 </option>
               )
             })}
-          </select>
+          </Select>
         </div>
       </div>
 

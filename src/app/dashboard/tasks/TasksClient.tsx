@@ -44,6 +44,7 @@ import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import TaskSummaryModal from '@/components/modals/TaskSummaryModal'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 import { matchesTechFilter, isTaskAssignedToUser } from '@/lib/task-assignment'
+import Select from '@/components/ui/Select'
 
 const PERIODICIDADE_OPTIONS: Periodicidade[] = ['semanal', 'mensal', 'trimestral', 'bianual', 'anual', 'bienal', 'trianual', 'horas', 'pontual']
 
@@ -1232,7 +1233,7 @@ export default function TasksClient({
 
           <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 font-medium shrink-0">
             <span>Por página:</span>
-            <select
+            <Select sort={false}
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
               className="select !text-xs !py-1 !px-2 font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg shadow-xs"
@@ -1242,7 +1243,7 @@ export default function TasksClient({
               <option value={100}>100</option>
               <option value={250}>250</option>
               <option value={-1}>Todas ({tasks.length})</option>
-            </select>
+            </Select>
           </div>
         </div>
       </div>

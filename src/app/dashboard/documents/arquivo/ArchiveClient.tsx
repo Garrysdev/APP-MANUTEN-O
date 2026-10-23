@@ -9,6 +9,7 @@ import { AVAILABLE_FRS, AVAILABLE_ITS } from '@/components/ui/TaskDocRequirement
 import { addLogoToWorkbook } from '@/lib/export-logo'
 import { useBranding } from '@/components/providers/BrandingProvider'
 import { formatDate } from '@/lib/utils'
+import Select from '@/components/ui/Select'
 
 // Arquivo de FR/IT preenchidas para auditorias: filtros por OT, Área, TAG, documento,
 // tipo, assinante e datas; cada registo abre o documento tal como foi preenchido e
@@ -135,27 +136,27 @@ export default function ArchiveClient({ records, docInfo, areaTags, signers }: {
       <div className="card p-3 mb-4 grid grid-cols-2 md:grid-cols-5 lg:grid-cols-9 gap-2">
         <input value={f.ref} onChange={(e) => set('ref', e.target.value)} placeholder="Referência (FR-MAN-18)" className={input} />
         <input value={f.ot} onChange={(e) => set('ot', e.target.value)} placeholder="OT nº / descrição" className={input} />
-        <select value={f.area} onChange={(e) => set('area', e.target.value)} className={input}>
+        <Select value={f.area} onChange={(e) => set('area', e.target.value)} className={input}>
           <option value="">Todas as áreas</option>
           {areaOptions.map((a) => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <select value={f.tag} onChange={(e) => set('tag', e.target.value)} className={input}>
+        </Select>
+        <Select value={f.tag} onChange={(e) => set('tag', e.target.value)} className={input}>
           <option value="">Todas as TAGs</option>
           {tagOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={f.doc} onChange={(e) => set('doc', e.target.value)} className={input}>
+        </Select>
+        <Select value={f.doc} onChange={(e) => set('doc', e.target.value)} className={input}>
           <option value="">Todos os documentos</option>
           {docOptions.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
-        </select>
-        <select value={f.kind} onChange={(e) => set('kind', e.target.value)} className={input}>
+        </Select>
+        <Select value={f.kind} onChange={(e) => set('kind', e.target.value)} className={input}>
           <option value="">FR e IT</option>
           <option value="FR">Só FR</option>
           <option value="IT">Só IT</option>
-        </select>
-        <select value={f.signedBy} onChange={(e) => set('signedBy', e.target.value)} className={input}>
+        </Select>
+        <Select value={f.signedBy} onChange={(e) => set('signedBy', e.target.value)} className={input}>
           <option value="">Assinado por (todos)</option>
           {signers.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        </Select>
         <input type="date" value={f.from} onChange={(e) => set('from', e.target.value)} className={input} title="Desde" />
         <input type="date" value={f.to} onChange={(e) => set('to', e.target.value)} className={input} title="Até" />
       </div>

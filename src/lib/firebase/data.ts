@@ -2066,8 +2066,30 @@ export async function createUserDirect(
     externalCompanyId?: string | null
     externalCompanyName?: string | null
     phone?: string | null
+    /** false = técnico sem acesso à app: só a ficha em `users`, sem conta Firebase Auth. */
+    appAccess?: boolean
   }
 ): Promise<string> {
+  if (data.appAccess === false) {
+    const ref = await adminDb().collection('users').add({
+      companyId,
+      email: data.email.trim().toLowerCase() || null,
+      name: data.name.trim(),
+      role: 'technician',
+      avatarUrl: data.avatarUrl ?? null,
+      specialty: data.specialty ?? null,
+      abbreviation: data.abbreviation ?? null,
+      isExternal: false,
+      externalCompanyId: null,
+      externalCompanyName: null,
+      phone: data.phone ?? null,
+      active: true,
+      appAccess: false,
+      createdAt: new Date().toISOString(),
+    })
+    revalidateTag('users')
+    return ref.id
+  }
   const finalEmail = data.email.includes('@') ? data.email.trim().toLowerCase() : `${data.email.trim().toLowerCase()}@rgmaintenance.pt`
   const authUser = await adminAuth().createUser({
     email: finalEmail,

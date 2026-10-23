@@ -14,6 +14,7 @@ import { useLanguage } from '@/components/providers/LanguageProvider'
 import type { Dictionary } from '@/lib/i18n/dictionaries'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
+import Select from '@/components/ui/Select'
 
 type ModalMode = { type: 'create' } | { type: 'edit'; item: StockItem }
 
@@ -64,7 +65,7 @@ function StockForm({
   )
   const [warehouseError, setWarehouseError] = useState('')
 
-  // Equipamentos Atribuídos — caixas de seleção em vez do <select multiple> nativo
+  // Equipamentos Atribuídos — caixas de seleção em vez do <Select multiple> nativo
   // (que exigia Ctrl/Cmd e não deixava perceber o que já estava escolhido).
   const initialAssetIds = defaultValues?.assetIds?.length
     ? defaultValues.assetIds
@@ -136,7 +137,7 @@ function StockForm({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Área</label>
-          <select
+          <Select
             name="area"
             value={area}
             onChange={(e) => { setArea(e.target.value); setTag('') }}
@@ -144,11 +145,11 @@ function StockForm({
           >
             <option value="">— Sem área —</option>
             {assetAreas.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">TAG</label>
-          <select
+          <Select
             name="tag"
             value={tag}
             onChange={(e) => setTag(e.target.value)}
@@ -156,7 +157,7 @@ function StockForm({
           >
             <option value="">— Sem TAG —</option>
             {tagsForArea.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
 
@@ -203,14 +204,14 @@ function StockForm({
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.stocks.formLocation}</label>
           {locationMode === 'select' ? (
             <div className="flex gap-2">
-              <select
+              <Select
                 value={warehouseId}
                 onChange={(e) => setWarehouseId(e.target.value)}
                 className="input flex-1"
               >
                 <option value="">— Sem armazém —</option>
                 {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
+              </Select>
               <button
                 type="button"
                 onClick={() => { setLocationMode('new'); setNewWarehouseName('') }}
@@ -359,7 +360,7 @@ export default function StocksClient({ items, assets = [], warehouses = [], plan
     unit: 'all',
   })
   // Área/TAG/Sistema em multi-seleção com popover — mesmo padrão das OTs e do Plano de
-  // Manutenção — em vez do <select> de valor único que havia antes.
+  // Manutenção — em vez do <Select> de valor único que havia antes.
   const [selectedAreas, setSelectedAreas] = useState<string[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedSystems, setSelectedSystems] = useState<string[]>([])
@@ -715,14 +716,14 @@ export default function StocksClient({ items, assets = [], warehouses = [], plan
                   </td>
                   <td className="p-1"></td>
                   <td className="p-1">
-                    <select
+                    <Select
                       value={colF.unit}
                       onChange={(e) => setColF((prev) => ({ ...prev, unit: e.target.value }))}
                       className="input text-[11px] py-1 px-1 w-full bg-white dark:bg-slate-900"
                     >
                       <option value="all">Todas</option>
                       {availableUnits.map((u) => <option key={u} value={u}>{u}</option>)}
-                    </select>
+                    </Select>
                   </td>
                   <td className="p-1 text-center">
                     {(colF.code || colF.name || colF.unit !== 'all' || selectedAreas.length > 0 || selectedTags.length > 0 || selectedSystems.length > 0) && (
@@ -823,7 +824,7 @@ export default function StocksClient({ items, assets = [], warehouses = [], plan
           <div className="card mt-2.5 md:mt-0 md:rounded-t-none p-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
               <span>Mostrar</span>
-              <select
+              <Select sort={false}
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
                 className="input text-xs py-1 px-2"
@@ -832,7 +833,7 @@ export default function StocksClient({ items, assets = [], warehouses = [], plan
                 <option value={50}>50 por página</option>
                 <option value={100}>100 por página</option>
                 <option value={-1}>Todos ({sortedItems.length})</option>
-              </select>
+              </Select>
               <span>registos de um total de <strong>{sortedItems.length}</strong></span>
             </div>
 
@@ -946,7 +947,7 @@ export default function StocksClient({ items, assets = [], warehouses = [], plan
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-purple-50/40 dark:bg-purple-950/20 p-3 rounded-xl border border-purple-100 dark:border-purple-900/40">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">2. Filtrar por Área:</label>
-                  <select
+                  <Select
                     value={bulkArea}
                     onChange={(e) => setBulkArea(e.target.value)}
                     className="input text-xs w-full bg-white dark:bg-slate-900"
@@ -955,11 +956,11 @@ export default function StocksClient({ items, assets = [], warehouses = [], plan
                     {availableAreas.map((a) => (
                       <option key={a} value={a}>Área {a}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Filtrar por TAG Específica:</label>
-                  <select
+                  <Select
                     value={bulkTag}
                     onChange={(e) => setBulkTag(e.target.value)}
                     className="input text-xs w-full bg-white dark:bg-slate-900"
@@ -968,7 +969,7 @@ export default function StocksClient({ items, assets = [], warehouses = [], plan
                     {availableTags.map((t) => (
                       <option key={t} value={t}>TAG {t}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 

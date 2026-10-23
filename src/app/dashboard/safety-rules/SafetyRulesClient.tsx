@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ShieldCheck, Plus, Trash2, Edit2, CheckCircle2, AlertTriangle, ShieldAlert } from 'lucide-react'
 import type { SafetyRule } from '@/types/models'
 import { createSafetyRuleAction, updateSafetyRuleAction, deleteSafetyRuleAction } from './actions'
+import Select from '@/components/ui/Select'
 
 export default function SafetyRulesClient({ initialRules }: { initialRules: SafetyRule[] }) {
   const router = useRouter()
@@ -176,7 +177,7 @@ export default function SafetyRulesClient({ initialRules }: { initialRules: Safe
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Categoria
                 </label>
-                <select
+                <Select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   className="input text-xs w-full"
@@ -187,7 +188,7 @@ export default function SafetyRulesClient({ initialRules }: { initialRules: Safe
                   <option value="Mecânico">Mecânico</option>
                   <option value="Espaços Confinados">Espaços Confinados</option>
                   <option value="Químico / Biológico">Químico / Biológico</option>
-                </select>
+                </Select>
               </div>
 
               <div>

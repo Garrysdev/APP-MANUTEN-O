@@ -11,6 +11,7 @@ import { useLanguage } from '@/components/providers/LanguageProvider'
 import type { HistoryRow } from './HistoryClient'
 import { addLogoToWorkbook } from '@/lib/export-logo'
 import { useBranding } from '@/components/providers/BrandingProvider'
+import Select from '@/components/ui/Select'
 
 async function downloadXLSX(workbook: ExcelJS.Workbook, filename: string, logoUrl: string | null) {
   await addLogoToWorkbook(workbook, logoUrl)
@@ -367,7 +368,7 @@ export default function HistoryExportModal({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Área</label>
-                <select
+                <Select
                   value={area}
                   onChange={(e) => setArea(e.target.value)}
                   className="input !text-xs !py-1.5 font-semibold"
@@ -376,12 +377,12 @@ export default function HistoryExportModal({
                   {uniqueAreas.map((a) => (
                     <option key={a} value={a}>{a}</option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">TAG / Equipamento</label>
-                <select
+                <Select
                   value={equiTag}
                   onChange={(e) => setEquiTag(e.target.value)}
                   className="input !text-xs !py-1.5 font-semibold"
@@ -390,12 +391,12 @@ export default function HistoryExportModal({
                   {uniqueTags.map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tipo de Intervenção (TI)</label>
-                <select
+                <Select
                   value={ti}
                   onChange={(e) => setTi(e.target.value)}
                   className="input !text-xs !py-1.5 font-semibold"
@@ -411,12 +412,12 @@ export default function HistoryExportModal({
                   <option value="LUB">LUB - Lubrificação</option>
                   <option value="CAL">CAL - Calibração</option>
                   <option value="OUT">OUT - Outro</option>
-                </select>
+                </Select>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Técnico</label>
-                <select
+                <Select
                   value={tecnicos}
                   onChange={(e) => setTecnicos(e.target.value)}
                   className="input !text-xs !py-1.5 font-semibold"
@@ -425,7 +426,7 @@ export default function HistoryExportModal({
                   {uniqueTechs.map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
-                </select>
+                </Select>
               </div>
             </div>
 

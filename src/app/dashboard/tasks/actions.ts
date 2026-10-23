@@ -85,7 +85,10 @@ function parseTask(formData: FormData) {
   const criticidade = String(formData.get('criticidade') ?? 'verde') as TaskCriticidade
   const tipo = String(formData.get('tipo') ?? 'preventiva') as TipoTarefa
   const rawStatus = String(formData.get('status') ?? 'pending') as TaskStatus
-  const dueDate = String(formData.get('dueDate') ?? '').trim() || null
+  // "Data Limite" saiu do formulário (Out/2026): só se grava quando vier no FormData, para
+  // não apagar a das OTs que já a têm (importadas, Gantt...).
+  const dueDateRaw = formData.get('dueDate')
+  const dueDate = dueDateRaw !== null ? (String(dueDateRaw).trim() || null) : undefined
   const completedAtRaw = String(formData.get('completedAt') ?? '').trim()
   const plannedStartDateRaw = String(formData.get('plannedStartDate') ?? '').trim()
 
@@ -153,7 +156,7 @@ function parseTask(formData: FormData) {
     criticidade: CRITICIDADES.includes(criticidade) ? criticidade : 'verde',
     tipo: TIPOS.includes(tipo) ? tipo : 'preventiva',
     status,
-    dueDate,
+    ...(dueDate !== undefined ? { dueDate } : {}),
     ...(createdAt ? { createdAt } : {}),
     startedAt: String(formData.get('startedAt') ?? '').trim() || (status === 'in_progress' || status === 'done' ? new Date().toISOString() : null),
     completedAt: completedAtRaw || (status === 'done' ? new Date().toISOString() : null),

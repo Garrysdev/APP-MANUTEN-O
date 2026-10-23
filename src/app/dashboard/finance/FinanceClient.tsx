@@ -40,6 +40,7 @@ import ExcelDateFilter, {
   DEFAULT_EXCEL_DATE_FILTER,
   filterByExcelDate
 } from '@/components/ui/ExcelDateFilter'
+import Select from '@/components/ui/Select'
 
 type Props = {
   tasks: Task[]
@@ -656,7 +657,7 @@ export default function FinanceClient({
               />
             </div>
 
-            <select
+            <Select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
               className="text-xs font-semibold border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -665,7 +666,7 @@ export default function FinanceClient({
               <option value="curativa">Curativas / PIs</option>
               <option value="preventiva">Preventivas / PMs</option>
               <option value="projeto">Projetos</option>
-            </select>
+            </Select>
           </div>
         </div>
 

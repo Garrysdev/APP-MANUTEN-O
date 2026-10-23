@@ -15,6 +15,7 @@ import { formatDateTime } from '@/lib/utils'
 import { sendInternalMessageAction, updateMessageStatusAction, deleteInternalMessageAction, markMessagesReadAction } from './actions'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
+import Select from '@/components/ui/Select'
 
 interface UserRef {
   id: string
@@ -1008,7 +1009,7 @@ export default function MessagesClient({
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
               Estado da Mensagem
             </label>
-            <select
+            <Select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
               className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
@@ -1018,7 +1019,7 @@ export default function MessagesClient({
               <option value="replied">💬 Respondida</option>
               <option value="info">ℹ️ Informativa</option>
               <option value="closed">✅ Fechada</option>
-            </select>
+            </Select>
           </div>
 
           {/* 3. Pasta / Origem */}
@@ -1026,7 +1027,7 @@ export default function MessagesClient({
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
               Pasta
             </label>
-            <select
+            <Select
               value={filter}
               onChange={(e) => setFilter(e.target.value as any)}
               className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
@@ -1034,7 +1035,7 @@ export default function MessagesClient({
               <option value="all">📥 Todas ({localMessages.length})</option>
               <option value="inbox">📬 Recebidas</option>
               <option value="sent">📤 Enviadas por mim</option>
-            </select>
+            </Select>
           </div>
 
           {/* 4. Filtro por Técnico */}
@@ -1042,7 +1043,7 @@ export default function MessagesClient({
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
               Técnico / Remetente
             </label>
-            <select
+            <Select
               value={techFilter}
               onChange={(e) => setTechFilter(e.target.value)}
               className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
@@ -1053,7 +1054,7 @@ export default function MessagesClient({
                   {u.abbreviation ? `[${u.abbreviation}] ` : ''}{u.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* 5. Associação a OT */}
@@ -1061,7 +1062,7 @@ export default function MessagesClient({
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
               Ligação a OT
             </label>
-            <select
+            <Select
               value={otFilter}
               onChange={(e) => setOtFilter(e.target.value as any)}
               className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
@@ -1069,7 +1070,7 @@ export default function MessagesClient({
               <option value="all">Todas as Mensagens</option>
               <option value="with_ot">⚙️ Apenas com OT</option>
               <option value="no_ot">💬 Sem OT</option>
-            </select>
+            </Select>
           </div>
 
           {/* 6. Fotos / Anexos */}
@@ -1077,14 +1078,14 @@ export default function MessagesClient({
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
               Imagens / Fotos
             </label>
-            <select
+            <Select
               value={photoFilter}
               onChange={(e) => setPhotoFilter(e.target.value as any)}
               className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
             >
               <option value="all">Todas as Mensagens</option>
               <option value="with_photo">📷 Com Foto Anexa</option>
-            </select>
+            </Select>
           </div>
 
           {/* 7. Data Início */}
@@ -1255,7 +1256,7 @@ export default function MessagesClient({
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <select
+                  <Select
                     value={selectedThread.last.status || (selectedThread.last.requiresResponse ? 'awaiting_reply' : 'info')}
                     disabled={statusUpdatingId === selectedThread.last.id}
                     onChange={(e) => handleUpdateStatus(selectedThread.last.id, e.target.value as MessageStatus)}
@@ -1266,7 +1267,7 @@ export default function MessagesClient({
                     <option value="replied">💬 Respondida</option>
                     <option value="info">ℹ️ Informativa</option>
                     <option value="closed">✅ Fechada</option>
-                  </select>
+                  </Select>
                   {isManager && (
                     <button
                       type="button"
@@ -1601,7 +1602,7 @@ export default function MessagesClient({
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                       Associar a OT (Opcional)
                     </label>
-                    <select
+                    <Select
                       value={selectedTaskId}
                       onChange={(e) => setSelectedTaskId(e.target.value)}
                       className="input text-xs font-bold"
@@ -1612,7 +1613,7 @@ export default function MessagesClient({
                           📍 [{t.area || 'Geral'}] 🏷️ [{t.tag || t.id}] — {t.title}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 </div>
               )}

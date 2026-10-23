@@ -20,6 +20,7 @@ import { useBranding } from '@/components/providers/BrandingProvider'
 import type { DocumentoObrigatorio } from '@/types/models'
 import { compressImage } from '@/lib/image'
 import { uploadImage } from '@/lib/upload'
+import Select from '@/components/ui/Select'
 
 const DEFAULT_SAFETY_RULES = [
   'EPIs obrigatórios (Botas, Luvas, Óculos)',
@@ -294,7 +295,7 @@ export default function TaskSummaryModal({
                   <span className={`${statusBadgeClass(status)} text-xs font-extrabold px-3 py-1 rounded-full`}>
                     {STATUS_LABELS[status] || status}
                   </span>
-                  <select
+                  <Select
                     value={status}
                     disabled={changingStatus}
                     onChange={(e) => {
@@ -308,7 +309,7 @@ export default function TaskSummaryModal({
                     {STATUS_OPTIONS.map((s) => (
                       <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                     ))}
-                  </select>
+                  </Select>
                   {task.plannedStartDate && (
                     <span className="text-xs text-slate-500 font-mono font-medium">
                       Agendada: {formatDate(task.plannedStartDate)}

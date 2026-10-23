@@ -23,6 +23,7 @@ import {
 } from '../projects/actions'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
+import Select from '@/components/ui/Select'
 
 type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
 type UserRef = Ref & {
@@ -1027,7 +1028,7 @@ export default function GanttClient({
             <div className="w-36">
               <ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} />
             </div>
-            <select
+            <Select
               value={areaFilter}
               onChange={(e) => { setAreaFilter(e.target.value); setTagFilter('') }}
               className="input text-xs py-1.5 px-2.5 w-36 font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
@@ -1036,8 +1037,8 @@ export default function GanttClient({
               {uniqueAreas.map((area) => (
                 <option key={area} value={area}>Área: {area}</option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={tagFilter}
               onChange={(e) => setTagFilter(e.target.value)}
               className="input text-xs py-1.5 px-2.5 w-36 font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
@@ -1046,8 +1047,8 @@ export default function GanttClient({
               {uniqueTags.map((tag) => (
                 <option key={tag} value={tag}>TAG: {tag}</option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={selectedTech}
               onChange={(e) => setSelectedTech(e.target.value)}
               className="input text-xs py-1.5 px-3 w-44 font-bold"
@@ -1058,7 +1059,7 @@ export default function GanttClient({
                   👤 {u.name}
                 </option>
               ))}
-            </select>
+            </Select>
             <input
               type="text"
               value={search}

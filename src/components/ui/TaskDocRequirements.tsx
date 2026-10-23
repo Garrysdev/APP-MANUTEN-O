@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useOfflineAction } from '@/hooks/useOfflineAction'
 import type { DocumentoObrigatorio } from '@/types/models'
 import { frSignature, itSignature } from '@/lib/doc-signatures'
+import Select from '@/components/ui/Select'
 
 // FR/IT da OT: as FR preenchem-se em papel — na app o técnico só marca "Preenchida em
 // papel" e o servidor grava quem marcou e quando (doc-signatures.ts). As IT leem-se e
@@ -188,7 +189,7 @@ export function TaskDocPickerManager({
 
         {/* Dropdown de Seleção */}
         <div className="flex gap-2 mb-2">
-          <select
+          <Select
             value={frToSelect}
             onChange={(e) => { setFrToSelect(e.target.value); if (e.target.value) handleAddFR(e.target.value) }}
             className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
@@ -197,7 +198,7 @@ export function TaskDocPickerManager({
             {unselectedFRs.map(fr => (
               <option key={fr.id} value={fr.id}>{fr.title}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* Lista de FRs Incluídas */}
@@ -239,7 +240,7 @@ export function TaskDocPickerManager({
 
         {/* Dropdown de Seleção */}
         <div className="flex gap-2 mb-2">
-          <select
+          <Select
             value={itToSelect}
             onChange={(e) => { setItToSelect(e.target.value); if (e.target.value) handleAddIT(e.target.value) }}
             className="input text-xs font-bold w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
@@ -248,7 +249,7 @@ export function TaskDocPickerManager({
             {unselectedITs.map(it => (
               <option key={it.id} value={it.id}>{it.title}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* Lista de ITs Incluídas */}

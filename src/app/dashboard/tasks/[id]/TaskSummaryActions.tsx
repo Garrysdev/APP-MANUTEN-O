@@ -14,6 +14,7 @@ import {
   TIPO_LABELS,
 } from '@/types/models'
 import { updateTaskAction } from '@/app/dashboard/tasks/actions'
+import Select from '@/components/ui/Select'
 
 type Ref = { id: string; name: string }
 
@@ -164,41 +165,41 @@ export default function TaskSummaryActions({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Tipo *</label>
-                  <select name="tipo" defaultValue={task.tipo} className="input">
+                  <Select name="tipo" defaultValue={task.tipo} className="input">
                     {tipos.map((t) => <option key={t} value={t}>{TIPO_LABELS[t]}</option>)}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Criticidade *</label>
-                  <select name="criticidade" defaultValue={task.criticidade} className="input">
+                  <Select sort={false} name="criticidade" defaultValue={task.criticidade} className="input">
                     {criticidades.map((c) => <option key={c} value={c}>{CRITICIDADE_LABELS[c]}</option>)}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Equipamento</label>
-                  <select name="assetId" defaultValue={task.assetId ?? ''} className="input">
+                  <Select name="assetId" defaultValue={task.assetId ?? ''} className="input">
                     <option value="">— Nenhum —</option>
                     {assets.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Responsável</label>
-                  <select name="assignedTo" defaultValue={task.assignedTo ?? ''} className="input">
+                  <Select name="assignedTo" defaultValue={task.assignedTo ?? ''} className="input">
                     <option value="">— Ninguém —</option>
                     {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Estado</label>
-                  <select name="status" defaultValue={task.status} className="input">
+                  <Select name="status" defaultValue={task.status} className="input">
                     {statuses.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Prazo</label>

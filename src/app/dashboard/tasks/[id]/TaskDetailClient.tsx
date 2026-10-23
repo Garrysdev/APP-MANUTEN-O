@@ -22,6 +22,7 @@ import {
   reopenTaskAction,
 } from './actions'
 import { loadDocumentsAction } from '../actions'
+import Select from '@/components/ui/Select'
 
 const MAX_PHOTOS = 5
 const MAX_PHOTO_MB = 10
@@ -601,10 +602,10 @@ export default function TaskDetailClient({
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Técnico</label>
-                <select name="technicianId" className="input" defaultValue="">
+                <Select name="technicianId" className="input" defaultValue="">
                   <option value="">— Eu —</option>
                   {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
+                </Select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -683,7 +684,7 @@ export default function TaskDetailClient({
                       <div key={m._key} className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
                         {/* Stock picker */}
                         {availableStockForTask.length > 0 && (
-                          <select
+                          <Select
                             className="input text-sm font-semibold"
                             value={m.stockItemId ?? ''}
                             onChange={(e) => selectStockItem(m._key, e.target.value)}
@@ -694,7 +695,7 @@ export default function TaskDetailClient({
                                 {s.name}{s.reference ? ` (${s.reference})` : ''} · {s.quantity} {s.unit ?? 'un'} disponíveis
                               </option>
                             ))}
-                          </select>
+                          </Select>
                         )}
                         <div className="grid grid-cols-2 gap-2">
                           <input

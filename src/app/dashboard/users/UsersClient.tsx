@@ -13,6 +13,7 @@ import { uploadImage } from '@/lib/upload'
 import { useLanguage } from '@/components/providers/LanguageProvider'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
 import { Building2, Phone, Mail, MapPin, FileText, UserPlus as UserPlusIcon, ExternalLink, Briefcase, Pencil, Trash2 } from 'lucide-react'
+import Select from '@/components/ui/Select'
 
 export default function UsersClient({
   users,
@@ -45,6 +46,7 @@ export default function UsersClient({
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [noAppAccess, setNoAppAccess] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
   const [inviteUrl, setInviteUrl] = useState('')
   const [inviteBusy, setInviteBusy] = useState(false)
@@ -210,6 +212,7 @@ export default function UsersClient({
     setSuccess(false)
     setNewAvatarFile(null)
     setNewAvatarPreview(null)
+    setNoAppAccess(false)
   }
 
   function closeExternalTechForm() {
@@ -594,31 +597,54 @@ export default function UsersClient({
                 </div>
               </div>
 
+              {/* Técnico sem acesso à app: só serve para atribuir OTs — sem conta de login,
+                  por isso e-mail e password deixam de ser obrigatórios. */}
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="noAppAccess"
+                  checked={noAppAccess}
+                  onChange={(e) => setNoAppAccess(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#2E86C1]"
+                />
+                <span className="text-sm">
+                  <span className="font-semibold text-gray-800 dark:text-slate-200">Técnico sem acesso à app</span>
+                  <span className="block text-xs text-gray-500 dark:text-slate-400">Não entra na app (não tem login) — aparece só para atribuir OTs. E-mail e password não são obrigatórios.</span>
+                </span>
+              </label>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">E-mail *</label>
-                <input name="email" type="email" className="input" placeholder="nome@empresa.pt" required />
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{noAppAccess ? 'E-mail (opcional)' : 'E-mail *'}</label>
+                <input name="email" type="email" className="input" placeholder={noAppAccess ? 'Opcional' : 'nome@empresa.pt'} required={!noAppAccess} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Papel *</label>
-                  <select name="role" className="input">
-                    <option value="technician">Técnico</option>
-                    <option value="manager">Gestor</option>
-                  </select>
+                  {noAppAccess ? (
+                    <>
+                      <input type="hidden" name="role" value="technician" />
+                      <div className="input text-gray-500 dark:text-slate-400">Técnico</div>
+                    </>
+                  ) : (
+                    <Select name="role" className="input">
+                      <option value="technician">Técnico</option>
+                      <option value="manager">Gestor</option>
+                    </Select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Especialidade / Tipo de Técnico</label>
-                  <select name="specialty" className="input">
+                  <Select name="specialty" className="input">
                     <option value="">— Sem especialidade —</option>
                     {typesList.map((t) => (
                       <option key={t} value={t}>{t}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
-              <div>
+              {!noAppAccess && <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Password temporária *</label>
                 <div className="relative">
                   <input
@@ -637,7 +663,7 @@ export default function UsersClient({
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-              </div>
+              </div>}
 
               {error && (
                 <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 px-3 py-2 text-sm text-red-700 dark:text-red-400">
@@ -673,7 +699,7 @@ export default function UsersClient({
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
           <span>Por página:</span>
-          <select
+          <Select sort={false}
             value={pageSize}
             onChange={(e) => setPageSize(Number(e.target.value))}
             className="input !py-1 !px-2 text-xs w-auto"
@@ -682,7 +708,7 @@ export default function UsersClient({
             <option value={20}>20</option>
             <option value={50}>50</option>
             <option value={-1}>Todos ({users.length})</option>
-          </select>
+          </Select>
         </div>
       </div>
 
@@ -732,7 +758,7 @@ export default function UsersClient({
                 </td>
                 <td className="px-2 py-1.5">
                   <div className="flex gap-1 flex-wrap">
-                    <select
+                    <Select
                       value={filterRole}
                       onChange={(e) => setFilterRole(e.target.value as any)}
                       className="input !text-xs !py-1 !px-1.5 w-24"
@@ -740,8 +766,8 @@ export default function UsersClient({
                       <option value="all">Todos papéis</option>
                       <option value="manager">Gestor</option>
                       <option value="technician">Técnico</option>
-                    </select>
-                    <select
+                    </Select>
+                    <Select
                       value={filterSpecialty}
                       onChange={(e) => setFilterSpecialty(e.target.value)}
                       className="input !text-xs !py-1 !px-1.5 flex-1 min-w-[100px]"
@@ -750,11 +776,11 @@ export default function UsersClient({
                       {typesList.map((t) => (
                         <option key={t} value={t}>{t}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 </td>
                 <td className="px-2 py-1.5">
-                  <select
+                  <Select
                     value={filterActive}
                     onChange={(e) => setFilterActive(e.target.value as any)}
                     className="input !text-xs !py-1 !px-1.5 w-28"
@@ -762,7 +788,7 @@ export default function UsersClient({
                     <option value="all">Todos estados</option>
                     <option value="active">Ativos</option>
                     <option value="inactive">Inativos</option>
-                  </select>
+                  </Select>
                 </td>
                 {isManager && <td className="px-2 py-1.5" />}
                 {isManager && <td className="px-2 py-1.5" />}
@@ -880,6 +906,11 @@ export default function UsersClient({
                     {isManager && (
                       <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2">
+                          {u.appAccess === false ? (
+                            <span className="px-2 py-1 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700" title="Técnico sem acesso à app (sem login)">
+                              Sem acesso à app
+                            </span>
+                          ) : (
                           <button
                             onClick={async () => {
                               const pwdPrompt = window.prompt(`Definir nova password para ${u.name} (mínimo 6 caracteres) ou clique em OK para gerar automática:`)
@@ -897,6 +928,7 @@ export default function UsersClient({
                           >
                             <KeyRound className="h-3.5 w-3.5" /> Repor Pass
                           </button>
+                          )}
                           <button
                             onClick={() => setEditingUser(u)}
                             className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-xs font-bold transition-all flex items-center gap-1"
@@ -965,12 +997,12 @@ export default function UsersClient({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Empresa Prestadora de Serviços</label>
-                  <select name="externalCompanyId" defaultValue={editingUser.externalCompanyId || ''} className="input">
+                  <Select name="externalCompanyId" defaultValue={editingUser.externalCompanyId || ''} className="input">
                     <option value="">— Selecionar Empresa —</option>
                     {externalCompanies.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -1064,44 +1096,44 @@ export default function UsersClient({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">E-mail</label>
-                <input type="email" name="email" defaultValue={editingUser.email} className="input" required />
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{editingUser.appAccess === false ? 'E-mail (opcional — sem acesso à app)' : 'E-mail'}</label>
+                <input type="email" name="email" defaultValue={editingUser.email || ''} className="input" required={editingUser.appAccess !== false} />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Papel</label>
-                  <select name="role" defaultValue={editingUser.role} className="input" disabled={editingUser.id === currentUserId}>
+                  <Select name="role" defaultValue={editingUser.role} className="input" disabled={editingUser.id === currentUserId}>
                     <option value="technician">Técnico</option>
                     <option value="manager">Gestor</option>
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Estado</label>
-                  <select name="active" defaultValue={editingUser.active ? 'true' : 'false'} className="input font-bold" disabled={editingUser.id === currentUserId}>
+                  <Select name="active" defaultValue={editingUser.active ? 'true' : 'false'} className="input font-bold" disabled={editingUser.id === currentUserId}>
                     <option value="true">Ativo</option>
                     <option value="false">Inativo</option>
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Língua</label>
-                  <select name="language" defaultValue={editingUser.language || 'pt'} className="input">
+                  <Select name="language" defaultValue={editingUser.language || 'pt'} className="input">
                     <option value="pt">Português</option>
                     <option value="en">Inglês</option>
                     <option value="es">Espanhol</option>
                     <option value="fr">Francês</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Especialidade / Tipo de Técnico</label>
-                <select name="specialty" defaultValue={editingUser.specialty || ''} className="input">
+                <Select name="specialty" defaultValue={editingUser.specialty || ''} className="input">
                   <option value="">— Sem especialidade —</option>
                   {typesList.map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               {editError && (
@@ -1233,12 +1265,12 @@ export default function UsersClient({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Empresa Prestadora de Serviços</label>
-                <select name="externalCompanyId" defaultValue={presetTechCompanyId} className="input">
+                <Select name="externalCompanyId" defaultValue={presetTechCompanyId} className="input">
                   <option value="">— Selecionar Empresa —</option>
                   {externalCompanies.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

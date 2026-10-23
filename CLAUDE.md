@@ -41,8 +41,10 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   correspondência por texto livre na descrição (`description.includes('projeto')`),
   já causou OTs normais a serem arrastadas para a lista de Projetos só
   por mencionarem a palavra no texto.
-- **Datas da OT**: só dois campos de data pedidos no formulário —
-  "Data Limite" (`dueDate`, opcional, sem relação com o Estado) e, só
+- **Datas da OT**: "Data Limite" (`dueDate`) **saiu do formulário de OT**
+  (Out/2026, pedido do Rui — "não faz sentido"); só aparece no formulário de
+  Projetos (fim da barra no Gantt). `parseTask` só grava `dueDate` quando vem
+  no FormData, para não apagar o das OTs que já o têm. Ficam, só
   para o gestor, "Início da OT"/"Fim da OT" (`startedAt`/`completedAt`,
   editáveis à mão, não só carimbo). "Data Planeada" (`plannedStartDate`)
   deixou de ter campo no formulário — `parseTask`/`parseProjectTask` só

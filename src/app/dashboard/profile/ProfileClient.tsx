@@ -10,6 +10,7 @@ import { useLanguage } from '@/components/providers/LanguageProvider'
 import type { UserProfile } from '@/types/models'
 import { ROLE_LABELS } from '@/types/models'
 import { updateProfileAction, updateCompanyAction } from './actions'
+import Select from '@/components/ui/Select'
 
 export default function ProfileClient({ profile }: { profile: UserProfile }) {
   const router = useRouter()
@@ -223,7 +224,7 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{dict.profile.language}</label>
-            <select
+            <Select
               value={language}
               onChange={(e) => setLanguage(e.target.value as typeof language)}
               className="input max-w-sm"
@@ -232,7 +233,7 @@ export default function ProfileClient({ profile }: { profile: UserProfile }) {
               <option value="en">English (EN)</option>
               <option value="es">Español (ES)</option>
               <option value="fr">Français (FR)</option>
-            </select>
+            </Select>
           </div>
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
           {success && <p className="text-sm text-green-600 dark:text-emerald-400">Perfil atualizado com sucesso.</p>}

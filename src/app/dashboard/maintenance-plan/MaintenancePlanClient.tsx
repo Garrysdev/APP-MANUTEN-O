@@ -41,6 +41,7 @@ import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import { PREDEFINED_SAFETY_RULES } from '../tasks/TasksClient'
 import ExcelDateFilter, { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
+import Select from '@/components/ui/Select'
 
 export function isPlanGanttActive(p: MaintenancePlan): boolean {
   if (p.includeInGantt !== undefined && p.includeInGantt !== null) {
@@ -668,7 +669,7 @@ export default function MaintenancePlanClient({
         <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
           <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 mr-2">
             <span>Por página:</span>
-            <select
+            <Select sort={false}
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
               className="input text-xs py-1 px-2 w-auto"
@@ -678,7 +679,7 @@ export default function MaintenancePlanClient({
               <option value={100}>100</option>
               <option value={250}>250</option>
               <option value={-1}>Todos ({plans.length})</option>
-            </select>
+            </Select>
           </div>
           <button
             onClick={() => {
@@ -1006,26 +1007,26 @@ export default function MaintenancePlanClient({
                   />
                 </th>
                 <th className="px-0.5 py-0.5">
-                  <select value={colF.executor} onChange={(e) => setCol('executor', e.target.value)} className={colFilterCls} title="Filtrar executor">
+                  <Select value={colF.executor} onChange={(e) => setCol('executor', e.target.value)} className={colFilterCls} title="Filtrar executor">
                     <option value="">Todos</option>
                     <option value="interno">Interno</option>
                     <option value="externo">Externo</option>
-                  </select>
+                  </Select>
                 </th>
                 <th className="px-0.5 py-0.5">
-                  <select value={colF.estado} onChange={(e) => setCol('estado', e.target.value)} className={colFilterCls} title="Filtrar estado">
+                  <Select value={colF.estado} onChange={(e) => setCol('estado', e.target.value)} className={colFilterCls} title="Filtrar estado">
                     <option value="">Todos</option>
                     <option value="ativo">Ativo</option>
                     <option value="inativo">Inativo</option>
-                  </select>
+                  </Select>
                 </th>
                 <th className="px-0.5 py-0.5">
-                  <select value={colF.tarefa} onChange={(e) => setCol('tarefa', e.target.value)} className={colFilterCls} title="Filtrar estado da tarefa">
+                  <Select value={colF.tarefa} onChange={(e) => setCol('tarefa', e.target.value)} className={colFilterCls} title="Filtrar estado da tarefa">
                     <option value="">Todas</option>
                     <option value="concluida">Concluída</option>
                     <option value="pendente">Pendente</option>
                     <option value="em_curso">Em curso</option>
-                  </select>
+                  </Select>
                 </th>
               </tr>
             </thead>
@@ -1125,7 +1126,7 @@ export default function MaintenancePlanClient({
           <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50 rounded-b-xl">
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
               <span>Linhas por página:</span>
-              <select 
+              <Select sort={false} 
                 value={pageSize} 
                 onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
                 className="bg-transparent border border-gray-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#2E86C1]"
@@ -1135,7 +1136,7 @@ export default function MaintenancePlanClient({
                 <option value={100}>100</option>
                 <option value={250}>250</option>
                 <option value={-1}>Todos ({plans.length})</option>
-              </select>
+              </Select>
             </div>
             
             <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-slate-300">

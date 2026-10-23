@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import type { Asset, Task, Intervention } from '@/types/models'
+import Select from '@/components/ui/Select'
 
 type Props = {
   assets: Asset[]
@@ -307,7 +308,7 @@ export default function ReliabilityClient({ assets, tasks, interventions = [] }:
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-slate-500">Ano:</span>
-            <select
+            <Select sort={false}
               value={selectedYear}
               onChange={(e) => setSelectedYear(Number(e.target.value))}
               className="text-xs font-semibold border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -315,7 +316,7 @@ export default function ReliabilityClient({ assets, tasks, interventions = [] }:
               {[2024, 2025, 2026, 2027].map((y) => (
                 <option key={y} value={y}>{y}</option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 
@@ -397,7 +398,7 @@ export default function ReliabilityClient({ assets, tasks, interventions = [] }:
             </div>
 
             {/* Filtro Criticidade */}
-            <select
+            <Select sort={false}
               value={criticidadeFilter}
               onChange={(e) => setCriticidadeFilter(e.target.value as any)}
               className="text-xs font-semibold border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -406,10 +407,10 @@ export default function ReliabilityClient({ assets, tasks, interventions = [] }:
               <option value="A">Classe A (Críticos)</option>
               <option value="B">Classe B (Médios)</option>
               <option value="C">Classe C (Baixos)</option>
-            </select>
+            </Select>
 
             {/* Filtro Avarias */}
-            <select
+            <Select
               value={hasBreakdownFilter}
               onChange={(e) => setHasBreakdownFilter(e.target.value as any)}
               className="text-xs font-semibold border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -417,7 +418,7 @@ export default function ReliabilityClient({ assets, tasks, interventions = [] }:
               <option value="all">Todos os Estados</option>
               <option value="with_breakdowns">Com Avarias Registadas</option>
               <option value="zero_breakdowns">Sem Avarias (100% OK)</option>
-            </select>
+            </Select>
           </div>
         </div>
 

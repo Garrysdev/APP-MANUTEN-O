@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { Plus, X, Package, Check, Sparkles } from 'lucide-react'
 import { createStockItemAction } from '@/app/dashboard/stocks/actions'
+import Select from '@/components/ui/Select'
 
 export interface StockItemRef {
   id: string
@@ -122,7 +123,7 @@ export default function MaterialsSelector({
       <div className="space-y-2">
         {items.map((val, i) => (
           <div key={i} className="flex items-center gap-2">
-            <select
+            <Select
               value={val}
               onChange={(e) => handleSelectExisting(i, e.target.value)}
               className="input flex-1 text-xs"
@@ -136,7 +137,7 @@ export default function MaterialsSelector({
               {val && !sortedStockRefs.some((s) => s.name === val) && (
                 <option value={val}>{val} (Novo/Avulso)</option>
               )}
-            </select>
+            </Select>
 
             <button
               type="button"

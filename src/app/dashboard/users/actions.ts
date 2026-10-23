@@ -48,8 +48,16 @@ export async function createUserDirectAction(
   const externalCompanyName = String(formData.get('externalCompanyName') ?? '').trim() || null
   const phone = String(formData.get('phone') ?? '').trim() || null
 
-  if (!name || !email || !tempPassword) return { error: 'Preenche todos os campos.' }
-  if (tempPassword.length < 6) return { error: 'A password deve ter pelo menos 6 caracteres.' }
+  // Técnico sem acesso à app: ficha sem conta de login (só para atribuir OTs).
+  const noAppAccess = formData.get('noAppAccess') === 'on' || formData.get('noAppAccess') === 'true'
+
+  if (noAppAccess) {
+    if (!name) return { error: 'O nome é obrigatório.' }
+    if (email && !email.includes('@')) return { error: 'E-mail inválido.' }
+  } else {
+    if (!name || !email || !tempPassword) return { error: 'Preenche todos os campos.' }
+    if (tempPassword.length < 6) return { error: 'A password deve ter pelo menos 6 caracteres.' }
+  }
 
   try {
     const plan = (profile.company?.plan ?? 'free') as PlanName
@@ -65,8 +73,9 @@ export async function createUserDirectAction(
     await createUserDirect(profile.companyId, {
       email,
       name,
-      role,
+      role: noAppAccess ? 'technician' : role,
       tempPassword,
+      appAccess: !noAppAccess,
       avatarUrl,
       specialty,
       abbreviation,

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { Task } from '@/types/models'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { getYearTasksAction, getPMComplianceAction } from './actions'
+import Select from '@/components/ui/Select'
 
 const EARLIEST_YEAR = 2017
 
@@ -88,7 +89,7 @@ export default function DashboardKpiCards({
           >
             <ChevronLeft size={14} />
           </button>
-          <select
+          <Select sort={false}
             value={year}
             onChange={(e) => changeYear(Number(e.target.value))}
             className="text-sm font-bold text-industrial-blue dark:text-blue-400 bg-transparent px-1 py-0.5 cursor-pointer focus:outline-none"
@@ -96,7 +97,7 @@ export default function DashboardKpiCards({
             {availableYears.map((y) => (
               <option key={y} value={y}>{y}{y === currentYear ? ' (atual)' : ''}</option>
             ))}
-          </select>
+          </Select>
           <button
             type="button"
             onClick={goNextYear}

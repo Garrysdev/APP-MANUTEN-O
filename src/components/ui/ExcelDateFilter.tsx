@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { CalendarDays, Filter, X, ChevronDown } from 'lucide-react'
 import { toNormalizedIsoDate } from '@/lib/utils'
+import Select from '@/components/ui/Select'
 
 export interface ExcelDateFilterValues {
   periodPreset: string // 'all' | 'this_year' | 'this_month' | 'last_month' | 'last_year' | 'last_30' | 'last_90' | 'custom'
@@ -302,7 +303,7 @@ export function ExcelColumnDateFilter({
             <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
               Período Rápido:
             </label>
-            <select
+            <Select sort={false}
               value={values.periodPreset || 'all'}
               onChange={(e) => updatePreset(e.target.value)}
               className="input !text-xs !py-1 !px-2 font-bold w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
@@ -315,7 +316,7 @@ export function ExcelColumnDateFilter({
               <option value="last_30">⏱️ Últimos 30 Dias</option>
               <option value="last_90">⏱️ Últimos 90 Dias</option>
               <option value="custom">✏️ Personalizado (Ano / Mês / Datas)</option>
-            </select>
+            </Select>
           </div>
 
           {/* Seletores de Ano e Mês */}
@@ -324,7 +325,7 @@ export function ExcelColumnDateFilter({
               <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
                 Ano:
               </label>
-              <select
+              <Select sort={false}
                 value={values.selectedYear || ''}
                 onChange={(e) =>
                   onChange({
@@ -341,14 +342,14 @@ export function ExcelColumnDateFilter({
                     {y}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div>
               <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
                 Mês:
               </label>
-              <select
+              <Select sort={false}
                 value={values.selectedMonth || ''}
                 onChange={(e) =>
                   onChange({
@@ -365,7 +366,7 @@ export function ExcelColumnDateFilter({
                     {m.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
