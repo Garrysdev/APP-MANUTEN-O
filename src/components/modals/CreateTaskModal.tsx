@@ -468,7 +468,9 @@ export default function CreateTaskModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!title.trim()) {
-      setError('⚠️ O Título / Descrição da Avaria é um campo obrigatório (*). Por favor preencha o título antes de guardar.')
+      setError(isProjectForm
+        ? '⚠️ O Nome do Projeto é obrigatório (*). Por favor preencha-o antes de guardar.'
+        : '⚠️ O Título / Descrição da Avaria é um campo obrigatório (*). Por favor preencha o título antes de guardar.')
       return
     }
     if (!isProjectForm && !assetId.trim()) {
@@ -590,7 +592,7 @@ export default function CreateTaskModal({
       }
     } catch (err) {
       setBusy(false)
-      setError(err instanceof Error ? err.message : 'Erro ao guardar OT.')
+      setError(err instanceof Error ? err.message : isProjectForm ? 'Erro ao guardar o projeto.' : 'Erro ao guardar OT.')
     }
   }
 
@@ -651,11 +653,15 @@ export default function CreateTaskModal({
           <div>
             <h1 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <span>
-                {titleText || (isEditingExisting ? 'Editar OT' : duplicating ? 'Duplicar OT' : 'Nova Ordem de Trabalho')}
+                {titleText || (isProjectForm
+                  ? (isEditingExisting ? 'Editar Projeto' : duplicating ? 'Duplicar Projeto' : 'Novo Projeto')
+                  : (isEditingExisting ? 'Editar OT' : duplicating ? 'Duplicar OT' : 'Nova Ordem de Trabalho'))}
               </span>
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-              {duplicating ? 'Rever os dados da cópia antes de gravar como OT nova' : 'Ficha completa de registo de OT'}
+              {isProjectForm
+                ? (duplicating ? 'Rever os dados da cópia antes de gravar como projeto novo' : 'Planeamento e acompanhamento do projeto (barra no Gantt)')
+                : (duplicating ? 'Rever os dados da cópia antes de gravar como OT nova' : 'Ficha completa de registo de OT')}
             </p>
           </div>
         </div>
@@ -666,7 +672,7 @@ export default function CreateTaskModal({
               type="button"
               onClick={handleDuplicateClick}
               className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Criar uma OT nova com os mesmos dados"
+              title={isProjectForm ? 'Criar um projeto novo com os mesmos dados' : 'Criar uma OT nova com os mesmos dados'}
             >
               <Copy className="h-4 w-4" />
               <span className="hidden sm:inline">Duplicar</span>
@@ -698,14 +704,14 @@ export default function CreateTaskModal({
       <div className="flex-1 w-full max-w-3xl mx-auto p-4 sm:p-8 space-y-6 pb-28">
         <form ref={formRef} onSubmit={handleSubmit} className="card p-6 shadow-xl space-y-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Título *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">{isProjectForm ? 'Nome do Projeto *' : 'Título *'}</label>
             <input
               name="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="input"
               required
-              placeholder="Ex.: Lubrificação mensal"
+              placeholder={isProjectForm ? 'Ex.: Remodelação da linha de enchimento' : 'Ex.: Lubrificação mensal'}
             />
           </div>
 
@@ -915,24 +921,24 @@ export default function CreateTaskModal({
               seguinte), sem adulterar métricas como o MTTR. */}
           <div className="grid grid-cols-2 gap-3">
             <StampField
-              label="Início da OT"
+              label={isProjectForm ? 'Início do Projeto' : 'Início da OT'}
               name="startedAt"
               value={startedAt}
               onStamp={() => setStartedAtAndStatus(nowForInput())}
               onClear={() => setStartedAtAndStatus('')}
               onChangeValue={setStartedAtAndStatus}
-              actionLabel="Iniciar OT"
+              actionLabel={isProjectForm ? 'Iniciar' : 'Iniciar OT'}
               tone="blue"
               editable={isManager}
             />
             <StampField
-              label="Fim da OT"
+              label={isProjectForm ? 'Fim do Projeto' : 'Fim da OT'}
               name="completedAt"
               value={completedAt}
               onStamp={() => setCompletedAtAndStatus(nowForInput())}
               onClear={() => setCompletedAtAndStatus('')}
               onChangeValue={setCompletedAtAndStatus}
-              actionLabel="Terminar OT"
+              actionLabel={isProjectForm ? 'Terminar' : 'Terminar OT'}
               tone="emerald"
               disabled={!startedAt}
               disabledHint="Marque primeiro o início"
@@ -955,7 +961,7 @@ export default function CreateTaskModal({
                 )}
               </div>
               <p className="text-[11px] text-indigo-800/80 dark:text-indigo-400">
-                Selecione as tarefas antecessoras (Finish-to-Start). Ao reagendar a antecessora, esta OT desloca-se automaticamente.
+                Selecione as tarefas antecessoras (Finish-to-Start). Ao reagendar a antecessora, {isProjectForm ? 'este projeto desloca-se' : 'esta OT desloca-se'} automaticamente.
               </p>
 
               <div className="max-h-36 overflow-y-auto border border-indigo-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-900 space-y-1">
@@ -1018,14 +1024,14 @@ export default function CreateTaskModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Descrição da Intervenção</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{isProjectForm ? 'Âmbito / Objetivos do Projeto' : 'Descrição da Intervenção'}</label>
             <textarea
               name="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="input"
               rows={2}
-              placeholder="Descreva os trabalhos a realizar..."
+              placeholder={isProjectForm ? 'O que o projeto vai entregar, fases principais, orçamento previsto...' : 'Descreva os trabalhos a realizar...'}
             />
           </div>
 
@@ -1037,7 +1043,7 @@ export default function CreateTaskModal({
               onChange={(e) => setObservacoes(e.target.value)}
               className="input"
               rows={2}
-              placeholder="Instruções específicas ou notas sobre a intervenção..."
+              placeholder={isProjectForm ? 'Fornecedores, riscos, notas de acompanhamento...' : 'Instruções específicas ou notas sobre a intervenção...'}
             />
           </div>
 
@@ -1061,7 +1067,7 @@ export default function CreateTaskModal({
           <div className="space-y-2 bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
             <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
               <Camera className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-              Foto da Avaria / Equipamento (Opcional)
+              {isProjectForm ? 'Foto / Imagem do Projeto (Opcional)' : 'Foto da Avaria / Equipamento (Opcional)'}
             </label>
             
             {photoPreview ? (
@@ -1254,7 +1260,7 @@ export default function CreateTaskModal({
 
           {duplicating && (
             <div className="rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 px-3 py-2.5 text-sm text-indigo-800 dark:text-indigo-300 flex items-center justify-between gap-3">
-              <span>📋 A criar uma <strong>cópia</strong> desta OT — reveja os campos e grave para a criar como uma OT nova (ID diferente do original).</span>
+              <span>📋 A criar uma <strong>cópia</strong> {isProjectForm ? 'deste projeto — reveja os campos e grave para o criar como um projeto novo' : 'desta OT — reveja os campos e grave para a criar como uma OT nova'} (ID diferente do original).</span>
               <button type="button" onClick={handleCancelDuplicate} className="text-xs font-bold underline shrink-0 cursor-pointer">
                 Cancelar cópia
               </button>
@@ -1276,14 +1282,14 @@ export default function CreateTaskModal({
               <button type="button" onClick={handleDelete} disabled={busy}
                 className="px-4 py-3 bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/40 dark:hover:bg-red-900/60 dark:text-red-300 border border-red-200 dark:border-red-800 text-sm font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer">
                 <Trash2 className="h-4 w-4" />
-                <span>Eliminar OT</span>
+                <span>{isProjectForm ? 'Eliminar Projeto' : 'Eliminar OT'}</span>
               </button>
             )}
             <button type="button" onClick={onClose} className="btn-secondary flex-1 py-3 text-sm font-bold">
               Cancelar
             </button>
             <button type="submit" disabled={busy} className="btn-primary flex-1 py-3 text-sm font-bold shadow-lg">
-              {busy ? 'A guardar…' : isEditingExisting ? 'Guardar Alterações' : duplicating ? 'Guardar Cópia' : 'Guardar Nova OT'}
+              {busy ? 'A guardar…' : isEditingExisting ? 'Guardar Alterações' : duplicating ? 'Guardar Cópia' : isProjectForm ? 'Criar Projeto' : 'Guardar Nova OT'}
             </button>
           </div>
         </form>
@@ -1305,7 +1311,7 @@ export default function CreateTaskModal({
             trás, e a OT não era gravada. */}
         <button type="button" onClick={() => formRef.current?.requestSubmit()}
           disabled={busy} className="btn-primary flex-1 py-2.5 text-xs font-bold shadow-md">
-          {busy ? 'A guardar…' : isEditingExisting ? 'Guardar Alterações' : duplicating ? 'Guardar Cópia' : 'Guardar Nova OT'}
+          {busy ? 'A guardar…' : isEditingExisting ? 'Guardar Alterações' : duplicating ? 'Guardar Cópia' : isProjectForm ? 'Criar Projeto' : 'Guardar Nova OT'}
         </button>
       </div>
     </div>,
