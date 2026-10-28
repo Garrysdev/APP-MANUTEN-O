@@ -1,4 +1,4 @@
-import { createVibrationAggregator, parseSeriesName, parseTimestamp, mergeSeriesDay, zoneOf, linearTrend, daysToLimit, ISO_PRESETS, BUCKETS_PER_DAY } from './vibration'
+import { belongsToEquipment, createVibrationAggregator, parseSeriesName, parseTimestamp, mergeSeriesDay, zoneOf, linearTrend, daysToLimit, ISO_PRESETS, BUCKETS_PER_DAY } from './vibration'
 
 describe('vibration', () => {
   it('reconhece sensor e métrica no nome da série', () => {
@@ -59,5 +59,13 @@ describe('vibration', () => {
     const t = linearTrend([{ x: 0, y: 1 }, { x: 1, y: 1.1 }, { x: 2, y: 1.2 }])
     expect(daysToLimit(t, 2, 2.8)).toBeCloseTo(16, 5)
     expect(daysToLimit(linearTrend([{ x: 0, y: 2 }, { x: 1, y: 1 }, { x: 2, y: 0.5 }]), 2, 2.8)).toBeNull()
+  })
+  it('exportação pedida ao SCADA: temperatura por sensor, corrente e rpm do R3', () => {
+    expect(parseSeriesName('Trend_SGM_SGM_R3_VIB2_Temperatura_Valor ValueY')).toMatchObject({ sensor: 'VIB2', metric: 'Temperatura', unit: '°C' })
+    expect(parseSeriesName('Trend_SGM_SGM_R3_VIB3_Temperatura_Valor ValueY')).toMatchObject({ sensor: 'VIB3', metric: 'Temperatura' })
+    expect(parseSeriesName('Trend_SGM_SGM_R3_Agitador_I_Corrente ValueY')).toMatchObject({ sensor: 'OUTROS', metric: 'Corrente', unit: 'A' })
+    expect(parseSeriesName('Trend_SGM_SGM_R3_Agitador_RPM ValueY')).toMatchObject({ sensor: 'OUTROS', metric: 'Velocidade', unit: 'rpm' })
+    expect(belongsToEquipment('Trend_SGM_SGM_R3_Agitador_RPM ValueY', ['R3'])).toBe(true)
+    expect(belongsToEquipment('Trend_SGM_B_Agua.I_Corrente_L1 ValueY', ['R3'])).toBe(false)
   })
 })

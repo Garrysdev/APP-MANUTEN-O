@@ -47,3 +47,6 @@ public/workbox-*.js.map
 # Área de rascunho
 /scratch/
 .env*
+
+# Excel de clientes (dados da UR) — fora do git
+UR EXCEL/
