@@ -14,6 +14,10 @@ export default async function AssetsPage() {
   const plan = (profile.company?.plan ?? 'free') as PlanName
   if (!planHas(plan, 'assets')) redirect('/dashboard/billing?feature=assets')
 
-  const assets = await listAssets(profile.companyId)
+  const assets = [...(await listAssets(profile.companyId))].sort(
+    (a, b) =>
+      (a.area || '').localeCompare(b.area || '', 'pt', { numeric: true }) ||
+      (a.tag || '').localeCompare(b.tag || '', 'pt', { numeric: true }),
+  )
   return <AssetsClient assets={assets} plan={plan} />
 }

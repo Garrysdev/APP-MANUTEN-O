@@ -28,7 +28,7 @@
   - Início/Fim do Projeto, Criar/Eliminar Projeto.
   - A Data Limite fica nos Projetos.
 - **Técnicos sem acesso à app contam para o limite:** já era assim (`countActiveUsers` conta todos os ativos). Nada mudou.
-- **Ordem alfabética:** os dropdowns já o eram (dc5d851). Para as tabelas, falta o Rui confirmar quais e por que coluna.
+- **Ordem alfabética:** os dropdowns já o eram (dc5d851). Tabelas (aprovado pelo Rui): Equipamentos por Área e depois TAG; Regras de Segurança por nome. Equipa, Armazéns e Inventário já estavam por nome (o Inventário mantém no topo os materiais atribuídos a TAG). OT, Histórico e Projetos ficam por data.
 
 ## Técnico
 
@@ -43,13 +43,12 @@
 ## Livro Hotmart
 
 - **Geradas no Google Flow as 6 fotos dos capítulos 4–9**: KPIs, Segurança, Stocks, Gantt, Financeiro, Documentos. Ficam no projeto do Flow "out. 28 - 12:25".
-- **Só a do cap. 9 foi descarregada.** O Chrome bloqueou os downloads seguintes (proteção de vários downloads automáticos).
+- **As 6 estão descarregadas** em `Monetização Hotmart/Imagens livro (Google Flow)/` (Cap04 a Cap09), depois de o Rui permitir vários downloads no Chrome.
 - Prompts em `Monetização Hotmart/Imagens livro (Google Flow)/`.
 - O ficheiro-fonte do livro não está neste computador (foi feito noutra sessão/máquina).
 
 ## Pendentes
 
-- O Rui permite downloads múltiplos para flow.google.com (ícone na barra de endereço). Depois descarregam-se as 5 que faltam.
-- `firebase login` para publicar o índice das notificações.
-- Ordem alfabética das tabelas — confirmar quais.
+- Índice das notificações: já existe e está Ativado na consola do Firebase (verificado 28/10). Não é preciso `firebase login`.
+- Inserir as fotos no livro (o ficheiro-fonte está noutra máquina).
 - Medir uma semana de leituras do Firestore.

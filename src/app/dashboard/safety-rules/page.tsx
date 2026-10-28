@@ -11,7 +11,9 @@ export default async function SafetyRulesPage() {
   const profile = await getCurrentProfile()
   if (!profile || profile.role !== 'manager') redirect('/dashboard/tasks')
 
-  const rules = await listSafetyRules(profile.companyId)
+  const rules = [...(await listSafetyRules(profile.companyId))].sort((a, b) =>
+    (a.title || '').localeCompare(b.title || '', 'pt', { numeric: true }),
+  )
 
   return <SafetyRulesClient initialRules={rules} />
 }
