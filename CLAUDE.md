@@ -55,6 +55,11 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   revertia sozinho para Pendente) — preencher/limpar "Fim da OT" muda
   o Estado automaticamente, nos dois sentidos, no cliente e no
   servidor.
+- **Popovers com "clicar fora fecha"** que contenham um `<Select>`
+  (`src/components/ui/Select.tsx`): a lista do Select abre em
+  `document.body` (portal). O handler de clique-fora tem de ignorar
+  `target.closest('[data-select-list]')` — senão o popover fecha antes
+  de a escolha contar (foi o bug dos filtros de data das OT, Out/2026).
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso
   acontecer é bug (ver secção de bugs conhecidos abaixo).
