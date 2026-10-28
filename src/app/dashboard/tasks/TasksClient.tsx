@@ -274,15 +274,30 @@ export default function TasksClient({
     const wantsCompleted = selectedStatuses.includes('done') || selectedStatuses.includes('cancelled')
     if (wantsCompleted && !completedLoaded && !loadingCompleted) {
       setLoadingCompleted(true)
-      loadCompletedTasksAction(1, 250).then((res) => {
-        setExtraCompletedTasks(res.tasks || [])
-        setCompletedLoaded(true)
-        setLoadingCompleted(false)
-      }).catch(() => {
-        setLoadingCompleted(false)
-      })
+      // Primeiro bloco depressa; o resto do histórico (≈6700 na UR) vem a seguir, em blocos.
+      // Antes ficava só nas 250 mais recentes e um filtro de data num ano antigo dava vazio.
+      ;(async () => {
+        const PAGE = 1000
+        let page = 1
+        let loaded: Task[] = []
+        for (;;) {
+          const res = await loadCompletedTasksAction(page, PAGE)
+          loaded = [...loaded, ...(res.tasks || [])]
+          setExtraCompletedTasks(loaded)
+          if (page === 1) setCompletedLoaded(true)
+          if (!res.tasks?.length || loaded.length >= res.total) break
+          page += 1
+        }
+      })().catch(() => {}).finally(() => setLoadingCompleted(false))
     }
   }, [selectedStatuses, completedLoaded, loadingCompleted])
+
+  // Depois de gravar: a lista de concluídas foi carregada à parte e não vem no
+  // router.refresh() — sem a recarregar, a OT editada continuava com os valores antigos.
+  function refreshTasks() {
+    setCompletedLoaded(false)
+    router.refresh()
+  }
 
   const [safetyRules, setSafetyRules] = useState<string[]>([''])
   const [materialsRequired, setMaterialsRequired] = useState<string[]>([''])
@@ -458,7 +473,7 @@ export default function TasksClient({
       : await createTaskAction({}, formData)
     setBusy(false)
     if (result.error) setError(result.error)
-    else { closeModal(); router.refresh() }
+    else { closeModal(); refreshTasks() }
   }
 
   async function handleDelete(task: Task) {
@@ -468,7 +483,7 @@ export default function TasksClient({
       alert(res.error)
       return
     }
-    router.refresh()
+    refreshTasks()
   }
 
   function handleStatusChange(taskId: string, newStatus: TaskStatus) {
@@ -477,7 +492,7 @@ export default function TasksClient({
       if (res?.error) {
         alert(res.error)
       } else {
-        router.refresh()
+        refreshTasks()
       }
     })
   }
@@ -535,21 +550,13 @@ export default function TasksClient({
     isExcelDateFilterActive(excelInicioFilter) ||
     isExcelDateFilterActive(excelFimFilter)
 
+  // Mesma data da coluna DATA da tabela (createdAt primeiro). Antes a Data Planeada vinha
+  // à frente e alterar a data de lançamento não se via no cartão do telemóvel.
   const getTaskDisplayDateTime = (task: Task) => {
-    const d = task.plannedStartDate || task.createdAt
+    const d = task.createdAt || task.plannedStartDate
     if (!d) return '—'
-    if (task.plannedStartDate && (task.plannedStartDate.includes('T') || task.plannedStartDate.includes(':'))) {
-      return formatDateTime(task.plannedStartDate)
-    }
-    if (task.createdAt && (task.createdAt.includes('T') || task.createdAt.includes(':'))) {
-      const dOnly = formatDate(task.plannedStartDate || task.createdAt)
-      const cObj = new Date(task.createdAt)
-      if (!isNaN(cObj.getTime())) {
-        const hh = String(cObj.getHours()).padStart(2, '0')
-        const mm = String(cObj.getMinutes()).padStart(2, '0')
-        return `${dOnly} ${hh}:${mm}`
-      }
-    }
+    // Data de lançamento editada à mão grava-se à meia-noite — sem hora a mostrar.
+    if (d.endsWith('T00:00:00.000Z')) return formatDate(d)
     return formatDateTime(d)
   }
 
@@ -667,8 +674,9 @@ export default function TasksClient({
   const combinedTasks = useMemo(() => {
     if (extraCompletedTasks.length === 0) return tasks
     const map = new Map<string, Task>()
-    tasks.forEach((t) => map.set(t.id, t))
+    // As do servidor (frescas a cada router.refresh) prevalecem sobre as carregadas à parte.
     extraCompletedTasks.forEach((t) => map.set(t.id, t))
+    tasks.forEach((t) => map.set(t.id, t))
     return Array.from(map.values())
   }, [tasks, extraCompletedTasks])
 
@@ -765,7 +773,7 @@ export default function TasksClient({
     })
   }, [safeTasks, assets, users])
 
-  useEffect(() => { setCurrentPage(1) }, [search, selectedStatuses, selectedTIs, selectedAreas, selectedTags, selectedTechs, areaFilter, tagFilter, colF, pageSize])
+  useEffect(() => { setCurrentPage(1) }, [search, selectedStatuses, selectedTIs, selectedAreas, selectedTags, selectedTechs, areaFilter, tagFilter, colF, pageSize, excelDateFilter, excelInicioFilter, excelFimFilter])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -1044,7 +1052,7 @@ export default function TasksClient({
     if (result.error) alert(result.error)
     else {
       alert(`Importação concluída com sucesso! (${result.created ?? 0} registos importados/atualizados)`)
-      router.refresh()
+      refreshTasks()
     }
   }
 
@@ -1690,7 +1698,7 @@ export default function TasksClient({
         hideDuplicateDelete
         onSuccess={() => {
           closeModal()
-          router.refresh()
+          refreshTasks()
         }}
       />
 
@@ -1720,7 +1728,7 @@ export default function TasksClient({
               return
             }
             setSummaryTask(null)
-            router.refresh()
+            refreshTasks()
           } : undefined}
           isManager={isManager}
           resolveTechInitials={resolveTechInitials}

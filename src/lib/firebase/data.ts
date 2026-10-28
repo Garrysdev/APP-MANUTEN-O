@@ -661,7 +661,9 @@ export async function deleteAsset(companyId: string, id: string): Promise<void> 
   const ref = (await adminDbFor(companyId)).collection('assets').doc(id)
   const doc = await ref.get()
   const inFallback = fallbackAssetById(companyId, id) !== null
-  if (doc.exists ? doc.data()?.companyId !== companyId : !inFallback) throw new Error('Ativo não encontrado')
+  // Documento com companyId corrompido mas que é da reserva desta empresa: o marcador
+  // abaixo grava o companyId certo (mesmo padrão de updateTask/updateMaintenancePlan).
+  if (doc.exists ? doc.data()?.companyId !== companyId && !inFallback : !inFallback) throw new Error('Ativo não encontrado')
   if (inFallback) {
     // Também existe na reserva: apagar o documento fazia-o voltar da reserva — fica um marcador.
     const tombstone = { companyId, deleted: true, deletedAt: new Date().toISOString() }
@@ -2575,10 +2577,28 @@ export async function setMaintenancePlanOccurrenceStatus(
   companyId: string,
   plan: MaintenancePlan,
   status: TaskStatus,
-  userId: string
+  userId: string,
+  // OT que a tabela do PM mostra para este plano (findPlanLinkedTask). Sem ela, a escolha
+  // abaixo (por updatedAt, em qualquer ano, só no Firestore) podia mudar outra OT — ou criar
+  // uma nova quando a mostrada só existe na reserva — e a tabela continuava igual.
+  taskId?: string
 ): Promise<void> {
   const now = new Date().toISOString()
   const todayStr = now.slice(0, 10)
+
+  if (taskId) {
+    const ref = (await adminDbFor(companyId)).collection('tasks').doc(taskId)
+    const before = await ref.get()
+    const beforeData = before.exists ? (before.data() as Partial<Task>) : null
+    await updateTask(companyId, taskId, {
+      status,
+      ...(status === 'done' ? { completedAt: now } : {}),
+    })
+    if (status === 'done') await finishPmOccurrence(companyId, plan, userId, now)
+    invalidateTasksForChange(companyId, beforeData, { status })
+    revalidateTag(plansTag(companyId))
+    return
+  }
 
   const snap = await (await adminDbFor(companyId))
     .collection('tasks')
@@ -2613,24 +2633,27 @@ export async function setMaintenancePlanOccurrenceStatus(
     } as any)
   }
 
-  if (status === 'done') {
-    try {
-      await createIntervention(companyId, {
-        taskId: `pm_${plan.id}_${Date.now()}`,
-        technicianId: userId,
-        observations: `[PM Concluída] ${plan.title}`,
-        startedAt: `${todayStr}T09:00:00.000Z`,
-        endedAt: `${todayStr}T10:00:00.000Z`,
-        checklist: [],
-      })
-    } catch (err) {
-      console.error('[setMaintenancePlanOccurrenceStatus] Erro ao registar intervenção:', err)
-    }
-    await updateMaintenancePlan(companyId, plan.id, { lastGeneratedAt: todayStr, updatedAt: now })
-  }
+  if (status === 'done') await finishPmOccurrence(companyId, plan, userId, now)
 
   invalidateTasksForChange(companyId, existing ? (existing.data() as Partial<Task>) : null, { status })
   revalidateTag(plansTag(companyId))
+}
+
+async function finishPmOccurrence(companyId: string, plan: MaintenancePlan, userId: string, now: string): Promise<void> {
+  const todayStr = now.slice(0, 10)
+  try {
+    await createIntervention(companyId, {
+      taskId: `pm_${plan.id}_${Date.now()}`,
+      technicianId: userId,
+      observations: `[PM Concluída] ${plan.title}`,
+      startedAt: `${todayStr}T09:00:00.000Z`,
+      endedAt: `${todayStr}T10:00:00.000Z`,
+      checklist: [],
+    })
+  } catch (err) {
+    console.error('[setMaintenancePlanOccurrenceStatus] Erro ao registar intervenção:', err)
+  }
+  await updateMaintenancePlan(companyId, plan.id, { lastGeneratedAt: todayStr, updatedAt: now })
 }
 
 export async function deleteMaintenancePlan(companyId: string, id: string): Promise<void> {

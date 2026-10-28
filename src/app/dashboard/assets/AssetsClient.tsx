@@ -385,7 +385,15 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
 
   async function handleDelete(asset: Asset) {
     if (!confirm(`Eliminar "${asset.name}"?`)) return
-    await deleteAssetAction(asset.id)
+    setBusy(true)
+    setError('')
+    const result = await deleteAssetAction(asset.id)
+    setBusy(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    closeModal()
     router.refresh()
   }
 
@@ -407,9 +415,13 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
   async function handleBulkDelete() {
     if (!confirm(`Eliminar ${selectedAssets.size} equipamento(s)?`)) return
     setBusy(true)
-    await bulkDeleteAssetsAction(Array.from(selectedAssets))
-    setSelectedAssets(new Set())
+    const result = await bulkDeleteAssetsAction(Array.from(selectedAssets))
     setBusy(false)
+    if (result.error) {
+      setNotice(`Não foi possível eliminar: ${result.error}`)
+      return
+    }
+    setSelectedAssets(new Set())
     router.refresh()
   }
 
@@ -1127,6 +1139,18 @@ export default function AssetsClient({ assets, plan }: { assets: Asset[], plan: 
               )}
 
               <div className="flex gap-3 pt-1">
+                {editing && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(editing)}
+                    disabled={busy}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm font-semibold bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 transition-colors"
+                    title="Eliminar equipamento"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Eliminar
+                  </button>
+                )}
                 <button type="button" onClick={closeModal} className="btn-secondary flex-1">{dict.common.cancel}</button>
                 <button type="submit" disabled={busy} className="btn-primary flex-1">
                   {busy ? dict.common.loading : dict.common.save}

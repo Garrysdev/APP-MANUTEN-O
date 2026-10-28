@@ -126,7 +126,8 @@ export async function concludePMAction(
  */
 export async function setPmOccurrenceStatusAction(
   planId: string,
-  status: TaskStatus
+  status: TaskStatus,
+  taskId?: string
 ): Promise<PlanFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
@@ -136,7 +137,7 @@ export async function setPmOccurrenceStatusAction(
     const plan = await getMaintenancePlan(profile.companyId, planId)
     if (!plan) return { error: 'Plano de manutenção não encontrado.' }
 
-    await setMaintenancePlanOccurrenceStatus(profile.companyId, plan, status, profile.id)
+    await setMaintenancePlanOccurrenceStatus(profile.companyId, plan, status, profile.id, taskId)
 
     revalidatePath('/dashboard/maintenance-plan')
     revalidatePath('/dashboard/calendar')

@@ -186,6 +186,9 @@ export default function Select({
         <ul
           ref={listRef}
           role="listbox"
+          // Marcador para popovers com "clicar fora fecha" (ex. ExcelDateFilter): esta lista
+          // vive em document.body, fora deles, e o clique numa opção fechava-os antes de contar.
+          data-select-list=""
           className="fixed z-[1000] overflow-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl py-1 text-xs"
           style={{ left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight }}
           onMouseDown={(e) => e.preventDefault() /* não tirar o foco ao campo */}

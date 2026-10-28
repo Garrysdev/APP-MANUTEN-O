@@ -265,7 +265,10 @@ export default function MaintenancePlanClient({
   async function handleSetPmStatus(planId: string, status: TaskStatus) {
     setStatusMenuPlanId(null)
     setConcludingPlanId(planId)
-    const res = await setPmOccurrenceStatusAction(planId, status)
+    // A OT que a linha mostra — é essa que muda de estado (ver setMaintenancePlanOccurrenceStatus).
+    const pmPlan = plans.find((x) => x.id === planId)
+    const linkedTask = pmPlan ? findPlanTask(pmPlan) : null
+    const res = await setPmOccurrenceStatusAction(planId, status, linkedTask?.id)
     setConcludingPlanId(null)
     if (res?.error) {
       alert(res.error)

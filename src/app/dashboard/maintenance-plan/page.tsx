@@ -19,8 +19,13 @@ export default async function MaintenancePlanPage() {
     listMaintenancePlans(profile.companyId),
     listAssetRefs(profile.companyId),
     listUsers(profile.companyId),
-    listTasks(profile.companyId),
+    // Todas as OT (não só as 2000 mais recentes: com o histórico importado a OT de um
+    // plano podia ficar de fora e o estado na tabela nunca mudava). Ao cliente só vão as
+    // que findPlanLinkedTask pode ligar a um plano — por id do plano ou por TAG.
+    listTasks(profile.companyId, 20000),
   ])
+  const planTags = new Set(plans.map((p) => (p.tag || '').trim().toLowerCase()).filter(Boolean))
+  const pmTasks = tasks.filter((t) => t.maintenancePlanId || (t.tag && planTags.has(t.tag.trim().toLowerCase())))
 
   return (
     <div className="w-full">
@@ -44,7 +49,7 @@ export default async function MaintenancePlanPage() {
           externalCompanyId: (u as any).externalCompanyId,
           externalCompanyName: (u as any).externalCompanyName,
         }))}
-        tasks={tasks}
+        tasks={pmTasks}
         plan={plan}
       />
     </div>

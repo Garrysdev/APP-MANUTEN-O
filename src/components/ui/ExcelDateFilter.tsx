@@ -2,24 +2,11 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { CalendarDays, Filter, X, ChevronDown } from 'lucide-react'
-import { toNormalizedIsoDate } from '@/lib/utils'
 import Select from '@/components/ui/Select'
 
-export interface ExcelDateFilterValues {
-  periodPreset: string // 'all' | 'this_year' | 'this_month' | 'last_month' | 'last_year' | 'last_30' | 'last_90' | 'custom'
-  selectedYear: string // '' ou '2026', '2025', etc.
-  selectedMonth: string // '' ou '01'..'12'
-  dateFrom: string // 'YYYY-MM-DD'
-  dateTo: string // 'YYYY-MM-DD'
-}
-
-export const DEFAULT_EXCEL_DATE_FILTER: ExcelDateFilterValues = {
-  periodPreset: 'all',
-  selectedYear: '',
-  selectedMonth: '',
-  dateFrom: '',
-  dateTo: '',
-}
+export { DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/lib/excel-date-filter'
+export type { ExcelDateFilterValues } from '@/lib/excel-date-filter'
+import { DEFAULT_EXCEL_DATE_FILTER, type ExcelDateFilterValues } from '@/lib/excel-date-filter'
 
 export const MONTH_NAMES = [
   { value: '01', label: 'Janeiro' },
@@ -35,66 +22,6 @@ export const MONTH_NAMES = [
   { value: '11', label: 'Novembro' },
   { value: '12', label: 'Dezembro' },
 ]
-
-/**
- * Função utilitária para filtrar uma data com base nos valores do filtro Excel
- */
-export function filterByExcelDate(
-  rawDate: string | null | undefined,
-  values: ExcelDateFilterValues
-): boolean {
-  if (!rawDate) return true
-
-  const iso = toNormalizedIsoDate(rawDate)
-  if (!iso) return true
-
-  const dateStr = iso.slice(0, 10) // 'YYYY-MM-DD'
-  const yearStr = iso.slice(0, 4)  // 'YYYY'
-  const monthStr = iso.slice(5, 7) // 'MM'
-
-  const today = new Date()
-  const currentYearNum = today.getFullYear()
-  const currentMonthNum = today.getMonth() + 1
-
-  // 1. Presets Rápidos
-  if (values.periodPreset && values.periodPreset !== 'all' && values.periodPreset !== 'custom') {
-    if (values.periodPreset === 'this_year') {
-      return yearStr === String(currentYearNum)
-    }
-    if (values.periodPreset === 'this_month') {
-      const curYearMonth = `${currentYearNum}-${String(currentMonthNum).padStart(2, '0')}`
-      return dateStr.slice(0, 7) === curYearMonth
-    }
-    if (values.periodPreset === 'last_month') {
-      const lmDate = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-      const lmYearMonth = `${lmDate.getFullYear()}-${String(lmDate.getMonth() + 1).padStart(2, '0')}`
-      return dateStr.slice(0, 7) === lmYearMonth
-    }
-    if (values.periodPreset === 'last_year') {
-      return yearStr === String(currentYearNum - 1)
-    }
-    if (values.periodPreset === 'last_30') {
-      const thirtyDaysAgo = new Date()
-      thirtyDaysAgo.setDate(today.getDate() - 30)
-      const tIso = thirtyDaysAgo.toISOString().slice(0, 10)
-      return dateStr >= tIso && dateStr <= today.toISOString().slice(0, 10)
-    }
-    if (values.periodPreset === 'last_90') {
-      const ninetyDaysAgo = new Date()
-      ninetyDaysAgo.setDate(today.getDate() - 90)
-      const nIso = ninetyDaysAgo.toISOString().slice(0, 10)
-      return dateStr >= nIso && dateStr <= today.toISOString().slice(0, 10)
-    }
-  }
-
-  // 2. Personalizado ou Seleções Específicas (Ano, Mês ou Intervalo)
-  if (values.selectedYear && yearStr !== values.selectedYear) return false
-  if (values.selectedMonth && monthStr !== values.selectedMonth) return false
-  if (values.dateFrom && dateStr < values.dateFrom) return false
-  if (values.dateTo && dateStr > values.dateTo) return false
-
-  return true
-}
 
 interface ExcelColumnDateFilterProps {
   values: ExcelDateFilterValues
@@ -133,7 +60,10 @@ export function ExcelColumnDateFilter({
   // Fechar popover ao clicar fora
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
+      const target = event.target as Element
+      // A lista dos <Select> do popover abre em document.body (portal) — não é "fora".
+      if (target.closest?.('[data-select-list]')) return
+      if (ref.current && !ref.current.contains(target)) {
         setOpen(false)
       }
     }
