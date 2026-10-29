@@ -23,4 +23,4 @@
 
 ## Pendentes
 - Rever no telemóvel o link "Descarregar" de uma FR.
-- O "Gerador Anual PMs" (cria OTs para o ano inteiro) não encaixa no novo modelo de uma OT por plano. Perguntar ao Rui se deve sair.
+- "Gerador Anual PMs" retirado a pedido do Rui (botão, janela e a ação no servidor, que também apagava as OTs do plano). Commit 654d36d, em produção.
