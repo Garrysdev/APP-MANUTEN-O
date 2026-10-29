@@ -16,7 +16,6 @@ import {
   setPlanNextDate,
   concludePmUntil,
 } from '@/lib/firebase/data'
-import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 import { LIMITS } from '@/lib/plans'
 import type { TaskCriticidade, TipoTarefa, Periodicidade, Executor, TaskStatus, PlanName } from '@/types/models'
 import { periodicidadeToRecurrence, CRITICIDADE_LABELS, PERIODICIDADE_LABELS, TIPOS_TAREFA } from '@/types/models'
@@ -33,43 +32,6 @@ function formatPlanActionError(e: unknown, fallback: string): string {
     return 'A quota gratuita de leitura/escrita do Firebase Firestore foi excedida hoje. Tenta novamente daqui a alguns minutos.'
   }
   return msg || fallback
-}
-
-export async function generateAnnualPMScheduleAction(
-  targetYear = 2026,
-  planIds?: string[]
-): Promise<{ ok?: boolean; error?: string; totalPlans?: number; totalTasksCreated?: number }> {
-  const profile = await getCurrentProfile()
-  if (!profile) return { error: 'Sessão expirada.' }
-  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
-
-  try {
-    const plans = await listMaintenancePlans(profile.companyId)
-    const activePlans = plans.filter((p) => p.active !== false && (!planIds || planIds.includes(p.id)))
-
-    for (const plan of activePlans) {
-      const dates = calculatePlanAnnualDates(plan, targetYear)
-      if (dates.length === 0) continue
-
-      await updateMaintenancePlan(profile.companyId, plan.id, {
-        showInCalendar: true,
-        calendarStartDate: dates[0],
-        calendarDates: dates,
-      })
-
-      // Eliminar quaisquer tarefas duplicadas na coleção tasks
-      await deleteTasksByMaintenancePlan(profile.companyId, plan.id).catch(() => {})
-    }
-
-    revalidatePath('/dashboard/maintenance-plan')
-    revalidatePath('/dashboard/calendar')
-    revalidatePath('/dashboard/tasks')
-    revalidatePath('/dashboard/projects')
-    revalidatePath('/dashboard')
-    return { ok: true, totalPlans: activePlans.length, totalTasksCreated: activePlans.length }
-  } catch (e) {
-    return { error: formatPlanActionError(e, 'Erro ao gerar agendamento anual de PMs.') }
-  }
 }
 
 export async function concludePMAction(

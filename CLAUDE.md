@@ -74,7 +74,9 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   seguinte — nasce outra. Ativo/Inativo passou a "Operacionalidade", só na
   ficha do plano. 29/10/2026: 507 planos dados como concluídos até 31/10
   (botão "Concluir PM até…", sem criar OTs — ficam no histórico como
-  "Concluída em bloco").
+  "Concluída em bloco"). O botão "Gerador Anual PMs" (criava OTs para o ano
+  inteiro e apagava as OTs do plano) foi retirado a 29/10 a pedido do Rui —
+  não repor.
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso
   acontecer é bug (ver secção de bugs conhecidos abaixo).
