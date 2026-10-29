@@ -60,6 +60,21 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   `document.body` (portal). O handler de clique-fora tem de ignorar
   `target.closest('[data-select-list]')` — senão o popover fecha antes
   de a escolha contar (foi o bug dos filtros de data das OT, Out/2026).
+- **PM = uma OT atual por plano (Out/2026, pedido do Rui)**: cada plano tem
+  uma só OT "atual", na data `plan.nextDueDate` (`src/lib/pm-schedule.ts`,
+  `planCurrentDate`). A tabela do PM mostra em ESTADO o estado dessa OT
+  (mesmas cores/nomes das OT, `statusBadgeClass`) e em PRÓXIMA a sua data
+  (editável; vermelha em atraso). O Calendário mostra só essa OT de cada
+  plano (vermelha em atraso). Concluir uma OT de PM em qualquer sítio
+  (`updateTask`/`createTask` → `advancePlanAfterDone`) passa o plano para a
+  data seguinte segundo a periodicidade e grava a execução em
+  `plan.executionHistory` (histórico na ficha do plano). Mudar a data no
+  Calendário, na coluna PRÓXIMA ou na ficha → `setPlanNextDate` (plano + OT
+  aberta). Uma OT de PM concluída **nunca** é reaberta para a execução
+  seguinte — nasce outra. Ativo/Inativo passou a "Operacionalidade", só na
+  ficha do plano. 29/10/2026: 507 planos dados como concluídos até 31/10
+  (botão "Concluir PM até…", sem criar OTs — ficam no histórico como
+  "Concluída em bloco").
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso
   acontecer é bug (ver secção de bugs conhecidos abaixo).
