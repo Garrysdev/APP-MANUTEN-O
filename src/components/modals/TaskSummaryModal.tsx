@@ -15,7 +15,7 @@ import { TipoBadge } from '@/components/ui/TipoBadge'
 import { format3DigitId } from '@/app/dashboard/history/HistoryClient'
 import { updateTaskStatusAction, updateTaskExecutionDetailsAction, updateTaskFRsAndITsAction, loadDocumentsAction, setTaskCalendarDateAction } from '@/app/dashboard/tasks/actions'
 import { frSignature, itSignature } from '@/lib/doc-signatures'
-import { originalDocViewUrl } from '@/components/ui/TaskDocRequirements'
+import { originalDocViewUrl, OriginalDocDownload } from '@/components/ui/TaskDocRequirements'
 import { useBranding } from '@/components/providers/BrandingProvider'
 import type { DocumentoObrigatorio } from '@/types/models'
 import { compressImage } from '@/lib/image'
@@ -517,6 +517,9 @@ export default function TaskSummaryModal({
                             Abrir folha (para imprimir)
                           </a>
                         )}
+                        {doc?.fileUrl && /\.(docx?|xlsx?|pptx?)$/i.test(doc.fileName || doc.fileUrl) && (
+                          <span className="block mt-0.5"><OriginalDocDownload url={doc.fileUrl} name={doc.fileName} /></span>
+                        )}
                       </span>
                     </label>
                   )
@@ -546,6 +549,9 @@ export default function TaskSummaryModal({
                           <a href={originalDocViewUrl(doc.fileUrl, doc.fileName)} target="_blank" rel="noopener noreferrer" className="block text-[11px] font-bold text-industrial-blue dark:text-sky-400 hover:underline mt-0.5">
                             Abrir instrução
                           </a>
+                        )}
+                        {doc?.fileUrl && /\.(docx?|xlsx?|pptx?)$/i.test(doc.fileName || doc.fileUrl) && (
+                          <span className="block mt-0.5"><OriginalDocDownload url={doc.fileUrl} name={doc.fileName} /></span>
                         )}
                       </span>
                     </div>

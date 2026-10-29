@@ -15,6 +15,9 @@ import { TipoBadge, getTipoBadgeClass } from '@/components/ui/TipoBadge'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
+import { findPlanLinkedTask } from '@/lib/pm-status'
+import { planCurrentDate, planRowStatus, isOpenLinkedTask } from '@/lib/pm-schedule'
+import { setPmOccurrenceStatusAction } from '@/app/dashboard/maintenance-plan/actions'
 import Select from '@/components/ui/Select'
 
 type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
@@ -36,6 +39,8 @@ interface CalendarEvent {
   plan?: MaintenancePlan
   label: string
   criticidade: TaskCriticidade
+  /** OT de PM com data já passada e ainda não concluída — chip a vermelho. */
+  overdue?: boolean
 }
 
 function addInterval(date: Date, recurrence: RecurrenceType, value: number): Date {
@@ -104,43 +109,39 @@ function isDailyOrWeekly(plan: MaintenancePlan): boolean {
   return false
 }
 
-function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end: Date): Map<string, CalendarEvent[]> {
+// OT atual de cada plano (pm-schedule.ts) — a mesma data da coluna PRÓXIMA do PM.
+function planCurrentOccurrence(plan: MaintenancePlan, allTasks: Task[], today: string): string | null {
+  const linked = findPlanLinkedTask(plan, allTasks, Number(today.slice(0, 4)))
+  const current = planCurrentDate(plan, today, linked?.status === 'done' ? linked.completedAt : null)
+  return planRowStatus(linked, current) === 'done' ? null : current
+}
+
+function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end: Date, allTasks: Task[] = tasks): Map<string, CalendarEvent[]> {
   const map = new Map<string, CalendarEvent[]>()
   function add(date: string, ev: CalendarEvent) {
     if (!map.has(date)) map.set(date, [])
     map.get(date)!.push(ev)
   }
+  const today = toYMD(new Date())
 
-  // No Calendário PM, colocamos as ocorrências de Planos de Manutenção Preventiva (PM)
-  // consoante as suas periodicidades (mensal, trimestral, bianual, anual), excluindo diárias e semanais.
+  // Calendário PM: só a OT atual (não concluída) de cada Plano de Manutenção, na data da
+  // próxima execução. Em atraso fica a vermelho; concluída sai e entra a seguinte, na data
+  // seguinte segundo a periodicidade (excluindo diárias e semanais, como antes).
   plans
     .filter((p) => p.active !== false && !isDailyOrWeekly(p))
     .forEach((plan) => {
-      const targetDates = getPlanTargetDates(plan, start.getFullYear())
-      if (targetDates.length > 0) {
-        targetDates.forEach((d) => {
-          const dd = new Date(d + 'T12:00:00')
-          if (dd >= start && dd <= end) {
-            add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
-          }
-        })
-      } else if (plan.calendarDates && plan.calendarDates.length > 0) {
-        plan.calendarDates.forEach((d) => {
-          const dd = new Date(d + 'T12:00:00')
-          if (dd >= start && dd <= end) {
-            add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
-          }
-        })
-      } else if (plan.showInCalendar) {
-        computePlanOccurrencesInRange(plan, start, end).forEach((d) =>
-          add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade })
-        )
+      const d = planCurrentOccurrence(plan, allTasks, today)
+      if (!d) return
+      const dd = new Date(d + 'T12:00:00')
+      if (dd >= start && dd <= end) {
+        add(d, { date: d, type: 'plan', plan, label: plan.title, criticidade: plan.criticidade, overdue: d < today })
       }
     })
 
-  // OTs colocadas à mão no calendário (botão "Calendário" na janela de resumo da OT).
+  // OTs colocadas à mão no calendário (botão "Calendário" na janela de resumo da OT). As de
+  // PM já aparecem acima como a OT atual do plano.
   tasks
-    .filter((t) => t.calendarDate)
+    .filter((t) => t.calendarDate && !t.maintenancePlanId)
     .forEach((t) => {
       const d = t.calendarDate!.slice(0, 10)
       const dd = new Date(d + 'T12:00:00')
@@ -180,6 +181,7 @@ const STATUS_CHIP: Record<string, string> = {
   cancelled: 'bg-red-800 text-white border-red-900',
 }
 function eventChipClass(ev: CalendarEvent): string {
+  if (ev.overdue) return 'bg-red-600 text-white border-red-700'
   if (ev.type === 'task' && ev.task) return STATUS_CHIP[String(ev.task.status || '').toLowerCase()] ?? STATUS_CHIP.pending
   return getTipoBadgeClass(resolveEventType(ev))
 }
@@ -366,13 +368,15 @@ export default function CalendarClient({
     )
     // Se houver várias ocorrências agendadas (uma por data), abre exatamente a que
     // corresponde à data clicada no calendário — não sempre a primeira encontrada.
-    const existingTask = (targetDate && planTasks.find((t) => (t.dueDate || '').slice(0, 10) === targetDate))
-      || planTasks[0]
+    // Só uma OT ainda aberta é a OT atual — uma concluída é de uma execução anterior.
+    const openTasks = planTasks.filter((t) => isOpenLinkedTask(t))
+    const existingTask = (targetDate && openTasks.find((t) => (t.dueDate || '').slice(0, 10) === targetDate))
+      || openTasks[0]
     if (existingTask) {
       openEditTask(existingTask)
     } else {
       const planTask: Task = {
-        id: `plan_${plan.id}`,
+        id: `plan_${plan.id}_${dateStr}`,
         companyId: plan.companyId,
         title: `[PM] ${plan.title}`,
         description: plan.description || `Plano de Manutenção: ${plan.periodicidadeLabel || plan.periodicidade || 'PM'} | TAG: ${plan.tag || '—'}`,
@@ -518,33 +522,14 @@ export default function CalendarClient({
           }
           setTaskList((prev) => prev.map((t) => (t.id === ev.task!.id ? { ...t, status: 'done', completedAt: new Date().toISOString() } : t)))
         } else if (ev.plan) {
-          const targetDate = ev.date || selectedDate || toYMD(new Date())
-          const fd = new FormData()
-          fd.set('planId', ev.plan.id)
-          fd.set('dueDate', targetDate)
-          fd.set('status', 'done')
-          const res = await createTaskFromPlanAction({}, fd)
+          // Mesmo caminho que o botão de estado do PM: conclui a OT atual e o plano passa
+          // para a data seguinte (o chip sai deste dia e aparece na próxima data).
+          const linked = findPlanLinkedTask(ev.plan, taskList, Number(ev.date.slice(0, 4)))
+          const res = await setPmOccurrenceStatusAction(ev.plan.id, 'done', isOpenLinkedTask(linked) ? linked!.id : undefined)
           if (res.error) {
             alert(`Erro ao concluir plano: ${res.error}`)
             return
           }
-          const newDoneTask: Task = {
-            id: `task_done_${ev.plan.id}_${Date.now()}`,
-            companyId: ev.plan.companyId,
-            title: `[PM] ${ev.plan.title}`,
-            assetId: ev.plan.assetId || '',
-            criticidade: ev.plan.criticidade || 'verde',
-            tipo: 'plano',
-            status: 'done',
-            dueDate: targetDate,
-            plannedStartDate: targetDate,
-            createdAt: targetDate,
-            completedAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            createdBy: userId,
-            maintenancePlanId: ev.plan.id,
-          }
-          setTaskList((prev) => [newDoneTask, ...prev])
         }
         router.refresh()
       } catch (err: any) {
@@ -652,8 +637,8 @@ export default function CalendarClient({
   const monthEnd = new Date(year, month + 1, 0, 23, 59, 59)
   const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6); weekEnd.setHours(23, 59, 59)
   const eventMap = viewMode === 'month'
-    ? buildEventMap(filteredTaskList, planList, monthStart, monthEnd)
-    : buildEventMap(filteredTaskList, planList, weekStart, weekEnd)
+    ? buildEventMap(filteredTaskList, planList, monthStart, monthEnd, taskList)
+    : buildEventMap(filteredTaskList, planList, weekStart, weekEnd, taskList)
 
   const todayStr = toYMD(today)
   const activeSelectedDate = selectedDate || todayStr

@@ -271,6 +271,13 @@ export interface Material {
   createdAt: string
 }
 
+export interface PmExecution {
+  date: string
+  doneAt: string
+  taskId?: string | null
+  bulk?: boolean
+}
+
 export interface MaintenancePlan {
   id: string
   companyId: string
@@ -301,6 +308,9 @@ export interface MaintenancePlan {
   calendarStartDate?: string | null // Data da primeira execução no calendário
   calendarDates?: string[] | null // Lista de datas agendadas no calendário
   nextDueDate?: string | null // Próxima data de execução agendada
+  /** Histórico das execuções concluídas (pm-schedule.ts): data prevista da OT, dia em que
+   * foi concluída e a OT, quando existe (as concluídas em bloco não têm OT). */
+  executionHistory?: PmExecution[] | null
   includeInGantt?: boolean | null // Marcador para incluir no Gráfico de Gantt de Projetos (Paragens AGO/DEZ e Intervenções)
 }
 

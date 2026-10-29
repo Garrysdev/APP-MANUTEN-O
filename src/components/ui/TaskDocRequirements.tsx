@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FileText, CheckCircle2, Eye, X, ShieldCheck, ClipboardList } from 'lucide-react'
+import { FileText, CheckCircle2, Eye, X, ShieldCheck, ClipboardList, Download } from 'lucide-react'
 import { updateTaskFRsAndITsAction } from '@/app/dashboard/tasks/actions'
 import { useRouter } from 'next/navigation'
 import { useOfflineAction } from '@/hooks/useOfflineAction'
@@ -36,15 +36,38 @@ export function originalDocViewUrl(url: string, fileName?: string | null): strin
 
 function OriginalDocLink({ url, name, label = 'Abrir documento original' }: { url?: string | null; name?: string | null; label?: string }) {
   if (!url) return null
+  const isOffice = /\.(docx?|xlsx?|pptx?)$/i.test(name || url)
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+      <a
+        href={originalDocViewUrl(url, name)}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="inline-flex items-center gap-1.5 text-xs font-bold text-industrial-blue dark:text-blue-400 hover:underline"
+      >
+        <FileText className="h-3.5 w-3.5" /> {label}
+      </a>
+      {isOffice && <OriginalDocDownload url={url} name={name} />}
+    </span>
+  )
+}
+
+/**
+ * Word/Excel: o visualizador online da Microsoft não abre bem no telemóvel nem deixa
+ * imprimir — o ficheiro direto abre no Word/Excel/Docs do telemóvel, que imprime.
+ */
+export function OriginalDocDownload({ url, name }: { url: string; name?: string | null }) {
   return (
     <a
-      href={originalDocViewUrl(url, name)}
+      href={url}
+      download={name || true}
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
       className="inline-flex items-center gap-1.5 text-xs font-bold text-industrial-blue dark:text-blue-400 hover:underline"
     >
-      <FileText className="h-3.5 w-3.5" /> {label}
+      <Download className="h-3.5 w-3.5" /> Descarregar (para imprimir no telemóvel)
     </a>
   )
 }
@@ -127,6 +150,7 @@ export function TaskDocPickerManager({
   onChangeITs,
   liveFRs = [],
   liveITs = [],
+  docStatus,
 }: {
   selectedFRs: string[]
   selectedITs: string[]
@@ -137,9 +161,46 @@ export function TaskDocPickerManager({
    * serem migrados para documentos reais com os mesmos IDs. */
   liveFRs?: DocumentoObrigatorio[]
   liveITs?: DocumentoObrigatorio[]
+  /** OT já gravada: caixa de visto em cada FR ("Preenchida em papel") e IT ("Tomei
+   * conhecimento"), igual à da janela de resumo da OT — grava logo, assinada no servidor.
+   * Sem isto não se conseguia concluir a OT a partir da edição (FR por preencher). */
+  docStatus?: { taskId: string; completedFRs?: Record<string, any> | null; acknowledgedITs?: string[] | null }
 }) {
   const [frToSelect, setFrToSelect] = useState('')
   const [itToSelect, setItToSelect] = useState('')
+  const [completedFRs, setCompletedFRs] = useState<Record<string, any>>(() => docStatus?.completedFRs || {})
+  const [acknowledgedITs, setAcknowledgedITs] = useState<string[]>(() => docStatus?.acknowledgedITs || [])
+  const [savingDoc, setSavingDoc] = useState<string | null>(null)
+  const [docError, setDocError] = useState('')
+
+  async function saveDocs(id: string, data: { completedFRs?: Record<string, any> | null; acknowledgedITs?: string[] }): Promise<boolean> {
+    if (!docStatus) return false
+    setSavingDoc(id)
+    setDocError('')
+    try {
+      const res = await updateTaskFRsAndITsAction(docStatus.taskId, data)
+      if (res.error) { setDocError(res.error); return false }
+      return true
+    } catch (err) {
+      console.error(err)
+      setDocError('Não foi possível gravar. Tenta de novo.')
+      return false
+    } finally {
+      setSavingDoc(null)
+    }
+  }
+
+  async function toggleFRFilled(frId: string, checked: boolean) {
+    if (!checked && !confirm('Desmarcar apaga o registo de quem preencheu esta FR. Continuar?')) return
+    const rest = Object.fromEntries(Object.entries(completedFRs).filter(([k]) => k !== frId))
+    const next = checked ? { ...rest, [frId]: { paper: true } } : rest
+    if (await saveDocs(frId, { completedFRs: Object.keys(next).length > 0 ? next : null })) setCompletedFRs(next)
+  }
+
+  async function acknowledgeIT(itId: string) {
+    const next = Array.from(new Set([...acknowledgedITs, itId]))
+    if (await saveDocs(itId, { acknowledgedITs: next })) setAcknowledgedITs(next)
+  }
 
   const liveFRShapes = liveFRs.map(docToFRShape)
   const liveITShapes = liveITs.map(docToITShape)
@@ -177,6 +238,9 @@ export function TaskDocPickerManager({
 
   return (
     <div className="space-y-4 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/20 p-4">
+      {docError && (
+        <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{docError}</p>
+      )}
       {/* 1. Folhas de Registo Obrigatórias (FR) */}
       <div>
         <h4 className="text-xs font-extrabold uppercase tracking-wide text-industrial-blue dark:text-blue-300 flex items-center gap-1.5 mb-1">
@@ -206,9 +270,26 @@ export function TaskDocPickerManager({
           <div className="space-y-1.5">
             {selectedFRs.map(frId => {
               const frDef = allFRs.find(f => f.id === frId) || { title: frId, desc: '' }
+              const isFilled = Boolean(completedFRs[frId])
+              const sig = frSignature(completedFRs[frId])
               return (
-                <div key={frId} className="flex items-center justify-between bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-amber-200 dark:border-amber-900/50 shadow-sm text-xs">
-                  <div>
+                <div key={frId} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border shadow-sm text-xs ${isFilled ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800' : 'bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/50'}`}>
+                  {docStatus && (
+                    <input
+                      type="checkbox"
+                      checked={isFilled}
+                      disabled={savingDoc === frId}
+                      onChange={(e) => toggleFRFilled(frId, e.target.checked)}
+                      title="Preenchida em papel"
+                      className="h-5 w-5 shrink-0 accent-emerald-600 cursor-pointer"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    {docStatus && (
+                      <span className="block text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                        {savingDoc === frId ? 'A gravar...' : isFilled ? `Preenchida em papel${sig ? ` — ${sig.name}, ${formatSignedAt(sig.at)}` : ''}` : ''}
+                      </span>
+                    )}
                     <span className="font-bold text-amber-950 dark:text-amber-200 block">{frDef.title}</span>
                     <span className="text-[10px] text-slate-500">{frDef.desc}</span>
                   </div>
@@ -257,9 +338,25 @@ export function TaskDocPickerManager({
           <div className="space-y-1.5">
             {selectedITs.map(itId => {
               const itDef = allITs.find(i => i.id === itId) || { title: itId, content: '' }
+              const isAck = acknowledgedITs.includes(itId)
               return (
-                <div key={itId} className="flex items-center justify-between bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-teal-200 dark:border-teal-900/50 shadow-sm text-xs">
-                  <div>
+                <div key={itId} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border shadow-sm text-xs ${isAck ? 'bg-teal-50 dark:bg-teal-950/30 border-teal-300 dark:border-teal-800' : 'bg-white dark:bg-slate-900 border-teal-200 dark:border-teal-900/50'}`}>
+                  {docStatus && (
+                    <input
+                      type="checkbox"
+                      checked={isAck}
+                      disabled={isAck || savingDoc === itId}
+                      onChange={() => acknowledgeIT(itId)}
+                      title="Tomei conhecimento"
+                      className="h-5 w-5 shrink-0 accent-teal-600 cursor-pointer"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    {docStatus && (isAck || savingDoc === itId) && (
+                      <span className="block text-[10px] font-bold text-teal-700 dark:text-teal-300">
+                        {savingDoc === itId ? 'A registar...' : 'Tomei conhecimento'}
+                      </span>
+                    )}
                     <span className="font-bold text-teal-950 dark:text-teal-200 block">{itDef.title}</span>
                     <span className="text-[10px] text-slate-500 line-clamp-1">{itDef.content}</span>
                   </div>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { getCurrentProfile } from '@/lib/firebase/session'
-import { getMaintenancePlan, createTask, updateMaintenancePlan, getTask, updateTask } from '@/lib/firebase/data'
+import { getMaintenancePlan, createTask, updateMaintenancePlan, getTask, updateTask, setPlanNextDate } from '@/lib/firebase/data'
 
 export type CalendarActionState = { error?: string; ok?: boolean }
 
@@ -20,27 +20,27 @@ export async function rescheduleCalendarItemAction(
     const taskId = isPlanItem ? (id.startsWith('plan_') ? id : `plan_${id}`) : id
     const planId = isPlanItem ? taskId.replace('plan_', '') : null
 
-    const task = await getTask(profile.companyId, taskId)
-    let newPlannedStart = `${targetDate}T09:00`
-    if (task && task.plannedStartDate) {
-      const timePart = task.plannedStartDate.includes('T') ? task.plannedStartDate.split('T')[1] : '09:00'
-      newPlannedStart = `${targetDate}T${timePart}`
-    }
-
-    await updateTask(profile.companyId, taskId, {
-      dueDate: targetDate,
-      plannedStartDate: newPlannedStart,
-      ...(planId ? { maintenancePlanId: planId } : {}),
-      // OT colocada à mão no calendário: arrastar muda o dia em que aparece.
-      ...(!planId && task?.calendarDate ? { calendarDate: targetDate } : {}),
-    })
-
     if (planId) {
-      await updateMaintenancePlan(profile.companyId, planId, {
-        calendarStartDate: targetDate,
-        calendarDates: [targetDate],
-        nextDueDate: targetDate,
-      }).catch(() => null)
+      // OT de PM: muda a data da OT atual do plano (a mesma da coluna PRÓXIMA do PM) e a
+      // da OT aberta, se já existir. Antes criava/alterava um documento "plan_<id>" à parte.
+      await setPlanNextDate(profile.companyId, planId, targetDate)
+    } else {
+      const task = await getTask(profile.companyId, taskId)
+      let newPlannedStart = `${targetDate}T09:00`
+      if (task && task.plannedStartDate) {
+        const timePart = task.plannedStartDate.includes('T') ? task.plannedStartDate.split('T')[1] : '09:00'
+        newPlannedStart = `${targetDate}T${timePart}`
+      }
+      await updateTask(profile.companyId, taskId, {
+        dueDate: targetDate,
+        plannedStartDate: newPlannedStart,
+        // OT colocada à mão no calendário: arrastar muda o dia em que aparece.
+        ...(task?.calendarDate ? { calendarDate: targetDate } : {}),
+      })
+      // OT de PM aberta arrastada: o plano acompanha.
+      if (task?.maintenancePlanId && task.status !== 'done') {
+        await setPlanNextDate(profile.companyId, task.maintenancePlanId, targetDate)
+      }
     }
 
     revalidatePath('/dashboard/calendar')

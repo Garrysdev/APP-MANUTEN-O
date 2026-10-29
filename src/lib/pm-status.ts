@@ -1,5 +1,18 @@
 import type { MaintenancePlan, Task, TaskStatus } from '@/types/models'
 
+/** A OT pertence a este plano: por maintenancePlanId (ou código) ou por TAG + título. */
+export function isPlanTask(plan: MaintenancePlan, t: Task): boolean {
+  return Boolean(
+    (t.maintenancePlanId && (t.maintenancePlanId === plan.id || t.maintenancePlanId === (plan as any).code)) ||
+    (t.tag && plan.tag && t.tag.trim().toLowerCase() === plan.tag.trim().toLowerCase() && (() => {
+      const tTitle = (t.title || '').trim().toLowerCase()
+      const pTitle = (plan.title || '').trim().toLowerCase()
+      const pAcao = (plan.description || '').trim().toLowerCase()
+      return tTitle === pTitle || (pAcao && tTitle.includes(pAcao)) || (pTitle && tTitle.includes(pTitle))
+    })())
+  )
+}
+
 /**
  * Encontra a OT ligada a um Plano de Manutenção num dado ano — por
  * maintenancePlanId (ou código do plano) ou, em fallback, por TAG + título
@@ -11,15 +24,7 @@ import type { MaintenancePlan, Task, TaskStatus } from '@/types/models'
  */
 export function findPlanLinkedTask(plan: MaintenancePlan, tasks: Task[], year: number): Task | null {
   const linkedTasks = tasks.filter((t) => {
-    const matches =
-      (t.maintenancePlanId && (t.maintenancePlanId === plan.id || t.maintenancePlanId === (plan as any).code)) ||
-      (t.tag && plan.tag && t.tag.trim().toLowerCase() === plan.tag.trim().toLowerCase() && (() => {
-        const tTitle = (t.title || '').trim().toLowerCase()
-        const pTitle = (plan.title || '').trim().toLowerCase()
-        const pAcao = (plan.description || '').trim().toLowerCase()
-        return tTitle === pTitle || (pAcao && tTitle.includes(pAcao)) || (pTitle && tTitle.includes(pTitle))
-      })())
-    if (!matches) return false
+    if (!isPlanTask(plan, t)) return false
     const d = t.dueDate || t.plannedStartDate || t.completedAt
     return d ? new Date(d).getFullYear() === year : false
   })

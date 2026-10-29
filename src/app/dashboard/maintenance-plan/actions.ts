@@ -13,6 +13,8 @@ import {
   deleteTasksByMaintenancePlan,
   listAssets,
   setMaintenancePlanOccurrenceStatus,
+  setPlanNextDate,
+  concludePmUntil,
 } from '@/lib/firebase/data'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 import { LIMITS } from '@/lib/plans'
@@ -124,6 +126,43 @@ export async function concludePMAction(
  * ocorrência atual do plano, que é o mesmo estado usado pelo filtro
  * "Estado da Tarefa" na tabela.
  */
+/** Data da próxima OT do plano (coluna PRÓXIMA do PM) — a mesma que o Calendário mostra. */
+export async function setPlanNextDateAction(planId: string, date: string): Promise<PlanFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  if (!YMD.test(date)) return { error: 'Data inválida.' }
+  try {
+    await setPlanNextDate(profile.companyId, planId, date)
+    revalidatePath('/dashboard/maintenance-plan')
+    revalidatePath('/dashboard/calendar')
+    revalidatePath('/dashboard/tasks')
+    return { ok: true }
+  } catch (e) {
+    return { error: formatPlanActionError(e, 'Erro ao mudar a data.') }
+  }
+}
+
+/** Dá como concluídas as OT de PM com data até `until` (dryRun: só conta). */
+export async function concludePmUntilAction(until: string, dryRun: boolean): Promise<PlanFormState & { plans?: number; tasks?: number }> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  if (!YMD.test(until)) return { error: 'Data inválida.' }
+  try {
+    const res = await concludePmUntil(profile.companyId, until, dryRun)
+    if (!dryRun) {
+      revalidatePath('/dashboard/maintenance-plan')
+      revalidatePath('/dashboard/calendar')
+      revalidatePath('/dashboard/tasks')
+      revalidatePath('/dashboard')
+    }
+    return { ok: true, ...res }
+  } catch (e) {
+    return { error: formatPlanActionError(e, 'Erro ao concluir as OT de PM.') }
+  }
+}
+
 export async function setPmOccurrenceStatusAction(
   planId: string,
   status: TaskStatus,
@@ -193,9 +232,12 @@ function parsePlan(formData: FormData) {
     recurrence,
     recurrenceValue,
     safetyRules,
-    active: true,
+    // Operacionalidade (Ativo/Inativo) na ficha do plano; sem o campo (ex. importação) fica ativo.
+    active: formData.has('active') ? formData.get('active') !== 'inativo' : true,
   }
 }
+
+const YMD = /^\d{4}-\d{2}-\d{2}$/
 
 export async function togglePlanCalendarAction(
   id: string,
@@ -414,8 +456,15 @@ export async function updateMaintenancePlanAction(
   if (!id) return { error: 'ID em falta.' }
   try {
     await updateMaintenancePlan(profile.companyId, id, parsePlan(formData))
+    // Data da próxima OT mudada na ficha: acompanha no Calendário e na OT aberta.
+    const nextDate = String(formData.get('nextDueDate') ?? '').trim()
+    if (YMD.test(nextDate)) {
+      const before = await getMaintenancePlan(profile.companyId, id)
+      if ((before?.nextDueDate || '').slice(0, 10) !== nextDate) await setPlanNextDate(profile.companyId, id, nextDate)
+    }
     revalidatePath('/dashboard/maintenance-plan')
     revalidatePath('/dashboard/calendar')
+    revalidatePath('/dashboard/tasks')
     return { ok: true }
   } catch (e) {
     return { error: formatPlanActionError(e, 'Erro ao atualizar plano.') }

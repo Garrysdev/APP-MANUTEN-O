@@ -256,6 +256,14 @@ export interface CreateTaskModalProps {
   /** Esconde Duplicar/Eliminar (cabeçalho e barras do fundo) — na lista de OT essas ações
    * estão na janela de resumo (TaskSummaryModal). */
   hideDuplicateDelete?: boolean
+  /** Ficha de um Plano de Manutenção (página do PM): mostra a Operacionalidade (Ativo/
+   * Inativo) e a data da próxima OT do plano — a mesma da coluna PRÓXIMA e do Calendário. */
+  planForm?: {
+    nextDate: string | null
+    active: boolean
+    /** Execuções já feitas (OT de PM concluídas e as concluídas em bloco), mais recentes primeiro. */
+    history: { key: string; date: string; doneAt: string; label: string }[]
+  }
 }
 
 export default function CreateTaskModal({
@@ -283,6 +291,7 @@ export default function CreateTaskModal({
   isProjectForm = false,
   startDuplicating = false,
   hideDuplicateDelete = false,
+  planForm,
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState(initialTitle || '')
   const [tipo, setTipo] = useState<TipoTarefa>(initialTipo || 'curativa')
@@ -885,6 +894,51 @@ export default function CreateTaskModal({
             </div>
           </div>
 
+          {planForm && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data da próxima OT</label>
+                <input type="date" name="nextDueDate" defaultValue={planForm.nextDate || ''} className="input" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Operacionalidade</label>
+                <Select name="active" defaultValue={planForm.active ? 'ativo' : 'inativo'} className="input" sort={false}>
+                  <option value="ativo">Ativo</option>
+                  <option value="inativo">Inativo</option>
+                </Select>
+              </div>
+              <div className="col-span-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">
+                  Histórico de execuções ({planForm.history.length})
+                </p>
+                {planForm.history.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic">Ainda não há OT deste plano concluídas.</p>
+                ) : (
+                  <div className="max-h-48 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                          <th className="py-1 pr-2 font-semibold">Data prevista</th>
+                          <th className="py-1 pr-2 font-semibold">Concluída em</th>
+                          <th className="py-1 font-semibold">OT</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {planForm.history.map((h) => (
+                          <tr key={h.key} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                            <td className="py-1 pr-2 font-mono">{h.date ? h.date.split('-').reverse().join('/') : '—'}</td>
+                            <td className="py-1 pr-2 font-mono">{h.doneAt ? h.doneAt.split('-').reverse().join('/') : '—'}</td>
+                            <td className="py-1 text-slate-600 dark:text-slate-400">{h.label}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             {isManager && (
               <div>
@@ -1157,12 +1211,16 @@ export default function CreateTaskModal({
 
           {isManager && !isProjectForm && (
             <TaskDocPickerManager
+              key={editingTask?.id || 'new'}
               selectedFRs={requiredFRs}
               selectedITs={requiredITs}
               onChangeFRs={setRequiredFRs}
               onChangeITs={setRequiredITs}
               liveFRs={liveDocs.filter((d) => d.type === 'FR')}
               liveITs={liveDocs.filter((d) => d.type === 'IT')}
+              docStatus={isEditingExisting && !planForm && editingTask?.id && !String(editingTask.id).startsWith('plan_')
+                ? { taskId: editingTask.id, completedFRs: editingTask.completedFRs, acknowledgedITs: editingTask.acknowledgedITs }
+                : undefined}
             />
           )}
 

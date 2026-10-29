@@ -15,7 +15,9 @@ import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
 import { docRecordsFromTasks, type DocRecord } from '../doc-archive'
 import { normalizeDocCode, cleanDocTitle } from '../doc-code'
-import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus, type TaskStatus, type DocumentoObrigatorio } from '@/types/models'
+import { planCurrentDate, nextPlanDate, planPeriodStep, addStep } from '../pm-schedule'
+import { findPlanLinkedTask } from '../pm-status'
+import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type PmExecution, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus, type TaskStatus, type DocumentoObrigatorio } from '@/types/models'
 
 function serialize<T>(doc: DocumentSnapshot): T {
   return { id: doc.id, ...doc.data() } as T
@@ -1309,6 +1311,11 @@ export async function createTask(
     if (data.criticidade === 'vermelho' || data.tipo === 'curativa') {
       await sendUrgentTaskEmail({ id: generatedId, title: data.title, companyId }).catch(() => {})
     }
+
+    // OT de PM criada já concluída: o plano passa para a execução seguinte.
+    if (data.status === 'done' && data.maintenancePlanId) {
+      await advancePlanAfterDone(companyId, data.maintenancePlanId, generatedId).catch(console.error)
+    }
   } catch (err) {
     console.error('Erro em createTask Firestore:', err)
     // Não continuar em modo "sucesso silencioso": o fallback local (ficheiro JSON / cache em
@@ -1461,6 +1468,14 @@ export async function updateTask(
       console.warn(`[updateTask] companyId corrompido na tarefa ${id} — a corrigir para ${companyId}.`)
     }
     await ref.update(JSON.parse(JSON.stringify({ ...data, companyId, updatedAt: now }))).catch(console.error)
+  }
+
+  // OT de PM concluída (venha da lista de OTs, do PM, do Calendário ou do técnico): o plano
+  // passa para a execução seguinte segundo a periodicidade (ver pm-schedule.ts).
+  if (data.status === 'done' && current?.status !== 'done') {
+    const planId = data.maintenancePlanId || current?.maintenancePlanId
+      || (id.startsWith('plan_') ? (await findOwnedPlanForOccurrence(companyId, id).catch(() => null))?.planId : null)
+    if (planId) await advancePlanAfterDone(companyId, planId, id).catch(console.error)
   }
 
   if (cachedFallbackTasks) {
@@ -2607,7 +2622,9 @@ export async function setMaintenancePlanOccurrenceStatus(
     .get()
     .catch(() => null)
 
-  const openDocs = (snap?.docs || []).filter((d) => d.data().status !== 'cancelled')
+  // Só reaproveita uma OT ainda aberta: uma concluída é de uma execução anterior (a OT atual
+  // é a da próxima data — pm-schedule.ts) e reabri-la apagava o registo dessa execução.
+  const openDocs = (snap?.docs || []).filter((d) => d.data().status !== 'cancelled' && d.data().status !== 'done')
   const existing = openDocs.sort((a, b) => (String(b.data().updatedAt || '')).localeCompare(String(a.data().updatedAt || '')))[0]
 
   if (existing) {
@@ -2617,6 +2634,7 @@ export async function setMaintenancePlanOccurrenceStatus(
       ...(status === 'done' ? { completedAt: now } : {}),
     })
     await touch('tasks', companyId, [existing.id])
+    if (status === 'done') await advancePlanAfterDone(companyId, plan.id, existing.id).catch(console.error)
   } else {
     await createTask(companyId, userId, {
       title: plan.title,
@@ -2627,7 +2645,7 @@ export async function setMaintenancePlanOccurrenceStatus(
       tipo: plan.tipo || 'preventiva',
       criticidade: plan.criticidade || 'verde',
       status,
-      dueDate: todayStr,
+      dueDate: planCurrentDate(plan, todayStr) || todayStr,
       maintenancePlanId: plan.id,
       source: 'plano_manutencao',
     } as any)
@@ -2637,6 +2655,115 @@ export async function setMaintenancePlanOccurrenceStatus(
 
   invalidateTasksForChange(companyId, existing ? (existing.data() as Partial<Task>) : null, { status })
   revalidateTag(plansTag(companyId))
+}
+
+/**
+ * Depois de concluir a OT atual do plano: grava a data da seguinte (periodicidade a partir
+ * da data da OT concluída, nunca já em atraso) — é a que o PM e o Calendário passam a mostrar.
+ */
+export async function advancePlanAfterDone(companyId: string, planId: string, taskId?: string | null): Promise<void> {
+  const ref = (await adminDbFor(companyId)).collection('maintenance_plans').doc(planId)
+  const snap = await ref.get()
+  const plan = snap.exists
+    ? ({ id: planId, ...snap.data() } as MaintenancePlan)
+    : (isDemoCompany(companyId) ? getFallbackPlans().find((p) => p.id === planId) ?? null : null)
+  if (!plan) return
+  const today = new Date().toISOString().slice(0, 10)
+  const occurrence = planCurrentDate(plan, today) || today
+  const next = nextPlanDate(plan, occurrence, today)
+  // Histórico das execuções do plano (ficha do plano): data prevista, dia em que foi feita, OT.
+  const executionHistory = [...(plan.executionHistory || []), { date: occurrence, doneAt: today, taskId: taskId || null }].slice(-300)
+  await updateMaintenancePlan(companyId, planId, { nextDueDate: next, lastGeneratedAt: today, executionHistory })
+}
+
+/**
+ * Dá como concluídas, de uma vez, as OT de PM com data até `until` (inclusive): cada plano
+ * ativo nessas condições passa para a primeira data seguinte a `until` segundo a
+ * periodicidade, e as OT abertas desses planos com data até `until` ficam Concluídas.
+ * dryRun só conta. Não cria OTs novas nem intervenções (não há trabalho real a registar).
+ */
+export async function concludePmUntil(
+  companyId: string,
+  until: string,
+  dryRun: boolean
+): Promise<{ plans: number; tasks: number }> {
+  const today = new Date().toISOString().slice(0, 10)
+  const [plans, tasks] = await Promise.all([listMaintenancePlans(companyId), listTasks(companyId, 20000)])
+  const year = Number(today.slice(0, 4))
+  const planUpdates: { id: string; nextDueDate: string | null; executionHistory: PmExecution[] }[] = []
+  const taskIds: string[] = []
+  for (const plan of plans) {
+    if (plan.active === false) continue
+    const linked = findPlanLinkedTask(plan, tasks, year)
+    const lastDone = linked?.status === 'done' ? linked.completedAt : null
+    const current = planCurrentDate(plan, today, lastDone)
+    if (!current || current > until) continue
+    // Cada execução prevista até `until` fica no histórico do plano, marcada "em bloco".
+    const step = planPeriodStep(plan)
+    const done: PmExecution[] = []
+    for (let d = current; d <= until && done.length < 400; d = step ? addStep(d, step) : '9999-12-31') {
+      done.push({ date: d, doneAt: today, taskId: null, bulk: true })
+    }
+    planUpdates.push({
+      id: plan.id,
+      nextDueDate: nextPlanDate(plan, current, until),
+      executionHistory: [...(plan.executionHistory || []), ...done].slice(-300),
+    })
+    tasks
+      .filter((t) => t.maintenancePlanId === plan.id && t.status !== 'done' && t.status !== 'cancelled')
+      .filter((t) => !t.dueDate || t.dueDate.slice(0, 10) <= until)
+      .forEach((t) => taskIds.push(t.id))
+  }
+  if (dryRun) return { plans: planUpdates.length, tasks: taskIds.length }
+
+  const db = await adminDbFor(companyId)
+  const now = new Date().toISOString()
+  const fallbackById = new Map((isDemoCompany(companyId) ? getFallbackPlans() : []).map((p) => [p.id, p]))
+  for (let i = 0; i < planUpdates.length; i += 400) {
+    const chunk = planUpdates.slice(i, i + 400)
+    const refs = chunk.map((u) => db.collection('maintenance_plans').doc(u.id))
+    const snaps = await db.getAll(...refs)
+    const batch = db.batch()
+    chunk.forEach((u, idx) => {
+      const fields = { nextDueDate: u.nextDueDate, lastGeneratedAt: today, executionHistory: u.executionHistory, companyId, updatedAt: now }
+      // Planos só da reserva (sem documento): o documento nasce dos dados da reserva.
+      if (snaps[idx].exists) batch.update(refs[idx], fields)
+      else batch.set(refs[idx], { ...(fallbackById.get(u.id) || {}), ...fields }, { merge: true })
+    })
+    await batch.commit()
+  }
+  for (let i = 0; i < taskIds.length; i += 400) {
+    const batch = db.batch()
+    taskIds.slice(i, i + 400).forEach((id) => {
+      batch.set(db.collection('tasks').doc(id), { status: 'done', completedAt: now, updatedAt: now, companyId }, { merge: true })
+    })
+    await batch.commit()
+  }
+  await touch('maintenance_plans', companyId, planUpdates.map((u) => u.id))
+  if (taskIds.length > 0) await touch('tasks', companyId, taskIds)
+  revalidateTag(plansTag(companyId))
+  invalidateTasks(companyId, { historyYears: [], completed: true })
+  return { plans: planUpdates.length, tasks: taskIds.length }
+}
+
+/** Muda a data da OT atual do plano (tabela do PM, ficha do plano ou Calendário). */
+export async function setPlanNextDate(companyId: string, planId: string, date: string): Promise<void> {
+  await updateMaintenancePlan(companyId, planId, { nextDueDate: date })
+  // A OT aberta deste plano (se já existir como documento) acompanha a data.
+  const snap = await (await adminDbFor(companyId))
+    .collection('tasks')
+    .where('companyId', '==', companyId)
+    .where('maintenancePlanId', '==', planId)
+    .get()
+    .catch(() => null)
+  const open = (snap?.docs || []).filter((d) => d.data().status !== 'done' && d.data().status !== 'cancelled')
+  for (const d of open) {
+    await d.ref.update({ dueDate: date, updatedAt: new Date().toISOString() })
+  }
+  if (open.length > 0) {
+    await touch('tasks', companyId, open.map((d) => d.id))
+    invalidateTasksForChange(companyId, null, { dueDate: date })
+  }
 }
 
 async function finishPmOccurrence(companyId: string, plan: MaintenancePlan, userId: string, now: string): Promise<void> {

@@ -13,7 +13,7 @@ import type {
 } from '@/types/models'
 import {
   CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS,
-  PERIODICIDADE_LABELS, EXECUTOR_LABELS,
+  PERIODICIDADE_LABELS, EXECUTOR_LABELS, STATUS_LABELS, statusBadgeClass,
 } from '@/types/models'
 import ExcelJS from 'exceljs'
 import { addLogoToWorkbook } from '@/lib/export-logo'
@@ -29,9 +29,12 @@ import {
   togglePlanCalendarAction,
   generateAnnualPMScheduleAction,
   setPmOccurrenceStatusAction,
+  setPlanNextDateAction,
+  concludePmUntilAction,
 } from './actions'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
-import { findPlanLinkedTask } from '@/lib/pm-status'
+import { findPlanLinkedTask, isPlanTask } from '@/lib/pm-status'
+import { planCurrentDate, planRowStatus, isOpenLinkedTask, isOverdue, type PmRowStatus } from '@/lib/pm-schedule'
 import { updateTaskStatusAction, updateTaskAction, loadStockRefsAction, type StockMaterialRef } from '../tasks/actions'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
@@ -151,7 +154,7 @@ export default function MaintenancePlanClient({
   const datalistId = useId()
 
   // Filtros por coluna (estilo Excel - alinhados com a folha PM)
-  const emptyCol = { area: '', tag: '', system: '', asset: '', title: '', description: '', tipo: '', period: '', crit: '', executor: '', estado: '', tarefa: '' }
+  const emptyCol = { area: '', tag: '', system: '', asset: '', title: '', description: '', tipo: '', period: '', crit: '', executor: '', estado: '' }
   const [colF, setColF] = useState(emptyCol)
   const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
   const [fLegal, setFLegal] = useState(false)
@@ -255,6 +258,108 @@ export default function MaintenancePlanClient({
   function findPlanTask(p: MaintenancePlan, year: number = selectedYear): Task | null {
     return findPlanLinkedTask(p, tasks, year)
   }
+  const todayYMD = new Date().toISOString().slice(0, 10)
+  // OT atual do plano (pm-schedule.ts): a data da próxima execução e o estado dessa OT.
+  // Uma OT concluída de uma execução anterior já não conta — a atual é a seguinte.
+  type PlanInfo = { linked: Task | null; current: string | null; status: PmRowStatus; overdue: boolean }
+  function computePlanInfo(p: MaintenancePlan): PlanInfo {
+    const linked = findPlanTask(p)
+    const current = planCurrentDate(p, todayYMD, linked?.status === 'done' ? linked.completedAt : null)
+    const status = planRowStatus(linked, current)
+    return { linked, current, status, overdue: status !== 'done' && isOverdue(current, todayYMD) }
+  }
+  // Calculado uma vez por plano (filtros, ordenação e linhas usam-no muitas vezes).
+  const planInfoById = useMemo(
+    () => new Map(plans.map((p) => [p.id, computePlanInfo(p)])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [plans, tasks, selectedYear, todayYMD],
+  )
+  function planInfo(p: MaintenancePlan): PlanInfo {
+    return planInfoById.get(p.id) ?? computePlanInfo(p)
+  }
+  // Histórico do plano (ficha): OT de PM concluídas + execuções concluídas em bloco.
+  function planHistory(p: MaintenancePlan): { key: string; date: string; doneAt: string; label: string }[] {
+    const fromTasks = tasks
+      .filter((t) => t.status === 'done' && isPlanTask(p, t))
+      .map((t) => ({
+        key: t.id,
+        date: (t.dueDate || t.plannedStartDate || t.completedAt || '').slice(0, 10),
+        doneAt: (t.completedAt || '').slice(0, 10),
+        label: t.otNumber ? `OT ${t.otNumber}` : 'OT',
+      }))
+    const taskIds = new Set(fromTasks.map((h) => h.key))
+    const fromPlan = (p.executionHistory || [])
+      .filter((e) => !e.taskId || !taskIds.has(e.taskId))
+      .map((e, i) => ({ key: `h${i}`, date: e.date, doneAt: e.doneAt, label: e.bulk ? 'Concluída em bloco' : 'OT' }))
+    return [...fromTasks, ...fromPlan].sort((a, b) => (b.doneAt || b.date).localeCompare(a.doneAt || a.date))
+  }
+  function matchesEstado(p: MaintenancePlan, estado: string): boolean {
+    if (!estado) return true
+    const { status, overdue } = planInfo(p)
+    if (estado === 'atraso') return overdue
+    return status === estado
+  }
+
+  // Coluna PRÓXIMA: muda a data da OT atual (a mesma do Calendário).
+  const [editingDatePlanId, setEditingDatePlanId] = useState<string | null>(null)
+  async function handleSetNextDate(planId: string, date: string) {
+    setEditingDatePlanId(null)
+    if (!date) return
+    const res = await setPlanNextDateAction(planId, date)
+    if (res?.error) alert(res.error)
+    else router.refresh()
+  }
+  function renderNextDate(p: MaintenancePlan) {
+    const { current, status, overdue } = planInfo(p)
+    if (editingDatePlanId === p.id) {
+      return (
+        <input
+          type="date"
+          autoFocus
+          defaultValue={current || ''}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={(e) => handleSetNextDate(p.id, e.target.value === current ? '' : e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            if (e.key === 'Escape') setEditingDatePlanId(null)
+          }}
+          className="w-full rounded border border-slate-300 px-1 py-0.5 text-[10px] font-mono"
+        />
+      )
+    }
+    if (!current || status === 'done') return <span className="text-slate-400">—</span>
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setEditingDatePlanId(p.id) }}
+        title={overdue ? 'Em atraso — clique para mudar a data (também muda no Calendário)' : 'Clique para mudar a data (também muda no Calendário)'}
+        className={`inline-flex items-center gap-1 px-1 py-0.5 rounded font-mono font-bold text-[10px] cursor-pointer ${overdue ? 'bg-red-600 text-white' : 'text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+      >
+        <CalendarClock className="h-3 w-3 shrink-0" /> {formatDate(current)}
+      </button>
+    )
+  }
+
+  // Dar como concluídas as OT de PM até uma data, de uma vez: primeiro conta, depois confirma.
+  const [concludingUntil, setConcludingUntil] = useState(false)
+  async function handleConcludeUntil() {
+    const d = new Date()
+    const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+    const suggestion = `${endOfMonth.getFullYear()}-${String(endOfMonth.getMonth() + 1).padStart(2, '0')}-${String(endOfMonth.getDate()).padStart(2, '0')}`
+    const until = prompt('Dar como concluídas as OT de PM com data até (AAAA-MM-DD):', suggestion)
+    if (!until) return
+    setConcludingUntil(true)
+    const preview = await concludePmUntilAction(until, true)
+    if (preview.error) { setConcludingUntil(false); alert(preview.error); return }
+    if (!confirm(`${preview.plans} plano(s) com OT até ${formatDate(until)} passam para a próxima data, e ${preview.tasks} OT de PM aberta(s) ficam Concluídas. Continuar?`)) {
+      setConcludingUntil(false)
+      return
+    }
+    const res = await concludePmUntilAction(until, false)
+    setConcludingUntil(false)
+    if (res.error) alert(res.error)
+    else router.refresh()
+  }
   function openPlanRow(p: MaintenancePlan) {
     openEdit(p)
   }
@@ -268,7 +373,8 @@ export default function MaintenancePlanClient({
     // A OT que a linha mostra — é essa que muda de estado (ver setMaintenancePlanOccurrenceStatus).
     const pmPlan = plans.find((x) => x.id === planId)
     const linkedTask = pmPlan ? findPlanTask(pmPlan) : null
-    const res = await setPmOccurrenceStatusAction(planId, status, linkedTask?.id)
+    // Uma OT já concluída é da execução anterior: a OT atual nasce no servidor, na próxima data.
+    const res = await setPmOccurrenceStatusAction(planId, status, isOpenLinkedTask(linkedTask) ? linkedTask!.id : undefined)
     setConcludingPlanId(null)
     if (res?.error) {
       alert(res.error)
@@ -277,26 +383,23 @@ export default function MaintenancePlanClient({
     }
   }
 
-  const PM_STATUS_STYLES: Record<'pending' | 'in_progress' | 'done', { label: string; cls: string; Icon: typeof Clock }> = {
-    pending: { label: 'Pendente', cls: 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700', Icon: Clock },
-    in_progress: { label: 'Em Curso', cls: 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800', Icon: PlayCircle },
-    done: { label: 'Concluída', cls: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800', Icon: CheckCircle2 },
-  }
+  // Mesmas cores e nomes dos estados das OT (badge-* em globals.css).
+  const PM_STATUS_ICONS: Record<PmRowStatus, typeof Clock> = { pending: Clock, in_progress: PlayCircle, done: CheckCircle2 }
 
   // Botão dinâmico de estado da tarefa: mostra o estado atual e, ao clicar,
   // revela só as transições válidas a partir daí (Pendente -> Em Curso | Concluída;
   // Em Curso -> Concluir). É este estado que também alimenta o filtro "Estado da Tarefa".
   function renderPmStatusButton(p: MaintenancePlan) {
-    const linkedTask = findPlanTask(p)
-    const rawStatus = linkedTask?.status
-    const status: 'pending' | 'in_progress' | 'done' = (rawStatus === 'in_progress' || rawStatus === 'done') ? rawStatus : 'pending'
+    const { status } = planInfo(p)
     const isOpen = statusMenuPlanId === p.id
     const isBusy = concludingPlanId === p.id
-    const { label, cls, Icon } = PM_STATUS_STYLES[status]
+    const label = STATUS_LABELS[status]
+    const cls = statusBadgeClass(status)
+    const Icon = PM_STATUS_ICONS[status]
 
     if (status === 'done') {
       return (
-        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-bold text-[9px] ${cls}`}>
+        <span className={`${cls} !px-1.5 !text-[9px] gap-1`}>
           <Icon className="h-3 w-3" /> {label}
         </span>
       )
@@ -309,7 +412,7 @@ export default function MaintenancePlanClient({
           disabled={isBusy}
           onClick={() => setStatusMenuPlanId(isOpen ? null : p.id)}
           title="Alterar estado desta ocorrência"
-          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-bold text-[9px] transition-colors disabled:opacity-50 cursor-pointer ${cls}`}
+          className={`${cls} !px-1.5 !text-[9px] gap-1 transition-colors disabled:opacity-50 cursor-pointer hover:brightness-110`}
         >
           <Icon className="h-3 w-3" />
           {isBusy ? 'A atualizar…' : label}
@@ -538,8 +641,8 @@ export default function MaintenancePlanClient({
         p.executor ? EXECUTOR_LABELS[p.executor] : EXECUTOR_LABELS.interno,
         p.legal ? 'SIM' : 'NÃO',
         p.safetyRules ? p.safetyRules.join('; ') : '—',
-        p.nextDueDate || p.calendarStartDate ? formatDate(p.nextDueDate || p.calendarStartDate) : '—',
-        p.active ? 'Ativo' : 'Inativo',
+        planInfo(p).current ? formatDate(planInfo(p).current) : '—',
+        STATUS_LABELS[planInfo(p).status],
       ])
       row.height = 20
       row.eachCell((cell) => {
@@ -606,16 +709,8 @@ export default function MaintenancePlanClient({
       if (!inc(p.title, colF.title)) return false
       if (!inc(p.description, colF.description)) return false
       if (colF.executor && (p.executor ?? 'interno') !== colF.executor) return false
-      if (colF.estado === 'ativo' && !p.active) return false
-      if (colF.estado === 'inativo' && p.active) return false
+      if (!matchesEstado(p, colF.estado)) return false
       if (fLegal && !p.legal) return false
-
-      if (colF.tarefa) {
-        const t = findPlanTask(p)
-        if (colF.tarefa === 'concluida' && (!t || t.status !== 'done')) return false
-        if (colF.tarefa === 'pendente' && (!t || t.status !== 'pending')) return false
-        if (colF.tarefa === 'em_curso' && (!t || t.status !== 'in_progress')) return false
-      }
 
       const isCal = Boolean(p.showInCalendar || (p.calendarDates && p.calendarDates.length > 0) || p.active !== false)
       if (fCalendar === 'yes' && !isCal) return false
@@ -641,7 +736,8 @@ export default function MaintenancePlanClient({
       period: (p) => periodLabel(p),
       crit: (p) => p.criticidade,
       executor: (p) => (p.executor ? EXECUTOR_LABELS[p.executor] : ''),
-      estado: (p) => (p.active ? 0 : 1),
+      estado: (p) => ({ pending: 0, in_progress: 1, done: 2 } as const)[planInfo(p).status],
+      proxima: (p) => planInfo(p).current,
       data: (p) => toNormalizedIsoDate(p.nextDueDate || p.calendarStartDate || p.createdAt),
     },
     'title',
@@ -750,6 +846,15 @@ export default function MaintenancePlanClient({
             <CalendarClock className="h-4 w-4 shrink-0 text-safety-orange" />
             <span>Gerador Anual PMs</span>
           </button>
+          <button
+            onClick={handleConcludeUntil}
+            disabled={concludingUntil}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="Dar como concluídas as OT de PM até uma data — cada plano passa para a próxima data"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span>{concludingUntil ? 'A concluir…' : 'Concluir PM até…'}</span>
+          </button>
           <button onClick={openCreate} className="btn-primary flex items-center gap-1.5">
             <Plus className="h-4 w-4 shrink-0" />
             <span>Criar Tarefa</span>
@@ -778,8 +883,10 @@ export default function MaintenancePlanClient({
         <div className="flex gap-1.5 flex-wrap">
           {[
             { key: 'todos', label: 'Todos' },
-            { key: 'ativo', label: 'Ativo' },
-            { key: 'inativo', label: 'Inativo' },
+            { key: 'pending', label: STATUS_LABELS.pending },
+            { key: 'in_progress', label: STATUS_LABELS.in_progress },
+            { key: 'done', label: STATUS_LABELS.done },
+            { key: 'atraso', label: 'Em atraso' },
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -881,9 +988,7 @@ export default function MaintenancePlanClient({
                     )}
                     <span className="text-[11px] font-mono font-semibold text-slate-500 dark:text-slate-400 truncate">{p.area || '—'}</span>
                   </div>
-                  <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold shrink-0 ${p.active ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-slate-100 text-slate-600 border border-slate-300'}`}>
-                    {p.active ? 'Ativo' : 'Inat.'}
-                  </span>
+                  <span className="shrink-0" onClick={(e) => e.stopPropagation()}>{renderPmStatusButton(p)}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <p className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-2 flex-1">{p.title}</p>
@@ -916,13 +1021,9 @@ export default function MaintenancePlanClient({
                       <span className="inline-flex items-center gap-0.5 font-bold text-amber-800 bg-amber-50 px-1 py-0.5 rounded border border-amber-200"><Building2 className="h-3 w-3" /> Ext.</span>
                     )}
                   </div>
-                  <span onClick={(e) => e.stopPropagation()}>
-                    {renderPmStatusButton(p)}
-                    {p.lastGeneratedAt && (
-                      <span className="text-[9px] text-slate-500 ml-1 block">
-                        Últ: {formatDate(p.lastGeneratedAt)}
-                      </span>
-                    )}
+                  <span onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase">Próxima:</span>
+                    {renderNextDate(p)}
                   </span>
                 </div>
               </button>
@@ -950,8 +1051,8 @@ export default function MaintenancePlanClient({
                 <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[100px] px-1 py-1.5 text-left" />
                 <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[45px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="TÉCNICO" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1 py-1.5 whitespace-nowrap text-left" />
-                <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[50px] px-1 py-1.5 whitespace-nowrap text-left" />
-                <th className="w-[85px] px-1 py-1.5 whitespace-nowrap text-left">TAREFA</th>
+                <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-1 py-1.5 whitespace-nowrap text-left" />
+                <SortableTh label="PRÓXIMA" sortableKey="proxima" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-1 py-1.5 whitespace-nowrap text-left" />
               </tr>
               {/* Linha de filtros por coluna (estilo Excel) */}
               <tr className="border-b border-slate-200 bg-slate-50">
@@ -1017,20 +1118,15 @@ export default function MaintenancePlanClient({
                   </Select>
                 </th>
                 <th className="px-0.5 py-0.5">
-                  <Select value={colF.estado} onChange={(e) => setCol('estado', e.target.value)} className={colFilterCls} title="Filtrar estado">
+                  <Select sort={false} value={colF.estado} onChange={(e) => setCol('estado', e.target.value)} className={colFilterCls} title="Filtrar estado da OT">
                     <option value="">Todos</option>
-                    <option value="ativo">Ativo</option>
-                    <option value="inativo">Inativo</option>
+                    <option value="pending">{STATUS_LABELS.pending}</option>
+                    <option value="in_progress">{STATUS_LABELS.in_progress}</option>
+                    <option value="done">{STATUS_LABELS.done}</option>
+                    <option value="atraso">Em atraso</option>
                   </Select>
                 </th>
-                <th className="px-0.5 py-0.5">
-                  <Select value={colF.tarefa} onChange={(e) => setCol('tarefa', e.target.value)} className={colFilterCls} title="Filtrar estado da tarefa">
-                    <option value="">Todas</option>
-                    <option value="concluida">Concluída</option>
-                    <option value="pendente">Pendente</option>
-                    <option value="em_curso">Em curso</option>
-                  </Select>
-                </th>
+                <th className="px-0.5 py-0.5" />
               </tr>
             </thead>
             <tbody>
@@ -1106,18 +1202,11 @@ export default function MaintenancePlanClient({
                       <span className="text-slate-600 font-medium">Int.</span>
                     )}
                   </td>
-                  <td className="px-1 py-1.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold ${p.active ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-slate-100 text-slate-600 border border-slate-300'}`}>
-                      {p.active ? 'Ativo' : 'Inat.'}
-                    </span>
-                  </td>
                   <td className="px-1 py-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     {renderPmStatusButton(p)}
-                    {p.lastGeneratedAt && (
-                      <div className="text-[9px] text-slate-500 mt-0.5">
-                        Últ: {formatDate(p.lastGeneratedAt)}
-                      </div>
-                    )}
+                  </td>
+                  <td className="px-1 py-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    {renderNextDate(p)}
                   </td>
                 </tr>
               ))}
@@ -1189,6 +1278,7 @@ export default function MaintenancePlanClient({
           updateAction={updateMaintenancePlanAction}
           deleteAction={deleteMaintenancePlanAction}
           allowDuplicate={false}
+          planForm={editing ? { nextDate: planInfo(editing).current, active: editing.active !== false, history: planHistory(editing) } : undefined}
           onSuccess={() => {
             closeModal()
             router.refresh()
