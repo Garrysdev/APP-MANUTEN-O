@@ -86,11 +86,6 @@ export default function MetricChart({
           <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">{title}{unit ? ` (${unit})` : ''}</h3>
           {subtitle && <p className="text-[11px] text-gray-500 dark:text-slate-400">{subtitle}</p>}
         </div>
-        <button type="button" onClick={view.onToggleTooltip}
-          title={view.showTooltip ? 'Esconder a caixa com as leituras ao passar o rato (todos os gráficos)' : 'Mostrar a caixa com as leituras ao passar o rato (todos os gráficos)'}
-          className={`shrink-0 inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold ${view.showTooltip ? 'border-[#2E86C1] bg-[#2E86C1]/10 text-[#2E86C1]' : 'border-slate-300 dark:border-slate-700 text-gray-500 dark:text-slate-400'}`}>
-          {view.showTooltip ? <MessageSquare className="h-3.5 w-3.5" /> : <MessageSquareOff className="h-3.5 w-3.5" />} Resumo
-        </button>
       </div>
       {/* Cursor de lupa sobre o gráfico; de redimensionar enquanto se arrasta a zona a ampliar. */}
       <div ref={boxRef} className={`h-64 select-none ${sel ? '[&_.recharts-surface]:!cursor-col-resize' : '[&_.recharts-surface]:!cursor-zoom-in'}`} title="Arrasta sobre o gráfico para ampliar essa zona"
@@ -155,6 +150,14 @@ export default function MetricChart({
             {sel && sel.a !== sel.b && <ReferenceArea x1={sel.a} x2={sel.b} fill="#2E86C1" fillOpacity={0.15} stroke="#2E86C1" strokeOpacity={0.4} />}
           </LineChart>
         </ResponsiveContainer>
+      </div>
+      {/* Junto à legenda: liga/desliga a caixa do resumo das leituras. */}
+      <div className="relative h-0">
+        <button type="button" onClick={view.onToggleTooltip}
+          title={view.showTooltip ? 'Esconder a caixa com as leituras ao passar o rato (todos os gráficos)' : 'Mostrar a caixa com as leituras ao passar o rato (todos os gráficos)'}
+          className={`absolute -top-7 right-0 z-10 inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold ${view.showTooltip ? 'border-[#2E86C1] bg-[#2E86C1]/10 text-[#2E86C1]' : 'border-slate-300 dark:border-slate-700 text-gray-500 dark:text-slate-400'}`}>
+          {view.showTooltip ? <MessageSquare className="h-3.5 w-3.5" /> : <MessageSquareOff className="h-3.5 w-3.5" />} Resumo
+        </button>
       </div>
     </div>
   )
