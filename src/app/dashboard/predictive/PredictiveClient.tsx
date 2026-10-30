@@ -339,47 +339,36 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
           </div>
 
           <div className={card}>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100 mr-auto">Alertas</h3>
-              {/* Máximos da janela: temperaturas de cada sensor e corrente do agitador. */}
-              {stats.filter((st) => st.key.endsWith('__Temperatura')).map((st) => {
-                const sensor = st.key.replace(/__Temperatura$/, '')
-                const hot = st.max >= limits.temp
-                return (
-                  <span key={st.key} title={`Temperatura máxima na janela (média ${st.avg.toFixed(1)} °C)`}
-                    className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold border ${hot ? 'border-red-300 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300' : 'border-slate-200 bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'}`}>
-                    <Thermometer className="h-3 w-3" />{labelOf(sensor)} máx {st.max.toFixed(1)} °C
-                  </span>
-                )
-              })}
-              {currents.map((c) => {
-                const st = stats.find((x) => x.key === c.key)
-                if (!st) return null
-                const high = Boolean(limits.current && st.max >= limits.current)
-                return (
-                  <span key={c.key} title={`Corrente máxima na janela (média ${st.avg.toFixed(1)} A)${limits.current ? ` · alarme ${limits.current} A` : ' · sem alarme definido em Sensores e limites'}`}
-                    className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold border ${high ? 'border-red-300 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300' : 'border-slate-200 bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'}`}>
-                    <Activity className="h-3 w-3" />{c.label} máx {st.max.toFixed(1)} A
-                  </span>
-                )
-              })}
-            </div>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100 mb-2">Alertas</h3>
             {alerts.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-slate-400">
-                Sem valores acima dos limites no período (vibração ≥ {limits.bc} mm/s, temperatura ≥ {limits.temp} °C{limits.current ? `, corrente ≥ ${limits.current} A` : ''}).
-                {currents.length > 0 && !limits.current && ' A corrente do agitador só dá alerta com um limite definido em Sensores e limites.'}
+                Sem valores acima dos limites no período (vibração ≥ {limits.bc} mm/s, temperatura ≥ {limits.temp} °C).
               </p>
             ) : (
               <div className="overflow-auto max-h-64">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-white dark:bg-slate-900"><tr className="text-left text-xs uppercase text-gray-500 dark:text-slate-400"><th className="py-1 pr-3">Data</th><th className="py-1 pr-3">Sensor</th><th className="py-1 pr-3">Tipo</th><th className="py-1 pr-3">Máximo</th><th className="py-1">Nível</th></tr></thead>
+                  <thead className="sticky top-0 bg-white dark:bg-slate-900">
+                    <tr className="text-left text-xs uppercase text-gray-500 dark:text-slate-400">
+                      <th className="py-1 pr-3">Data / hora</th><th className="py-1 pr-3">Sensor</th><th className="py-1 pr-3">Tipo</th><th className="py-1 pr-3">Máximo</th>
+                      <th className="py-1 pr-3" title="Temperatura do mesmo sensor no momento do alerta">Temperatura</th>
+                      {currents.map((c) => <th key={c.key} className="py-1 pr-3" title="Corrente do motor no momento do alerta">{c.label}</th>)}
+                      <th className="py-1">Nível</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {alerts.map((a, i) => (
                       <tr key={i} className="border-t border-slate-100 dark:border-slate-800 text-gray-700 dark:text-slate-200">
-                        <td className="py-1 pr-3">{a.date}</td>
-                        <td className="py-1 pr-3">{a.kind === 'corrente' ? a.sensor : labelOf(a.sensor)}</td>
+                        <td className="py-1 pr-3 whitespace-nowrap">
+                          <button type="button" className="hover:underline" title="Ampliar os gráficos à volta deste momento"
+                            onClick={() => setZoom({ from: Math.max(fullWindow.from, a.t - 3 * 3_600_000), to: Math.min(fullWindow.to, a.t + 3 * 3_600_000) })}>
+                            {fmtWhen(a.t)}
+                          </button>
+                        </td>
+                        <td className="py-1 pr-3">{labelOf(a.sensor)}</td>
                         <td className="py-1 pr-3">{a.kind}</td>
-                        <td className="py-1 pr-3">{a.value.toFixed(2)} {a.kind === 'vibração' ? 'mm/s' : a.kind === 'corrente' ? 'A' : '°C'}</td>
+                        <td className="py-1 pr-3 whitespace-nowrap">{a.value.toFixed(2)} {a.kind === 'vibração' ? 'mm/s' : '°C'}</td>
+                        <td className="py-1 pr-3 whitespace-nowrap">{a.temperature === null ? '—' : `${a.temperature.toFixed(1)} °C`}</td>
+                        {a.currents.map((c, j) => <td key={j} className="py-1 pr-3 whitespace-nowrap">{c.value === null ? '—' : `${c.value.toFixed(1)} A`}</td>)}
                         <td className="py-1"><span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${a.level === 'perigo' ? ZONE_STYLE.D.cls : ZONE_STYLE.C.cls}`}>{a.level}</span></td>
                       </tr>
                     ))}

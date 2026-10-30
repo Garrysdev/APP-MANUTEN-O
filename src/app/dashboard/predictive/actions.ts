@@ -88,9 +88,8 @@ export async function saveVibrationSettingsAction(
     const nums = [l?.ab, l?.bc, l?.cd, l?.temp]
     if (!nums.every((n) => typeof n === 'number' && Number.isFinite(n) && n > 0)) throw new Error('Limites inválidos.')
     if (!(l.ab < l.bc && l.bc < l.cd)) throw new Error('Os limites têm de ser crescentes (A/B < B/C < C/D).')
-    const current = typeof l.current === 'number' && Number.isFinite(l.current) && l.current > 0 ? l.current : 0
     const base = data.base === 'flexible' ? 'flexible' : 'rigid'
-    await updateVibrationSettings(companyId, id, { sensorLabels: labels, limits: { ab: l.ab, bc: l.bc, cd: l.cd, temp: l.temp, current }, base })
+    await updateVibrationSettings(companyId, id, { sensorLabels: labels, limits: { ab: l.ab, bc: l.bc, cd: l.cd, temp: l.temp }, base })
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Erro ao guardar.' }

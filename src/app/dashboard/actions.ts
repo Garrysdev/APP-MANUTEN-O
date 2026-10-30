@@ -16,6 +16,6 @@ export async function getYearTasksAction(year: number): Promise<Task[]> {
 /** Cumprimento do PM do ano selecionado — ocorrências previstas vs concluídas. */
 export async function getPMComplianceAction(year: number): Promise<PmCompliance> {
   const profile = await getCurrentProfile()
-  if (!profile) return { total: 0, done: 0, overdue: 0, plans: 0, plansOk: 0, pct: null, source: null }
+  if (!profile) return { total: 0, done: 0, pending: 0, overdue: 0, pct: null, source: null }
   return getPMComplianceForYear(profile.companyId, year)
 }

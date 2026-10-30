@@ -116,39 +116,62 @@ export function summarizeSensor(days: VibDayPayload[], sensor: string, limits: V
   }
 }
 
-export interface VibAlert { date: string; sensor: string; kind: 'vibração' | 'temperatura' | 'corrente'; value: number; level: 'alerta' | 'perigo' }
+/** Leitura de uma grandeza no instante do alerta (média do intervalo de 10 min). */
+export interface VibReading { label: string; value: number | null }
+
+export interface VibAlert {
+  date: string
+  /** Instante (ms) do intervalo de 10 min com o pior valor do dia. */
+  t: number
+  sensor: string
+  kind: 'vibração' | 'temperatura'
+  value: number
+  level: 'alerta' | 'perigo'
+  /** Temperatura do mesmo sensor nesse instante. */
+  temperature: number | null
+  /** Corrente do motor nesse instante — ajuda a ver a causa (carga, arranque…). */
+  currents: VibReading[]
+}
 
 /**
- * Um alerta por dia/sensor/tipo — o pior valor máximo do dia. `currents` são as séries de
- * corrente do motor ({ key, label }); só dão alerta com limits.current definido
- * (perigo a partir de +10%).
+ * Um alerta por dia/sensor/tipo — o pior valor máximo do dia, com a hora desse valor e a
+ * temperatura do sensor e a corrente do motor (`currents`) nesse mesmo intervalo.
  */
 export function findAlerts(days: VibDayPayload[], sensors: string[], limits: VibLimits, currents: { key: string; label: string }[] = []): VibAlert[] {
   const out: VibAlert[] = []
-  const maxOf = (arr: (number | null)[]) => Math.max(...arr.filter((x): x is number => x !== null))
+  const peak = (arr: (number | null)[]) => {
+    let i = -1
+    arr.forEach((x, j) => { if (x !== null && x !== undefined && (i < 0 || x > (arr[i] as number))) i = j })
+    return i
+  }
+  const at = (day: VibDayPayload, key: string, i: number) => {
+    const s = day.series[key]
+    const v = s?.avg[i] ?? s?.max[i]
+    return v === null || v === undefined ? null : v
+  }
   for (const day of days) {
-    if (limits.current && limits.current > 0) {
-      for (const c of currents) {
-        const s = day.series[c.key]
-        if (!s) continue
-        const mx = maxOf(s.max)
-        if (mx >= limits.current) out.push({ date: day.date, sensor: c.label, kind: 'corrente', value: mx, level: mx >= limits.current * 1.1 ? 'perigo' : 'alerta' })
-      }
-    }
+    const t0 = dayStart(day.date)
+    const push = (sensor: string, kind: VibAlert['kind'], i: number, value: number, level: VibAlert['level']) => out.push({
+      date: day.date, t: t0 + i * BUCKET_MINUTES * 60_000, sensor, kind, value, level,
+      temperature: at(day, `${sensor}__Temperatura`, i),
+      currents: currents.map((c) => ({ label: c.label, value: at(day, c.key, i) })),
+    })
     for (const sensor of sensors) {
       const v = day.series[`${sensor}__vRMS`]
-      if (v) {
-        const mx = Math.max(...v.max.filter((x): x is number => x !== null))
-        if (mx >= limits.bc) out.push({ date: day.date, sensor, kind: 'vibração', value: mx, level: mx >= limits.cd ? 'perigo' : 'alerta' })
+      const iv = v ? peak(v.max) : -1
+      if (v && iv >= 0 && (v.max[iv] as number) >= limits.bc) {
+        const mx = v.max[iv] as number
+        push(sensor, 'vibração', iv, mx, mx >= limits.cd ? 'perigo' : 'alerta')
       }
       const t = day.series[`${sensor}__Temperatura`]
-      if (t) {
-        const mx = Math.max(...t.max.filter((x): x is number => x !== null))
-        if (mx >= limits.temp) out.push({ date: day.date, sensor, kind: 'temperatura', value: mx, level: mx >= limits.temp + 10 ? 'perigo' : 'alerta' })
+      const it = t ? peak(t.max) : -1
+      if (t && it >= 0 && (t.max[it] as number) >= limits.temp) {
+        const mx = t.max[it] as number
+        push(sensor, 'temperatura', it, mx, mx >= limits.temp + 10 ? 'perigo' : 'alerta')
       }
     }
   }
-  return out.sort((a, b) => b.date.localeCompare(a.date))
+  return out.sort((a, b) => b.t - a.t)
 }
 
 /** Datas AAAA-MM-DD dos últimos `n` dias até `end` (inclusive). */

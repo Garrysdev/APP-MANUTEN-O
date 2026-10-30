@@ -7,6 +7,7 @@ import ExcelDateFilter, { ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filt
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 import { pmComplianceByYear, type HistoricalPmKpi } from '@/lib/pm-compliance'
 import HistoricalPmImport from './HistoricalPmImport'
+import HistoryImport from './HistoryImport'
 
 // Grupos de exibição para "Distribuição por Tipo de Manutenção" — 'plano'/'pm' e
 // 'preventiva'/'mp' são o mesmo tipo guardado com chaves diferentes consoante a
@@ -255,8 +256,7 @@ export default function ReportsChartsClient({
         pmTotal: pm.total,
         pmDone: pm.done,
         pmOverdue: pm.overdue,
-        pmPlans: pm.plans,
-        pmPlansOk: pm.plansOk,
+        pmPending: pm.pending,
         pmSource: pm.source,
         pmCompliance: pm.pct,
         pmOts,
@@ -281,8 +281,7 @@ export default function ReportsChartsClient({
       concluidas: y?.pmDone ?? 0,
       emAtraso: y?.pmOverdue ?? 0,
       compliancePct: y?.pmCompliance ?? null,
-      planos: y?.pmPlans ?? 0,
-      planosOk: y?.pmPlansOk ?? 0,
+      porFazer: y?.pmPending ?? 0,
       source: y?.pmSource ?? null,
       pmOts: y?.pmOts ?? 0,
     }
@@ -353,15 +352,15 @@ export default function ReportsChartsClient({
               <span className="text-xs font-bold text-slate-300">
                 {annualPMStats.compliancePct === null
                   ? `(${annualPMStats.pmOts} OT de PM feitas em ${annualPMStats.targetYear})`
-                  : `(${annualPMStats.planosOk} de ${annualPMStats.planos} planos cumpridos · ${annualPMStats.concluidas} de ${annualPMStats.previstas} execuções)`}
+                  : `(${annualPMStats.concluidas} de ${annualPMStats.previstas} OT de PM devidas no ano${annualPMStats.emAtraso ? ` · ${annualPMStats.emAtraso} em atraso` : ''})`}
               </span>
             </div>
             <p className="text-[11px] text-slate-300 font-medium">
               {annualPMStats.compliancePct === null
                 ? 'Ano sem registo do plano — importa o PL-MAN-01 desse ano em "KPI do PM dos anos anteriores".'
                 : annualPMStats.source === 'excel'
-                  ? 'KPI da folha PL-MAN-01 desse ano: planos que fizeram todas as intervenções devidas.'
-                  : 'Planos sem nenhuma execução em atraso, dos planos com execuções previstas até hoje (inclui as concluídas em bloco).'}
+                  ? 'Da folha PL-MAN-01 desse ano: intervenções realizadas ÷ devidas no ano.'
+                  : 'OT de PM concluídas até hoje ÷ OT de PM devidas até ao fim do ano.'}
             </p>
           </div>
           <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
@@ -540,7 +539,7 @@ export default function ReportsChartsClient({
               <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100">
                 Plano de Manutenção (% por Ano)
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">KPI: planos que fizeram todas as execuções devidas · anos antes da app pelo PL-MAN-01 do Excel</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">OT de PM concluídas ÷ devidas no ano inteiro · anos antes da app pelo PL-MAN-01 do Excel</p>
             </div>
             <span className="text-xs font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 rounded border border-emerald-200 dark:border-emerald-800 shrink-0 self-start sm:self-auto">
               Meta: 100%
@@ -562,7 +561,7 @@ export default function ReportsChartsClient({
                       <div style={{ height: `${height}%` }} className={`w-full max-w-[40px] rounded-t-md ${color}`}
                         title={pct === null
                           ? `${y.year}: sem registo do plano na app — ${y.pmOts} OT de PM feitas`
-                          : `${y.year}: ${y.pmPlansOk} de ${y.pmPlans} planos cumpridos (${pct}%) · ${y.pmDone} de ${y.pmTotal} execuções${y.pmSource === 'excel' ? ' · Excel PL-MAN-01' : ''}`} />
+                          : `${y.year}: ${y.pmDone} de ${y.pmTotal} OT de PM devidas (${pct}%)${y.pmSource === 'excel' ? ' · Excel PL-MAN-01' : ''}`} />
                     </div>
                     <span className="shrink-0 text-[10px] font-black text-slate-800 dark:text-slate-200 mt-1">{y.year}</span>
                   </div>
@@ -579,11 +578,11 @@ export default function ReportsChartsClient({
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700">
                     <th className="py-1 px-2">Ano</th>
-                    <th className="py-1 px-2 text-center">OT de PM feitas</th>
-                    <th className="py-1 px-2 text-center">Execuções devidas</th>
-                    <th className="py-1 px-2 text-center">Feitas</th>
-                    <th className="py-1 px-2 text-center">Planos</th>
-                    <th className="py-1 px-2 text-center">Cumpridos</th>
+                    <th className="py-1 px-2 text-center" title="OT de PM registadas no histórico de OT desse ano">OT de PM no histórico</th>
+                    <th className="py-1 px-2 text-center">Devidas no ano</th>
+                    <th className="py-1 px-2 text-center">Concluídas</th>
+                    <th className="py-1 px-2 text-center">Por fazer</th>
+                    <th className="py-1 px-2 text-center">Em atraso</th>
                     <th className="py-1 px-2 text-center">% Cumprido</th>
                     <th className="py-1 px-2 text-center">Fonte</th>
                   </tr>
@@ -595,8 +594,8 @@ export default function ReportsChartsClient({
                       <td className="py-1 px-2 text-center text-slate-600 dark:text-slate-300 font-bold">{y.pmOts}</td>
                       <td className="py-1 px-2 text-center text-amber-600 dark:text-amber-400 font-bold">{y.pmCompliance === null ? '—' : y.pmTotal}</td>
                       <td className="py-1 px-2 text-center text-emerald-600 dark:text-emerald-400 font-bold">{y.pmCompliance === null ? '—' : y.pmDone}</td>
-                      <td className="py-1 px-2 text-center text-slate-700 dark:text-slate-200 font-bold">{y.pmCompliance === null ? '—' : y.pmPlans}</td>
-                      <td className="py-1 px-2 text-center text-emerald-600 dark:text-emerald-400 font-bold">{y.pmCompliance === null ? '—' : y.pmPlansOk}</td>
+                      <td className="py-1 px-2 text-center text-slate-700 dark:text-slate-200 font-bold">{y.pmCompliance === null ? '—' : y.pmPending}</td>
+                      <td className="py-1 px-2 text-center text-red-600 dark:text-red-400 font-bold">{y.pmCompliance === null || y.pmSource === 'excel' ? '—' : y.pmOverdue}</td>
                       <td className="py-1 px-2 text-center font-black">
                         {y.pmCompliance === null ? <span className="text-slate-400" title="Sem execuções do plano registadas na app nesse ano">—</span> : (
                           <span className={y.pmCompliance >= 90 ? 'text-emerald-600 dark:text-emerald-400' : y.pmCompliance >= 60 ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'}>
@@ -654,6 +653,7 @@ export default function ReportsChartsClient({
               })}
             </div>
           </div>
+          <HistoryImport />
         </div>
 
       </div>

@@ -37,8 +37,6 @@ export interface VibLimits {
   cd: number
   /** Temperatura de alarme (°C). */
   temp: number
-  /** Corrente de alarme do motor (A); 0/ausente = sem alarme. */
-  current?: number
 }
 
 // ISO 10816-3 / 20816-3, Grupo 2 (15–300 kW) — o motor de 90 kW encaixa aqui.

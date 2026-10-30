@@ -1,34 +1,31 @@
 import type { MaintenancePlan, Task } from '@/types/models'
 import { isPlanTask } from './pm-status'
-import { planCurrentDate } from './pm-schedule'
+import { planCurrentDate, planPeriodStep, addStep } from './pm-schedule'
 
-// Cumprimento do PM de um ano (30/10/2026), igual ao KPI da folha PL-MAN-01 do Excel:
-// cada plano com execuções devidas no ano conta como "cumprido" se fez todas as devidas.
+// Cumprimento do PM de um ano (definição do Rui, 30/10/2026):
+//   % = OT de PM concluídas até hoje ÷ OT de PM devidas no ano inteiro (até 31/12).
+// Num ano a decorrer a % sobe ao longo do ano e só chega a 100% se tudo o que estava
+// previsto até dezembro for feito.
 //
-// Na app cada plano tem uma só OT atual e as execuções concluídas ficam em
-// plan.executionHistory (também as "concluídas em bloco", que não criam OT). Antes
-// contava "planos com a OT do ano concluída" ÷ "planos existentes" — as execuções em
-// bloco nunca entravam e a % não mexia, e nos anos antigos (antes de haver planos na app)
-// dava ~1% ao dividir pelos 600 planos de hoje.
-//
-// execuções feitas = histórico do plano com data prevista no ano + OT de PM concluídas
-//                    ligadas ao plano nesse ano que não estejam já no histórico;
-// em atraso        = planos ativos cuja OT atual é desse ano e já passou da data;
-// planos           = planos com execuções feitas ou em atraso no ano;
-// % (KPI)          = planos sem nenhuma em atraso ÷ planos.
-// Os anos sem execuções registadas na app usam os KPI importados dos PL-MAN-01 do Excel
-// (src/lib/historical-kpis.ts); sem eles a % fica null (o histórico de OT do Excel só
-// tem as OT feitas, não as previstas — não há como medir).
+// Na app cada plano tem uma só OT atual (plan.nextDueDate) e as execuções concluídas ficam
+// em plan.executionHistory (também as concluídas em bloco na implementação, até 31/10/2026).
+//   concluídas = histórico do plano com data prevista no ano + OT de PM concluídas ligadas
+//                ao plano nesse ano que não estejam já no histórico;
+//   por fazer  = a OT atual e as seguintes (pela periodicidade) que ainda caem no ano;
+//   devidas    = concluídas + por fazer.
+// Os anos sem execuções registadas na app usam o KPI importado das folhas PL-MAN-01
+// (src/lib/historical-kpis.ts): realizadas (no máx. as devidas de cada plano) ÷ devidas.
+// Sem nada disso a % fica null — o histórico de OT do Excel só tem as feitas, não as devidas.
 
 export interface PmCompliance {
-  /** Execuções previstas até hoje (feitas + em atraso). */
+  /** OT de PM devidas no ano inteiro. */
   total: number
+  /** Concluídas (até hoje). */
   done: number
+  /** Ainda por fazer no ano (em atraso + até 31/12). */
+  pending: number
+  /** Das por fazer, as que já passaram da data. */
   overdue: number
-  /** Planos com execuções devidas no ano e quantos as fizeram todas. */
-  plans: number
-  plansOk: number
-  /** KPI: plansOk ÷ plans, em %. null quando o ano não tem registos. */
   pct: number | null
   source: 'app' | 'excel' | null
 }
@@ -39,6 +36,8 @@ export interface HistoricalPmKpi {
   /** Intervenções devidas e realizadas (soma de todas as linhas do plano). */
   due: number
   done: number
+  /** Realizadas contando no máximo as devidas de cada plano (as "a mais" não contam). */
+  doneCapped?: number
   plans: number
   plansOk: number
   file?: string
@@ -68,55 +67,69 @@ function indexTasks(tasks: Task[]) {
   }
 }
 
-export function fromHistorical(h: HistoricalPmKpi): PmCompliance {
-  return {
-    total: h.due, done: h.done, overdue: Math.max(0, h.due - h.done),
-    plans: h.plans, plansOk: h.plansOk, pct: h.plans > 0 ? pctOf(h.plansOk, h.plans) : null, source: 'excel',
+/** Datas da OT atual e das seguintes, por ano, até ao fim do último ano pedido. */
+function upcomingByYear(plan: MaintenancePlan, current: string, lastYear: number): Map<number, string[]> {
+  const out = new Map<number, string[]>()
+  const step = planPeriodStep(plan)
+  let d = current
+  for (let guard = 0; guard < 500 && Number(d.slice(0, 4)) <= lastYear; guard++) {
+    const y = Number(d.slice(0, 4))
+    out.set(y, [...(out.get(y) || []), d])
+    if (!step) break
+    d = addStep(d, step)
   }
+  return out
+}
+
+export function fromHistorical(h: HistoricalPmKpi): PmCompliance {
+  const done = Math.min(h.doneCapped ?? h.done, h.due)
+  return { total: h.due, done, pending: h.due - done, overdue: h.due - done, pct: h.due > 0 ? pctOf(done, h.due) : null, source: 'excel' }
 }
 
 export function pmComplianceByYear(
   plans: MaintenancePlan[], tasks: Task[], years: number[], today: string, historical: HistoricalPmKpi[] = [],
 ): Map<number, PmCompliance> {
   const doneTasksOf = indexTasks(tasks)
+  const lastYear = Math.max(...years, Number(today.slice(0, 4)))
   const done = new Map<number, number>()
+  const pending = new Map<number, number>()
   const overdue = new Map<number, number>()
-  const plansIn = new Map<number, number>()
   const histYears = new Set<number>()
   const add = (m: Map<number, number>, y: number, n = 1) => m.set(y, (m.get(y) || 0) + n)
   for (const p of plans) {
     const hist = p.executionHistory || []
     const inHist = new Set(hist.map((e) => e.taskId).filter(Boolean))
-    const yearsOfPlan = new Set<number>()
     for (const e of hist) {
       const y = Number(day(e.date).slice(0, 4))
-      if (y) { add(done, y); histYears.add(y); yearsOfPlan.add(y) }
+      if (y) { add(done, y); histYears.add(y) }
     }
     const linked = doneTasksOf(p)
     for (const t of linked) {
       if (inHist.has(t.id)) continue
       const y = Number(taskDay(t).slice(0, 4))
-      if (y) { add(done, y); yearsOfPlan.add(y) }
+      if (y) add(done, y)
     }
-    if (p.active !== false) {
-      const lastDone = linked.map((t) => day(t.completedAt)).filter(Boolean).sort().pop() || null
-      const current = planCurrentDate(p, today, lastDone)
-      if (current && current < today) { const y = Number(current.slice(0, 4)); add(overdue, y); yearsOfPlan.add(y) }
-    }
-    yearsOfPlan.forEach((y) => add(plansIn, y))
+    if (p.active === false) continue
+    const lastDone = linked.map((t) => day(t.completedAt)).filter(Boolean).sort().pop() || null
+    const current = planCurrentDate(p, today, lastDone)
+    if (!current) continue
+    upcomingByYear(p, current, lastYear).forEach((dates, y) => {
+      add(pending, y, dates.length)
+      add(overdue, y, dates.filter((d) => d < today).length)
+    })
   }
   const thisYear = Number(today.slice(0, 4))
   const histByYear = new Map(historical.map((h) => [h.year, h]))
   return new Map(years.map((y) => {
     const d = done.get(y) || 0
-    const o = overdue.get(y) || 0
-    const measurable = d + o > 0 && (y >= thisYear || o > 0 || histYears.has(y))
+    const pend = pending.get(y) || 0
+    const over = overdue.get(y) || 0
+    const measurable = d + pend > 0 && (y >= thisYear || over > 0 || histYears.has(y))
     const h = histByYear.get(y)
     if (!measurable && h) return [y, fromHistorical(h)]
-    const n = plansIn.get(y) || 0
     return [y, {
-      total: d + o, done: d, overdue: o, plans: n, plansOk: n - o,
-      pct: measurable && n > 0 ? pctOf(n - o, n) : null, source: measurable ? 'app' : null,
+      total: d + pend, done: d, pending: pend, overdue: over,
+      pct: measurable ? pctOf(d, d + pend) : null, source: measurable ? 'app' : null,
     }]
   }))
 }

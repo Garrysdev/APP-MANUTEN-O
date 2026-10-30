@@ -4200,3 +4200,69 @@ export async function clearAllInternalMessages(companyId: string): Promise<void>
 
   revalidateTag('messages')
 }
+
+/**
+ * Importa OT do histórico das folhas FR-MAN-09 (src/lib/history-import.ts), no formato da
+ * importação de 14/09/2026. Não duplica: salta as linhas cuja data + área + TAG + título já
+ * existe (lê a cópia materializada das OT uma vez — poucas leituras). Escreve em lotes de
+ * 400 e atualiza a cópia materializada com os dados escritos (sem reler os documentos).
+ * dryRun só conta.
+ */
+export async function importHistoricalTasks(
+  companyId: string,
+  createdBy: { id: string; name?: string | null },
+  rows: import('../history-import').HistoryRow[],
+  source: string,
+  dryRun: boolean
+): Promise<{ created: number; skipped: number; years: number[] }> {
+  const { historyKey, tipoFromTi } = await import('../history-import')
+  const existing = (await readAll('tasks', companyId, LIST_TIMEOUT_MS, 'importHistoricalTasks')) as (Task & { deleted?: boolean })[]
+  const known = new Set(existing.filter((t) => !t.deleted).map((t) => historyKey({ date: t.createdAt, area: t.area, tag: t.tag, title: t.title })))
+  const ids = new Set(existing.map((t) => t.id))
+  const now = new Date().toISOString()
+  const docs: Task[] = []
+  let skipped = 0
+  for (const r of rows) {
+    const key = historyKey({ date: r.date, area: r.area, tag: r.tag, title: r.title })
+    const id = `hist_${r.date.slice(0, 4)}_${(r.excelId || `l${r.line}`).replace(/[^A-Za-z0-9_-]/g, '')}`
+    if (known.has(key) || ids.has(id)) { skipped++; continue }
+    known.add(key)
+    ids.add(id)
+    const ti = r.ti || null
+    docs.push({
+      id,
+      companyId,
+      title: r.title,
+      description: r.action,
+      area: r.area,
+      tag: r.tag,
+      assetId: null,
+      tipo: tipoFromTi(ti),
+      ti,
+      tipoText: ti,
+      criticidade: 'verde',
+      status: 'done',
+      assignedTo: r.techs,
+      plannedStartDate: r.date,
+      startedAt: r.start,
+      completedAt: r.end || r.start || r.date,
+      createdAt: r.date,
+      createdBy: createdBy.id,
+      createdByName: createdBy.name ?? null,
+      observacoes: `Origem: ${source}, linha ${r.line}${r.excelId ? `, ID ${r.excelId}` : ''}`,
+      source: 'historico_excel',
+      updatedAt: now,
+    } as Task)
+  }
+  const years = Array.from(new Set(docs.map((d) => Number(d.createdAt.slice(0, 4))))).sort()
+  if (dryRun || docs.length === 0) return { created: docs.length, skipped, years }
+  const db = await adminDbFor(companyId)
+  for (let i = 0; i < docs.length; i += 400) {
+    const batch = db.batch()
+    docs.slice(i, i + 400).forEach((d) => batch.set(db.collection('tasks').doc(d.id), d))
+    await batch.commit()
+  }
+  await patch('tasks', companyId, docs.map((d) => ({ id: d.id, data: d })))
+  invalidateTasks(companyId, { historyYears: years, completed: true })
+  return { created: docs.length, skipped, years }
+}

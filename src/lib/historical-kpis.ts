@@ -38,7 +38,7 @@ export function parsePlanSheet(rows: SheetRows, year: number, file?: string): Hi
     }
     if (dueCol < 0 || doneCol < 0) return null
   }
-  let due = 0, done = 0, plans = 0, plansOk = 0
+  let due = 0, done = 0, doneCapped = 0, plans = 0, plansOk = 0
   // Cada coluna soma-se à parte, como os totais do cabeçalho da folha (há linhas com o
   // plano marcado mas sem número nas devidas/realizadas, e vice-versa).
   for (const r of rows.slice(3)) {
@@ -46,6 +46,7 @@ export function parsePlanSheet(rows: SheetRows, year: number, file?: string): Hi
     const x = num(r?.[doneCol])
     due += d ?? 0
     done += x ?? 0
+    doneCapped += Math.min(x ?? 0, d ?? 0)
     if (plansCol >= 0) {
       plans += num(r?.[plansCol]) ?? 0
       plansOk += num(r?.[okCol]) ?? 0
@@ -55,5 +56,5 @@ export function parsePlanSheet(rows: SheetRows, year: number, file?: string): Hi
     }
   }
   if (due === 0 && plans === 0) return null
-  return { year, due, done, plans, plansOk, file }
+  return { year, due, done, doneCapped, plans, plansOk, file }
 }

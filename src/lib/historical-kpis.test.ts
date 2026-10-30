@@ -17,7 +17,7 @@ describe('historical-kpis', () => {
       [30, 'A', null, 2, 2, 1, 1],
       [40, 'B', null, 2, 1, 0, 1],
     ]
-    expect(parsePlanSheet(rows, 2023)).toEqual({ year: 2023, due: 4, done: 3, plans: 2, plansOk: 1, file: undefined })
+    expect(parsePlanSheet(rows, 2023)).toEqual({ year: 2023, due: 4, done: 3, doneCapped: 3, plans: 2, plansOk: 1, file: undefined })
   })
 
   it('formato 2017/2018: colunas DEVIDAS / REALIZADAS', () => {
@@ -28,6 +28,6 @@ describe('historical-kpis', () => {
       [50, 1, 1, 1],
       [90, 1, 3, 0.33],
     ]
-    expect(parsePlanSheet(rows, 2017)).toMatchObject({ due: 4, done: 2, plans: 2, plansOk: 1 })
+    expect(parsePlanSheet(rows, 2017)).toMatchObject({ due: 4, done: 2, doneCapped: 2, plans: 2, plansOk: 1 })
   })
 })
