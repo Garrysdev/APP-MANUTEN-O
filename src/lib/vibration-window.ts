@@ -64,16 +64,34 @@ export interface SeriesStats { key: string; n: number; min: number; avg: number;
 
 /** Mínimo, média, máximo, desvio-padrão e variação (1.º → último valor médio) de cada série na janela. */
 export function windowStats(days: VibDayPayload[], keys: string[], win: TimeWindow): SeriesStats[] {
-  const rows = windowRows(days, keys, win)
+  // Uma só passagem pelos dados (com 6 meses × 25 séries são ~600 mil intervalos).
+  const acc = new Map(keys.map((k) => [k, { n: 0, sum: 0, sq: 0, min: Infinity, max: -Infinity, first: NaN, last: NaN }]))
+  for (const day of [...days].sort((x, y) => x.date.localeCompare(y.date))) {
+    const t0 = dayStartMs(day.date)
+    if (t0 + 86_400_000 <= win.from || t0 > win.to) continue
+    const b0 = Math.max(0, Math.ceil((win.from - t0) / BUCKET_MS))
+    const b1 = Math.min(BUCKETS_PER_DAY - 1, Math.floor((win.to - t0) / BUCKET_MS))
+    for (const key of keys) {
+      const s = day.series[key]
+      const a = acc.get(key)!
+      if (!s) continue
+      for (let i = b0; i <= b1; i++) {
+        const v = s.avg[i]
+        if (v === null || v === undefined) continue
+        a.n++; a.sum += v; a.sq += v * v
+        if (Number.isNaN(a.first)) a.first = v
+        a.last = v
+        const lo = s.min[i] ?? v, hi = s.max[i] ?? v
+        if (lo < a.min) a.min = lo
+        if (hi > a.max) a.max = hi
+      }
+    }
+  }
   return keys.flatMap((key) => {
-    const r = rows.filter((x) => x.key === key && x.avg !== null)
-    if (!r.length) return []
-    const avgs = r.map((x) => x.avg as number)
-    const mean = avgs.reduce((a, v) => a + v, 0) / avgs.length
-    const sd = Math.sqrt(avgs.reduce((a, v) => a + (v - mean) ** 2, 0) / avgs.length)
-    const mins = r.map((x) => x.min ?? (x.avg as number))
-    const maxs = r.map((x) => x.max ?? (x.avg as number))
-    return [{ key, n: r.length, min: Math.min(...mins), avg: mean, max: Math.max(...maxs), sd, first: avgs[0], last: avgs[avgs.length - 1] }]
+    const a = acc.get(key)!
+    if (!a.n) return []
+    const avg = a.sum / a.n
+    return [{ key, n: a.n, min: a.min, avg, max: a.max, sd: Math.sqrt(Math.max(0, a.sq / a.n - avg * avg)), first: a.first, last: a.last }]
   })
 }
 

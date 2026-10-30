@@ -103,9 +103,9 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
         if (!res.ok) { setError(res.error); break }
         const got = new Map((res.data ?? []).map((d) => [d.date, d]))
         for (const d of part) known.set(d, got.get(d) ?? null)
-        setCacheVersion((v) => v + 1)
       }
-      if (!cancelled) setLoading(false)
+      // Um só redesenho no fim (redesenhar a cada bloco prendia a página com períodos longos).
+      if (!cancelled) { setCacheVersion((v) => v + 1); setLoading(false) }
     })()
     return () => { cancelled = true; setLoading(false) }
   }, [cfg?.assetId, cfg?.lastDate, rangeDates, reloadKey])

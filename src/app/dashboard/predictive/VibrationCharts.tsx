@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceArea, ReferenceLine } from 'recharts'
 import type { ChartPoint } from '@/lib/vibration-view'
 
@@ -50,6 +50,7 @@ export default function MetricChart({
 }) {
   // Arrastar no gráfico seleciona a zona a ampliar (aplica-se a todos os gráficos).
   const [sel, setSel] = useState<{ a: number; b: number } | null>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
   if (points.length === 0 || series.length === 0) return null
   const from = view.window?.from ?? points[0].t
   const to = view.window?.to ?? points[points.length - 1].t
@@ -62,10 +63,13 @@ export default function MetricChart({
   }
   const top = zones ? Math.max(yMax * 1.15, zones.bc * 1.1) : limitLine ? Math.max(yMax * 1.1, limitLine * 1.05) : undefined
   const labelOf = (key: string) => [...series, ...rightSeries].find((s) => s.key === key)?.label ?? key
-  const tOf = (s: unknown): number | null => {
-    const v = (s as { activeLabel?: unknown } | null)?.activeLabel
-    const n = Number(v)
-    return v === undefined || v === null || !Number.isFinite(n) ? null : n
+  // Instante sob o rato, pela posição na área do gráfico (a grelha marca a área útil).
+  const tAt = (clientX: number): number | null => {
+    const grid = boxRef.current?.querySelector('.recharts-cartesian-grid')
+    const r = grid?.getBoundingClientRect()
+    if (!r || r.width <= 0) return null
+    const f = Math.min(1, Math.max(0, (clientX - r.left) / r.width))
+    return from + f * (to - from)
   }
 
   return (
@@ -74,19 +78,20 @@ export default function MetricChart({
         <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">{title}{unit ? ` (${unit})` : ''}</h3>
         {subtitle && <p className="text-[11px] text-gray-500 dark:text-slate-400">{subtitle}</p>}
       </div>
-      <div className="h-64 select-none" title="Arrasta sobre o gráfico para ampliar essa zona">
+      <div ref={boxRef} className="h-64 select-none cursor-crosshair" title="Arrasta sobre o gráfico para ampliar essa zona"
+        onMouseDown={(e) => { if (e.button !== 0) return; const t = tAt(e.clientX); if (t !== null) setSel({ a: t, b: t }) }}
+        onMouseMove={(e) => { if (!sel) return; const t = tAt(e.clientX); if (t !== null) setSel({ a: sel.a, b: t }) }}
+        onMouseUp={() => {
+          // Arrasto curto (< 1% da largura) é um clique, não um zoom.
+          if (sel && Math.abs(sel.a - sel.b) > (to - from) / 100) view.onZoom(Math.min(sel.a, sel.b), Math.max(sel.a, sel.b))
+          setSel(null)
+        }}
+        onMouseLeave={() => setSel(null)}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={points}
             syncId="predictive"
             margin={{ top: 4, right: 12, left: -8, bottom: 0 }}
-            onMouseDown={(s) => { const t = tOf(s); if (t !== null) setSel({ a: t, b: t }) }}
-            onMouseMove={(s) => { if (!sel) return; const t = tOf(s); if (t !== null) setSel({ a: sel.a, b: t }) }}
-            onMouseUp={() => {
-              if (sel && sel.a !== sel.b) view.onZoom(Math.min(sel.a, sel.b), Math.max(sel.a, sel.b))
-              setSel(null)
-            }}
-            onMouseLeave={() => setSel(null)}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#94a3b833" />
             {zones && top !== undefined && (
