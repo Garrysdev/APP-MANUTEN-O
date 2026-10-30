@@ -10,6 +10,7 @@ import { uploadFile } from '@/lib/upload'
 import { originalDocViewUrl } from '@/components/ui/TaskDocRequirements'
 import { normalizeDocCode, isValidDocCode, cleanDocTitle } from '@/lib/doc-code'
 import { createDocumentAction, updateDocumentAction, deleteDocumentAction } from './actions'
+import DocumentsAiPanel from './DocumentsAiPanel'
 
 type DocTab = 'FR' | 'IT' | 'MANUAL'
 
@@ -29,7 +30,7 @@ function docFromFileName(fileName: string): { code: string; title: string } {
  * (safety-rules/SafetyRulesClient.tsx). Substitui os 3 FR + 3 IT antes fixos no código
  * (ver TaskDocRequirements.tsx), que passam a ler daqui via listDocuments().
  */
-export default function DocumentsClient({ initialDocs }: { initialDocs: DocumentoObrigatorio[] }) {
+export default function DocumentsClient({ initialDocs, aiEnabled = false }: { initialDocs: DocumentoObrigatorio[]; aiEnabled?: boolean }) {
   const router = useRouter()
   const [tab, setTab] = useState<DocTab>('FR')
   const [modalOpen, setModalOpen] = useState(false)
@@ -189,7 +190,7 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
   }
 
   return (
-    <div className="max-w-5xl mx-auto animate-fade-in-up">
+    <div className={`${aiEnabled ? 'max-w-7xl' : 'max-w-5xl'} mx-auto animate-fade-in-up`}>
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-800 gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -278,6 +279,9 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
         </button>
       </div>
 
+      {/* Com a IA (plano Business+): documentos à esquerda, "Perguntar à IA" à direita. */}
+      <div className={aiEnabled ? 'grid grid-cols-1 lg:grid-cols-3 gap-6 items-start' : ''}>
+      <div className={aiEnabled ? 'lg:col-span-2' : ''}>
       {shown.length === 0 ? (
         <div className="card p-10 text-center text-slate-400">
           <FileText className="h-10 w-10 mx-auto mb-3 opacity-40" />
@@ -328,6 +332,13 @@ export default function DocumentsClient({ initialDocs }: { initialDocs: Document
           ))}
         </div>
       )}
+      </div>
+      {aiEnabled && (
+        <div className="lg:sticky lg:top-4">
+          <DocumentsAiPanel docCount={initialDocs.length} />
+        </div>
+      )}
+      </div>
 
       {modalOpen && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">

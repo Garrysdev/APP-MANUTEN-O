@@ -15,7 +15,7 @@ import { sendWebPush } from '../webpush-server'
 import { calculateTotalCost } from '../finance'
 import { docRecordsFromTasks, type DocRecord } from '../doc-archive'
 import { normalizeDocCode, cleanDocTitle } from '../doc-code'
-import { planCurrentDate, nextPlanDate, planPeriodStep, addStep } from '../pm-schedule'
+import { planCurrentDate, nextPlanDate, planPeriodStep, addStep, bianualStopDate } from '../pm-schedule'
 import { findPlanLinkedTask } from '../pm-status'
 import { DEFAULT_TECHNICIAN_TYPES, type Asset, type Task, type User, type ExternalCompany, type Intervention, type Material, type Invite, type UserRole, type MaintenancePlan, type StockItem, type StockMovement, type PmExecution, type Warehouse, type TaskCriticidade, type Periodicidade, type Executor, type SafetyRule, type AppNotification, type InternalMessage, type MessageStatus, type TaskStatus, type DocumentoObrigatorio } from '@/types/models'
 
@@ -2743,6 +2743,51 @@ export async function concludePmUntil(
   revalidateTag(plansTag(companyId))
   invalidateTasks(companyId, { historyYears: [], completed: true })
   return { plans: planUpdates.length, tasks: taskIds.length }
+}
+
+/**
+ * Põe nas paragens (agosto/dezembro) a próxima data dos planos Bianuais que a têm noutro
+ * mês (acerto único, 30/10/2026 — daqui em diante nextPlanDate já as põe lá). As OT abertas
+ * desses planos acompanham a data. Uma leitura da lista e escritas em lote.
+ */
+export async function alignBianualPlansToStops(companyId: string, dryRun: boolean): Promise<{ plans: { id: string; title: string; from: string; to: string }[]; tasks: number }> {
+  const [plans, tasks] = await Promise.all([listMaintenancePlans(companyId), listTasks(companyId, 20000)])
+  const changes = plans
+    .map((p) => ({ p, to: bianualStopDate(p) }))
+    .filter((c): c is { p: MaintenancePlan; to: string } => Boolean(c.to))
+    .map(({ p, to }) => ({ id: p.id, title: p.title, from: String(p.nextDueDate).slice(0, 10), to }))
+  const toById = new Map(changes.map((c) => [c.id, c.to]))
+  const openTasks = tasks.filter((t) => t.maintenancePlanId && toById.has(t.maintenancePlanId) && t.status !== 'done' && t.status !== 'cancelled')
+  if (dryRun || changes.length === 0) return { plans: changes, tasks: openTasks.length }
+
+  const db = await adminDbFor(companyId)
+  const now = new Date().toISOString()
+  const fallbackById = new Map((isDemoCompany(companyId) ? getFallbackPlans() : []).map((p) => [p.id, p]))
+  for (let i = 0; i < changes.length; i += 400) {
+    const chunk = changes.slice(i, i + 400)
+    const refs = chunk.map((c) => db.collection('maintenance_plans').doc(c.id))
+    const snaps = await db.getAll(...refs)
+    const batch = db.batch()
+    chunk.forEach((c, idx) => {
+      const fields = { nextDueDate: c.to, companyId, updatedAt: now }
+      if (snaps[idx].exists) batch.update(refs[idx], fields)
+      else batch.set(refs[idx], { ...(fallbackById.get(c.id) || {}), ...fields }, { merge: true })
+    })
+    await batch.commit()
+  }
+  for (let i = 0; i < openTasks.length; i += 400) {
+    const batch = db.batch()
+    openTasks.slice(i, i + 400).forEach((t) => {
+      batch.set(db.collection('tasks').doc(t.id), { dueDate: toById.get(t.maintenancePlanId!), updatedAt: now, companyId }, { merge: true })
+    })
+    await batch.commit()
+  }
+  await touch('maintenance_plans', companyId, changes.map((c) => c.id))
+  if (openTasks.length > 0) await touch('tasks', companyId, openTasks.map((t) => t.id))
+  revalidateTag(plansTag(companyId))
+  const years = [...new Set(changes.flatMap((c) => [Number(c.from.slice(0, 4)), Number(c.to.slice(0, 4))]).filter(Boolean))]
+  invalidateTasks(companyId, { historyYears: years })
+  return { plans: changes, tasks: openTasks.length }
 }
 
 /** Muda a data da OT atual do plano (tabela do PM, ficha do plano ou Calendário). */

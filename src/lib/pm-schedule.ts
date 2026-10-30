@@ -6,7 +6,7 @@ import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 // O Calendário mostra só essa OT atual (a vermelho se estiver em atraso) e a tabela do PM
 // mostra a mesma data na coluna PRÓXIMA — mudar a data num sítio muda no outro.
 
-type PlanDates = Partial<Pick<MaintenancePlan, 'periodicidade' | 'periodicidadeLabel' | 'title' | 'description' | 'calendarDates' | 'calendarStartDate' | 'nextDueDate' | 'lastGeneratedAt'>>
+type PlanDates = Partial<Pick<MaintenancePlan, 'periodicidade' | 'periodicidadeLabel' | 'title' | 'description' | 'calendarDates' | 'calendarStartDate' | 'nextDueDate' | 'lastGeneratedAt' | 'executionHistory'>>
 
 type Step = { days?: number; months?: number }
 
@@ -83,12 +83,45 @@ export function planCurrentDate(plan: PlanDates, today: string, lastDone?: strin
  * abre logo outra já em atraso. null quando o plano não tem periodicidade fixa.
  */
 export function nextPlanDate(plan: PlanDates, occurrence: string, after: string): string | null {
+  if (isBianual(plan)) return nextStopDate(occurrence > after ? occurrence : after)
   const step = planPeriodStep(plan)
   if (!step) return null
   let d = addStep(occurrence, step)
   let guard = 0
   while (d <= after && guard++ < 1000) d = addStep(d, step)
   return d
+}
+
+// Bianual (2×/ano) faz-se nas paragens da fábrica: agosto e dezembro (pedido do Rui,
+// 30/10/2026) — as mesmas datas do calendário-padrão (pm-generator). Semestral continua
+// de 6 em 6 meses.
+const STOPS = ['08-08', '12-21']
+
+export function isBianual(plan: Pick<MaintenancePlan, 'periodicidade' | 'periodicidadeLabel'> | PlanDates): boolean {
+  return `${plan.periodicidade || ''} ${plan.periodicidadeLabel || ''}`.toLowerCase().includes('bianual')
+}
+
+/** Primeira paragem (8 de agosto ou 21 de dezembro) depois de `after`. */
+export function nextStopDate(after: string): string {
+  const y = Number(after.slice(0, 4))
+  for (let year = y; year <= y + 1; year++) {
+    for (const md of STOPS) {
+      const d = `${year}-${md}`
+      if (d > after.slice(0, 10)) return d
+    }
+  }
+  return `${y + 1}-${STOPS[0]}`
+}
+
+/**
+ * Acerto de um plano Bianual com a próxima data fora das paragens: a paragem a seguir à
+ * última execução (ou a seguir à data gravada, se nunca foi executado). null = nada a mudar.
+ */
+export function bianualStopDate(plan: PlanDates): string | null {
+  const next = ymd(plan.nextDueDate)
+  if (!next || !isBianual(plan) || STOPS.some((md) => next.slice(5, 7) === md.slice(0, 2))) return null
+  const last = (plan.executionHistory || []).map((e) => ymd(e.date)).filter((d): d is string => Boolean(d) && d! < next).sort().pop()
+  return nextStopDate(last || next)
 }
 
 export type PmRowStatus = 'pending' | 'in_progress' | 'done'

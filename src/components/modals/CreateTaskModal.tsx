@@ -331,6 +331,8 @@ export default function CreateTaskModal({
   const [dependsOn, setDependsOn] = useState<string[]>([])
   const [addToPmModal, setAddToPmModal] = useState(false)
   const [periodicidadeModal, setPeriodicidadeModal] = useState<string>('mensal')
+  // OT STP (paragem): data em que fica no Calendário, escolhida por quem abre a OT.
+  const [stpDate, setStpDate] = useState('')
   // true = a editingTask (prop) continua com o registo original, mas o formulário está a
   // preparar uma CÓPIA nova a partir dele — ver handleDuplicateClick.
   const [duplicating, setDuplicating] = useState(false)
@@ -356,6 +358,7 @@ export default function CreateTaskModal({
   function applyTaskToForm(t: any) {
     setTitle(t.title || '')
     setTipo(t.tipo || 'preventiva')
+    setStpDate((t.calendarDate || '').slice(0, 10))
     setCriticidade(t.criticidade || 'verde')
     setAssetId(t.assetId || t.tag || initialAssetId || '')
     const techIds = (t.assignedToIds && t.assignedToIds.length > 0)
@@ -418,6 +421,7 @@ export default function CreateTaskModal({
       // Reset form on close
       setTitle(initialTitle || '')
       setTipo(initialTipo || 'curativa')
+      setStpDate('')
       setCriticidade('verde')
       setAssetId(initialAssetId || '')
       setSelectedTechIds([])
@@ -774,6 +778,14 @@ export default function CreateTaskModal({
                   ))}
                 </Select>
               </div>
+            </div>
+          )}
+
+          {/* OT STP (paragem): aparece no Calendário na data que quem abre a OT escolher. */}
+          {tipo === 'stp' && !isProjectForm && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Data da paragem (Calendário) *</label>
+              <input type="date" name="calendarDate" required value={stpDate} onChange={(e) => setStpDate(e.target.value)} className="input" />
             </div>
           )}
 

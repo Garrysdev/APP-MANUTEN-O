@@ -1,4 +1,4 @@
-import { addStep, planPeriodStep, planCurrentDate, nextPlanDate, planRowStatus } from './pm-schedule'
+import { addStep, planPeriodStep, planCurrentDate, nextPlanDate, planRowStatus, nextStopDate, bianualStopDate } from './pm-schedule'
 
 describe('pm-schedule', () => {
   it('soma a periodicidade mantendo o dia (ou o último dia do mês)', () => {
@@ -24,6 +24,23 @@ describe('pm-schedule', () => {
     expect(nextPlanDate({ periodicidade: 'mensal' }, '2026-10-29', '2026-10-29')).toBe('2026-11-29')
     expect(nextPlanDate({ periodicidade: 'mensal' }, '2026-01-15', '2026-10-29')).toBe('2026-11-15')
     expect(nextPlanDate({ periodicidade: 'pontual' }, '2026-10-29', '2026-10-29')).toBeNull()
+  })
+
+  it('Bianual: a seguinte vai sempre para a próxima paragem (agosto ou dezembro)', () => {
+    expect(nextStopDate('2026-08-08')).toBe('2026-12-21')
+    expect(nextStopDate('2026-12-21')).toBe('2027-08-08')
+    expect(nextStopDate('2027-02-08')).toBe('2027-08-08')
+    expect(nextPlanDate({ periodicidade: 'bianual' }, '2026-08-08', '2026-10-30')).toBe('2026-12-21')
+    expect(nextPlanDate({ periodicidade: 'bianual' }, '2026-12-21', '2026-12-22')).toBe('2027-08-08')
+    // em atraso: nunca abre outra já em atraso
+    expect(nextPlanDate({ periodicidade: 'bianual' }, '2025-08-08', '2026-10-30')).toBe('2026-12-21')
+    // semestral continua de 6 em 6 meses
+    expect(nextPlanDate({ periodicidade: 'semestral' }, '2026-08-08', '2026-10-30')).toBe('2027-02-08')
+    // acerto das próximas datas já gravadas fora das paragens
+    expect(bianualStopDate({ periodicidade: 'bianual', nextDueDate: '2027-02-08', executionHistory: [{ date: '2026-08-08', doneAt: '2026-10-29' }] })).toBe('2026-12-21')
+    expect(bianualStopDate({ periodicidade: 'bianual', nextDueDate: '2026-12-21' })).toBeNull()
+    expect(bianualStopDate({ periodicidade: 'bianual', nextDueDate: '2027-03-01' })).toBe('2027-08-08')
+    expect(bianualStopDate({ periodicidade: 'anual', nextDueDate: '2027-03-01' })).toBeNull()
   })
 
   it('uma OT concluída de uma execução anterior não é a OT atual', () => {

@@ -123,18 +123,6 @@ export default function DashboardKpiCards({
 
       {/* ── 1ª LINHA DE INDICADORES ────────────────────────────────── */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Link href="/dashboard/tasks" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
-          <p className="text-4xl font-extrabold text-[#1B4F72] dark:text-blue-400 group-hover:scale-105 transition-transform">{totalOTs}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-industrial-blue">
-            <span>Total OTs ({year})</span> <span className="text-[10px]">↗</span>
-          </p>
-        </Link>
-        <Link href="/dashboard/tasks?status=done" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
-          <p className="text-4xl font-extrabold text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">{doneOTs}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-emerald-600">
-            <span>Concluídas ({year})</span> <span className="text-[10px]">↗</span>
-          </p>
-        </Link>
         <Link href="/dashboard/tasks?status=in_progress" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
           <p className="text-4xl font-extrabold text-blue-500 dark:text-blue-400 group-hover:scale-105 transition-transform">{inProgressOTs}</p>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-blue-500">
@@ -145,6 +133,18 @@ export default function DashboardKpiCards({
           <p className="text-4xl font-extrabold text-amber-600 dark:text-amber-500 group-hover:scale-105 transition-transform">{pendingOTs}</p>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-amber-600">
             <span>Pendentes</span> <span className="text-[10px]">↗</span>
+          </p>
+        </Link>
+        <Link href="/dashboard/tasks?status=done" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
+          <p className="text-4xl font-extrabold text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">{doneOTs}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-emerald-600">
+            <span>Concluídas ({year})</span> <span className="text-[10px]">↗</span>
+          </p>
+        </Link>
+        <Link href="/dashboard/tasks" className="bg-white dark:bg-slate-900 border border-outline rounded-xl p-5 text-center shadow-sm hover:shadow-md transition-all group">
+          <p className="text-4xl font-extrabold text-[#1B4F72] dark:text-blue-400 group-hover:scale-105 transition-transform">{totalOTs}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-bold flex items-center justify-center gap-1 group-hover:text-industrial-blue">
+            <span>Total OTs ({year})</span> <span className="text-[10px]">↗</span>
           </p>
         </Link>
       </section>

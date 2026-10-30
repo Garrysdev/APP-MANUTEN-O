@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Wrench, ClipboardList, ShieldAlert, X, Plus,
 import type { Task, MaintenancePlan, TaskCriticidade, TipoTarefa, TaskStatus, RecurrenceType, UserRole } from '@/types/models'
 import { CRITICIDADE_LABELS, TIPO_LABELS, RECURRENCE_LABELS } from '@/types/models'
 import { createTaskFromPlanAction, rescheduleCalendarItemAction } from './actions'
-import { createTaskAction, updateTaskStatusAction } from '@/app/dashboard/tasks/actions'
+import { createTaskAction, updateTaskStatusAction, deleteTaskAction } from '@/app/dashboard/tasks/actions'
 import Avatar from '@/components/ui/Avatar'
 import MaterialsSelector from '@/components/ui/MaterialsSelector'
 import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
@@ -17,7 +17,7 @@ import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 import { findPlanLinkedTask } from '@/lib/pm-status'
 import { planCurrentDate, planRowStatus, isOpenLinkedTask } from '@/lib/pm-schedule'
-import { setPmOccurrenceStatusAction } from '@/app/dashboard/maintenance-plan/actions'
+import { setPmOccurrenceStatusAction, deleteMaintenancePlanAction } from '@/app/dashboard/maintenance-plan/actions'
 import Select from '@/components/ui/Select'
 
 type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
@@ -138,12 +138,15 @@ function buildEventMap(tasks: Task[], plans: MaintenancePlan[], start: Date, end
       }
     })
 
-  // OTs colocadas à mão no calendário (botão "Calendário" na janela de resumo da OT). As de
-  // PM já aparecem acima como a OT atual do plano.
+  // OTs colocadas à mão no calendário (botão "Calendário" na janela de resumo da OT) e as
+  // OT STP (paragens), na data escolhida por quem abriu a OT. As de PM já aparecem acima
+  // como a OT atual do plano.
+  const isStp = (t: Task) => String(t.tipo || '').toLowerCase() === 'stp'
+  const taskDate = (t: Task) => t.calendarDate || (isStp(t) ? t.plannedStartDate || t.dueDate : null)
   tasks
-    .filter((t) => t.calendarDate && !t.maintenancePlanId)
+    .filter((t) => taskDate(t) && !t.maintenancePlanId)
     .forEach((t) => {
-      const d = t.calendarDate!.slice(0, 10)
+      const d = taskDate(t)!.slice(0, 10)
       const dd = new Date(d + 'T12:00:00')
       if (dd >= start && dd <= end) add(d, { date: d, type: 'task', task: t, label: t.title, criticidade: t.criticidade })
     })
@@ -356,9 +359,30 @@ export default function CalendarClient({
 
   // Edit existing task modal from calendar (reutiliza o mesmo CreateTaskModal das OTs)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  // Plano de PM de onde veio a OT aberta (a OT atual do plano no calendário).
+  const [editingPlan, setEditingPlan] = useState<MaintenancePlan | null>(null)
 
-  function openEditTask(task: Task) {
+  function openEditTask(task: Task, plan: MaintenancePlan | null = null) {
     setEditingTask(task)
+    setEditingPlan(plan)
+  }
+
+  // Eliminar a partir do calendário. Uma OT de PM no calendário é a OT atual do plano —
+  // eliminar só a OT fazia nascer logo outra na mesma data, por isso elimina-se o plano
+  // (com as suas OT). As outras OT eliminam-se sozinhas.
+  async function handleCalendarDelete(id: string) {
+    const plan = editingPlan
+    if (plan) {
+      if (!confirm(`Esta OT é do plano de PM "${plan.title}". Para sair do Calendário elimina-se o plano e as suas OT (também sai do PM). Continuar?`)) return { error: 'Nada foi eliminado.' }
+      const res = await deleteMaintenancePlanAction(plan.id)
+      if (res?.error) return res
+      setPlanList((prev) => prev.filter((p) => p.id !== plan.id))
+      setTaskList((prev) => prev.filter((t) => t.maintenancePlanId !== plan.id))
+      return res
+    }
+    const res = await deleteTaskAction(id)
+    if (!res?.error) setTaskList((prev) => prev.filter((t) => t.id !== id))
+    return res
   }
 
   function openPlanAsOT(plan: MaintenancePlan, targetDate?: string) {
@@ -373,7 +397,7 @@ export default function CalendarClient({
     const existingTask = (targetDate && openTasks.find((t) => (t.dueDate || '').slice(0, 10) === targetDate))
       || openTasks[0]
     if (existingTask) {
-      openEditTask(existingTask)
+      openEditTask(existingTask, plan)
     } else {
       const planTask: Task = {
         id: `plan_${plan.id}_${dateStr}`,
@@ -393,7 +417,7 @@ export default function CalendarClient({
         safetyRules: plan.safetyRules || [],
         maintenancePlanId: plan.id,
       }
-      openEditTask(planTask)
+      openEditTask(planTask, plan)
     }
   }
 
@@ -1322,10 +1346,12 @@ export default function CalendarClient({
       <CreateTaskModal
         isOpen={!!editingTask}
         editingTask={editingTask}
-        onClose={() => setEditingTask(null)}
+        onClose={() => { setEditingTask(null); setEditingPlan(null) }}
         assets={assets}
         users={users}
         isManager={role === 'manager'}
+        deleteAction={handleCalendarDelete}
+        onDelete={() => router.refresh()}
         onSuccess={() => {
           setEditingTask(null)
           router.refresh()

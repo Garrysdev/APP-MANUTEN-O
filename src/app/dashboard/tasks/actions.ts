@@ -175,6 +175,8 @@ function parseTask(formData: FormData) {
     requiredITs: parseStringArray('requiredITs'),
     maintenancePlanId,
     dependsOn: parseStringArray('dependsOn'),
+    // Só as OT STP trazem este campo (data da paragem no Calendário).
+    ...(formData.has('calendarDate') ? { calendarDate: /^\d{4}-\d{2}-\d{2}$/.test(String(formData.get('calendarDate'))) ? String(formData.get('calendarDate')) : null } : {}),
   }
 }
 

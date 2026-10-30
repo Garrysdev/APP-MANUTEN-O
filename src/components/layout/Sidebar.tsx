@@ -78,7 +78,6 @@ const managerNavGroups: NavGroup[] = [
     items: [
       { href: '/dashboard/finance',            key: 'finance',         icon: DollarSign,     feature: 'finance' },
       { href: '/dashboard/ai',                 key: 'aiConsultant',    icon: Brain,          feature: 'aiConsultant' },
-      { href: '/dashboard/knowledge',          key: 'knowledgeBase',   icon: BookOpen,       feature: 'aiConsultant' },
       { href: '/dashboard/predictive',         key: 'predictive',      icon: Gauge,          feature: 'predictive' },
     ]
   },

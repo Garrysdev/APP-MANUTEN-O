@@ -14,6 +14,7 @@ import TaskDetailClient from './TaskDetailClient'
 import TaskSummaryActions from './TaskSummaryActions'
 import AITaskConsultant from './AITaskConsultant'
 import CompliancePDFExport from './CompliancePDFExport'
+import BackButton from '@/components/ui/BackButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,9 +51,9 @@ export default async function TaskDetailPage({
 
   return (
     <div className="max-w-4xl mx-auto">
-      <Link href="/dashboard/tasks" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#2E86C1] mb-4">
-        <ArrowLeft className="h-4 w-4" /> Voltar às OTs
-      </Link>
+      <BackButton fallback="/dashboard/tasks" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#2E86C1] mb-4">
+        <ArrowLeft className="h-4 w-4" /> Voltar
+      </BackButton>
 
       {/* Resumo da tarefa */}
       <div className="card p-5 mb-6">

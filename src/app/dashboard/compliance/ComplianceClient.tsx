@@ -132,7 +132,7 @@ export default function ComplianceClient({ companyName }: { companyName: string 
               <p className="text-xs text-gray-500">Definições de MP, MC, PM e disponibilidade</p>
             </div>
             <a
-              href="/dashboard/knowledge"
+              href="/dashboard/documents"
               className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1"
             >
               Abrir Documento ↗
@@ -145,7 +145,7 @@ export default function ComplianceClient({ companyName }: { companyName: string 
               <p className="text-xs text-gray-500">§7.1.3 Infraestrutura & §7.5 Registos</p>
             </div>
             <a
-              href="/dashboard/knowledge"
+              href="/dashboard/documents"
               className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1"
             >
               Abrir Documento ↗

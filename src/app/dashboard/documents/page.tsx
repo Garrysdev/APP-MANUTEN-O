@@ -18,5 +18,5 @@ export default async function DocumentsPage() {
 
   const docs = await listDocuments(profile.companyId)
 
-  return <DocumentsClient initialDocs={docs} />
+  return <DocumentsClient initialDocs={docs} aiEnabled={planHas(plan, 'aiConsultant')} />
 }

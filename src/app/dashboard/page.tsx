@@ -86,12 +86,13 @@ export default async function DashboardPage() {
         criticidadeABC: asset.criticidadeABC || 'C',
       }
     })
+    // Mais críticos = mais OT (como a tabela das Estatísticas ordenada por Total OTs);
+    // a Classe ABC só desempata. Ordenar primeiro pela classe escondia os equipamentos
+    // com mais avarias (ex.: floculadores, Classe C).
     .sort((a, b) => {
+      if (a.totalTasks !== b.totalTasks) return b.totalTasks - a.totalTasks
       const rank: Record<string, number> = { A: 1, B: 2, C: 3 }
-      const rA = rank[a.criticidadeABC] || 4
-      const rB = rank[b.criticidadeABC] || 4
-      if (rA !== rB) return rA - rB
-      return b.totalTasks - a.totalTasks
+      return (rank[a.criticidadeABC] || 4) - (rank[b.criticidadeABC] || 4)
     })
     .slice(0, 10)
 

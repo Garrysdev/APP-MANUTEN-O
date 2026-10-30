@@ -159,8 +159,10 @@ export default function MaintenancePlanClient({
   const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
   const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
   const [fLegal, setFLegal] = useState(false)
-  const anyFilter = fLegal || Object.values(colF).some(Boolean) || JSON.stringify(excelDateFilter) !== JSON.stringify(DEFAULT_EXCEL_DATE_FILTER)
-  function clearFilters() { setColF(emptyCol); setFLegal(false); setExcelDateFilter(DEFAULT_EXCEL_DATE_FILTER) }
+  // Só equipamentos HACCP (o nome do equipamento tem "HACCP").
+  const [fHaccp, setFHaccp] = useState(false)
+  const anyFilter = fLegal || fHaccp || Object.values(colF).some(Boolean) || JSON.stringify(excelDateFilter) !== JSON.stringify(DEFAULT_EXCEL_DATE_FILTER)
+  function clearFilters() { setColF(emptyCol); setFLegal(false); setFHaccp(false); setExcelDateFilter(DEFAULT_EXCEL_DATE_FILTER) }
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
   const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
@@ -309,7 +311,7 @@ export default function MaintenancePlanClient({
     if (res?.error) alert(res.error)
     else router.refresh()
   }
-  function renderNextDate(p: MaintenancePlan) {
+  function renderNextDate(p: MaintenancePlan, large = false) {
     const { current, status, overdue } = planInfo(p)
     if (editingDatePlanId === p.id) {
       return (
@@ -333,9 +335,11 @@ export default function MaintenancePlanClient({
         type="button"
         onClick={(e) => { e.stopPropagation(); setEditingDatePlanId(p.id) }}
         title={overdue ? 'Em atraso — clique para mudar a data (também muda no Calendário)' : 'Clique para mudar a data (também muda no Calendário)'}
-        className={`inline-flex items-center gap-1 px-1 py-0.5 rounded font-mono font-bold text-[10px] cursor-pointer ${overdue ? 'bg-red-600 text-white' : 'text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+        className={large
+          ? `rounded px-1 -mx-1 text-lg font-bold cursor-pointer ${overdue ? 'text-red-600 hover:bg-red-50' : 'text-gray-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'}`
+          : `inline-flex items-center gap-1 px-1 py-0.5 rounded font-mono font-bold text-[10px] cursor-pointer ${overdue ? 'bg-red-600 text-white' : 'text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
       >
-        <CalendarClock className="h-3 w-3 shrink-0" /> {formatDate(current)}
+        {large ? formatDate(current) : <><CalendarClock className="h-3 w-3 shrink-0" /> {formatDate(current)}</>}
       </button>
     )
   }
@@ -691,14 +695,15 @@ export default function MaintenancePlanClient({
       if (colF.executor && (p.executor ?? 'interno') !== colF.executor) return false
       if (!matchesEstado(p, colF.estado)) return false
       if (fLegal && !p.legal) return false
+      if (fHaccp && !norm(assetName(p.assetId)).includes('haccp')) return false
 
       return true
     })
-  }, [plans, tasks, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, assetMap, assetTagMap, excelDateFilter, selectedYear, planInfoById])
+  }, [plans, tasks, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, fHaccp, assetMap, assetTagMap, excelDateFilter, selectedYear, planInfoById])
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
-  useEffect(() => { setCurrentPage(1) }, [colF, fLegal, pageSize, excelDateFilter])
+  useEffect(() => { setCurrentPage(1) }, [colF, fLegal, fHaccp, pageSize, excelDateFilter])
 
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<MaintenancePlan>(
     filtered,
@@ -875,6 +880,10 @@ export default function MaintenancePlanClient({
           <Scale className="h-3.5 w-3.5 text-red-600" />
           <span>Só legais</span>
         </label>
+        <label className="flex items-center gap-1.5 text-xs text-slate-900 font-bold cursor-pointer select-none bg-white px-2.5 py-1 rounded-lg border border-slate-300 shadow-sm hover:bg-slate-50" title="Só os planos de equipamentos HACCP (coluna Equipamento)">
+          <input type="checkbox" checked={fHaccp} onChange={(e) => setFHaccp(e.target.checked)} className="rounded border-slate-300 text-safety-orange focus:ring-safety-orange w-3.5 h-3.5" />
+          <span>Só HACCP</span>
+        </label>
         {/* Sempre visível (não só quando há filtros ativos) — pedido do Rui para não ter de
             adivinhar se algum filtro ficou esquecido ligado noutra sessão/página. */}
         <button
@@ -966,12 +975,8 @@ export default function MaintenancePlanClient({
       </div>
 
       <div className="hidden md:block card overflow-x-auto shadow-lg border border-slate-200 dark:border-slate-800">
-        {shown.length === 0 ? (
-          <div className="px-5 py-12 text-center text-slate-400">
-            <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p className="text-sm">{dict.maintenancePlan.empty}</p>
-          </div>
-        ) : (
+        {/* A tabela (cabeçalhos + linha de filtros) fica sempre visível, mesmo sem resultados —
+            senão um filtro mal escrito escondia a própria caixa onde se corrige. */}
           <table className="w-full text-[11px] min-w-[860px] table-fixed">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
@@ -1065,6 +1070,14 @@ export default function MaintenancePlanClient({
               </tr>
             </thead>
             <tbody>
+              {shown.length === 0 && (
+                <tr>
+                  <td colSpan={11} className="px-5 py-12 text-center text-slate-400">
+                    <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm">{dict.maintenancePlan.empty}</p>
+                  </td>
+                </tr>
+              )}
               {currentShown.map((p) => (
                 <tr
                   key={p.id}
@@ -1147,8 +1160,7 @@ export default function MaintenancePlanClient({
               ))}
             </tbody>
           </table>
-        )}
-        
+
         {shown.length > 0 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50 rounded-b-xl">
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
@@ -1204,7 +1216,7 @@ export default function MaintenancePlanClient({
           current={planInfo(detailPlan).current}
           overdue={planInfo(detailPlan).overdue}
           statusButton={renderPmStatusButton(detailPlan)}
-          nextDateControl={renderNextDate(detailPlan)}
+          nextDateControl={renderNextDate(detailPlan, true)}
           onClose={() => setDetailPlanId(null)}
           onEdit={() => openEdit(detailPlan)}
           onDelete={() => handleDelete(detailPlan)}

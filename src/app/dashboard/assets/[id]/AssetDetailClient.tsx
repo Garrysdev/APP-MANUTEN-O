@@ -19,8 +19,12 @@ import {
 import type { Asset, Task, User } from '@/types/models'
 import { STATUS_LABELS, TIPO_LABELS } from '@/types/models'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
+import { tipoCode } from '@/components/ui/TipoBadge'
+import Select from '@/components/ui/Select'
+import TablePager from './TablePager'
 
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
+import BackButton from '@/components/ui/BackButton'
 
 export default function AssetDetailClient({
   asset,
@@ -70,6 +74,50 @@ export default function AssetDetailClient({
     },
     'date',
     'desc'
+  )
+
+  // Filtros por coluna e paginação das duas tabelas (como nas OT / Plano de Manutenção).
+  const norm = (v: unknown) => String(v ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const has = (v: unknown, f: string) => !f || norm(v).includes(norm(f))
+  const day = (v?: string | null) => (v ? v.slice(0, 10) : '')
+  const pmPlanned = (t: Task) => day(t.plannedStartDate || t.dueDate || (t as any).scheduledDate || t.createdAt)
+  const pmPeriod = (t: Task) => t.periodicidade || (t as any).periodicidadeLabel || 'Anual'
+  const actionText = (t: Task) => (t.observacoes && !t.observacoes.startsWith('Origem:')) ? t.observacoes : (t.description || t.observacoes || '—')
+
+  const [pmF, setPmF] = useState({ date: '', title: '', period: '', done: '', status: '' })
+  const [pmPage, setPmPage] = useState(1)
+  const [pmPageSize, setPmPageSize] = useState(20)
+  const pmRows = React.useMemo(() => pmTasks.filter((t) =>
+    has(pmPlanned(t), pmF.date) && has(t.title, pmF.title) && has(pmPeriod(t), pmF.period) &&
+    has(day(t.completedAt), pmF.done) && (!pmF.status || t.status === pmF.status)
+  ), [pmTasks, pmF])
+
+  const [histF, setHistF] = useState({ date: '', title: '', tipo: '', action: '', status: '' })
+  const [histPage, setHistPage] = useState(1)
+  const [histPageSize, setHistPageSize] = useState(20)
+  const histRows = React.useMemo(() => sortedTasks.filter((t) => !isPMTask(t)).filter((t) =>
+    has(new Date(t.createdAt).toLocaleDateString('pt-PT'), histF.date) && has(t.title, histF.title) &&
+    (!histF.tipo || tipoCode(t.tipo) === histF.tipo) && has(actionText(t), histF.action) &&
+    (!histF.status || t.status === histF.status)
+  ), [sortedTasks, histF])
+  React.useEffect(() => { setPmPage(1) }, [pmF, pmPageSize])
+  React.useEffect(() => { setHistPage(1) }, [histF, histPageSize])
+
+  // 2.ª fila de cartões: nº de OT por tipo (as de PM pelo mesmo critério da tabela de PM).
+  const byTipo = React.useMemo(() => {
+    const m = new Map<string, number>()
+    taskList.forEach((t) => { const c = isPMTask(t) ? 'PM' : (tipoCode(t.tipo) || 'OUT'); m.set(c, (m.get(c) || 0) + 1) })
+    const order = ['PM', 'MP', 'MC', 'PI', 'MI', 'STP', 'PR', 'INS', 'LUB', 'CAL']
+    const rank = (c: string) => (order.indexOf(c) + 1) || 99
+    return [...m.entries()].sort((a, b) => rank(a[0]) - rank(b[0]))
+  }, [taskList])
+  const histTipos = React.useMemo(() => [...new Set(correctiveTasks.map((t) => tipoCode(t.tipo)).filter(Boolean))].sort(), [correctiveTasks])
+  const filterCls = 'w-full rounded-md border border-slate-300 bg-white dark:bg-slate-900 dark:border-slate-700 px-2 py-1 text-xs font-semibold normal-case text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-safety-orange'
+  const statusFilter = (value: string, onChange: (v: string) => void) => (
+    <Select sort={false} value={value} onChange={(e) => onChange(e.target.value)} className={filterCls}>
+      <option value="">Todos</option>
+      {(['pending', 'in_progress', 'done', 'cancelled'] as const).map((st) => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
+    </Select>
   )
 
   const [isEditing, setIsEditing] = useState(false)
@@ -130,9 +178,9 @@ export default function AssetDetailClient({
     <div className="max-w-7xl mx-auto animate-fade-in-up">
       {/* HEADER */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => router.push('/dashboard/assets')} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors text-gray-600 dark:text-slate-300">
+        <BackButton fallback="/dashboard/assets" className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors text-gray-600 dark:text-slate-300">
           <ArrowLeft className="h-5 w-5" />
-        </button>
+        </BackButton>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h1 className="text-2xl font-extrabold text-gray-900 dark:text-slate-100 flex items-center gap-3">
@@ -316,6 +364,18 @@ export default function AssetDetailClient({
             </div>
           </div>
 
+          {/* 2.ª fila: nº de OT por tipo */}
+          {byTipo.length > 0 && (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+              {byTipo.map(([code, n]) => (
+                <div key={code} className="card p-3 border border-slate-200 dark:border-slate-800 text-center">
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">{n}</p>
+                  <p className="text-[11px] font-semibold text-gray-500 dark:text-slate-400 mt-0.5">OT {code}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* 1. TABELA DE OTs DO PLANO DE MANUTENÇÃO (PM) */}
           <div className="card overflow-hidden border border-amber-500/20">
             <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-slate-800 bg-amber-50/40 dark:bg-amber-950/20 flex items-center justify-between flex-wrap gap-2">
@@ -343,15 +403,22 @@ export default function AssetDetailClient({
                       <th className="px-4 py-3">Data Realizada</th>
                       <th className="px-4 py-3">Estado</th>
                     </tr>
+                    <tr className="border-b border-gray-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40">
+                      <th className="px-2 py-1"><input value={pmF.date} onChange={(e) => setPmF((f) => ({ ...f, date: e.target.value }))} placeholder="filtrar…" className={filterCls} /></th>
+                      <th className="px-2 py-1"><input value={pmF.title} onChange={(e) => setPmF((f) => ({ ...f, title: e.target.value }))} placeholder="filtrar…" className={filterCls} /></th>
+                      <th className="px-2 py-1"><input value={pmF.period} onChange={(e) => setPmF((f) => ({ ...f, period: e.target.value }))} placeholder="filtrar…" className={filterCls} /></th>
+                      <th className="px-2 py-1"><input value={pmF.done} onChange={(e) => setPmF((f) => ({ ...f, done: e.target.value }))} placeholder="filtrar…" className={filterCls} /></th>
+                      <th className="px-2 py-1">{statusFilter(pmF.status, (v) => setPmF((f) => ({ ...f, status: v })))}</th>
+                    </tr>
                   </thead>
                   <tbody>
-                    {pmTasks.map((t) => {
-                      const datePlanned = t.plannedStartDate || t.dueDate || (t as any).scheduledDate || t.createdAt
-                      const dateFormatted = datePlanned
-                        ? (datePlanned.includes('T') ? datePlanned.split('T')[0] : datePlanned)
-                        : '—'
-                      const dateDone = t.completedAt ? t.completedAt.split('T')[0] : '—'
-                      const periodicidadeLabel = t.periodicidade || (t as any).periodicidadeLabel || 'Anual'
+                    {pmRows.length === 0 && (
+                      <tr><td colSpan={5} className="p-6 text-center text-gray-500 dark:text-slate-400 text-sm">Nenhuma OT corresponde aos filtros.</td></tr>
+                    )}
+                    {pmRows.slice((pmPage - 1) * pmPageSize, pmPage * pmPageSize).map((t) => {
+                      const dateFormatted = pmPlanned(t) || '—'
+                      const dateDone = day(t.completedAt) || '—'
+                      const periodicidadeLabel = pmPeriod(t)
 
                       return (
                         <tr
@@ -388,6 +455,7 @@ export default function AssetDetailClient({
                     })}
                   </tbody>
                 </table>
+                <TablePager total={pmRows.length} page={pmPage} pageSize={pmPageSize} onPage={setPmPage} onPageSize={setPmPageSize} />
               </div>
             )}
           </div>
@@ -418,9 +486,24 @@ export default function AssetDetailClient({
                       <th className="px-4 py-3">Ação / Observações</th>
                       <SortableTh label="Estado" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="px-4 py-3" />
                     </tr>
+                    <tr className="border-b border-gray-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40">
+                      <th className="px-2 py-1"><input value={histF.date} onChange={(e) => setHistF((f) => ({ ...f, date: e.target.value }))} placeholder="filtrar…" className={filterCls} /></th>
+                      <th className="px-2 py-1"><input value={histF.title} onChange={(e) => setHistF((f) => ({ ...f, title: e.target.value }))} placeholder="filtrar…" className={filterCls} /></th>
+                      <th className="px-2 py-1">
+                        <Select value={histF.tipo} onChange={(e) => setHistF((f) => ({ ...f, tipo: e.target.value }))} className={filterCls}>
+                          <option value="">Todos</option>
+                          {histTipos.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </Select>
+                      </th>
+                      <th className="px-2 py-1"><input value={histF.action} onChange={(e) => setHistF((f) => ({ ...f, action: e.target.value }))} placeholder="filtrar…" className={filterCls} /></th>
+                      <th className="px-2 py-1">{statusFilter(histF.status, (v) => setHistF((f) => ({ ...f, status: v })))}</th>
+                    </tr>
                   </thead>
                   <tbody>
-                    {sortedTasks.filter((t) => !isPMTask(t)).map(t => (
+                    {histRows.length === 0 && (
+                      <tr><td colSpan={5} className="p-6 text-center text-gray-500 dark:text-slate-400 text-sm">Nenhuma OT corresponde aos filtros.</td></tr>
+                    )}
+                    {histRows.slice((histPage - 1) * histPageSize, histPage * histPageSize).map(t => (
                       <tr
                         key={t.id}
                         onClick={() => router.push(`/dashboard/tasks/${t.id}`)}
@@ -439,14 +522,7 @@ export default function AssetDetailClient({
                           {TIPO_LABELS[t.tipo] || t.tipo}
                         </td>
                         <td className="px-4 py-3 text-gray-600 dark:text-slate-300 max-w-[280px]">
-                          {(() => {
-                            const actionText = (t.observacoes && !t.observacoes.startsWith('Origem:'))
-                              ? t.observacoes
-                              : (t.description || t.observacoes || '—')
-                            return (
-                              <span className="line-clamp-2" title={actionText}>{actionText}</span>
-                            )
-                          })()}
+                          <span className="line-clamp-2" title={actionText(t)}>{actionText(t)}</span>
                         </td>
                         <td className="px-4 py-3">
                           <span className={
@@ -461,6 +537,7 @@ export default function AssetDetailClient({
                     ))}
                   </tbody>
                 </table>
+                <TablePager total={histRows.length} page={histPage} pageSize={histPageSize} onPage={setHistPage} onPageSize={setHistPageSize} />
               </div>
             )}
           </div>

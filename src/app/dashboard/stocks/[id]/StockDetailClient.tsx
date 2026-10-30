@@ -9,6 +9,7 @@ import type { StockItem, StockMovement, Material } from '@/types/models'
 import { createStockPurchaseAction } from '../actions'
 import { format } from 'date-fns'
 import { pt } from 'date-fns/locale'
+import BackButton from '@/components/ui/BackButton'
 
 export default function StockDetailClient({
   item,
@@ -46,9 +47,9 @@ export default function StockDetailClient({
     <div className="max-w-6xl mx-auto space-y-6">
       {/* HEADER */}
       <div className="flex items-center gap-4 mb-8">
-        <Link href="/dashboard/stocks" className="p-2 -ml-2 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
+        <BackButton fallback="/dashboard/stocks" className="p-2 -ml-2 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
           <ArrowLeft className="h-5 w-5" />
-        </Link>
+        </BackButton>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
             <Package className="h-6 w-6 text-[#2E86C1]" />

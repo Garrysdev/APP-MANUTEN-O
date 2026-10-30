@@ -48,10 +48,10 @@ export function getTipoBadgeClass(tipo: TipoTarefa | string): string {
   return 'bg-slate-600 text-white border border-slate-700 font-semibold shadow-sm'
 }
 
-export function TipoBadge({ tipo, codeOnly = false }: { tipo: TipoTarefa | string; codeOnly?: boolean }) {
-  const cls = getTipoBadgeClass(tipo)
+/** Sigla do tipo de OT (MC, PI, PM, MP, MI, STP, PR, INS, LUB, CAL…). */
+export function tipoCode(tipo: TipoTarefa | string | null | undefined): string {
   const t = String(tipo || '').toLowerCase().trim()
-  const code = (
+  return (
     t === 'projeto' || t === 'projetos' || t === 'projecto' || t === 'projectos' || t === 'pr' ? 'PR' :
     t === 'curativa' || t === 'mc' ? 'MC' :
     t === 'mi' || t === 'melhoria' || t === 'investimento' ? 'MI' :
@@ -64,6 +64,12 @@ export function TipoBadge({ tipo, codeOnly = false }: { tipo: TipoTarefa | strin
     t === 'calibracao' || t === 'cal' || t === 'calibração' ? 'CAL' :
     t.toUpperCase()
   )
+}
+
+export function TipoBadge({ tipo, codeOnly = false }: { tipo: TipoTarefa | string; codeOnly?: boolean }) {
+  const cls = getTipoBadgeClass(tipo)
+  const t = String(tipo || '').toLowerCase().trim()
+  const code = tipoCode(tipo)
   const label = (TIPO_LABELS as any)[t] || code
   const textToShow = codeOnly || code === label || String(label).toUpperCase() === code ? code : `${code} · ${label}`
 
