@@ -51,6 +51,9 @@ export default function MetricChart({
   // Arrastar no gráfico seleciona a zona a ampliar (aplica-se a todos os gráficos).
   const [sel, setSel] = useState<{ a: number; b: number } | null>(null)
   const boxRef = useRef<HTMLDivElement>(null)
+  // A seleção também num ref: os eventos do rato podem chegar antes de o estado redesenhar.
+  const selRef = useRef<{ a: number; b: number } | null>(null)
+  const setSelBoth = (v: { a: number; b: number } | null) => { selRef.current = v; setSel(v) }
   if (points.length === 0 || series.length === 0) return null
   const from = view.window?.from ?? points[0].t
   const to = view.window?.to ?? points[points.length - 1].t
@@ -79,14 +82,15 @@ export default function MetricChart({
         {subtitle && <p className="text-[11px] text-gray-500 dark:text-slate-400">{subtitle}</p>}
       </div>
       <div ref={boxRef} className="h-64 select-none cursor-crosshair" title="Arrasta sobre o gráfico para ampliar essa zona"
-        onMouseDown={(e) => { if (e.button !== 0) return; const t = tAt(e.clientX); if (t !== null) setSel({ a: t, b: t }) }}
-        onMouseMove={(e) => { if (!sel) return; const t = tAt(e.clientX); if (t !== null) setSel({ a: sel.a, b: t }) }}
+        onMouseDown={(e) => { if (e.button !== 0) return; const t = tAt(e.clientX); if (t !== null) setSelBoth({ a: t, b: t }) }}
+        onMouseMove={(e) => { const cur = selRef.current; if (!cur) return; const t = tAt(e.clientX); if (t !== null) setSelBoth({ a: cur.a, b: t }) }}
         onMouseUp={() => {
+          const cur = selRef.current
           // Arrasto curto (< 1% da largura) é um clique, não um zoom.
-          if (sel && Math.abs(sel.a - sel.b) > (to - from) / 100) view.onZoom(Math.min(sel.a, sel.b), Math.max(sel.a, sel.b))
-          setSel(null)
+          if (cur && Math.abs(cur.a - cur.b) > (to - from) / 100) view.onZoom(Math.min(cur.a, cur.b), Math.max(cur.a, cur.b))
+          setSelBoth(null)
         }}
-        onMouseLeave={() => setSel(null)}>
+        onMouseLeave={() => setSelBoth(null)}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={points}
