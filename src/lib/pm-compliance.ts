@@ -1,28 +1,23 @@
 import type { MaintenancePlan, Task } from '@/types/models'
 import { isPlanTask } from './pm-status'
-import { planCurrentDate, planPeriodStep, addStep } from './pm-schedule'
+import { planCurrentDate } from './pm-schedule'
 
 // Cumprimento do PM de um ano (definição do Rui, 30/10/2026):
-//   % = OT de PM concluídas até hoje ÷ OT de PM devidas no ano inteiro (até 31/12).
-// Num ano a decorrer a % sobe ao longo do ano e só chega a 100% se tudo o que estava
-// previsto até dezembro for feito.
+//   cada plano é UMA OT de PM do ano → % = planos com a OT concluída no ano ÷ nº de planos.
+// Ex.: 2026 tem 601 planos = 601 OT de PM; feitas = planos com alguma execução concluída
+// em 2026 (OT de PM concluída ligada ao plano, ou execução no histórico do plano —
+// incluindo as concluídas em bloco na implementação, até 31/10/2026).
+// NÃO somar execuções (uma por mês/semana): isso dava "3217 de 3825", que não é o KPI.
 //
-// Na app cada plano tem uma só OT atual (plan.nextDueDate) e as execuções concluídas ficam
-// em plan.executionHistory (também as concluídas em bloco na implementação, até 31/10/2026).
-//   concluídas = histórico do plano com data prevista no ano + OT de PM concluídas ligadas
-//                ao plano nesse ano que não estejam já no histórico;
-//   por fazer  = a OT atual e as seguintes (pela periodicidade) que ainda caem no ano;
-//   devidas    = concluídas + por fazer.
-// Os anos sem execuções registadas na app usam o KPI importado das folhas PL-MAN-01
-// (src/lib/historical-kpis.ts): realizadas (no máx. as devidas de cada plano) ÷ devidas.
-// Sem nada disso a % fica null — o histórico de OT do Excel só tem as feitas, não as devidas.
+// Os anos sem registos na app usam a folha PL-MAN-01 importada (src/lib/historical-kpis.ts):
+// o KPI da própria folha — planos cumpridos ÷ planos. Sem nada disso a % fica null.
 
 export interface PmCompliance {
-  /** OT de PM devidas no ano inteiro. */
+  /** OT de PM do ano (uma por plano). */
   total: number
-  /** Concluídas (até hoje). */
+  /** Concluídas no ano. */
   done: number
-  /** Ainda por fazer no ano (em atraso + até 31/12). */
+  /** Por fazer (total − concluídas). */
   pending: number
   /** Das por fazer, as que já passaram da data. */
   overdue: number
@@ -67,69 +62,48 @@ function indexTasks(tasks: Task[]) {
   }
 }
 
-/** Datas da OT atual e das seguintes, por ano, até ao fim do último ano pedido. */
-function upcomingByYear(plan: MaintenancePlan, current: string, lastYear: number): Map<number, string[]> {
-  const out = new Map<number, string[]>()
-  const step = planPeriodStep(plan)
-  let d = current
-  for (let guard = 0; guard < 500 && Number(d.slice(0, 4)) <= lastYear; guard++) {
-    const y = Number(d.slice(0, 4))
-    out.set(y, [...(out.get(y) || []), d])
-    if (!step) break
-    d = addStep(d, step)
-  }
-  return out
-}
-
 export function fromHistorical(h: HistoricalPmKpi): PmCompliance {
-  const done = Math.min(h.doneCapped ?? h.done, h.due)
-  return { total: h.due, done, pending: h.due - done, overdue: h.due - done, pct: h.due > 0 ? pctOf(done, h.due) : null, source: 'excel' }
+  const done = Math.min(h.plansOk, h.plans)
+  return { total: h.plans, done, pending: h.plans - done, overdue: h.plans - done, pct: h.plans > 0 ? pctOf(done, h.plans) : null, source: 'excel' }
 }
 
 export function pmComplianceByYear(
   plans: MaintenancePlan[], tasks: Task[], years: number[], today: string, historical: HistoricalPmKpi[] = [],
 ): Map<number, PmCompliance> {
   const doneTasksOf = indexTasks(tasks)
-  const lastYear = Math.max(...years, Number(today.slice(0, 4)))
+  const thisYear = Number(today.slice(0, 4))
   const done = new Map<number, number>()
-  const pending = new Map<number, number>()
   const overdue = new Map<number, number>()
   const histYears = new Set<number>()
-  const add = (m: Map<number, number>, y: number, n = 1) => m.set(y, (m.get(y) || 0) + n)
+  const add = (m: Map<number, number>, y: number) => m.set(y, (m.get(y) || 0) + 1)
   for (const p of plans) {
-    const hist = p.executionHistory || []
-    const inHist = new Set(hist.map((e) => e.taskId).filter(Boolean))
-    for (const e of hist) {
-      const y = Number(day(e.date).slice(0, 4))
-      if (y) { add(done, y); histYears.add(y) }
-    }
     const linked = doneTasksOf(p)
-    for (const t of linked) {
-      if (inHist.has(t.id)) continue
-      const y = Number(taskDay(t).slice(0, 4))
-      if (y) add(done, y)
+    const doneYears = new Set<number>()
+    for (const e of p.executionHistory || []) {
+      const y = Number(day(e.date).slice(0, 4))
+      if (y) { doneYears.add(y); histYears.add(y) }
     }
+    for (const t of linked) {
+      const y = Number(taskDay(t).slice(0, 4))
+      if (y) doneYears.add(y)
+    }
+    doneYears.forEach((y) => add(done, y))
     if (p.active === false) continue
     const lastDone = linked.map((t) => day(t.completedAt)).filter(Boolean).sort().pop() || null
     const current = planCurrentDate(p, today, lastDone)
-    if (!current) continue
-    upcomingByYear(p, current, lastYear).forEach((dates, y) => {
-      add(pending, y, dates.length)
-      add(overdue, y, dates.filter((d) => d < today).length)
-    })
+    if (current && current < today && !doneYears.has(Number(current.slice(0, 4)))) add(overdue, Number(current.slice(0, 4)))
   }
-  const thisYear = Number(today.slice(0, 4))
   const histByYear = new Map(historical.map((h) => [h.year, h]))
   return new Map(years.map((y) => {
     const d = done.get(y) || 0
-    const pend = pending.get(y) || 0
-    const over = overdue.get(y) || 0
-    const measurable = d + pend > 0 && (y >= thisYear || over > 0 || histYears.has(y))
+    // Anos com o plano na app: o ano corrente e os seguintes, ou um ano passado com execuções registadas.
+    const measurable = plans.length > 0 && (y >= thisYear || histYears.has(y))
     const h = histByYear.get(y)
     if (!measurable && h) return [y, fromHistorical(h)]
+    const total = measurable ? plans.length : 0
     return [y, {
-      total: d + pend, done: d, pending: pend, overdue: over,
-      pct: measurable ? pctOf(d, d + pend) : null, source: measurable ? 'app' : null,
+      total, done: measurable ? Math.min(d, total) : d, pending: Math.max(0, total - d), overdue: overdue.get(y) || 0,
+      pct: measurable ? pctOf(Math.min(d, total), total) : null, source: measurable ? 'app' : null,
     }]
   }))
 }

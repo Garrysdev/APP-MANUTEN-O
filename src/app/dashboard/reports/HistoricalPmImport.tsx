@@ -63,7 +63,7 @@ export default function HistoricalPmImport({ saved }: { saved: HistoricalPmKpi[]
         <thead>
           <tr className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold">
             <th className="py-1 px-2 text-left">Ano</th><th className={cell}>Devidas</th><th className={cell}>Realizadas</th>
-            <th className={cell} title="Realizadas, no máximo as devidas de cada plano">Contam</th><th className={cell}>%</th>
+            <th className={cell}>Planos</th><th className={cell}>Cumpridos</th><th className={cell}>%</th>
             <th className="py-1 px-2 text-left">Ficheiro</th><th />
           </tr>
         </thead>
@@ -77,8 +77,8 @@ export default function HistoricalPmImport({ saved }: { saved: HistoricalPmKpi[]
                 ) : k.year}
               </td>
               <td className={cell}>{k.due}</td><td className={cell}>{k.done}</td>
-              <td className={cell}>{k.doneCapped ?? '—'}</td>
-              <td className={`${cell} font-black`}>{pct(Math.min(k.doneCapped ?? k.done, k.due), k.due)}</td>
+              <td className={cell}>{k.plans}</td><td className={cell}>{k.plansOk}</td>
+              <td className={`${cell} font-black`}>{pct(k.plansOk, k.plans)}</td>
               <td className="py-1 px-2 text-slate-500 truncate max-w-[220px]" title={k.file}>{k.file || '—'}</td>
               <td className="py-1 px-1 text-right">
                 {edit ? (
@@ -102,7 +102,7 @@ export default function HistoricalPmImport({ saved }: { saved: HistoricalPmKpi[]
       {open && (
         <div className="mt-2 space-y-3">
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            Anos sem registo do plano na app usam a folha PL-MAN-01 de cada ano: intervenções realizadas ÷ devidas (as feitas a mais num plano não contam).
+            Anos sem registo do plano na app usam o KPI da folha PL-MAN-01 de cada ano: planos cumpridos ÷ planos (uma OT de PM por plano).
             O ano lê-se do nome do ficheiro — confirma antes de gravar.
           </p>
           <label className="inline-flex items-center gap-2 rounded-lg bg-[#2E86C1] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#2471A3] cursor-pointer">

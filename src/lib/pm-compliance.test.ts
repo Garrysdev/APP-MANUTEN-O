@@ -6,23 +6,16 @@ const plan = (id: string, extra: Partial<MaintenancePlan> = {}) =>
 const task = (extra: Partial<Task>) => ({ id: 'x', companyId: 'c', title: 't', status: 'done', ...extra }) as unknown as Task
 
 describe('pm-compliance', () => {
-  it('concluídas até hoje ÷ devidas até ao fim do ano (inclui as concluídas em bloco)', () => {
+  it('uma OT por plano: planos com a OT concluída no ano ÷ nº de planos', () => {
     const plans = [
-      // mensal: set e out feitas em bloco, nov e dez por fazer → 2 de 4
-      plan('a', { nextDueDate: '2026-11-15', executionHistory: [{ date: '2026-09-15', doneAt: '2026-10-30', bulk: true }, { date: '2026-10-15', doneAt: '2026-10-30', bulk: true }] }),
-      // anual, em atraso desde 01/10 → 0 de 1
-      plan('b', { periodicidade: 'anual', nextDueDate: '2026-10-01' }),
+      // mensal com 10 execuções em bloco conta como UMA OT feita
+      plan('a', { nextDueDate: '2026-11-15', executionHistory: Array.from({ length: 10 }, (_, i) => ({ date: `2026-${String(i + 1).padStart(2, '0')}-15`, doneAt: '2026-10-30', bulk: true })) }),
+      plan('b', { periodicidade: 'anual', nextDueDate: '2026-10-01' }), // em atraso
+      plan('c', { periodicidade: 'anual', nextDueDate: '2026-12-01' }), // por fazer
+      plan('d', { periodicidade: 'anual', nextDueDate: '2027-03-01' }),
     ]
-    expect(pmComplianceForYear(plans, [], 2026, '2026-10-30')).toEqual({ total: 5, done: 2, pending: 3, overdue: 1, pct: 40, source: 'app' })
-  })
-
-  it('soma as OT concluídas ligadas ao plano, sem contar duas vezes as que já estão no histórico', () => {
-    const plans = [plan('a', { periodicidade: 'anual', nextDueDate: '2027-05-01', executionHistory: [{ date: '2026-05-01', doneAt: '2026-05-02', taskId: 't1' }] })]
-    const tasks = [
-      task({ id: 't1', maintenancePlanId: 'a', dueDate: '2026-05-01' }),
-      task({ id: 't2', maintenancePlanId: 'a', dueDate: '2026-06-01' }),
-    ]
-    expect(pmComplianceForYear(plans, tasks, 2026, '2026-10-30')).toMatchObject({ done: 2, pending: 0, pct: 100 })
+    const tasks = [task({ id: 't1', maintenancePlanId: 'd', dueDate: '2026-03-01' })]
+    expect(pmComplianceForYear(plans, tasks, 2026, '2026-10-30')).toEqual({ total: 4, done: 2, pending: 2, overdue: 1, pct: 50, source: 'app' })
   })
 
   it('anos antigos só com OT do histórico do Excel ficam sem % — ou com o KPI do PL-MAN-01', () => {
@@ -30,6 +23,6 @@ describe('pm-compliance', () => {
     const tasks = [task({ id: 'h', tag: 'Ta', title: 'Plano a', dueDate: '2019-03-01' })]
     expect(pmComplianceByYear(plans, tasks, [2019], '2026-10-30').get(2019)).toMatchObject({ done: 1, pct: null, source: null })
     const hist = [{ year: 2019, due: 2093, done: 2400, doneCapped: 2050, plans: 483, plansOk: 470 }]
-    expect(pmComplianceByYear(plans, tasks, [2019], '2026-10-30', hist).get(2019)).toEqual({ total: 2093, done: 2050, pending: 43, overdue: 43, pct: 97.9, source: 'excel' })
+    expect(pmComplianceByYear(plans, tasks, [2019], '2026-10-30', hist).get(2019)).toEqual({ total: 483, done: 470, pending: 13, overdue: 13, pct: 97.3, source: 'excel' })
   })
 })

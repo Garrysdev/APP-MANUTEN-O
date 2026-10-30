@@ -352,15 +352,15 @@ export default function ReportsChartsClient({
               <span className="text-xs font-bold text-slate-300">
                 {annualPMStats.compliancePct === null
                   ? `(${annualPMStats.pmOts} OT de PM feitas em ${annualPMStats.targetYear})`
-                  : `(${annualPMStats.concluidas} de ${annualPMStats.previstas} OT de PM devidas no ano${annualPMStats.emAtraso ? ` · ${annualPMStats.emAtraso} em atraso` : ''})`}
+                  : `(${annualPMStats.concluidas} de ${annualPMStats.previstas} OT de PM do ano${annualPMStats.emAtraso && annualPMStats.source === 'app' ? ` · ${annualPMStats.emAtraso} em atraso` : ''})`}
               </span>
             </div>
             <p className="text-[11px] text-slate-300 font-medium">
               {annualPMStats.compliancePct === null
                 ? 'Ano sem registo do plano — importa o PL-MAN-01 desse ano em "KPI do PM dos anos anteriores".'
                 : annualPMStats.source === 'excel'
-                  ? 'Da folha PL-MAN-01 desse ano: intervenções realizadas ÷ devidas no ano.'
-                  : 'OT de PM concluídas até hoje ÷ OT de PM devidas até ao fim do ano.'}
+                  ? 'Da folha PL-MAN-01 desse ano: planos cumpridos ÷ planos (uma OT de PM por plano).'
+                  : 'OT de PM concluídas no ano ÷ OT de PM do ano (uma por plano).'}
             </p>
           </div>
           <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
@@ -539,7 +539,7 @@ export default function ReportsChartsClient({
               <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100">
                 Plano de Manutenção (% por Ano)
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">OT de PM concluídas ÷ devidas no ano inteiro · anos antes da app pelo PL-MAN-01 do Excel</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">OT de PM concluídas ÷ OT de PM do ano (uma por plano) · anos antes da app pelo PL-MAN-01 do Excel</p>
             </div>
             <span className="text-xs font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 rounded border border-emerald-200 dark:border-emerald-800 shrink-0 self-start sm:self-auto">
               Meta: 100%
@@ -561,7 +561,7 @@ export default function ReportsChartsClient({
                       <div style={{ height: `${height}%` }} className={`w-full max-w-[40px] rounded-t-md ${color}`}
                         title={pct === null
                           ? `${y.year}: sem registo do plano na app — ${y.pmOts} OT de PM feitas`
-                          : `${y.year}: ${y.pmDone} de ${y.pmTotal} OT de PM devidas (${pct}%)${y.pmSource === 'excel' ? ' · Excel PL-MAN-01' : ''}`} />
+                          : `${y.year}: ${y.pmDone} de ${y.pmTotal} OT de PM concluídas (${pct}%)${y.pmSource === 'excel' ? ' · Excel PL-MAN-01' : ''}`} />
                     </div>
                     <span className="shrink-0 text-[10px] font-black text-slate-800 dark:text-slate-200 mt-1">{y.year}</span>
                   </div>
@@ -579,7 +579,7 @@ export default function ReportsChartsClient({
                   <tr className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700">
                     <th className="py-1 px-2">Ano</th>
                     <th className="py-1 px-2 text-center" title="OT de PM registadas no histórico de OT desse ano">OT de PM no histórico</th>
-                    <th className="py-1 px-2 text-center">Devidas no ano</th>
+                    <th className="py-1 px-2 text-center">OT de PM do ano</th>
                     <th className="py-1 px-2 text-center">Concluídas</th>
                     <th className="py-1 px-2 text-center">Por fazer</th>
                     <th className="py-1 px-2 text-center">Em atraso</th>

@@ -159,15 +159,15 @@ export default function DashboardKpiCards({
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-black text-white">{pmCompliancePct}</span>
               <span className="text-xs font-bold text-slate-300">
-                {pmCompliance.pct === null ? '' : `(${pmDone} de ${pmTotal} OT de PM devidas em ${year}${pmCompliance.source === 'app' && pmCompliance.overdue ? ` · ${pmCompliance.overdue} em atraso` : ''})`}
+                {pmCompliance.pct === null ? '' : `(${pmDone} de ${pmTotal} OT de PM de ${year}${pmCompliance.source === 'app' && pmCompliance.overdue ? ` · ${pmCompliance.overdue} em atraso` : ''})`}
               </span>
             </div>
             <p className="text-[11px] text-slate-300 font-medium">
               {pmCompliance.pct === null
                 ? `Sem registo do plano em ${year} — importa o PL-MAN-01 desse ano em Estatísticas e Gráficos.`
                 : pmCompliance.source === 'excel'
-                  ? `Da folha PL-MAN-01 de ${year}: intervenções realizadas ÷ devidas no ano.`
-                  : `OT de PM concluídas até hoje ÷ OT de PM devidas até ao fim de ${year}.`}
+                  ? `Da folha PL-MAN-01 de ${year}: planos cumpridos ÷ planos (uma OT de PM por plano).`
+                  : `OT de PM concluídas em ${year} ÷ OT de PM do ano (uma por plano).`}
             </p>
           </div>
           <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
