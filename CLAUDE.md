@@ -77,6 +77,15 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   "Concluída em bloco"). O botão "Gerador Anual PMs" (criava OTs para o ano
   inteiro e apagava as OTs do plano) foi retirado a 29/10 a pedido do Rui —
   não repor.
+- **Eliminar planos de PM (30/10/2026)**: `deleteMaintenancePlan` grava
+  sempre um marcador `deleted` (nunca `ref.delete()`), e `fetchMaintenancePlans`
+  /`getMaintenancePlan` não deixam a reserva (JSON) repor um plano marcado.
+  Antes, apagar um plano que também existe na reserva fazia-o voltar logo.
+- **Manutenção Preditiva (30/10/2026)**: período livre (De/Até + 48 h/7 d/30 d/
+  90 d/Tudo, máx. 366 dias, lido em blocos de 31 dias e guardado por dia no
+  cliente), zoom por arrasto partilhado por todos os gráficos, exportação
+  .csv da janela, estatísticas e tabela filtrável no fim
+  (`src/lib/vibration-window.ts`, `VibrationTable.tsx`).
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso
   acontecer é bug (ver secção de bugs conhecidos abaixo).
