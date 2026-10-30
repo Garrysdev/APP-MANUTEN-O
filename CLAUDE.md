@@ -81,11 +81,28 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   sempre um marcador `deleted` (nunca `ref.delete()`), e `fetchMaintenancePlans`
   /`getMaintenancePlan` não deixam a reserva (JSON) repor um plano marcado.
   Antes, apagar um plano que também existe na reserva fazia-o voltar logo.
+- **Eliminar OT (30/10/2026)**: `deleteTask` também grava sempre o marcador
+  `deleted` (OT da reserva com documento voltava a aparecer depois do `ref.delete()`).
+- **Ficha do plano de PM (30/10/2026)**: clicar numa linha do PM abre
+  `PlanDetailModal.tsx` (histórico de todas as OT de PM do plano + execuções em
+  bloco, editar/eliminar o plano e cada OT). O editor do plano abre pelo botão
+  "Editar plano" da ficha. Sem filtro "No/Fora do Calendário" (retirado a pedido).
+- **Cumprimento do PM (30/10/2026)**: uma só fórmula em `src/lib/pm-compliance.ts`
+  (Dashboard e Estatísticas) = KPI da folha PL-MAN-01: planos sem execuções em
+  atraso ÷ planos com execuções previstas no ano (inclui `executionHistory`, também
+  as concluídas em bloco). Anos antes da app usam o KPI importado dos PL-MAN-01
+  (Estatísticas → "KPI do PM dos anos anteriores", `historical_kpis/<companyId>`,
+  leitor em `src/lib/historical-kpis.ts`). Nunca voltar a dividir pelo nº de planos
+  de hoje (dava ~1% nos anos antigos). Falta o FR-MAN-09 de 2022 (só ~20 OT desse ano).
 - **Manutenção Preditiva (30/10/2026)**: período livre (De/Até + 48 h/7 d/30 d/
   90 d/Tudo, máx. 366 dias, lido em blocos de 31 dias e guardado por dia no
   cliente), zoom por arrasto partilhado por todos os gráficos, exportação
   .csv da janela, estatísticas e tabela filtrável no fim
-  (`src/lib/vibration-window.ts`, `VibrationTable.tsx`).
+  (`src/lib/vibration-window.ts`, `VibrationTable.tsx`). Botão "Resumo" em cada
+  gráfico liga/desliga a caixa das leituras (todos os gráficos); cursor de lupa /
+  redimensionar no zoom. Caixa de Alertas por cima dos gráficos, com máximos de
+  temperatura e corrente do agitador; a corrente só alerta com limite em Sensores e
+  limites (`limits.current`).
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso
   acontecer é bug (ver secção de bugs conhecidos abaixo).

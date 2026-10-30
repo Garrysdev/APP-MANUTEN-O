@@ -17,14 +17,14 @@ export default function HistoricalPmImport({ saved }: { saved: HistoricalPmKpi[]
   const [preview, setPreview] = useState<HistoricalPmKpi[]>([])
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
-  async function readFiles(files: FileList | null) {
-    if (!files?.length) return
+  async function readFiles(files: File[]) {
+    if (!files.length) return
     setBusy(true)
     setMsg(null)
     const XLSX = await import('xlsx')
     const out: HistoricalPmKpi[] = []
     const skipped: string[] = []
-    for (const f of Array.from(files)) {
+    for (const f of files) {
       try {
         const wb = XLSX.read(await f.arrayBuffer())
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null }) as SheetRows
@@ -107,7 +107,12 @@ export default function HistoricalPmImport({ saved }: { saved: HistoricalPmKpi[]
           </p>
           <label className="inline-flex items-center gap-2 rounded-lg bg-[#2E86C1] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#2471A3] cursor-pointer">
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Escolher ficheiros PL-MAN-01
-            <input type="file" multiple accept=".xls,.xlsx,.xlsm,.xlsb" className="hidden" onChange={(e) => { void readFiles(e.target.files); e.target.value = '' }} />
+            <input type="file" multiple accept=".xls,.xlsx,.xlsm,.xlsb" className="hidden" onChange={(e) => {
+              // Copiar antes de limpar o campo: a FileList esvazia-se com value = ''.
+              const files = Array.from(e.target.files ?? [])
+              e.target.value = ''
+              void readFiles(files)
+            }} />
           </label>
           {msg && <p className={`text-xs ${msg.ok ? 'text-emerald-600' : 'text-red-600'}`}>{msg.text}</p>}
           {preview.length > 0 && (
