@@ -87,22 +87,28 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   `PlanDetailModal.tsx` (histórico de todas as OT de PM do plano + execuções em
   bloco, editar/eliminar o plano e cada OT). O editor do plano abre pelo botão
   "Editar plano" da ficha. Sem filtro "No/Fora do Calendário" (retirado a pedido).
-- **Cumprimento do PM (30/10/2026)**: uma só fórmula em `src/lib/pm-compliance.ts`
-  (Dashboard e Estatísticas) = KPI da folha PL-MAN-01: planos sem execuções em
-  atraso ÷ planos com execuções previstas no ano (inclui `executionHistory`, também
-  as concluídas em bloco). Anos antes da app usam o KPI importado dos PL-MAN-01
-  (Estatísticas → "KPI do PM dos anos anteriores", `historical_kpis/<companyId>`,
-  leitor em `src/lib/historical-kpis.ts`). Nunca voltar a dividir pelo nº de planos
-  de hoje (dava ~1% nos anos antigos). Falta o FR-MAN-09 de 2022 (só ~20 OT desse ano).
+- **Cumprimento do PM (30/10/2026, definição do Rui)**: uma só fórmula em
+  `src/lib/pm-compliance.ts` (Dashboard e Estatísticas): **OT de PM concluídas até
+  hoje ÷ OT de PM devidas até ao fim do ano** (devidas = concluídas + a OT atual e as
+  seguintes pela periodicidade que ainda caem no ano). A conclusão em bloco até 31/10
+  foi só para a implementação — daqui em diante concluem-se uma a uma. Anos antes da
+  app usam as folhas PL-MAN-01 importadas (realizadas, no máx. as devidas de cada
+  plano ÷ devidas; Estatísticas → "KPI do PM dos anos anteriores",
+  `historical_kpis/<companyId>`, leitor `src/lib/historical-kpis.ts`). Nunca dividir
+  pelo nº de planos de hoje (dava ~1% nos anos antigos).
+- **Histórico de OT do Excel**: Estatísticas → "Importar histórico de OT de um ano"
+  (FR-MAN-09, folha UR, `src/lib/history-import.ts` + `importHistoricalTasks`):
+  salta as que já existem (data+área+TAG+avaria), lê a cópia materializada uma vez e
+  escreve em lotes. 2022 importado a 30/10 (999 OT).
 - **Manutenção Preditiva (30/10/2026)**: período livre (De/Até + 48 h/7 d/30 d/
   90 d/Tudo, máx. 366 dias, lido em blocos de 31 dias e guardado por dia no
   cliente), zoom por arrasto partilhado por todos os gráficos, exportação
   .csv da janela, estatísticas e tabela filtrável no fim
   (`src/lib/vibration-window.ts`, `VibrationTable.tsx`). Botão "Resumo" em cada
   gráfico liga/desliga a caixa das leituras (todos os gráficos); cursor de lupa /
-  redimensionar no zoom. Caixa de Alertas por cima dos gráficos, com máximos de
-  temperatura e corrente do agitador; a corrente só alerta com limite em Sensores e
-  limites (`limits.current`).
+  redimensionar no zoom. Caixa de Alertas por cima dos gráficos, com a
+  hora do pico e a temperatura e a corrente do agitador nesse momento (ajuda a
+  ver a causa). A corrente **não** dá alertas (pedido do Rui).
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso
   acontecer é bug (ver secção de bugs conhecidos abaixo).
