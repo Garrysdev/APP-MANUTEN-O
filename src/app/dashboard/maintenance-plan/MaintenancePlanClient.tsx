@@ -156,10 +156,11 @@ export default function MaintenancePlanClient({
   const emptyCol = { area: '', tag: '', system: '', asset: '', title: '', description: '', tipo: '', period: '', crit: '', executor: '', estado: '' }
   const [colF, setColF] = useState(emptyCol)
   const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
+  const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
   const [fLegal, setFLegal] = useState(false)
   const [fCalendar, setFCalendar] = useState<'' | 'yes' | 'no'>('')
-  const anyFilter = fLegal || Boolean(fCalendar) || Object.values(colF).some(Boolean)
-  function clearFilters() { setColF(emptyCol); setFLegal(false); setFCalendar(''); }
+  const anyFilter = fLegal || Boolean(fCalendar) || Object.values(colF).some(Boolean) || JSON.stringify(excelDateFilter) !== JSON.stringify(DEFAULT_EXCEL_DATE_FILTER)
+  function clearFilters() { setColF(emptyCol); setFLegal(false); setFCalendar(''); setExcelDateFilter(DEFAULT_EXCEL_DATE_FILTER) }
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
   const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
@@ -646,12 +647,11 @@ export default function MaintenancePlanClient({
   const inc = (val: string | null | undefined, f: string) =>
     !f || norm(val).includes(norm(f))
 
-  const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
 
   const filtered = useMemo(() => {
     return plans.filter((p) => {
-      const planDate = p.nextDueDate || p.calendarStartDate || p.createdAt
-      if (!filterByExcelDate(planDate, excelDateFilter)) return false
+      // Filtro de datas da coluna PRÓXIMA (a data da OT atual do plano).
+      if (!filterByExcelDate(planInfo(p).current, excelDateFilter)) return false
       
       // Filtros Multi-Seleção
       if (selectedAreas.length > 0) {
@@ -688,11 +688,11 @@ export default function MaintenancePlanClient({
 
       return true
     })
-  }, [plans, tasks, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, fCalendar, assetMap, assetTagMap, excelDateFilter, selectedYear])
+  }, [plans, tasks, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, fCalendar, assetMap, assetTagMap, excelDateFilter, selectedYear, planInfoById])
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
-  useEffect(() => { setCurrentPage(1) }, [colF, fLegal, pageSize])
+  useEffect(() => { setCurrentPage(1) }, [colF, fLegal, pageSize, excelDateFilter])
 
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<MaintenancePlan>(
     filtered,
@@ -1084,7 +1084,9 @@ export default function MaintenancePlanClient({
                     <option value="atraso">Em atraso</option>
                   </Select>
                 </th>
-                <th className="px-0.5 py-0.5" />
+                <th className="px-0.5 py-0.5 relative">
+                  <ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} />
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -1235,6 +1237,7 @@ export default function MaintenancePlanClient({
           createAction={createMaintenancePlanAction}
           updateAction={updateMaintenancePlanAction}
           deleteAction={deleteMaintenancePlanAction}
+          onDelete={() => router.refresh()}
           allowDuplicate={false}
           planForm={editing ? { nextDate: planInfo(editing).current, active: editing.active !== false, history: planHistory(editing) } : undefined}
           onSuccess={() => {

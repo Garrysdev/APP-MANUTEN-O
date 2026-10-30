@@ -2438,8 +2438,10 @@ const fallbackPlansFor = (companyId: string): MaintenancePlan[] =>
 
 async function fetchMaintenancePlans(companyId: string): Promise<MaintenancePlan[]> {
     {
-      const dbDocs = ((await readAll('maintenance_plans', companyId, LIST_TIMEOUT_MS, 'listMaintenancePlans')) as (MaintenancePlan & { deleted?: boolean })[])
-        .filter((p) => !p.deleted)
+      const allDocs = (await readAll('maintenance_plans', companyId, LIST_TIMEOUT_MS, 'listMaintenancePlans')) as (MaintenancePlan & { deleted?: boolean })[]
+      const dbDocs = allDocs.filter((p) => !p.deleted)
+      // Planos eliminados (marcador `deleted`) também não podem voltar pela reserva.
+      const deletedIds = new Set(allDocs.filter((p) => p.deleted).map((p) => p.id))
 
       // Mesclar com os planos de reserva (JSON) em vez de os ignorar assim que
       // exista QUALQUER documento no Firestore — um único "Concluir PM" grava
@@ -2447,7 +2449,7 @@ async function fetchMaintenancePlans(companyId: string): Promise<MaintenancePlan
       // que ainda só existem no ficheiro de reserva.
       const fallbackPlans = isDemoCompany(companyId) ? getFallbackPlans() : []
       const byId = new Map<string, MaintenancePlan>()
-      fallbackPlans.forEach((p) => byId.set(p.id, p))
+      fallbackPlans.forEach((p) => { if (!deletedIds.has(p.id)) byId.set(p.id, p) })
       dbDocs.forEach((p) => byId.set(p.id, p)) // Firestore substitui a versão de reserva quando existe
 
       const seen = new Set<string>()
@@ -2478,8 +2480,9 @@ export const listMaintenancePlans = cache(async function(companyId: string): Pro
 export const getMaintenancePlan = cache(async function(companyId: string, id: string): Promise<MaintenancePlan | null> {
   try {
     const doc = await (await adminDbFor(companyId)).collection('maintenance_plans').doc(id).get()
-    if (doc.exists && doc.data()?.companyId === companyId && !doc.data()?.deleted) {
-      return serialize<MaintenancePlan>(doc)
+    if (doc.exists && doc.data()?.companyId === companyId) {
+      // Eliminado: não devolver a versão da reserva.
+      return doc.data()?.deleted ? null : serialize<MaintenancePlan>(doc)
     }
   } catch (err) {
     console.error('[getMaintenancePlan] Error:', err)
@@ -2794,10 +2797,10 @@ export async function deleteMaintenancePlan(companyId: string, id: string): Prom
       if (!belongsToThisCompanyFallback) throw new Error('Plano de manutenção não encontrado')
       console.warn(`[deleteMaintenancePlan] companyId corrompido no plano ${id} — a eliminar mesmo assim (é da empresa atual).`)
     }
-    await ref.delete()
-  } else {
-    await ref.set({ id, companyId, deleted: true, updatedAt: now })
   }
+  // Sempre marcador `deleted` (nunca apagar o documento): os planos da reserva (JSON) voltavam
+  // a aparecer assim que o documento do Firestore desaparecia (ex.: os 507 gravados a 29/10).
+  await ref.set({ id, companyId, deleted: true, updatedAt: now })
   await touch('maintenance_plans', companyId, [id])
   revalidateTag(plansTag(companyId))
 }

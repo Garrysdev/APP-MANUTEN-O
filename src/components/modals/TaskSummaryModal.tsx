@@ -256,7 +256,7 @@ export default function TaskSummaryModal({
                 type="button"
                 onClick={() => setCalendarOpen((v) => !v)}
                 className={`px-3 py-1.5 border text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer ${calendarDate ? 'bg-blue-50 hover:bg-blue-100 text-industrial-blue border-blue-200 dark:bg-blue-950/40 dark:text-sky-300 dark:border-blue-800' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'}`}
-                title={calendarDate ? `No Calendário PM a ${formatDate(calendarDate)}` : 'Colocar esta OT no Calendário PM'}
+                title={calendarDate ? `No Calendário a ${formatDate(calendarDate)}` : 'Colocar esta OT no Calendário'}
               >
                 <CalendarPlus className="h-4 w-4" />
                 <span className="hidden sm:inline">{calendarDate ? formatDate(calendarDate) : 'Calendário'}</span>
@@ -297,7 +297,7 @@ export default function TaskSummaryModal({
 
         {calendarOpen && (
           <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-blue-50/60 dark:bg-blue-950/30 flex flex-wrap items-center gap-2 text-sm shrink-0">
-            <span className="font-semibold text-slate-700 dark:text-slate-200">Mostrar no Calendário PM em</span>
+            <span className="font-semibold text-slate-700 dark:text-slate-200">Mostrar no Calendário em</span>
             <input type="date" value={calendarDraft} onChange={(e) => setCalendarDraft(e.target.value)}
               className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm" />
             <button type="button" disabled={!calendarDraft || savingCalendar} onClick={() => saveCalendar(calendarDraft)}
