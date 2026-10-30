@@ -116,12 +116,25 @@ export function summarizeSensor(days: VibDayPayload[], sensor: string, limits: V
   }
 }
 
-export interface VibAlert { date: string; sensor: string; kind: 'vibração' | 'temperatura'; value: number; level: 'alerta' | 'perigo' }
+export interface VibAlert { date: string; sensor: string; kind: 'vibração' | 'temperatura' | 'corrente'; value: number; level: 'alerta' | 'perigo' }
 
-/** Um alerta por dia/sensor/tipo — o pior valor máximo do dia. */
-export function findAlerts(days: VibDayPayload[], sensors: string[], limits: VibLimits): VibAlert[] {
+/**
+ * Um alerta por dia/sensor/tipo — o pior valor máximo do dia. `currents` são as séries de
+ * corrente do motor ({ key, label }); só dão alerta com limits.current definido
+ * (perigo a partir de +10%).
+ */
+export function findAlerts(days: VibDayPayload[], sensors: string[], limits: VibLimits, currents: { key: string; label: string }[] = []): VibAlert[] {
   const out: VibAlert[] = []
+  const maxOf = (arr: (number | null)[]) => Math.max(...arr.filter((x): x is number => x !== null))
   for (const day of days) {
+    if (limits.current && limits.current > 0) {
+      for (const c of currents) {
+        const s = day.series[c.key]
+        if (!s) continue
+        const mx = maxOf(s.max)
+        if (mx >= limits.current) out.push({ date: day.date, sensor: c.label, kind: 'corrente', value: mx, level: mx >= limits.current * 1.1 ? 'perigo' : 'alerta' })
+      }
+    }
     for (const sensor of sensors) {
       const v = day.series[`${sensor}__vRMS`]
       if (v) {

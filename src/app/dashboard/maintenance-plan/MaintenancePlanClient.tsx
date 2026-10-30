@@ -34,7 +34,8 @@ import {
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 import { findPlanLinkedTask, isPlanTask } from '@/lib/pm-status'
 import { planCurrentDate, planRowStatus, isOpenLinkedTask, isOverdue, type PmRowStatus } from '@/lib/pm-schedule'
-import { updateTaskStatusAction, updateTaskAction, loadStockRefsAction, type StockMaterialRef } from '../tasks/actions'
+import { updateTaskStatusAction, updateTaskAction, loadStockRefsAction, deleteTaskAction, type StockMaterialRef } from '../tasks/actions'
+import PlanDetailModal from './PlanDetailModal'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
@@ -158,9 +159,8 @@ export default function MaintenancePlanClient({
   const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
   const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
   const [fLegal, setFLegal] = useState(false)
-  const [fCalendar, setFCalendar] = useState<'' | 'yes' | 'no'>('')
-  const anyFilter = fLegal || Boolean(fCalendar) || Object.values(colF).some(Boolean) || JSON.stringify(excelDateFilter) !== JSON.stringify(DEFAULT_EXCEL_DATE_FILTER)
-  function clearFilters() { setColF(emptyCol); setFLegal(false); setFCalendar(''); setExcelDateFilter(DEFAULT_EXCEL_DATE_FILTER) }
+  const anyFilter = fLegal || Object.values(colF).some(Boolean) || JSON.stringify(excelDateFilter) !== JSON.stringify(DEFAULT_EXCEL_DATE_FILTER)
+  function clearFilters() { setColF(emptyCol); setFLegal(false); setExcelDateFilter(DEFAULT_EXCEL_DATE_FILTER) }
 
   const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
   const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
@@ -360,8 +360,17 @@ export default function MaintenancePlanClient({
     if (res.error) alert(res.error)
     else router.refresh()
   }
+  // Clicar numa linha abre a ficha do plano (histórico das OT, editar, eliminar…).
+  const [detailPlanId, setDetailPlanId] = useState<string | null>(null)
+  const detailPlan = detailPlanId ? plans.find((x) => x.id === detailPlanId) ?? null : null
   function openPlanRow(p: MaintenancePlan) {
-    openEdit(p)
+    setDetailPlanId(p.id)
+  }
+  async function handleDeleteTask(t: Task) {
+    if (!confirm(`Eliminar a OT "${t.title}"?`)) return
+    const res = await deleteTaskAction(t.id)
+    if (res?.error) alert(res.error)
+    else router.refresh()
   }
 
   // Botão dinâmico da coluna TAREFA: Pendente -> Em Curso -> Concluída
@@ -540,6 +549,7 @@ export default function MaintenancePlanClient({
     if (res?.error) {
       alert(res.error)
     } else {
+      setDetailPlanId(null)
       router.refresh()
     }
   }
@@ -682,13 +692,9 @@ export default function MaintenancePlanClient({
       if (!matchesEstado(p, colF.estado)) return false
       if (fLegal && !p.legal) return false
 
-      const isCal = Boolean(p.showInCalendar || (p.calendarDates && p.calendarDates.length > 0) || p.active !== false)
-      if (fCalendar === 'yes' && !isCal) return false
-      if (fCalendar === 'no' && isCal) return false
-
       return true
     })
-  }, [plans, tasks, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, fCalendar, assetMap, assetTagMap, excelDateFilter, selectedYear, planInfoById])
+  }, [plans, tasks, colF, selectedAreas, selectedTags, selectedTipos, selectedPeriods, selectedCrits, fLegal, assetMap, assetTagMap, excelDateFilter, selectedYear, planInfoById])
 
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
@@ -836,7 +842,7 @@ export default function MaintenancePlanClient({
         </div>
       )}
 
-      {/* Filtros por estado, Calendário e Gantt */}
+      {/* Filtros por estado */}
       <div className="flex items-center gap-3 mb-3 flex-wrap">
         <div className="flex gap-1.5 flex-wrap">
           {[
@@ -858,37 +864,6 @@ export default function MaintenancePlanClient({
               {label}
             </button>
           ))}
-        </div>
-
-        {/* Filtro Calendário */}
-        <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs">
-          <span className="px-2 font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-            <CalendarClock size={14} className="text-safety-orange" /> Calendário:
-          </span>
-          <button
-            onClick={() => setFCalendar('')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-              !fCalendar ? 'bg-[#1B4F72] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-            }`}
-          >
-            Todos
-          </button>
-          <button
-            onClick={() => setFCalendar('yes')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-              fCalendar === 'yes' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-            }`}
-          >
-            ✓ No Calendário
-          </button>
-          <button
-            onClick={() => setFCalendar('no')}
-            className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-              fCalendar === 'no' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-            }`}
-          >
-            Fora do Calendário
-          </button>
         </div>
 
       </div>
@@ -1095,7 +1070,7 @@ export default function MaintenancePlanClient({
                   key={p.id}
                   onClick={() => openPlanRow(p)}
                   className={`border-b border-slate-100 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group ${!p.active ? 'opacity-50' : ''}`}
-                  title={tasks.some((t) => t.maintenancePlanId === p.id) ? 'Clique para abrir a OT desta ocorrência no calendário' : 'Clique para abrir e editar este Plano de Manutenção'}
+                  title="Clique para abrir a ficha do plano (histórico das OT, editar, eliminar)"
                 >
                   <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">{p.area || '—'}</td>
                   <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
@@ -1218,6 +1193,25 @@ export default function MaintenancePlanClient({
           </div>
         )}
       </div>
+
+      {detailPlan && (
+        <PlanDetailModal
+          plan={detailPlan}
+          tasks={tasks}
+          tag={getPlanTag(detailPlan)}
+          assetName={assetName(detailPlan.assetId)}
+          periodLabel={periodLabel(detailPlan)}
+          current={planInfo(detailPlan).current}
+          overdue={planInfo(detailPlan).overdue}
+          statusButton={renderPmStatusButton(detailPlan)}
+          nextDateControl={renderNextDate(detailPlan)}
+          onClose={() => setDetailPlanId(null)}
+          onEdit={() => openEdit(detailPlan)}
+          onDelete={() => handleDelete(detailPlan)}
+          onDeleteTask={handleDeleteTask}
+          userName={userName}
+        />
+      )}
 
       {/* Modal criar/editar com ficha completa e campos unificados */}
       {(creating || Boolean(editing)) && (

@@ -62,6 +62,7 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
   const [zoom, setZoom] = useState<TimeWindow | null>(null)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [showMax, setShowMax] = useState(false)
+  const [showTooltip, setShowTooltip] = useState(true)
   // Dias já lidos, por equipamento (null = dia sem medições) — mudar o período só lê o que falta.
   const cache = useRef(new Map<string, Map<string, VibDayPayload | null>>())
   const [cacheVersion, setCacheVersion] = useState(0)
@@ -129,6 +130,8 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
     hidden,
     onToggle: (key) => setHidden((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n }),
     showMax,
+    showTooltip,
+    onToggleTooltip: () => setShowTooltip((v) => !v),
   }
   function setRangeSafe(next: Range) {
     let { from, to } = next
@@ -157,7 +160,8 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
   const hasMetric = (metric: string) => (cfg?.series ?? []).some((m) => m.metric === metric)
 
   const summaries = useMemo(() => sensors.map((s) => summarizeSensor(winDays, s, limits)), [winDays, sensors, limits])
-  const alerts = useMemo(() => findAlerts(winDays, sensors, limits), [winDays, sensors, limits])
+  const currents = useMemo(() => processGroups.filter((g) => g.metric === 'Corrente').flatMap((g) => g.items.map((m) => ({ key: m.key, label: `Corrente ${g.items.length > 1 ? m.label : ''}`.trim() }))), [processGroups])
+  const alerts = useMemo(() => findAlerts(winDays, sensors, limits, currents), [winDays, sensors, limits, currents])
   const worst = summaries.reduce<Zone | null>((w, s) => (s.zone && (!w || s.zone > w) ? s.zone : w), null)
   const soonest = summaries.reduce<number | null>((m, s) => (s.daysToAlert !== null && (m === null || s.daysToAlert < m) ? s.daysToAlert : m), null)
 
@@ -334,6 +338,57 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
             ))}
           </div>
 
+          <div className={card}>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100 mr-auto">Alertas</h3>
+              {/* Máximos da janela: temperaturas de cada sensor e corrente do agitador. */}
+              {stats.filter((st) => st.key.endsWith('__Temperatura')).map((st) => {
+                const sensor = st.key.replace(/__Temperatura$/, '')
+                const hot = st.max >= limits.temp
+                return (
+                  <span key={st.key} title={`Temperatura máxima na janela (média ${st.avg.toFixed(1)} °C)`}
+                    className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold border ${hot ? 'border-red-300 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300' : 'border-slate-200 bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'}`}>
+                    <Thermometer className="h-3 w-3" />{labelOf(sensor)} máx {st.max.toFixed(1)} °C
+                  </span>
+                )
+              })}
+              {currents.map((c) => {
+                const st = stats.find((x) => x.key === c.key)
+                if (!st) return null
+                const high = Boolean(limits.current && st.max >= limits.current)
+                return (
+                  <span key={c.key} title={`Corrente máxima na janela (média ${st.avg.toFixed(1)} A)${limits.current ? ` · alarme ${limits.current} A` : ' · sem alarme definido em Sensores e limites'}`}
+                    className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold border ${high ? 'border-red-300 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300' : 'border-slate-200 bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'}`}>
+                    <Activity className="h-3 w-3" />{c.label} máx {st.max.toFixed(1)} A
+                  </span>
+                )
+              })}
+            </div>
+            {alerts.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-slate-400">
+                Sem valores acima dos limites no período (vibração ≥ {limits.bc} mm/s, temperatura ≥ {limits.temp} °C{limits.current ? `, corrente ≥ ${limits.current} A` : ''}).
+                {currents.length > 0 && !limits.current && ' A corrente do agitador só dá alerta com um limite definido em Sensores e limites.'}
+              </p>
+            ) : (
+              <div className="overflow-auto max-h-64">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white dark:bg-slate-900"><tr className="text-left text-xs uppercase text-gray-500 dark:text-slate-400"><th className="py-1 pr-3">Data</th><th className="py-1 pr-3">Sensor</th><th className="py-1 pr-3">Tipo</th><th className="py-1 pr-3">Máximo</th><th className="py-1">Nível</th></tr></thead>
+                  <tbody>
+                    {alerts.map((a, i) => (
+                      <tr key={i} className="border-t border-slate-100 dark:border-slate-800 text-gray-700 dark:text-slate-200">
+                        <td className="py-1 pr-3">{a.date}</td>
+                        <td className="py-1 pr-3">{a.kind === 'corrente' ? a.sensor : labelOf(a.sensor)}</td>
+                        <td className="py-1 pr-3">{a.kind}</td>
+                        <td className="py-1 pr-3">{a.value.toFixed(2)} {a.kind === 'vibração' ? 'mm/s' : a.kind === 'corrente' ? 'A' : '°C'}</td>
+                        <td className="py-1"><span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${a.level === 'perigo' ? ZONE_STYLE.D.cls : ZONE_STYLE.C.cls}`}>{a.level}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           {hasMetric('vRMS') && (
             <MetricChart view={view} title="Fadiga — velocidade de vibração RMS" unit="mm/s" points={metricPoints('vRMS')} series={metricSeries('vRMS')} zones={limits}
               subtitle="Desequilíbrio, desalinhamento e folgas — zonas ISO 10816-3 a cores (0,2 mm/s = 0,0002 m/s no SCADA)" />
@@ -376,30 +431,6 @@ export default function PredictiveClient({ assets, configs: initial }: { assets:
               <MetricChart view={view} title="Temperatura" unit="°C" points={metricPoints('Temperatura')} limitLine={limits.temp}
                 series={sensors.filter((s) => cfg.series.some((m) => m.key === `${s}__Temperatura`)).map((s) => ({ key: `${s}__Temperatura`, label: labelOf(s), color: colorOf(s) }))}
                 subtitle="Aquecimento progressivo acompanha lubrificação deficiente ou sobrecarga" />
-            )}
-          </div>
-
-          <div className={card}>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100 mb-2">Alertas</h3>
-            {alerts.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-slate-400">Sem valores acima dos limites no período.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="text-left text-xs uppercase text-gray-500 dark:text-slate-400"><th className="py-1 pr-3">Data</th><th className="py-1 pr-3">Sensor</th><th className="py-1 pr-3">Tipo</th><th className="py-1 pr-3">Máximo</th><th className="py-1">Nível</th></tr></thead>
-                  <tbody>
-                    {alerts.map((a, i) => (
-                      <tr key={i} className="border-t border-slate-100 dark:border-slate-800 text-gray-700 dark:text-slate-200">
-                        <td className="py-1 pr-3">{a.date}</td>
-                        <td className="py-1 pr-3">{labelOf(a.sensor)}</td>
-                        <td className="py-1 pr-3">{a.kind}</td>
-                        <td className="py-1 pr-3">{a.value.toFixed(2)} {a.kind === 'vibração' ? 'mm/s' : '°C'}</td>
-                        <td className="py-1"><span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${a.level === 'perigo' ? ZONE_STYLE.D.cls : ZONE_STYLE.C.cls}`}>{a.level}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             )}
           </div>
 

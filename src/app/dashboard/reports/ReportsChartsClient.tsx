@@ -5,7 +5,8 @@ import Link from 'next/link'
 import type { Task, Asset, Intervention, MaintenancePlan } from '@/types/models'
 import ExcelDateFilter, { ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
-import { findPlanLinkedTask } from '@/lib/pm-status'
+import { pmComplianceByYear, type HistoricalPmKpi } from '@/lib/pm-compliance'
+import HistoricalPmImport from './HistoricalPmImport'
 
 // Grupos de exibição para "Distribuição por Tipo de Manutenção" — 'plano'/'pm' e
 // 'preventiva'/'mp' são o mesmo tipo guardado com chaves diferentes consoante a
@@ -81,11 +82,14 @@ export default function ReportsChartsClient({
   assets,
   interventions,
   plans,
+  historical = [],
 }: {
   tasks: Task[]
   assets: Asset[]
   interventions: Intervention[]
   plans: MaintenancePlan[]
+  /** KPI de PM dos anos antes da app, importados dos PL-MAN-01 (sem filtro de área/TAG). */
+  historical?: HistoricalPmKpi[]
 }) {
   const currentYear = new Date().getFullYear()
   const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>({
@@ -213,6 +217,7 @@ export default function ReportsChartsClient({
         yearsSet.add(parsed.year)
       }
     })
+    historical.forEach((h) => yearsSet.add(h.year))
     const years = Array.from(yearsSet).sort((a, b) => a - b)
 
     const filteredPlans = plans.filter((p) => {
@@ -222,6 +227,10 @@ export default function ReportsChartsClient({
       if (selectedTags.length > 0 && !selectedTags.some((t) => pTag === t.toLowerCase() || pTag.startsWith(t.toLowerCase()))) return false
       return true
     })
+
+    // O KPI do Excel é da fábrica toda — com filtro de área/TAG não se aplica.
+    const hist = selectedAreas.length || selectedTags.length ? [] : historical
+    const pmByYear = pmComplianceByYear(filteredPlans, tasks, years, new Date().toISOString().slice(0, 10), hist)
 
     return years.map((yr) => {
       const tasksInYr = filteredTasksAllYears.filter((t) => {
@@ -234,51 +243,50 @@ export default function ReportsChartsClient({
       const piCompleted = piTasks.filter((t) => t.status === 'done' || !!t.completedAt).length
       const resolutionRate = piRequested > 0 ? Math.round((piCompleted / piRequested) * 100) : 0
 
-      const pmTotal = filteredPlans.length
-      const pmDone = filteredPlans.filter((p) => findPlanLinkedTask(p, tasks, yr)?.status === 'done').length
-      const pmCompliance = pmTotal > 0 ? Math.round((pmDone / pmTotal) * 100) : 0
+      const pm = pmByYear.get(yr)!
+      // OT de PM concluídas registadas nesse ano (inclui o histórico importado do Excel).
+      const pmOts = tasksInYr.filter((t) => isPMTask(t) && (t.status === 'done' || !!t.completedAt)).length
 
       return {
         year: yr,
         piRequested,
         piCompleted,
         resolutionRate,
-        pmTotal,
-        pmDone,
-        pmCompliance,
+        pmTotal: pm.total,
+        pmDone: pm.done,
+        pmOverdue: pm.overdue,
+        pmPlans: pm.plans,
+        pmPlansOk: pm.plansOk,
+        pmSource: pm.source,
+        pmCompliance: pm.pct,
+        pmOts,
       }
     })
-  }, [filteredTasksAllYears, currentYear, plans, tasks, selectedAreas, selectedTags])
+  }, [filteredTasksAllYears, currentYear, plans, tasks, selectedAreas, selectedTags, historical])
+
+  const maxYrPmOts = useMemo(() => Math.max(1, ...yearlyStats.map((y) => y.pmOts)), [yearlyStats])
 
   const maxYrPI = useMemo(() => {
     return Math.max(1, ...yearlyStats.map((y) => Math.max(y.piRequested, y.piCompleted)))
   }, [yearlyStats])
 
-  // 3. Cumprimento Global do PM (Preventivas) — mesma lógica da tabela "Plano de
-  // Manutenção" e do cartão do Dashboard: total = nº de Planos de Manutenção
-  // (filtrados por Área/TAG quando aplicável), concluídas = planos cuja OT do ano
-  // selecionado está "Concluída" (findPlanLinkedTask). Um plano recorrente reutiliza
-  // sempre a mesma OT, por isso contar OTs existentes na coleção tasks inflava a %
-  // para perto de 100% assim que a última OT do plano fechava.
+  // 3. Cumprimento do PM do ano selecionado — por execução (src/lib/pm-compliance.ts),
+  // a mesma fórmula do cartão do Dashboard.
   const annualPMStats = useMemo(() => {
     const targetYear = excelDateFilter.selectedYear ? parseInt(excelDateFilter.selectedYear, 10) : currentYear
-    const filteredPlans = plans.filter((p) => {
-      const pArea = (p.area || '').trim().toLowerCase()
-      const pTag = (p.tag || '').trim().toLowerCase()
-      if (selectedAreas.length > 0 && !selectedAreas.some((a) => pArea === a.toLowerCase() || pArea.startsWith(a.toLowerCase()))) return false
-      if (selectedTags.length > 0 && !selectedTags.some((t) => pTag === t.toLowerCase() || pTag.startsWith(t.toLowerCase()))) return false
-      return true
-    })
-    const totalExistentes = filteredPlans.length
-    const concluidas = filteredPlans.filter((p) => findPlanLinkedTask(p, tasks, targetYear)?.status === 'done').length
-    const compliancePct = totalExistentes > 0 ? Math.round((concluidas / totalExistentes) * 1000) / 10 : 0
-
+    const y = yearlyStats.find((s) => s.year === targetYear)
     return {
-      totalExistentes,
-      concluidas,
-      compliancePct,
+      targetYear,
+      previstas: y?.pmTotal ?? 0,
+      concluidas: y?.pmDone ?? 0,
+      emAtraso: y?.pmOverdue ?? 0,
+      compliancePct: y?.pmCompliance ?? null,
+      planos: y?.pmPlans ?? 0,
+      planosOk: y?.pmPlansOk ?? 0,
+      source: y?.pmSource ?? null,
+      pmOts: y?.pmOts ?? 0,
     }
-  }, [plans, tasks, selectedAreas, selectedTags, excelDateFilter.selectedYear, currentYear])
+  }, [yearlyStats, excelDateFilter.selectedYear, currentYear])
 
   const annualPIStats = useMemo(() => {
     const piTasks = filteredTasks.filter(isPITask)
@@ -341,17 +349,23 @@ export default function ReportsChartsClient({
               Cumprimento do Plano de Manutenção (PM)
             </span>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black text-white">{annualPMStats.compliancePct}%</span>
+              <span className="text-4xl font-black text-white">{annualPMStats.compliancePct === null ? '—' : `${annualPMStats.compliancePct}%`}</span>
               <span className="text-xs font-bold text-slate-300">
-                ({annualPMStats.concluidas} de {annualPMStats.totalExistentes} Planos de Manutenção)
+                {annualPMStats.compliancePct === null
+                  ? `(${annualPMStats.pmOts} OT de PM feitas em ${annualPMStats.targetYear})`
+                  : `(${annualPMStats.planosOk} de ${annualPMStats.planos} planos cumpridos · ${annualPMStats.concluidas} de ${annualPMStats.previstas} execuções)`}
               </span>
             </div>
             <p className="text-[11px] text-slate-300 font-medium">
-              Planos de Manutenção com a OT do ano selecionado concluída, do total de planos existentes ({annualPMStats.totalExistentes}).
+              {annualPMStats.compliancePct === null
+                ? 'Ano sem registo do plano — importa o PL-MAN-01 desse ano em "KPI do PM dos anos anteriores".'
+                : annualPMStats.source === 'excel'
+                  ? 'KPI da folha PL-MAN-01 desse ano: planos que fizeram todas as intervenções devidas.'
+                  : 'Planos sem nenhuma execução em atraso, dos planos com execuções previstas até hoje (inclui as concluídas em bloco).'}
             </p>
           </div>
           <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
-            {annualPMStats.compliancePct}%
+            {annualPMStats.compliancePct === null ? '—' : `${Math.round(annualPMStats.compliancePct)}%`}
           </div>
         </div>
 
@@ -422,7 +436,7 @@ export default function ReportsChartsClient({
       {/* GRÁFICOS PRINCIPAIS (KPI por Mês e % por Ano) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico 1: Pedidos de PI (KPI por Mês) */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div className="min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div>
               <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100">
@@ -436,12 +450,12 @@ export default function ReportsChartsClient({
             </div>
           </div>
 
-          <div className="h-64 flex items-end justify-between gap-2 pt-8 pb-2 px-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
+          <div className="h-64 flex items-end justify-between gap-1 pt-6 pb-2 px-1 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
             {monthlyData.map((d) => {
               const hReq = d.piRequested > 0 ? Math.max(16, Math.round((d.piRequested / maxPIVal) * 100)) : 0
               const hComp = d.piCompleted > 0 ? Math.max(16, Math.round((d.piCompleted / maxPIVal) * 100)) : 0
               return (
-                <div key={d.month} className="flex-1 min-w-[36px] flex flex-col items-center gap-2 h-full justify-end group">
+                <div key={d.month} className="flex-1 min-w-[30px] flex flex-col items-center gap-1 h-full justify-end group">
                   <div className="w-full flex items-end justify-center gap-1.5 h-full max-w-[48px]">
                     {/* Barra Solicitados */}
                     <div
@@ -520,57 +534,41 @@ export default function ReportsChartsClient({
         </div>
 
         {/* Gráfico 2: Plano de Manutenção (% por Ano) */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div className="min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div>
               <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100">
                 Plano de Manutenção (% por Ano)
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Rácio de cumprimento (% de OTs de PM concluídas vs existentes)</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">KPI: planos que fizeram todas as execuções devidas · anos antes da app pelo PL-MAN-01 do Excel</p>
             </div>
-            <div className="flex items-center gap-3 text-xs font-bold shrink-0">
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-500" /> % Cumprido</span>
-              <span className="text-xs font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 rounded border border-emerald-200 dark:border-emerald-800">
-                Meta: 100%
-              </span>
-            </div>
+            <span className="text-xs font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 rounded border border-emerald-200 dark:border-emerald-800 shrink-0 self-start sm:self-auto">
+              Meta: 100%
+            </span>
           </div>
 
-          <div className="h-64 flex items-end justify-around gap-6 pt-8 pb-2 px-6 border-b border-slate-200 dark:border-slate-800">
-            {yearlyStats.map((y) => {
-              const height = y.pmTotal > 0 ? Math.max(16, Math.min(100, y.pmCompliance)) : 4
-              return (
-                <div key={y.year} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group max-w-[120px]">
-                  {/* Badge % */}
-                  <span className={`text-xs font-black px-2 py-0.5 rounded shadow-xs mb-1 ${
-                    y.pmCompliance >= 90 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
-                    y.pmCompliance >= 60 ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
-                    y.pmTotal > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-                  }`}>
-                    {y.pmCompliance}%
-                  </span>
-
-                  <div className="w-full flex items-end justify-center h-full">
-                    <div
-                      style={{ height: `${height}%` }}
-                      className={`w-full rounded-t-lg transition-all flex items-start justify-center pt-1 ${
-                        y.pmCompliance >= 90 ? 'bg-emerald-500 group-hover:bg-emerald-600' :
-                        y.pmCompliance >= 60 ? 'bg-blue-600 group-hover:bg-blue-700' :
-                        y.pmTotal > 0 ? 'bg-amber-500 group-hover:bg-amber-600' : 'bg-slate-200 dark:bg-slate-800'
-                      }`}
-                      title={`Ano ${y.year} - Cumprimento: ${y.pmCompliance}% (${y.pmDone} de ${y.pmTotal} OTs)`}
-                    >
-                      {y.pmTotal > 0 && (
-                        <span className="text-[11px] font-extrabold text-white">
-                          {y.pmDone}/{y.pmTotal}
-                        </span>
-                      )}
+          <div className="overflow-x-auto">
+            <div className="h-64 flex items-stretch gap-1.5 pb-1 border-b border-slate-200 dark:border-slate-800" style={{ minWidth: yearlyStats.length * 44 }}>
+              {yearlyStats.map((y) => {
+                const pct = y.pmCompliance
+                const height = pct === null ? (y.pmOts > 0 ? Math.max(6, Math.round((y.pmOts / maxYrPmOts) * 100)) : 2) : Math.max(4, Math.min(100, pct))
+                const color = pct === null ? 'bg-slate-400 dark:bg-slate-600' : pct >= 90 ? 'bg-emerald-500' : pct >= 60 ? 'bg-blue-600' : 'bg-amber-500'
+                return (
+                  <div key={y.year} className="flex-1 min-w-0 flex flex-col items-center h-full">
+                    <span className={`shrink-0 text-[10px] font-black px-1 rounded mb-1 whitespace-nowrap ${pct === null ? 'text-slate-500' : pct >= 90 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : pct >= 60 ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'}`}>
+                      {pct === null ? (y.pmOts > 0 ? `${y.pmOts} OT` : '—') : `${Math.round(pct)}%`}
+                    </span>
+                    <div className="flex-1 min-h-0 w-full flex items-end justify-center">
+                      <div style={{ height: `${height}%` }} className={`w-full max-w-[40px] rounded-t-md ${color}`}
+                        title={pct === null
+                          ? `${y.year}: sem registo do plano na app — ${y.pmOts} OT de PM feitas`
+                          : `${y.year}: ${y.pmPlansOk} de ${y.pmPlans} planos cumpridos (${pct}%) · ${y.pmDone} de ${y.pmTotal} execuções${y.pmSource === 'excel' ? ' · Excel PL-MAN-01' : ''}`} />
                     </div>
+                    <span className="shrink-0 text-[10px] font-black text-slate-800 dark:text-slate-200 mt-1">{y.year}</span>
                   </div>
-                  <span className="text-xs font-black text-slate-800 dark:text-slate-200 mt-1">{y.year}</span>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
 
           {/* Tabela de Contas Plano de Manutenção Anual */}
@@ -581,35 +579,46 @@ export default function ReportsChartsClient({
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700">
                     <th className="py-1 px-2">Ano</th>
-                    <th className="py-1 px-2 text-center">OTs PM Existentes</th>
-                    <th className="py-1 px-2 text-center">OTs Concluídas</th>
+                    <th className="py-1 px-2 text-center">OT de PM feitas</th>
+                    <th className="py-1 px-2 text-center">Execuções devidas</th>
+                    <th className="py-1 px-2 text-center">Feitas</th>
+                    <th className="py-1 px-2 text-center">Planos</th>
+                    <th className="py-1 px-2 text-center">Cumpridos</th>
                     <th className="py-1 px-2 text-center">% Cumprido</th>
+                    <th className="py-1 px-2 text-center">Fonte</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
                   {yearlyStats.map((y) => (
                     <tr key={y.year} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
                       <td className="py-1 px-2 font-bold text-slate-800 dark:text-slate-200">{y.year}</td>
-                      <td className="py-1 px-2 text-center text-amber-600 dark:text-amber-400 font-bold">{y.pmTotal}</td>
-                      <td className="py-1 px-2 text-center text-emerald-600 dark:text-emerald-400 font-bold">{y.pmDone}</td>
+                      <td className="py-1 px-2 text-center text-slate-600 dark:text-slate-300 font-bold">{y.pmOts}</td>
+                      <td className="py-1 px-2 text-center text-amber-600 dark:text-amber-400 font-bold">{y.pmCompliance === null ? '—' : y.pmTotal}</td>
+                      <td className="py-1 px-2 text-center text-emerald-600 dark:text-emerald-400 font-bold">{y.pmCompliance === null ? '—' : y.pmDone}</td>
+                      <td className="py-1 px-2 text-center text-slate-700 dark:text-slate-200 font-bold">{y.pmCompliance === null ? '—' : y.pmPlans}</td>
+                      <td className="py-1 px-2 text-center text-emerald-600 dark:text-emerald-400 font-bold">{y.pmCompliance === null ? '—' : y.pmPlansOk}</td>
                       <td className="py-1 px-2 text-center font-black">
-                        <span className={y.pmCompliance >= 90 ? 'text-emerald-600 dark:text-emerald-400' : y.pmCompliance >= 60 ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'}>
-                          {y.pmTotal > 0 ? `${y.pmCompliance}%` : '0%'}
-                        </span>
+                        {y.pmCompliance === null ? <span className="text-slate-400" title="Sem execuções do plano registadas na app nesse ano">—</span> : (
+                          <span className={y.pmCompliance >= 90 ? 'text-emerald-600 dark:text-emerald-400' : y.pmCompliance >= 60 ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'}>
+                            {y.pmCompliance}%
+                          </span>
+                        )}
                       </td>
+                      <td className="py-1 px-2 text-center text-slate-500">{y.pmSource === 'excel' ? 'Excel' : y.pmSource === 'app' ? 'App' : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            <HistoricalPmImport saved={historical} />
           </div>
         </div>
       </div>
 
       {/* GRÁFICOS ANUAIS (Comparação por Ano) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Gráfico 3: Pedidos de PI por Ano (Volume Anual) */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div className="min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div>
               <h3 className="font-extrabold text-base text-industrial-blue dark:text-slate-100">
@@ -623,36 +632,27 @@ export default function ReportsChartsClient({
             </div>
           </div>
 
-          <div className="h-64 flex items-end justify-around gap-6 pt-8 pb-2 px-6 border-b border-slate-200 dark:border-slate-800">
-            {yearlyStats.map((y) => {
-              const hReq = y.piRequested > 0 ? Math.max(20, Math.round((y.piRequested / maxYrPI) * 100)) : 15
-              const hComp = y.piCompleted > 0 ? Math.max(20, Math.round((y.piCompleted / maxYrPI) * 100)) : 15
-
-              return (
-                <div key={y.year} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group max-w-[120px]">
-                  <div className="w-full flex items-end justify-center gap-3 h-full">
-                    {/* Pedidas */}
-                    <div
-                      style={{ height: `${hReq}%` }}
-                      className="w-1/2 rounded-t-lg bg-blue-600 group-hover:bg-blue-700 transition-all flex items-start justify-center pt-1"
-                      title={`Ano ${y.year} - PIs Pedidas: ${y.piRequested}`}
-                    >
-                      <span className="text-xs font-extrabold text-white">{y.piRequested}</span>
+          <div className="overflow-x-auto">
+            <div className="h-64 flex items-stretch gap-2 pb-1 border-b border-slate-200 dark:border-slate-800" style={{ minWidth: yearlyStats.length * 56 }}>
+              {yearlyStats.map((y) => {
+                const hReq = y.piRequested > 0 ? Math.max(3, Math.round((y.piRequested / maxYrPI) * 100)) : 0
+                const hComp = y.piCompleted > 0 ? Math.max(3, Math.round((y.piCompleted / maxYrPI) * 100)) : 0
+                return (
+                  <div key={y.year} className="flex-1 min-w-0 flex flex-col items-center h-full">
+                    <div className="flex-1 min-h-0 w-full flex items-end justify-center gap-1 pt-4">
+                      {[{ h: hReq, v: y.piRequested, c: 'bg-blue-600', l: 'Pedidas' }, { h: hComp, v: y.piCompleted, c: 'bg-emerald-500', l: 'Concluídas' }].map((b) => (
+                        <div key={b.l} className="w-1/2 max-w-[28px] h-full flex items-end">
+                          <div style={{ height: `${b.h}%` }} className={`relative w-full rounded-t-md ${b.c}`} title={`Ano ${y.year} - PIs ${b.l}: ${b.v}`}>
+                            <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] font-extrabold text-slate-700 dark:text-slate-200">{b.v}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-
-                    {/* Concluídas */}
-                    <div
-                      style={{ height: `${hComp}%` }}
-                      className="w-1/2 rounded-t-lg bg-emerald-500 group-hover:bg-emerald-600 transition-all flex items-start justify-center pt-1"
-                      title={`Ano ${y.year} - PIs Concluídas: ${y.piCompleted}`}
-                    >
-                      <span className="text-xs font-extrabold text-white">{y.piCompleted}</span>
-                    </div>
+                    <span className="shrink-0 text-[10px] font-black text-slate-800 dark:text-slate-200 mt-1">{y.year}</span>
                   </div>
-                  <span className="text-xs font-black text-slate-800 dark:text-slate-200">{y.year}</span>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
 

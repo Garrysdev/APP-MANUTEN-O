@@ -874,17 +874,15 @@ export async function getTasksForYearStats(companyId: string, year: number): Pro
 export async function getPMComplianceForYear(
   companyId: string,
   year: number
-): Promise<{ total: number; done: number; pct: number }> {
-  const { findPlanLinkedTask } = await import('../pm-status')
-  const [plans, tasks] = await Promise.all([
+): Promise<import('../pm-compliance').PmCompliance> {
+  const { pmComplianceForYear } = await import('../pm-compliance')
+  const { getHistoricalPmKpis } = await import('./historical-kpis-data')
+  const [plans, tasks, historical] = await Promise.all([
     listMaintenancePlans(companyId),
     listTasks(companyId),
+    getHistoricalPmKpis(companyId),
   ])
-
-  const total = plans.length
-  const done = plans.filter((p) => findPlanLinkedTask(p, tasks, year)?.status === 'done').length
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0
-  return { total, done, pct }
+  return pmComplianceForYear(plans, tasks, year, new Date().toISOString().slice(0, 10), historical)
 }
 
 // Lê TODAS as OTs fechadas da empresa (~6000 na UR) — por isso fica em cache (só a
@@ -1542,17 +1540,15 @@ export async function updateTask(
 export async function deleteTask(companyId: string, id: string): Promise<void> {
   const ref = (await adminDbFor(companyId)).collection('tasks').doc(id)
   const doc = await ref.get()
-  if (doc.exists) {
-    if (doc.data()?.companyId !== companyId) throw new Error('Tarefa não encontrada')
-    await ref.delete()
-  } else {
-    // Tarefa só existe na camada de reserva (scripts/import/tasks.json) — nunca foi
-    // escrita no Firestore, por isso não há nada para apagar ali. Grava um marcador
-    // de eliminado (mesmo padrão já usado em deleteMaintenancePlan) para a suprimir
-    // do merge em listTasksCached; sem isto o "delete" falhava sempre com "Tarefa
-    // não encontrada" e a OT reaparecia na lista.
-    await ref.set({ id, companyId, deleted: true, updatedAt: new Date().toISOString() })
-  }
+  const isOwnFallback = isDemoCompany(companyId) && getFallbackTasks().some((t) => t.id === id)
+  // companyId corrompido numa OT da reserva desta empresa conta como dela (mesma regra
+  // de auto-reparação de updateTask).
+  if (doc.exists && doc.data()?.companyId !== companyId && !isOwnFallback) throw new Error('Tarefa não encontrada')
+  // Grava sempre um marcador de eliminado (nunca ref.delete()): uma OT que também existe
+  // na reserva (scripts/import/tasks.json) e já tinha documento voltava logo a aparecer
+  // quando o documento era apagado — o merge com a reserva repunha-a (mesma causa e mesma
+  // correção de deleteMaintenancePlan, 30/10/2026).
+  await ref.set({ id, companyId, deleted: true, updatedAt: new Date().toISOString() })
   await touch('tasks', companyId, [id])
   const before = doc.exists
     ? (doc.data() as Partial<Task>)

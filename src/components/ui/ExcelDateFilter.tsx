@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useRef, useEffect, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { CalendarDays, Filter, X, ChevronDown } from 'lucide-react'
 import Select from '@/components/ui/Select'
 
@@ -41,6 +42,10 @@ export function ExcelColumnDateFilter({
 }: ExcelColumnDateFilterProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+  // O popover abre em document.body com posição fixa: dentro da tabela (overflow-x-auto)
+  // ficava cortado na última coluna (PRÓXIMA do PM).
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const currentYearNum = new Date().getFullYear()
 
   const yearsOptions = useMemo(() => {
@@ -63,6 +68,7 @@ export function ExcelColumnDateFilter({
       const target = event.target as Element
       // A lista dos <Select> do popover abre em document.body (portal) — não é "fora".
       if (target.closest?.('[data-select-list]')) return
+      if (popRef.current?.contains(target)) return
       if (ref.current && !ref.current.contains(target)) {
         setOpen(false)
       }
@@ -74,6 +80,25 @@ export function ExcelColumnDateFilter({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [open])
+
+  useLayoutEffect(() => {
+    if (!open) { setPos(null); return }
+    function place() {
+      const r = ref.current?.getBoundingClientRect()
+      if (!r) return
+      const w = 288 // w-72
+      const h = popRef.current?.offsetHeight ?? 380
+      const margin = 8
+      const left = Math.max(margin, Math.min(r.left, window.innerWidth - w - margin))
+      const below = r.bottom + 4
+      const top = below + h > window.innerHeight - margin && r.top - h - 4 > margin ? r.top - h - 4 : Math.max(margin, Math.min(below, window.innerHeight - h - margin))
+      setPos({ left, top })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
+  }, [open, values])
 
   function getButtonLabel(): string {
     if (values.periodPreset === 'this_year') return 'Este Ano'
@@ -210,8 +235,9 @@ export function ExcelColumnDateFilter({
       </button>
 
       {/* Popover / Dropdown ao Clicar na Célula */}
-      {open && (
-        <div className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl p-3 shadow-2xl z-50 text-xs space-y-3 normal-case tracking-normal">
+      {open && typeof document !== 'undefined' && createPortal(
+        <div ref={popRef} style={{ position: 'fixed', left: pos?.left ?? -9999, top: pos?.top ?? 0 }}
+          className="w-72 max-h-[calc(100vh-16px)] overflow-y-auto text-left font-normal bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl p-3 shadow-2xl z-[300] text-xs space-y-3 normal-case tracking-normal">
           <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 font-bold text-slate-800 dark:text-slate-200">
             <span className="flex items-center gap-1.5">
               <Filter className="h-3.5 w-3.5 text-industrial-blue dark:text-sky-400" />
@@ -340,7 +366,8 @@ export function ExcelColumnDateFilter({
               Aplicar
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

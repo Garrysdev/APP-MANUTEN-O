@@ -6,6 +6,7 @@ import type { Task } from '@/types/models'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { getYearTasksAction, getPMComplianceAction } from './actions'
 import Select from '@/components/ui/Select'
+import type { PmCompliance } from '@/lib/pm-compliance'
 
 const EARLIEST_YEAR = 2017
 
@@ -27,7 +28,7 @@ export default function DashboardKpiCards({
   openTasks: Task[]
   initialYear: number
   initialYearTasks: Task[]
-  initialPMCompliance: { total: number; done: number; pct: number }
+  initialPMCompliance: PmCompliance
 }) {
   const currentYear = new Date().getFullYear()
   const [year, setYear] = useState(initialYear)
@@ -63,7 +64,7 @@ export default function DashboardKpiCards({
 
   const pmTotal = pmCompliance.total
   const pmDone = pmCompliance.done
-  const pmCompliancePct = pmCompliance.pct
+  const pmCompliancePct = pmCompliance.pct === null ? '—' : `${pmCompliance.pct}%`
 
   const piTasks = useMemo(() => yearTasks.filter(isPITask), [yearTasks])
   const piRequested = piTasks.length
@@ -156,17 +157,21 @@ export default function DashboardKpiCards({
               Cumprimento do Plano de Manutenção (PM)
             </span>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black text-white">{pmCompliancePct}%</span>
+              <span className="text-4xl font-black text-white">{pmCompliancePct}</span>
               <span className="text-xs font-bold text-slate-300">
-                ({pmDone} de {pmTotal} Planos de Manutenção)
+                {pmCompliance.pct === null ? '' : `(${pmCompliance.plansOk} de ${pmCompliance.plans} planos cumpridos · ${pmDone} de ${pmTotal} execuções)`}
               </span>
             </div>
             <p className="text-[11px] text-slate-300 font-medium">
-              Planos de Manutenção com a OT de {year} concluída, do total de planos existentes ({pmTotal}).
+              {pmCompliance.pct === null
+                ? `Sem registo do plano em ${year} — importa o PL-MAN-01 desse ano em Estatísticas e Gráficos.`
+                : pmCompliance.source === 'excel'
+                  ? `KPI da folha PL-MAN-01 de ${year}: planos que fizeram todas as intervenções devidas.`
+                  : `Planos sem nenhuma execução em atraso em ${year}, dos que tinham execuções previstas até hoje (inclui as concluídas em bloco).`}
             </p>
           </div>
           <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center font-black text-xl border border-white/20 shrink-0 text-amber-400">
-            {pmCompliancePct}%
+            {pmCompliance.pct === null ? '—' : `${Math.round(pmCompliance.pct)}%`}
           </div>
         </div>
 

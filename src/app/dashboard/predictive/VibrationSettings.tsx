@@ -36,8 +36,8 @@ export default function VibrationSettings({
     if (res.ok) { setMsg({ ok: true, text: 'Guardado.' }); onSaved(v) } else setMsg({ ok: false, text: res.error })
   }
 
-  const num = (k: keyof VibLimits) => (
-    <input type="number" step="0.1" min="0" className={inputCls} value={limits[k]}
+  const num = (k: keyof VibLimits, placeholder?: string) => (
+    <input type="number" step="0.1" min="0" className={inputCls} value={limits[k] || (placeholder ? '' : 0)} placeholder={placeholder}
       onChange={(e) => setLimits((l) => ({ ...l, [k]: parseFloat(e.target.value) || 0 }))} />
   )
 
@@ -58,11 +58,11 @@ export default function VibrationSettings({
 
       <div>
         <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Limites de alarme (ISO 10816-3, Grupo 2: 15–300 kW)</p>
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <div>
             <label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-0.5">Base de fixação</label>
             <Select className={inputCls} value={base} sort={false}
-              onChange={(e) => { const b = e.target.value as 'rigid' | 'flexible'; setBase(b); setLimits((l) => ({ ...ISO_PRESETS[b], temp: l.temp })) }}>
+              onChange={(e) => { const b = e.target.value as 'rigid' | 'flexible'; setBase(b); setLimits((l) => ({ ...ISO_PRESETS[b], temp: l.temp, current: l.current })) }}>
               <option value="rigid">Rígida</option>
               <option value="flexible">Flexível</option>
             </Select>
@@ -71,6 +71,7 @@ export default function VibrationSettings({
           <div><label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-0.5">B/C — alerta (mm/s)</label>{num('bc')}</div>
           <div><label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-0.5">C/D — perigo (mm/s)</label>{num('cd')}</div>
           <div><label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-0.5">Temperatura (°C)</label>{num('temp')}</div>
+          <div><label className="block text-[11px] text-gray-500 dark:text-slate-400 mb-0.5">Corrente do motor (A)</label>{num('current', 'sem alarme')}</div>
         </div>
       </div>
 

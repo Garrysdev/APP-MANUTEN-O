@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { MessageSquare, MessageSquareOff } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceArea, ReferenceLine } from 'recharts'
 import type { ChartPoint } from '@/lib/vibration-view'
 
@@ -22,6 +23,9 @@ export interface ChartView {
   hidden: Set<string>
   onToggle: (key: string) => void
   showMax: boolean
+  /** Caixa com o resumo das leituras do instante sob o rato. */
+  showTooltip: boolean
+  onToggleTooltip: () => void
 }
 
 export default function MetricChart({
@@ -77,11 +81,19 @@ export default function MetricChart({
 
   return (
     <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-      <div className="mb-3">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">{title}{unit ? ` (${unit})` : ''}</h3>
-        {subtitle && <p className="text-[11px] text-gray-500 dark:text-slate-400">{subtitle}</p>}
+      <div className="mb-3 flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">{title}{unit ? ` (${unit})` : ''}</h3>
+          {subtitle && <p className="text-[11px] text-gray-500 dark:text-slate-400">{subtitle}</p>}
+        </div>
+        <button type="button" onClick={view.onToggleTooltip}
+          title={view.showTooltip ? 'Esconder a caixa com as leituras ao passar o rato (todos os gráficos)' : 'Mostrar a caixa com as leituras ao passar o rato (todos os gráficos)'}
+          className={`shrink-0 inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold ${view.showTooltip ? 'border-[#2E86C1] bg-[#2E86C1]/10 text-[#2E86C1]' : 'border-slate-300 dark:border-slate-700 text-gray-500 dark:text-slate-400'}`}>
+          {view.showTooltip ? <MessageSquare className="h-3.5 w-3.5" /> : <MessageSquareOff className="h-3.5 w-3.5" />} Resumo
+        </button>
       </div>
-      <div ref={boxRef} className="h-64 select-none cursor-crosshair" title="Arrasta sobre o gráfico para ampliar essa zona"
+      {/* Cursor de lupa sobre o gráfico; de redimensionar enquanto se arrasta a zona a ampliar. */}
+      <div ref={boxRef} className={`h-64 select-none ${sel ? '[&_.recharts-surface]:!cursor-col-resize' : '[&_.recharts-surface]:!cursor-zoom-in'}`} title="Arrasta sobre o gráfico para ampliar essa zona"
         onMouseDown={(e) => { if (e.button !== 0) return; const t = tAt(e.clientX); if (t !== null) setSelBoth({ a: t, b: t }) }}
         onMouseMove={(e) => { const cur = selRef.current; if (!cur) return; const t = tAt(e.clientX); if (t !== null) setSelBoth({ a: cur.a, b: t }) }}
         onMouseUp={() => {
@@ -113,7 +125,7 @@ export default function MetricChart({
             {rightSeries.length > 0 && (
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} label={rightUnit ? { value: rightUnit, angle: 90, position: 'insideRight', fontSize: 10 } : undefined} />
             )}
-            <Tooltip
+            {view.showTooltip && <Tooltip
               labelFormatter={(t) => new Date(Number(t)).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' })}
               formatter={(v, name) => {
                 const right = rightSeries.find((s) => s.label === name)
@@ -121,7 +133,7 @@ export default function MetricChart({
                 return [`${v}${u ? ` ${u}` : ''}`, name]
               }}
               contentStyle={{ fontSize: 12 }}
-            />
+            />}
             <Legend
               wrapperStyle={{ fontSize: 11, cursor: 'pointer' }}
               onClick={(e) => { const k = String((e as { dataKey?: unknown }).dataKey ?? ''); if (k) view.onToggle(k.replace(/_max$/, '')) }}
