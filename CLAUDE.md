@@ -88,14 +88,14 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   bloco, editar/eliminar o plano e cada OT). O editor do plano abre pelo botão
   "Editar plano" da ficha. Sem filtro "No/Fora do Calendário" (retirado a pedido).
 - **Cumprimento do PM (30/10/2026, definição do Rui)**: uma só fórmula em
-  `src/lib/pm-compliance.ts` (Dashboard e Estatísticas): **OT de PM concluídas até
-  hoje ÷ OT de PM devidas até ao fim do ano** (devidas = concluídas + a OT atual e as
-  seguintes pela periodicidade que ainda caem no ano). A conclusão em bloco até 31/10
-  foi só para a implementação — daqui em diante concluem-se uma a uma. Anos antes da
-  app usam as folhas PL-MAN-01 importadas (realizadas, no máx. as devidas de cada
-  plano ÷ devidas; Estatísticas → "KPI do PM dos anos anteriores",
-  `historical_kpis/<companyId>`, leitor `src/lib/historical-kpis.ts`). Nunca dividir
-  pelo nº de planos de hoje (dava ~1% nos anos antigos).
+  `src/lib/pm-compliance.ts` (Dashboard e Estatísticas): **cada plano é UMA OT de
+  PM do ano; % = planos com a OT concluída no ano ÷ nº de planos** (2026: 586 de
+  601). Nunca somar execuções (semanais/mensais contam várias vezes — deu "3217 de
+  3825", errado) nem dividir anos antigos pelos planos de hoje (dava ~1%). A
+  conclusão em bloco até 31/10 foi só para a implementação — daqui em diante
+  concluem-se uma a uma. Anos antes da app: KPI das folhas PL-MAN-01 importadas
+  (planos cumpridos ÷ planos; Estatísticas → "KPI do PM dos anos anteriores",
+  `historical_kpis/<companyId>`, leitor `src/lib/historical-kpis.ts`).
 - **Histórico de OT do Excel**: Estatísticas → "Importar histórico de OT de um ano"
   (FR-MAN-09, folha UR, `src/lib/history-import.ts` + `importHistoricalTasks`):
   salta as que já existem (data+área+TAG+avaria), lê a cópia materializada uma vez e
