@@ -109,6 +109,20 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   redimensionar no zoom. Caixa de Alertas por cima dos gráficos, com a
   hora do pico e a temperatura e a corrente do agitador nesse momento (ajuda a
   ver a causa). A corrente **não** dá alertas (pedido do Rui).
+- **Bianual = paragens (30/10/2026)**: as OT de PM Bianuais fazem-se nas paragens —
+  8 de agosto e 21 de dezembro (`nextStopDate`/`nextPlanDate` em `pm-schedule.ts`).
+  Semestral continua de 6 em 6 meses. As 228 Bianuais que estavam em fev/2027 passaram
+  para 21/12/2026 (`/api/pm/bianual-stops`, acerto único).
+- **OT STP (paragem)**: o formulário pede "Data da paragem (Calendário)" (`calendarDate`)
+  e o Calendário mostra-as nessa data. Eliminar no Calendário: OT normal → elimina a OT;
+  OT de PM → elimina o plano (senão nascia logo outra OT atual na mesma data).
+- **PM**: filtro "Só HACCP" (nome do equipamento com HACCP); a tabela fica sempre com
+  cabeçalhos/filtros mesmo sem resultados.
+- **Documentação / Base de Conhecimento IA retirada (30/10/2026)**: era só demonstração.
+  A IA está na Gestão Documental ("Perguntar à IA", `askDocumentsAction`, plano Business+),
+  sobre os documentos reais; `/dashboard/knowledge` só redireciona. Sem GEMINI/OPENAI key
+  responde com os documentos encontrados e um excerto.
+- **Setas de voltar** (`BackButton`): voltam à página anterior, não a uma lista fixa.
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso
   acontecer é bug (ver secção de bugs conhecidos abaixo).
