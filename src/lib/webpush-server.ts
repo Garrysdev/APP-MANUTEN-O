@@ -4,13 +4,17 @@ let vapidConfigured = false
 
 // Configuração lazy: só ocorre no primeiro envio, em runtime — nunca no import/build.
 // Se faltarem as chaves VAPID, devolve false sem quebrar (o build não depende disto).
+// As variáveis gravadas no Vercel a partir do PowerShell trazem um BOM (U+FEFF) no início —
+// "﻿mailto:..." deixava de ser um URL válido e nenhum push era enviado.
+const cleanEnv = (v?: string) => (v || '').replace(/^﻿/, '').trim()
+
 function ensureVapid(): boolean {
   if (vapidConfigured) return true
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-  const privateKey = process.env.VAPID_PRIVATE_KEY
+  const publicKey = cleanEnv(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY)
+  const privateKey = cleanEnv(process.env.VAPID_PRIVATE_KEY)
   if (!publicKey || !privateKey) return false
   webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT || 'mailto:admin@rgmaintenance.pt',
+    cleanEnv(process.env.VAPID_SUBJECT) || 'mailto:admin@rgmaintenance.pt',
     publicKey,
     privateKey
   )

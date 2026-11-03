@@ -63,10 +63,10 @@ export function useProjectStatusFilter() {
 type Ctl = ReturnType<typeof useProjectStatusFilter>
 
 /** Cartões do topo — contam sobre os outros filtros (não sobre o estado), e clicar filtra. */
-export function ProjectKpiCards({ base, ctl }: { base: Task[]; ctl: Ctl }) {
+export function ProjectKpiCards({ base, ctl, inProgressLabel = 'Em Progresso' }: { base: Task[]; ctl: Ctl; inProgressLabel?: string }) {
   const cards: { k: CardKey; label: string; value: number; tone: string; num: string; Icon: typeof Play; extra?: string }[] = [
     { k: 'all', label: 'Total Projetos', value: base.length, tone: 'text-slate-500', num: 'text-slate-900 dark:text-slate-100', Icon: FolderKanban },
-    { k: 'in_progress', label: 'Em Progresso', value: base.filter((t) => t.status === 'in_progress').length, tone: 'text-teal-600', num: 'text-teal-700 dark:text-teal-400', Icon: Play },
+    { k: 'in_progress', label: inProgressLabel, value: base.filter((t) => t.status === 'in_progress').length, tone: 'text-teal-600', num: 'text-teal-700 dark:text-teal-400', Icon: Play },
     { k: 'overdue', label: 'Em Risco / Atrasados', value: base.filter(isOverdue).length, tone: 'text-red-600', num: 'text-red-700 dark:text-red-400', Icon: ShieldAlert },
     { k: 'done', label: 'Concluídos', value: base.filter((t) => t.status === 'done').length, tone: 'text-green-600', num: 'text-green-700 dark:text-green-400', Icon: CheckCircle2 },
     {

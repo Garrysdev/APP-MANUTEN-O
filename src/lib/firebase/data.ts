@@ -740,15 +740,15 @@ async function fetchTasksList(companyId: string, limitCount: number, includeComp
         )
         fallbacks = fallbacks.filter((f) => !(closedIds.has(f.id) && f.status !== 'done' && f.status !== 'cancelled'))
       }
-      let result: Task[]
-      if (dbDocs.length === 0) {
-        result = fallbacks
-      } else {
-        const dbMap = new Map(dbDocs.map((d) => [d.id, d]))
-        const mergedFallbacks = fallbacks.map((f) => dbMap.get(f.id) || f)
-        const customDocs = dbDocs.filter((d) => !fallbacks.some((f) => f.id === d.id))
-        result = [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      }
+      // A versão gravada de uma OT da reserva vem de TODOS os documentos (já em memória),
+      // não só das `limitCount` mais recentes: um Projeto/OT antigo (ex. de 2021) editado
+      // ficava fora do corte e a lista mostrava a cópia da reserva — parecia que nada
+      // gravava (datas, estado, arrastar no Gantt).
+      const savedById = new Map(allDocs.filter((d) => !d.deleted).map((d) => [d.id, d]))
+      const fallbackIds = new Set(fallbacks.map((f) => f.id))
+      const mergedFallbacks = fallbacks.map((f) => savedById.get(f.id) || f)
+      const customDocs = dbDocs.filter((d) => !fallbackIds.has(d.id))
+      const result: Task[] = [...customDocs, ...mergedFallbacks].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
       lastGoodTasksByKey.set(tasksCacheKey(companyId, includeCompleted), { data: result, savedAt: Date.now() })
       return result
     } catch (err: any) {

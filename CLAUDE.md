@@ -130,6 +130,13 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   vazios), Em Curso carimba Início, Pendente limpa as datas — o estado é derivado das datas e
   antes "Concluída" sem Fim voltava a Pendente ao gravar. No Calendário um Projeto abre com o
   formulário/ações dos Projetos; há seletor de mês, ano e "ir para data".
+- **Gantt (03/11/2026)**: Em curso = barra do início real até à Data Limite (ou hoje, se passou);
+  Concluído = início→fim reais; por iniciar = só marco na Data Limite (`barRange` em GanttClient).
+  Arrastar um Em curso muda a Data Limite; um marco muda para a data largada. Coluna Descrição em
+  vez de Técnico; cartão "Em Curso".
+- **listTasks e OT antigas da reserva**: a versão gravada vem de todos os documentos, não só das
+  2000 mais recentes — antes uma OT/Projeto antigo (ex. 2021) editado mostrava a cópia da reserva
+  e parecia não gravar.
 - **Setas de voltar** (`BackButton`): voltam à página anterior, não a uma lista fixa.
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso

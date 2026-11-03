@@ -37,6 +37,33 @@ type UserRef = Ref & {
 }
 type TimeScale = 'week' | 'month' | 'year'
 
+// Largura da coluna da esquerda (Área, TAG, Dur., Início, Fim, Descrição).
+const LEFT_W = 480
+
+/**
+ * Período desenhado de cada projeto (pedido do Rui, 03/11/2026):
+ * - Em curso: toda a extensão, do início real até à Data Limite (ou até hoje, se já passou).
+ * - Concluído: do início ao fim reais.
+ * - Ainda não iniciado (Pendente/Prazo/Cancelado): só um marco na Data Limite.
+ */
+function barRange(t: Task): { s: string; e: string; started: boolean } {
+  const d = (v?: string | null) => (v ? v.slice(0, 10) : '')
+  const today = new Date().toISOString().slice(0, 10)
+  if (t.status === 'in_progress') {
+    const s = d(t.startedAt) || d(t.plannedStartDate) || today
+    const due = d(t.dueDate) || today
+    const e = due < today ? today : due
+    return { s, e: e < s ? s : e, started: true }
+  }
+  if (t.status === 'done') {
+    const s = d(t.startedAt) || d(t.plannedStartDate) || d(t.createdAt) || today
+    const e = d(t.completedAt) || d(t.dueDate) || s
+    return { s, e: e < s ? s : e, started: true }
+  }
+  const m = d(t.dueDate) || d(t.plannedStartDate) || d(t.createdAt) || today
+  return { s: m, e: m, started: false }
+}
+
 function addDaysToDateStr(dateStr: string, days: number): string {
   const d = new Date(dateStr.slice(0, 10) + 'T12:00:00')
   d.setDate(d.getDate() + days)
@@ -126,9 +153,11 @@ function GanttChartView({
   let minTime = defaultStart.getTime()
   let maxTime = defaultEnd.getTime()
 
+  // A grelha estende-se sempre para mostrar cada projeto filtrado por inteiro.
   tasks.forEach((t) => {
-    const sDate = t.plannedStartDate ? new Date(t.plannedStartDate.slice(0, 10) + 'T00:00:00').getTime() : (t.createdAt ? new Date(t.createdAt.slice(0, 10) + 'T00:00:00').getTime() : minTime)
-    const eDate = t.dueDate ? new Date(t.dueDate.slice(0, 10) + 'T23:59:59').getTime() : sDate + 7 * 86400000
+    const r = barRange(t)
+    const sDate = new Date(r.s + 'T00:00:00').getTime()
+    const eDate = new Date(r.e + 'T23:59:59').getTime()
     if (!dateStartFilter && sDate < minTime) minTime = sDate
     if (!dateEndFilter && eDate > maxTime) maxTime = eDate
   })
@@ -250,12 +279,12 @@ function GanttChartView({
 
   const minGridWidth = useMemo(() => {
     if (timeScale === 'week') {
-      return Math.max(1200, 380 + subHeaders.length * 42)
+      return Math.max(1200, LEFT_W + subHeaders.length * 42)
     }
     if (timeScale === 'month') {
-      return Math.max(1200, 380 + subHeaders.length * 85)
+      return Math.max(1200, LEFT_W + subHeaders.length * 85)
     }
-    return Math.max(1200, 380 + subHeaders.length * 60)
+    return Math.max(1200, LEFT_W + subHeaders.length * 60)
   }, [timeScale, subHeaders.length])
 
   const ROW_HEIGHT = 40
@@ -357,13 +386,13 @@ function GanttChartView({
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span>💡 Arraste o centro da barra para mover ou as extremidades para esticar as datas.</span>
+            <span>💡 Em curso: do início à Data Limite (arraste para mudar a Data Limite). Por iniciar: marco na Data Limite (arraste para outra data).</span>
           </div>
         </div>
         <div className="overflow-x-auto custom-scrollbar">
           <div style={{ minWidth: `${minGridWidth}px` }}>
-            <div className="grid grid-cols-[380px_1fr] border-b border-slate-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-800/90 text-xs font-bold text-slate-700 dark:text-slate-200">
-              <div className="grid grid-cols-[80px_90px_40px_60px_60px_50px] border-r border-slate-200 dark:border-slate-700 p-2 items-center text-[10px] uppercase tracking-wider font-mono">
+            <div className="grid grid-cols-[480px_1fr] border-b border-slate-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-800/90 text-xs font-bold text-slate-700 dark:text-slate-200">
+              <div className="grid grid-cols-[70px_80px_36px_52px_52px_1fr] gap-x-1 border-r border-slate-200 dark:border-slate-700 p-2 items-center text-[10px] uppercase tracking-wider font-mono">
                 <span className="truncate cursor-pointer hover:text-safety-orange flex items-center gap-0.5" title="Ordenar por Área" onClick={() => toggleSort?.('area')}>
                   Área {sortKey === 'area' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </span>
@@ -379,8 +408,8 @@ function GanttChartView({
                 <span className="text-center cursor-pointer hover:text-safety-orange" title="Ordenar por Data de Fim" onClick={() => toggleSort?.('dueDate')}>
                   Fim{sortKey === 'dueDate' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </span>
-                <span className="text-center cursor-pointer hover:text-safety-orange" title="Ordenar por Técnico Alocado" onClick={() => toggleSort?.('assignee')}>
-                  Técnico{sortKey === 'assignee' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                <span className="truncate cursor-pointer hover:text-safety-orange" title="Ordenar por Descrição" onClick={() => toggleSort?.('title')}>
+                  Descrição{sortKey === 'title' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                 </span>
               </div>
               <div className="flex flex-col">
@@ -410,12 +439,14 @@ function GanttChartView({
                 <div className="p-8 text-center text-slate-400">Sem projetos no filtro selecionado.</div>
               ) : (
                 tasks.map((t, idx) => {
-                  const sDateStr = t.plannedStartDate ? t.plannedStartDate.slice(0, 10) : (t.createdAt ? t.createdAt.slice(0, 10) : '')
-                  const eDateStr = t.dueDate ? t.dueDate.slice(0, 10) : sDateStr
-                  const sDate = sDateStr ? new Date(sDateStr + 'T00:00:00') : new Date()
-                  const eDate = eDateStr ? new Date(eDateStr + 'T23:59:59') : new Date(sDate.getTime() + 7 * 86400000)
+                  const range = barRange(t)
+                  const sDateStr = range.s
+                  const eDateStr = range.e
+                  const sDate = new Date(sDateStr + 'T00:00:00')
+                  const eDate = new Date(eDateStr + 'T23:59:59')
+                  const isInProgress = t.status === 'in_progress'
 
-                  const durationDays = getDurationInDays(sDateStr || '2026-08-08', eDateStr || sDateStr || '2026-08-08')
+                  const durationDays = getDurationInDays(sDateStr, eDateStr)
 
                   const leftPercent = Math.max(0, Math.min(100, ((sDate.getTime() - gridStartMs) / gridTotalMs) * 100))
                   const widthPercent = Math.max(1.5, Math.min(100 - leftPercent, ((eDate.getTime() - sDate.getTime()) / gridTotalMs) * 100))
@@ -443,10 +474,10 @@ function GanttChartView({
                   const barLabel = tagStr ? `${tagStr} — ${t.title}` : t.title
 
                   return (
-                    <div key={t.id} className="grid grid-cols-[380px_1fr] hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors items-center group h-10">
+                    <div key={t.id} className="grid grid-cols-[480px_1fr] hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors items-center group h-10">
                       <div
                         onClick={() => onEdit(t)}
-                        className="grid grid-cols-[80px_90px_40px_60px_60px_50px] border-r border-slate-200 dark:border-slate-800 p-2 items-center font-mono cursor-pointer"
+                        className="grid grid-cols-[70px_80px_36px_52px_52px_1fr] gap-x-1 border-r border-slate-200 dark:border-slate-800 p-2 items-center font-mono cursor-pointer"
                         title="Clique para abrir e ver/editar a OT"
                       >
                         <div className="flex items-center gap-1 overflow-hidden" title={`Área: ${areaStr}`}>
@@ -471,15 +502,9 @@ function GanttChartView({
                         <span className="text-center font-bold text-slate-600 text-[10px]">{durationDays}d</span>
                         <span className="text-center text-[10px] text-slate-500">{sDate.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })}</span>
                         <span className="text-center text-[10px] text-slate-500">{eDate.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })}</span>
-                        <div className="flex justify-center" title={userName(t.assignedTo)}>
-                          {assignedUser ? (
-                            <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 truncate max-w-[45px]">
-                              {assignedUser.abbreviation || assignedUser.name.slice(0, 5)}
-                            </span>
-                          ) : (
-                            <span className="text-slate-300 text-[10px]">—</span>
-                          )}
-                        </div>
+                        <span className="truncate font-sans font-semibold text-[10px] text-slate-800 dark:text-slate-200" title={taskDesc || t.title}>
+                          {taskDesc || t.title}
+                        </span>
                       </div>
                       <div className="relative h-10 flex items-center px-1">
                         <div className="absolute inset-0 grid grid-flow-col auto-cols-fr">
@@ -507,6 +532,9 @@ function GanttChartView({
                                     const newDueStr = d.endDateStr || d.dateStr
                                     const newStartStr = anchorStart && newDueStr < anchorStart ? newDueStr : (anchorStart || newDueStr)
                                     onRescheduleTask(taskId, newStartStr, newDueStr)
+                                  } else if (actionType === 'move-due') {
+                                    const keepStart = anchorStart || d.dateStr
+                                    onRescheduleTask(taskId, keepStart > d.dateStr ? d.dateStr : keepStart, d.endDateStr || d.dateStr)
                                   } else {
                                     const newStartDate = new Date(d.dateStr + 'T09:00:00')
                                     const newEndDate = new Date(newStartDate.getTime() + (currentDuration - 1) * 86400000)
@@ -528,16 +556,17 @@ function GanttChartView({
                           onDragStart={(e) => {
                             e.stopPropagation()
                             e.dataTransfer.setData('taskId', t.id)
-                            e.dataTransfer.setData('actionType', 'move')
-                            e.dataTransfer.setData('durationDays', String(durationDays))
+                            e.dataTransfer.setData('actionType', isInProgress ? 'move-due' : 'move')
+                            e.dataTransfer.setData('anchorStart', (t.plannedStartDate || sDateStr).slice(0, 10))
+                            e.dataTransfer.setData('durationDays', String(range.started ? durationDays : 1))
                             e.dataTransfer.effectAllowed = 'move'
                           }}
                           style={{ left: `${leftPercent}%`, width: `${widthPercent}%` }}
                           className={`absolute h-6 rounded shadow-sm border flex items-center justify-between px-1 text-[10px] font-bold z-10 cursor-grab active:cursor-grabbing transition-all hover:scale-y-105 hover:shadow-md select-none group/bar ${barClass}`}
                           onClick={() => onEdit(t)}
-                          title={`${tooltipText}\n\nEstado: ${STATUS_LABELS[t.status]}\nTécnico: ${userName(t.assignedTo)}\nInício: ${sDate.toLocaleDateString('pt-PT')} | Fim: ${eDate.toLocaleDateString('pt-PT')}`}
+                          title={`${tooltipText}\n\nEstado: ${STATUS_LABELS[t.status]}\nTécnico: ${userName(t.assignedTo)}\n${range.started ? `Início: ${sDate.toLocaleDateString('pt-PT')} | Fim: ${eDate.toLocaleDateString('pt-PT')}` : `Data Limite: ${eDate.toLocaleDateString('pt-PT')} (aparece por inteiro quando for iniciado)`}`}
                         >
-                          <div
+                          {isInProgress && !t.startedAt && <div
                             draggable
                             onDragStart={(e) => {
                               e.stopPropagation()
@@ -550,7 +579,7 @@ function GanttChartView({
                             title="Arrastar para alterar início (esticar)"
                           >
                             <span className="w-0.5 h-3 bg-white/70 rounded-full" />
-                          </div>
+                          </div>}
                           <div className="flex items-center justify-between w-full truncate gap-1 px-1 pointer-events-none">
                             <span className="truncate flex items-center gap-1">
                               <GripHorizontal className="h-3 w-3 opacity-60 shrink-0" />
@@ -562,20 +591,20 @@ function GanttChartView({
                               </span>
                             )}
                           </div>
-                          <div
+                          {isInProgress && <div
                             draggable
                             onDragStart={(e) => {
                               e.stopPropagation()
                               e.dataTransfer.setData('taskId', t.id)
                               e.dataTransfer.setData('actionType', 'resize-end')
-                              e.dataTransfer.setData('anchorStart', sDateStr)
+                              e.dataTransfer.setData('anchorStart', (t.plannedStartDate || sDateStr).slice(0, 10))
                               e.dataTransfer.effectAllowed = 'move'
                             }}
                             className="absolute -right-1 top-0 bottom-0 w-2.5 cursor-e-resize bg-black/10 hover:bg-black/30 dark:bg-white/10 dark:hover:bg-white/40 rounded-r transition-colors z-20 flex items-center justify-center opacity-0 group-hover/bar:opacity-100"
-                            title="Arrastar para alterar fim (esticar)"
+                            title="Arrastar para alterar a Data Limite (esticar)"
                           >
                             <span className="w-0.5 h-3 bg-white/70 rounded-full" />
-                          </div>
+                          </div>}
                         </div>
                       </div>
                     </div>
@@ -587,7 +616,7 @@ function GanttChartView({
                   viewBox={`0 0 1000 ${tasks.length * ROW_HEIGHT}`}
                   preserveAspectRatio="none"
                   className="absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible"
-                  style={{ left: '380px', width: 'calc(100% - 380px)' }}
+                  style={{ left: `${LEFT_W}px`, width: `calc(100% - ${LEFT_W}px)` }}
                 >
                   <defs>
                     <marker
@@ -966,7 +995,7 @@ export default function GanttClient({
         </div>
       </div>
 
-      <ProjectKpiCards base={base} ctl={statusCtl} />
+      <ProjectKpiCards base={base} ctl={statusCtl} inProgressLabel="Em Curso" />
 
       <div className="flex flex-col gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="flex items-center justify-between gap-3 flex-wrap">
