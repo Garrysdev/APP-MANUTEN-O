@@ -119,6 +119,7 @@ export default function TaskSummaryModal({
   const [photos, setPhotos] = useState<string[]>(existingPhotos)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   const formattedId = format3DigitId(task.id, 0, task.otNumber)
 
@@ -178,7 +179,7 @@ export default function TaskSummaryModal({
       alert('Erro ao carregar fotografia.')
     } finally {
       setUploadingPhoto(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      e.target.value = ''
     }
   }
 
@@ -600,20 +601,42 @@ export default function TaskSummaryModal({
                 Registo Fotográfico ({photos.length})
               </label>
 
-              <button
-                type="button"
-                disabled={uploadingPhoto}
-                onClick={() => fileInputRef.current?.click()}
-                className="btn-secondary text-xs py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 cursor-pointer text-industrial-blue dark:text-sky-400"
-              >
-                <Camera className="h-3.5 w-3.5" />
-                <span>{uploadingPhoto ? 'A carregar foto...' : 'Tirar / Anexar Foto'}</span>
-              </button>
+              {uploadingPhoto ? (
+                <span className="text-xs font-bold text-industrial-blue dark:text-sky-400">A carregar foto...</span>
+              ) : (
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="btn-secondary text-xs py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 cursor-pointer text-industrial-blue dark:text-sky-400"
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                    <span>Tirar Foto</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="btn-secondary text-xs py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 cursor-pointer text-industrial-blue dark:text-sky-400"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    <span>Anexar Foto</span>
+                  </button>
+                </div>
+              )}
+              {/* Câmara direta (capture) e galeria/ficheiros (sem capture) — com capture o
+                  telemóvel abre logo a câmara e não deixa escolher uma foto já existente. */}
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoUpload}
+                className="hidden"
+              />
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 onChange={handlePhotoUpload}
                 className="hidden"
               />
