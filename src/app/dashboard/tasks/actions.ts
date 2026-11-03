@@ -133,7 +133,8 @@ function parseTask(formData: FormData) {
 
   const tag = String(formData.get('tag') ?? '').trim() || null
   const area = String(formData.get('area') ?? '').trim() || null
-  const photoUrl = String(formData.get('photoUrl') ?? '').trim() || null
+  // Só endereços reais (https): um "blob:" é a pré-visualização local do telemóvel e não abre noutro lado.
+  const photoUrl = /^https:\/\//.test(String(formData.get('photoUrl') ?? '').trim()) ? String(formData.get('photoUrl')).trim() : null
   const periodicidade = String(formData.get('periodicidade') ?? 'mensal').trim() || null
   const addToMaintenancePlan = formData.get('addToMaintenancePlan') === 'true' || formData.get('addToMaintenancePlan') === 'on'
 

@@ -509,9 +509,17 @@ export default function CreateTaskModal({
           formData.set('photoUrl', url)
         } catch (err) {
           console.error('Erro no upload de foto da OT:', err)
-          // Upload falhou: mantém a foto que já existia em vez de a apagar.
-          formData.set('photoUrl', editingTask?.photoUrl ?? '')
+          // Não gravar sem a foto sem avisar (antes mantinha a antiga em silêncio e a foto
+          // nova perdia-se sem o utilizador saber).
+          setBusy(false)
+          setError(`⚠️ A foto não foi carregada: ${err instanceof Error ? err.message : 'erro no envio'} Nada foi gravado — tenta de novo.`)
+          return
         }
+      } else if (photoPreview?.startsWith('blob:')) {
+        // Pré-visualização local sem ficheiro para enviar: nunca gravar um endereço blob:.
+        setBusy(false)
+        setError('⚠️ A foto escolhida perdeu-se. Volta a escolhê-la antes de gravar.')
+        return
       } else {
         // Sem ficheiro novo escolhido: submete sempre o que está em photoPreview (a foto já
         // existente no registo em edição, OU vinda de initialPhotoUrl — ex. partilha de foto
@@ -635,7 +643,8 @@ export default function CreateTaskModal({
     setStartedAt('')
     setCompletedAt('')
     setCreatedAtDate(new Date().toISOString().slice(0, 10))
-    setPhotoFile(null)
+    // A foto escolhida antes de "Duplicar" (ainda por enviar) segue para a cópia: limpar o
+    // ficheiro aqui deixava só a pré-visualização blob: e a OT nova gravava sem imagem.
     setDuplicating(true)
     setError('')
   }
@@ -643,6 +652,7 @@ export default function CreateTaskModal({
   function handleCancelDuplicate() {
     if (!editingTask) return
     applyTaskToForm(editingTask)
+    setPhotoFile(null)
     setDuplicating(false)
     setError('')
   }
