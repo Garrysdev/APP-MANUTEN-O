@@ -6,6 +6,7 @@ import { LanguageProvider } from '@/components/providers/LanguageProvider'
 import MustChangePasswordBanner from '@/components/ui/MustChangePasswordBanner'
 import RefreshOnFocus from '@/components/layout/RefreshOnFocus'
 import AppResume from '@/components/layout/AppResume'
+import StartupSummaryPopup from '@/components/layout/StartupSummary'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,7 @@ export default async function DashboardLayout({
         <MustChangePasswordBanner mustChange={profile.mustChangePassword} />
         <RefreshOnFocus />
         <AppResume renderedAt={Date.now()} />
+        <StartupSummaryPopup />
         <LayoutShell user={userForHeader}>
           {children}
         </LayoutShell>

@@ -3488,12 +3488,31 @@ async function fetchNotifications(companyId: string, userId: string): Promise<Ap
     throw new Error('Firestore indisponível (listNotifications)')
   }
   if (!snap.empty) {
-    return snap.docs
+    return withoutOrphanMessageNotifs(companyId, snap.docs
       .map((d) => serialize<AppNotification>(d))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-      .slice(0, 15)
+      .slice(0, 15))
   }
   return localNotificationsFor(companyId, userId)
+}
+
+/**
+ * Uma notificação de mensagem cuja mensagem já foi apagada ficava "por ler" para sempre
+ * (sino com 2 e a página de Mensagens vazia). Só lê o feed (1 documento) quando há
+ * notificações de mensagem por ler; se a leitura falhar, não esconde nada.
+ */
+async function withoutOrphanMessageNotifs(companyId: string, list: AppNotification[]): Promise<AppNotification[]> {
+  if (!list.some((n) => !n.read && n.type === 'internal_message')) return list
+  let ids: Set<string>
+  try {
+    ids = new Set((await readMessagesFeed(companyId)).map((m) => m.id))
+  } catch {
+    return list
+  }
+  return list.filter((n) => {
+    if (n.read || n.type !== 'internal_message') return true
+    return n.messageId ? ids.has(n.messageId) : ids.size > 0
+  })
 }
 
 // 1h (era 60s): o sino faz polling a cada 2 min e, com 60s, cada poll falhava sempre a
@@ -4211,6 +4230,8 @@ export async function deleteInternalMessage(
     console.error('[deleteInternalMessage] Error:', err)
   }
   revalidateTag('messages')
+  // As notificações desta mensagem deixam de contar no sino (withoutOrphanMessageNotifs).
+  revalidateTag(notificationsTag(finalCompanyId))
 }
 
 // Só apaga as mensagens DESTA empresa. Antes apagava as primeiras 300 da coleção e o
@@ -4244,6 +4265,7 @@ export async function clearAllInternalMessages(companyId: string): Promise<void>
   } catch {}
 
   revalidateTag('messages')
+  revalidateTag(notificationsTag(companyId))
 }
 
 /**

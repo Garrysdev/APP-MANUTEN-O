@@ -63,7 +63,7 @@ export function useProjectStatusFilter() {
 type Ctl = ReturnType<typeof useProjectStatusFilter>
 
 /** Cartões do topo — contam sobre os outros filtros (não sobre o estado), e clicar filtra. */
-export function ProjectKpiCards({ base, ctl, inProgressLabel = 'Em Progresso' }: { base: Task[]; ctl: Ctl; inProgressLabel?: string }) {
+export function ProjectKpiCards({ base, ctl, inProgressLabel = 'Em Curso' }: { base: Task[]; ctl: Ctl; inProgressLabel?: string }) {
   const cards: { k: CardKey; label: string; value: number; tone: string; num: string; Icon: typeof Play; extra?: string }[] = [
     { k: 'all', label: 'Total Projetos', value: base.length, tone: 'text-slate-500', num: 'text-slate-900 dark:text-slate-100', Icon: FolderKanban },
     { k: 'in_progress', label: inProgressLabel, value: base.filter((t) => t.status === 'in_progress').length, tone: 'text-teal-600', num: 'text-teal-700 dark:text-teal-400', Icon: Play },

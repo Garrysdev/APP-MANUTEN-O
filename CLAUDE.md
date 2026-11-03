@@ -137,6 +137,10 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
 - **listTasks e OT antigas da reserva**: a versão gravada vem de todos os documentos, não só das
   2000 mais recentes — antes uma OT/Projeto antigo (ex. 2021) editado mostrava a cópia da reserva
   e parecia não gravar.
+- **Resumo ao abrir a app (03/11/2026)**: popup uma vez por sessão com OT em curso, Projetos em
+  curso e OT de PM previstas esta semana (`StartupSummary.tsx` + `startup-summary-actions.ts`, listas
+  em cache; o técnico só vê o seu). Só aparece se houver algo.
+- **Sino**: notificações de mensagens apagadas deixam de contar como por ler (`withoutOrphanMessageNotifs`).
 - **Setas de voltar** (`BackButton`): voltam à página anterior, não a uma lista fixa.
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso
