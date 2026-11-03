@@ -322,6 +322,24 @@ export default function CreateTaskModal({
     setStartedAt(value)
     setStatus((s) => deriveTaskStatus(s, value, completedAt))
   }
+  // O inverso, para o seletor de Estado: como o estado é derivado das datas, escolher
+  // "Concluída" sem Fim voltava a "Pendente" ao gravar (parecia que não gravava). Escolher
+  // um estado acerta as datas: Concluída carimba Início/Fim (se vazios), Em Curso carimba
+  // Início e limpa Fim, Pendente/Prazo limpam as duas.
+  function changeStatus(next: TaskStatus) {
+    const now = nowForInput()
+    if (next === 'done') {
+      if (!startedAt) setStartedAt(now)
+      if (!completedAt) setCompletedAt(now)
+    } else if (next === 'in_progress') {
+      if (!startedAt) setStartedAt(now)
+      setCompletedAt('')
+    } else if (next === 'pending' || next === 'prazo') {
+      setStartedAt('')
+      setCompletedAt('')
+    }
+    setStatus(next)
+  }
   const [safetyRules, setSafetyRules] = useState<string[]>([])
   const [dynamicSafetyRules, setDynamicSafetyRules] = useState<string[]>(PREDEFINED_SAFETY_RULES)
   const [liveDocs, setLiveDocs] = useState<DocumentoObrigatorio[]>([])
@@ -1129,7 +1147,7 @@ export default function CreateTaskModal({
               <Select
                 name="status"
                 value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
+                onChange={(e) => changeStatus(e.target.value as TaskStatus)}
                 className="input"
               >
                 {STATUS_OPTIONS.map((opt) => (

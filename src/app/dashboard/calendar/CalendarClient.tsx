@@ -19,6 +19,8 @@ import { findPlanLinkedTask } from '@/lib/pm-status'
 import { planCurrentDate, planRowStatus, isOpenLinkedTask } from '@/lib/pm-schedule'
 import { setPmOccurrenceStatusAction, deleteMaintenancePlanAction } from '@/app/dashboard/maintenance-plan/actions'
 import Select from '@/components/ui/Select'
+import { isProjectTask } from '@/lib/task-assignment'
+import { updateProjectTaskAction, deleteProjectTaskAction } from '@/app/dashboard/projects/actions'
 
 type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
 type UserRef = Ref & {
@@ -744,6 +746,23 @@ export default function CalendarClient({
     })
   }
 
+  // Saltar para um mês/ano ou para uma data (semana/dia que a contém).
+  function goToDate(ymd: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return
+    const d = new Date(ymd + 'T12:00:00')
+    setYear(d.getFullYear())
+    setMonth(d.getMonth())
+    setWeekStart(getWeekStart(d))
+    setSelectedDate(ymd)
+  }
+  function goToMonth(y: number, m: number) {
+    setYear(y)
+    setMonth(m)
+    setWeekStart(getWeekStart(new Date(y, m, 1)))
+    setSelectedDate(null)
+  }
+  const yearOptions = Array.from({ length: 12 }, (_, i) => today.getFullYear() - 6 + i)
+
   function goToToday() {
     const t = new Date()
     setYear(t.getFullYear())
@@ -780,6 +799,24 @@ export default function CalendarClient({
             <button onClick={nextPeriod} className="p-1.5 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer" title="Seguinte">
               <ChevronRight className="h-4 w-4" />
             </button>
+          </div>
+
+          {/* Ir para mês / ano / data */}
+          <div className="flex items-center gap-1.5">
+            <Select sort={false} value={month} onChange={(e) => goToMonth(year, Number(e.target.value))} className="input text-xs py-1 px-2 w-28 font-bold" aria-label="Mês">
+              {MONTH_NAMES.map((n, i) => <option key={n} value={i}>{n}</option>)}
+            </Select>
+            <Select sort={false} value={year} onChange={(e) => goToMonth(Number(e.target.value), month)} className="input text-xs py-1 px-2 w-20 font-bold" aria-label="Ano">
+              {(yearOptions.includes(year) ? yearOptions : [...yearOptions, year].sort()).map((y) => <option key={y} value={y}>{y}</option>)}
+            </Select>
+            <input
+              type="date"
+              value={selectedDate || ''}
+              onChange={(e) => goToDate(e.target.value)}
+              className="input text-xs py-1 px-2 w-36"
+              title="Ir para a semana / dia desta data"
+              aria-label="Ir para data"
+            />
           </div>
 
           {/* Vista Mês/Semana/Dia */}
@@ -1350,9 +1387,21 @@ export default function CalendarClient({
         assets={assets}
         users={users}
         isManager={role === 'manager'}
-        deleteAction={handleCalendarDelete}
-        onDelete={() => router.refresh()}
-        onSuccess={() => {
+        // Um Projeto abre com o formulário e a gravação dos Projetos (como na página
+        // Projetos) — com o formulário de OT o tipo 'projeto' não existe na lista de TI.
+        {...(editingTask && isProjectTask(editingTask)
+          ? { isProjectForm: true, updateAction: updateProjectTaskAction, deleteAction: deleteProjectTaskAction, showDependencies: true, availableTasksForDependencies: taskList.filter(isProjectTask) }
+          : { deleteAction: handleCalendarDelete })}
+        onDelete={() => {
+          if (editingTask && isProjectTask(editingTask)) setTaskList((prev) => prev.filter((t) => t.id !== editingTask.id))
+          router.refresh()
+        }}
+        onSuccess={(saved) => {
+          // Atualiza já a lista local: uma OT/Projeto concluído sai logo do calendário.
+          const id = editingTask?.id
+          if (id && saved) {
+            setTaskList((prev) => prev.map((t) => (t.id === id ? { ...t, status: saved.status, completedAt: saved.completedAt ?? t.completedAt } : t)))
+          }
           setEditingTask(null)
           router.refresh()
         }}

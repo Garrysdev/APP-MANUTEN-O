@@ -122,6 +122,14 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   A IA está na Gestão Documental ("Perguntar à IA", `askDocumentsAction`, plano Business+),
   sobre os documentos reais; `/dashboard/knowledge` só redireciona. Sem GEMINI/OPENAI key
   responde com os documentos encontrados e um excerto.
+- **Projetos e Gantt (03/11/2026)**: abrem só com os projetos ativos; chips de estado que se
+  somam (Ativos/Histórico/Todos + estados, como nas OT) e cartões do topo clicáveis que filtram
+  (`projects/ProjectStatusFilter.tsx`, partilhado). Tabela de Projetos com linha de filtros por
+  coluna e datas INÍCIO / FIM / DATA LIMITE (`startedAt|plannedStartDate` / `completedAt` / `dueDate`).
+- **Seletor de Estado no formulário de OT/Projeto**: escolher Concluída carimba Início/Fim (se
+  vazios), Em Curso carimba Início, Pendente limpa as datas — o estado é derivado das datas e
+  antes "Concluída" sem Fim voltava a Pendente ao gravar. No Calendário um Projeto abre com o
+  formulário/ações dos Projetos; há seletor de mês, ano e "ir para data".
 - **Setas de voltar** (`BackButton`): voltam à página anterior, não a uma lista fixa.
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso

@@ -1,12 +1,9 @@
 'use client'
 
-import { useState, useEffect, useTransition, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  Plus, FolderKanban, Play, CheckCircle2, ShieldAlert, Building2,
-  BarChart3, Clock,
-} from 'lucide-react'
+import { Plus, FolderKanban, BarChart3, Clock, X } from 'lucide-react'
 import { format3DigitId } from '../history/HistoryClient'
 import {
   type Task,
@@ -16,7 +13,7 @@ import {
   TIPO_LABELS,
   statusBadgeClass,
 } from '@/types/models'
-import { formatDate, formatDateTime } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import { TipoBadge } from '@/components/ui/TipoBadge'
 import { useTableSort, SortableTh } from '@/lib/useTableSort'
 import {
@@ -24,7 +21,10 @@ import {
 } from './actions'
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
+import MultiSelectPopoverFilter from '@/components/ui/MultiSelectPopoverFilter'
 import Select from '@/components/ui/Select'
+import { matchesTechFilter } from '@/lib/task-assignment'
+import { useProjectStatusFilter, ProjectKpiCards, ProjectStatusChips, PROJECT_STATUSES } from './ProjectStatusFilter'
 
 type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
 type UserRef = Ref & {
@@ -37,11 +37,16 @@ type UserRef = Ref & {
   externalCompanyName?: string | null
 }
 
+const day = (v?: string | null) => (v ? v.slice(0, 10) : '')
+// Datas das colunas: DATA = lançamento, INÍCIO/FIM = reais, DATA LIMITE = prazo (fim da barra no Gantt).
+const startOf = (t: Task) => day(t.startedAt || t.plannedStartDate)
+const emptyCol = { id: '', ti: '', projeto: '' }
+
 /**
- * Lista de Projetos, estilo da página de OTs (`tasks/TasksClient.tsx`): chips de estado,
- * filtros por coluna, pesquisa, cartões no telemóvel, tabela ordenável + paginação no
- * desktop. O Gantt combinado (Projetos + barras de PM) vive à parte em /dashboard/gantt,
- * ligado por um botão no cabeçalho — ver plano "Planos & Limites, Projetos/Gantt" (Fase 5).
+ * Lista de Projetos, estilo da página de OTs (`tasks/TasksClient.tsx`): chips de estado que
+ * se somam (abre só com os ativos), cartões que filtram, linha de filtros por coluna sempre
+ * visível, cartões no telemóvel, tabela ordenável + paginação no desktop. O Gantt vive à
+ * parte em /dashboard/gantt, ligado por um botão no cabeçalho.
  */
 export default function ProjectsListClient({
   tasks,
@@ -62,15 +67,11 @@ export default function ProjectsListClient({
   const [stockLoading, setStockLoading] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
   const [creating, setCreating] = useState(false)
-  const [filter, setFilter] = useState<'all' | TaskStatus>('all')
-  const [, startTransition] = useTransition()
+  const statusCtl = useProjectStatusFilter()
 
   const isManager = role === 'manager'
-  const statuses: TaskStatus[] = ['prazo', 'pending', 'in_progress', 'done']
 
-  function openCreate() {
-    setEditing(null)
-    setCreating(true)
+  function loadStock() {
     if (!stockLoaded && !stockLoading) {
       setStockLoading(true)
       loadStockRefsAction().then((res) => {
@@ -81,17 +82,16 @@ export default function ProjectsListClient({
     }
   }
 
+  function openCreate() {
+    setEditing(null)
+    setCreating(true)
+    loadStock()
+  }
+
   function openEdit(task: Task) {
     setCreating(false)
     setEditing(task)
-    if (!stockLoaded && !stockLoading) {
-      setStockLoading(true)
-      loadStockRefsAction().then((res) => {
-        setStockRefs(res)
-        setStockLoaded(true)
-        setStockLoading(false)
-      })
-    }
+    loadStock()
   }
 
   function closeModal() {
@@ -103,88 +103,81 @@ export default function ProjectsListClient({
   useEffect(() => { setTaskList(tasks) }, [tasks])
 
   const [search, setSearch] = useState('')
-  const [searchArea, setSearchArea] = useState('')
-  const [searchTag, setSearchTag] = useState('')
-  const [searchTech, setSearchTech] = useState('')
   const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
-  const [selectedTech, setSelectedTech] = useState('')
-  const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
-  const [areaFilter, setAreaFilter] = useState('')
-  const [tagFilter, setTagFilter] = useState('')
+  const [colF, setColF] = useState(emptyCol)
+  const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedTechs, setSelectedTechs] = useState<string[]>([])
+  const [dataF, setDataF] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [inicioF, setInicioF] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [fimF, setFimF] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
+  const [limiteF, setLimiteF] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
 
-  const assetMap = useMemo(() => new Map(assets.map((a) => [a.id, a.name])), [assets])
+  function clearFilters() {
+    setColF(emptyCol)
+    setSelectedAreas([])
+    setSelectedTags([])
+    setSelectedTechs([])
+    setDataF(DEFAULT_EXCEL_DATE_FILTER)
+    setInicioF(DEFAULT_EXCEL_DATE_FILTER)
+    setFimF(DEFAULT_EXCEL_DATE_FILTER)
+    setLimiteF(DEFAULT_EXCEL_DATE_FILTER)
+    setSearch('')
+  }
+
+  const assetById = useMemo(() => new Map(assets.map((a) => [a.id, a])), [assets])
   const userMap = useMemo(() => new Map(users.map((u) => [u.id, u.abbreviation || u.name])), [users])
-  const assetAreaMap = useMemo(() => new Map(assets.map((a) => [a.id, a.area || ''])), [assets])
-  const assetTagMap = useMemo(() => new Map(assets.map((a) => [a.id, a.tag || ''])), [assets])
   const userName = (id?: string | null) => (id ? userMap.get(id) ?? id ?? '—' : '—')
+  const areaOf = (t: Task) => ((t as any).area || (t.assetId ? assetById.get(t.assetId)?.area : '') || '').trim()
+  const tagOf = (t: Task) => ((t as any).tag || (t.assetId ? assetById.get(t.assetId)?.tag : '') || '').trim()
 
-  const uniqueAreas = useMemo(() => {
-    const set = new Set<string>()
-    taskList.forEach((t) => {
-      const area = (t as any).area || (t.assetId ? assetAreaMap.get(t.assetId) : '') || ''
-      if (area && area !== '—') set.add(area.trim())
-    })
-    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-  }, [taskList, assetAreaMap])
+  const uniqueAreas = useMemo(() => [...new Set(taskList.map(areaOf).filter((a) => a && a !== '—'))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })), [taskList, assetById])
+  const uniqueTags = useMemo(() => [...new Set(taskList.map(tagOf).filter((a) => a && a !== '—'))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })), [taskList, assetById])
+  const techOptions = useMemo(() => users.map((u) => ({ value: u.id, label: u.abbreviation ? `${u.abbreviation} - ${u.name}` : u.name })), [users])
 
-  const uniqueTags = useMemo(() => {
-    const set = new Set<string>()
-    taskList.forEach((t) => {
-      const tArea = (t as any).area || (t.assetId ? assetAreaMap.get(t.assetId) : '') || ''
-      if (areaFilter && tArea.trim().toLowerCase() !== areaFilter.trim().toLowerCase()) return
-      const tag = (t as any).tag || (t.assetId ? assetTagMap.get(t.assetId) : '') || ''
-      if (tag && tag !== '—') set.add(tag.trim())
-    })
-    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-  }, [taskList, areaFilter, assetAreaMap, assetTagMap])
-
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [search, searchArea, searchTag, searchTech, filter, selectedTech, areaFilter, tagFilter, pageSize])
-
-  const filtered = useMemo(() => {
+  // Todos os filtros menos o estado — é sobre isto que os cartões contam.
+  const base = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const qArea = searchArea.trim().toLowerCase()
-    const qTag = searchTag.trim().toLowerCase()
-    const qTech = searchTech.trim().toLowerCase()
-
-    return taskList.filter((t) => {
-      if (filter !== 'all' && t.status !== filter) return false
-      if (selectedTech && t.assignedTo !== selectedTech) return false
-
-      const aArea = ((t as any).area || (t.assetId ? assetAreaMap.get(t.assetId) : '') || '').trim().toLowerCase()
-      const aTag = ((t as any).tag || (t.assetId ? assetTagMap.get(t.assetId) : '') || '').trim().toLowerCase()
-
-      if (areaFilter && aArea !== areaFilter.trim().toLowerCase()) return false
-      if (tagFilter && aTag !== tagFilter.trim().toLowerCase()) return false
-      if (qArea && !aArea.includes(qArea)) return false
-      if (qTag && !aTag.includes(qTag)) return false
-      if (qTech) {
-        const uName = (t.assignedTo ? userMap.get(t.assignedTo) || '' : '').toLowerCase()
-        if (!uName.includes(qTech)) return false
-      }
-      if (!filterByExcelDate(t.dueDate || t.createdAt, excelDateFilter)) return false
+    const has = (v: unknown, f: string) => !f || String(v ?? '').toLowerCase().includes(f.trim().toLowerCase())
+    return taskList.filter((t, idx) => {
+      if (selectedAreas.length && !selectedAreas.includes(areaOf(t))) return false
+      if (selectedTags.length && !selectedTags.includes(tagOf(t))) return false
+      if (selectedTechs.length && !selectedTechs.some((id) => matchesTechFilter(t, id, users))) return false
+      if (!has(format3DigitId(t.id, idx, t.otNumber), colF.id)) return false
+      if (!has(`${TIPO_LABELS[t.tipo] ?? t.tipo} ${t.tipo}`, colF.ti)) return false
+      if (!has(`${t.title || ''} ${t.description || ''}`, colF.projeto)) return false
+      if (!filterByExcelDate(t.createdAt, dataF)) return false
+      if (!filterByExcelDate(startOf(t) || null, inicioF)) return false
+      if (!filterByExcelDate(t.completedAt || null, fimF)) return false
+      if (!filterByExcelDate(t.dueDate || null, limiteF)) return false
       if (q) {
-        const aSearch = t.assetId ? (assetMap.get(t.assetId) || '') : ''
-        const text = `${t.title || ''} ${t.description || ''} ${(t as any).tag || ''} ${(t as any).area || ''} ${aSearch}`.toLowerCase()
+        const text = `${t.title || ''} ${t.description || ''} ${tagOf(t)} ${areaOf(t)} ${t.assetId ? assetById.get(t.assetId)?.name || '' : ''}`.toLowerCase()
         if (!text.includes(q)) return false
       }
       return true
     })
-  }, [taskList, filter, selectedTech, areaFilter, tagFilter, search, searchArea, searchTag, searchTech, assetAreaMap, assetTagMap, userMap, assetMap, excelDateFilter])
+  }, [taskList, selectedAreas, selectedTags, selectedTechs, colF, dataF, inicioF, fimF, limiteF, search, users, assetById])
+
+  const filtered = useMemo(() => base.filter(statusCtl.matches), [base, statusCtl.matches])
+
+  useEffect(() => { setCurrentPage(1) }, [base, statusCtl.statuses, statusCtl.card, pageSize])
 
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Task>(
     filtered,
     {
+      id: (t) => t.otNumber ?? t.id,
+      data: (t) => t.createdAt ?? null,
       title: (t) => t.title?.toLowerCase(),
       tipo: (t) => TIPO_LABELS[t.tipo] ?? t.tipo,
       assignee: (t) => userName(t.assignedTo),
       status: (t) => STATUS_LABELS[t.status],
+      inicio: (t) => startOf(t) || null,
+      fim: (t) => t.completedAt ?? null,
       dueDate: (t) => t.dueDate ?? null,
-      plannedStartDate: (t) => t.plannedStartDate ?? t.createdAt ?? null,
-      area: (t) => (t as any).area || (t.assetId ? assetAreaMap.get(t.assetId) : ''),
-      tag: (t) => (t as any).tag || (t.assetId ? assetTagMap.get(t.assetId) : ''),
+      area: (t) => areaOf(t),
+      tag: (t) => tagOf(t),
     },
     null,
   )
@@ -195,13 +188,8 @@ export default function ProjectsListClient({
     return shown.slice(start, start + pageSize)
   }, [shown, currentPage, pageSize])
 
-  const totalCount = filtered.length
-  const completedCount = filtered.filter((t) => t.status === 'done').length
-  const inProgressCount = filtered.filter((t) => t.status === 'in_progress').length
-  const overdueCount = filtered.filter((t) => t.status !== 'done' && t.dueDate && new Date(t.dueDate) < new Date()).length
-  const allocatedTechsCount = useMemo(() => new Set(filtered.map((t) => t.assignedTo).filter(Boolean)).size, [filtered])
-
   const modalActive = creating || editing !== null
+  const fInput = 'input !text-[11px] !py-0.5 !px-1.5 w-full font-semibold'
 
   return (
     <div className="max-w-7xl mx-auto animate-fade-in-up space-y-5">
@@ -232,109 +220,25 @@ export default function ProjectsListClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Projetos</span>
-            <p className="text-xl font-extrabold text-slate-900 dark:text-slate-100">{totalCount}</p>
-          </div>
-          <FolderKanban className="h-7 w-7 text-blue-600 opacity-80" />
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-teal-600 uppercase tracking-wider">Em Progresso</span>
-            <p className="text-xl font-extrabold text-teal-700 dark:text-teal-400">{inProgressCount}</p>
-          </div>
-          <Play className="h-7 w-7 text-teal-600 opacity-80" />
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Em Risco / Atrasados</span>
-            <p className="text-xl font-extrabold text-red-700 dark:text-red-400">{overdueCount}</p>
-          </div>
-          <ShieldAlert className="h-7 w-7 text-red-600 opacity-80" />
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Concluídos</span>
-            <p className="text-xl font-extrabold text-green-700 dark:text-green-400">{completedCount}</p>
-          </div>
-          <CheckCircle2 className="h-7 w-7 text-green-600 opacity-80" />
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between col-span-2 sm:col-span-1">
-          <div>
-            <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Técnicos Alocados</span>
-            <p className="text-xl font-extrabold text-purple-700 dark:text-purple-400">{allocatedTechsCount}</p>
-          </div>
-          <Building2 className="h-7 w-7 text-purple-600 opacity-80" />
-        </div>
-      </div>
+      <ProjectKpiCards base={base} ctl={statusCtl} />
 
-      <div className="flex flex-col gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex gap-2 flex-wrap items-center">
-            {(['all', ...statuses] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setFilter(s)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${
-                  filter === s ? 'bg-industrial-blue text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200'
-                }`}
-              >
-                {s === 'all' ? 'Todos os Estados' : STATUS_LABELS[s]}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="w-36">
-              <ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} />
-            </div>
-            <Select
-              value={areaFilter}
-              onChange={(e) => { setAreaFilter(e.target.value); setTagFilter('') }}
-              className="input text-xs py-1.5 px-2.5 w-36 font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
-            >
-              <option value="">-- Área: Todas --</option>
-              {uniqueAreas.map((area) => (
-                <option key={area} value={area}>Área: {area}</option>
-              ))}
-            </Select>
-            <Select
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-              className="input text-xs py-1.5 px-2.5 w-36 font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
-            >
-              <option value="">-- TAG: Todas --</option>
-              {uniqueTags.map((tag) => (
-                <option key={tag} value={tag}>TAG: {tag}</option>
-              ))}
-            </Select>
-            <Select
-              value={selectedTech}
-              onChange={(e) => setSelectedTech(e.target.value)}
-              className="input text-xs py-1.5 px-3 w-44 font-bold"
-            >
-              <option value="">-- Todos os Técnicos --</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>👤 {u.name}</option>
-              ))}
-            </Select>
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Pesquisar Projeto, TAG..."
-              className="input text-xs py-1.5 px-3 w-40 sm:w-48"
-            />
-            <Select sort={false}
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="input text-xs py-1.5 px-2.5 font-bold"
-            >
-              {[20, 50, 100].map((n) => <option key={n} value={n}>{n} / pág.</option>)}
-            </Select>
-          </div>
+      <div className="flex items-center justify-between gap-3 flex-wrap bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <ProjectStatusChips ctl={statusCtl} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Pesquisar Projeto, TAG..."
+            className="input text-xs py-1.5 px-3 w-40 sm:w-48"
+          />
+          <Select sort={false}
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            className="input text-xs py-1.5 px-2.5 font-bold"
+          >
+            {[20, 50, 100].map((n) => <option key={n} value={n}>{n} / pág.</option>)}
+          </Select>
         </div>
       </div>
 
@@ -347,10 +251,10 @@ export default function ProjectsListClient({
           </div>
         ) : (
           currentShown.map((t, idx) => {
-            const asset = assets.find((a) => a.id === t.assetId)
+            const asset = t.assetId ? assetById.get(t.assetId) : undefined
             const formattedId = format3DigitId(t.id, idx, t.otNumber)
-            const tag = (asset as any)?.tag || asset?.name || (t as any).tag || '—'
-            const area = (t as any).area || (asset as any)?.area || '—'
+            const tag = asset?.tag || asset?.name || (t as any).tag || '—'
+            const area = areaOf(t) || '—'
             return (
               <button
                 key={t.id}
@@ -371,7 +275,7 @@ export default function ProjectsListClient({
                   <span className="text-slate-600 dark:text-slate-300 font-semibold">{userName(t.assignedTo)}</span>
                   <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/90 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 whitespace-nowrap">
                     <Clock className="h-3 w-3 text-industrial-blue dark:text-sky-400" />
-                    <span>{formatDate(t.plannedStartDate || t.createdAt)}</span>
+                    <span>{t.dueDate ? `Limite ${formatDate(t.dueDate)}` : formatDate(startOf(t) || t.createdAt)}</span>
                   </span>
                 </div>
               </button>
@@ -380,94 +284,126 @@ export default function ProjectsListClient({
         )}
       </div>
 
-      {/* Tabela — desktop */}
-      <div className="hidden md:block card overflow-hidden">
-        {shown.length === 0 ? (
-          <div className="px-5 py-12 text-center text-gray-400">
-            <FolderKanban className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p className="text-sm">Sem projetos neste filtro.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs min-w-[1000px]">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
-                  <SortableTh label="ID" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="DATA" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="EQUIPAMENTO / TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="TI" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="PROJETO / DESCRIÇÃO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="TÉCNICOS" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="INÍCIO" sortableKey="plannedStartDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
-                  <SortableTh label="FIM" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="hidden xl:table-cell" />
-                  <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+      {/* Tabela — desktop (cabeçalhos e linha de filtros sempre visíveis, mesmo sem resultados) */}
+      <div className="hidden md:block card">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[1100px]">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
+                <SortableTh label="ID" sortableKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="DATA" sortableKey="data" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="EQUIPAMENTO / TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="TI" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="PROJETO / DESCRIÇÃO" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="TÉCNICOS" sortableKey="assignee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="INÍCIO" sortableKey="inicio" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="FIM" sortableKey="fim" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="DATA LIMITE" sortableKey="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="ESTADO" sortableKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              </tr>
+              {/* Linha de filtro por coluna (sempre visível, como nas OT / PM) */}
+              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200">
+                <td className="p-1"><input value={colF.id} onChange={(e) => setCol('id', e.target.value)} placeholder="000..." className={fInput} /></td>
+                <td className="p-1"><ExcelColumnDateFilter values={dataF} onChange={setDataF} /></td>
+                <td className="p-1">
+                  <MultiSelectPopoverFilter label="Área" options={uniqueAreas.map((a) => ({ value: a, label: a }))} selectedValues={selectedAreas} onChange={setSelectedAreas} placeholder="Área (Todas)" width="w-56" />
+                </td>
+                <td className="p-1">
+                  <MultiSelectPopoverFilter label="TAG" options={uniqueTags.map((a) => ({ value: a, label: a }))} selectedValues={selectedTags} onChange={setSelectedTags} placeholder="TAG (Todas)" width="w-64" />
+                </td>
+                <td className="p-1"><input value={colF.ti} onChange={(e) => setCol('ti', e.target.value)} placeholder="TI..." className={fInput} /></td>
+                <td className="p-1"><input value={colF.projeto} onChange={(e) => setCol('projeto', e.target.value)} placeholder="Projeto..." className={fInput} /></td>
+                <td className="p-1">
+                  <MultiSelectPopoverFilter label="Técnico" options={techOptions} selectedValues={selectedTechs} onChange={setSelectedTechs} placeholder="Técnico (Todos)" width="w-56" />
+                </td>
+                <td className="p-1"><ExcelColumnDateFilter values={inicioF} onChange={setInicioF} /></td>
+                <td className="p-1"><ExcelColumnDateFilter values={fimF} onChange={setFimF} /></td>
+                <td className="p-1"><ExcelColumnDateFilter values={limiteF} onChange={setLimiteF} /></td>
+                <td className="p-1">
+                  <MultiSelectPopoverFilter
+                    label="Estado"
+                    options={PROJECT_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
+                    selectedValues={statusCtl.statuses}
+                    onChange={(vals) => statusCtl.setStatuses(vals.length ? (vals as TaskStatus[]) : PROJECT_STATUSES)}
+                    placeholder="Estado (Todos)"
+                    width="w-48"
+                  />
+                </td>
+              </tr>
+            </thead>
+            <tbody>
+              {currentShown.length === 0 && (
+                <tr>
+                  <td colSpan={11} className="px-5 py-12 text-center text-gray-400">
+                    <FolderKanban className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm">Sem projetos neste filtro.</p>
+                    <button type="button" onClick={clearFilters} className="mt-3 text-xs font-bold text-[#2E86C1] hover:underline inline-flex items-center gap-1 cursor-pointer">
+                      <X size={14} /> Limpar Todos os Filtros
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {currentShown.map((t, idx) => {
-                  const asset = assets.find((a) => a.id === t.assetId)
-                  const formattedId = format3DigitId(t.id, idx, t.otNumber)
-                  const sDateStr = t.plannedStartDate ? t.plannedStartDate.slice(0, 10) : (t.createdAt ? t.createdAt.slice(0, 10) : '')
-                  const eDateStr = t.dueDate ? t.dueDate.slice(0, 10) : sDateStr
-                  return (
-                    <tr
-                      key={t.id}
-                      onClick={() => openEdit(t)}
-                      className="border-b border-slate-100 dark:border-slate-800 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group"
-                      title="Clique para abrir e editar o projeto"
-                    >
-                      <td className="px-3 py-2.5 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                        <span className="bg-slate-100/90 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 group-hover:border-blue-400 group-hover:bg-blue-100/80 transition-colors">{formattedId}</span>
-                      </td>
-                      <td className="px-3 py-2.5 font-mono font-semibold text-slate-800 dark:text-slate-300 whitespace-nowrap">
-                        {formatDate(sDateStr || t.createdAt)}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                        {(t as any).area || (asset as any)?.area || '—'}
-                      </td>
-                      <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        {(() => {
-                          const tagOrName = (asset as any)?.tag || asset?.name || (t as any).tag || '—'
-                          const targetId = asset?.id || t.assetId || (t as any).tag
-                          if (!targetId || tagOrName === '—') return <span>{tagOrName}</span>
-                          return (
-                            <Link
-                              href={`/dashboard/assets/${encodeURIComponent(targetId)}`}
-                              className="text-industrial-blue dark:text-blue-400 hover:text-safety-orange hover:underline font-bold transition-colors"
-                              title={`Abrir página do equipamento ${tagOrName}`}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {tagOrName}
-                            </Link>
-                          )
-                        })()}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <TipoBadge tipo={t.tipo} codeOnly={true} />
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-900 dark:text-slate-100 font-semibold max-w-[280px]">
-                        <span className="hover:text-safety-orange transition-colors underline-offset-2 group-hover:underline">{t.title}</span>
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-300 font-semibold whitespace-nowrap">
-                        {userName(t.assignedTo)}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-slate-700 dark:text-slate-300 hidden xl:table-cell whitespace-nowrap">
-                        {sDateStr ? formatDate(sDateStr) : formatDateTime(t.createdAt)}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-slate-700 dark:text-slate-300 hidden xl:table-cell whitespace-nowrap">
-                        {eDateStr ? formatDate(eDateStr) : (t.updatedAt ? formatDateTime(t.updatedAt) : '—')}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <span className={statusBadgeClass(t.status)}>{STATUS_LABELS[t.status]}</span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+              )}
+              {currentShown.map((t, idx) => {
+                const asset = t.assetId ? assetById.get(t.assetId) : undefined
+                const formattedId = format3DigitId(t.id, idx, t.otNumber)
+                const dateCell = (v?: string | null) => (
+                  <td className="px-3 py-2.5 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">{v ? formatDate(v) : '—'}</td>
+                )
+                return (
+                  <tr
+                    key={t.id}
+                    onClick={() => openEdit(t)}
+                    className="border-b border-slate-100 dark:border-slate-800 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group"
+                    title="Clique para abrir e editar o projeto"
+                  >
+                    <td className="px-3 py-2.5 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                      <span className="bg-slate-100/90 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 group-hover:border-blue-400 group-hover:bg-blue-100/80 transition-colors">{formattedId}</span>
+                    </td>
+                    <td className="px-3 py-2.5 font-mono font-semibold text-slate-800 dark:text-slate-300 whitespace-nowrap">
+                      {formatDate(day(t.createdAt))}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                      {areaOf(t) || '—'}
+                    </td>
+                    <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      {(() => {
+                        const tagOrName = asset?.tag || asset?.name || (t as any).tag || '—'
+                        const targetId = asset?.id || t.assetId || (t as any).tag
+                        if (!targetId || tagOrName === '—') return <span>{tagOrName}</span>
+                        return (
+                          <Link
+                            href={`/dashboard/assets/${encodeURIComponent(targetId)}`}
+                            className="text-industrial-blue dark:text-blue-400 hover:text-safety-orange hover:underline font-bold transition-colors"
+                            title={`Abrir página do equipamento ${tagOrName}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {tagOrName}
+                          </Link>
+                        )
+                      })()}
+                    </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      <TipoBadge tipo={t.tipo} codeOnly={true} />
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-900 dark:text-slate-100 font-semibold max-w-[280px]">
+                      <span className="hover:text-safety-orange transition-colors underline-offset-2 group-hover:underline">{t.title}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-300 font-semibold whitespace-nowrap">
+                      {userName(t.assignedTo)}
+                    </td>
+                    {dateCell(startOf(t))}
+                    {dateCell(day(t.completedAt))}
+                    {dateCell(day(t.dueDate))}
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      <span className={statusBadgeClass(t.status)}>{STATUS_LABELS[t.status]}</span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-gray-100 dark:border-slate-800 px-4 py-3 bg-gray-50/50 dark:bg-slate-900/50">

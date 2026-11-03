@@ -4,8 +4,7 @@ import { useState, useEffect, useTransition, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  Plus, FolderKanban, Play, CheckCircle2,
-  ShieldAlert, Building2, GripHorizontal, ArrowLeft,
+  Plus, GripHorizontal, ArrowLeft,
 } from 'lucide-react'
 import {
   type Task,
@@ -24,6 +23,7 @@ import {
 import CreateTaskModal from '@/components/modals/CreateTaskModal'
 import { ExcelColumnDateFilter, ExcelDateFilterValues, DEFAULT_EXCEL_DATE_FILTER, filterByExcelDate } from '@/components/ui/ExcelDateFilter'
 import Select from '@/components/ui/Select'
+import { useProjectStatusFilter, ProjectKpiCards, ProjectStatusChips } from '../projects/ProjectStatusFilter'
 
 type Ref = { id: string; name: string; tag?: string | null; area?: string | null }
 type UserRef = Ref & {
@@ -696,11 +696,11 @@ export default function GanttClient({
   const [stockLoading, setStockLoading] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
   const [creating, setCreating] = useState(false)
-  const [filter, setFilter] = useState<'all' | TaskStatus>('all')
+  // Abre só com os projetos ativos; os outros conforme os filtros (chips/cartões).
+  const statusCtl = useProjectStatusFilter()
   const [statusPending, startStatusTransition] = useTransition()
 
   const isManager = role === 'manager'
-  const statuses: TaskStatus[] = ['prazo', 'pending', 'in_progress', 'done']
 
   function openCreate() {
     setEditing(null)
@@ -815,7 +815,7 @@ export default function GanttClient({
     setCurrentPage(1)
   }, [
     search, searchId, searchArea, searchTag, searchTi, searchProject, searchTech,
-    filter, selectedTech, dateStartFilter, dateEndFilter,
+    statusCtl.statuses, statusCtl.card, selectedTech, dateStartFilter, dateEndFilter,
     areaFilter, tagFilter, pageSize
   ])
 
@@ -831,7 +831,8 @@ export default function GanttClient({
     })
   }, [combinedTasks, assets, users])
 
-  const filtered = useMemo(() => {
+  // Todos os filtros menos o estado — é sobre isto que os cartões contam.
+  const base = useMemo(() => {
     const q = search.trim().toLowerCase()
     const qId = searchId.trim().toLowerCase()
     const qArea = searchArea.trim().toLowerCase()
@@ -842,7 +843,6 @@ export default function GanttClient({
 
     return searchIndex
       .filter(({ task: t, text }) => {
-        if (filter !== 'all' && t.status !== filter) return false
         if (selectedTech && t.assignedTo !== selectedTech) return false
 
         if (areaFilter) {
@@ -901,10 +901,11 @@ export default function GanttClient({
       })
       .map(({ task }) => task)
   }, [
-    searchIndex, filter, selectedTech, areaFilter, tagFilter,
+    searchIndex, selectedTech, areaFilter, tagFilter,
     dateStartFilter, dateEndFilter, search, searchId, searchArea, searchTag, searchTi, searchProject, searchTech,
     assetAreaMap, assetTagMap, userMap, excelDateFilter, excelInicioFilter, excelFimFilter
   ])
+  const filtered = useMemo(() => base.filter(statusCtl.matches), [base, statusCtl.matches])
 
   const { sorted: shown, sortKey, sortDir, toggleSort } = useTableSort<Task>(
     filtered,
@@ -934,11 +935,6 @@ export default function GanttClient({
     return shown.slice(start, start + pageSize)
   }, [shown, currentPage, pageSize])
 
-  const totalCount = filtered.length
-  const completedCount = filtered.filter((t) => t.status === 'done').length
-  const inProgressCount = filtered.filter((t) => t.status === 'in_progress').length
-  const overdueCount = filtered.filter((t) => t.status !== 'done' && t.dueDate && new Date(t.dueDate) < new Date()).length
-  const allocatedTechsCount = useMemo(() => new Set(filtered.map((t) => t.assignedTo).filter(Boolean)).size, [filtered])
 
   const modalActive = creating || editing !== null
 
@@ -970,58 +966,12 @@ export default function GanttClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Projetos</span>
-            <p className="text-xl font-extrabold text-slate-900 dark:text-slate-100">{totalCount}</p>
-          </div>
-          <FolderKanban className="h-7 w-7 text-blue-600 opacity-80" />
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-teal-600 uppercase tracking-wider">Em Progresso</span>
-            <p className="text-xl font-extrabold text-teal-700 dark:text-teal-400">{inProgressCount}</p>
-          </div>
-          <Play className="h-7 w-7 text-teal-600 opacity-80" />
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Em Risco / Atrasados</span>
-            <p className="text-xl font-extrabold text-red-700 dark:text-red-400">{overdueCount}</p>
-          </div>
-          <ShieldAlert className="h-7 w-7 text-red-600 opacity-80" />
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Concluídos</span>
-            <p className="text-xl font-extrabold text-green-700 dark:text-green-400">{completedCount}</p>
-          </div>
-          <CheckCircle2 className="h-7 w-7 text-green-600 opacity-80" />
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between col-span-2 sm:col-span-1">
-          <div>
-            <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Técnicos Alocados</span>
-            <p className="text-xl font-extrabold text-purple-700 dark:text-purple-400">{allocatedTechsCount}</p>
-          </div>
-          <Building2 className="h-7 w-7 text-purple-600 opacity-80" />
-        </div>
-      </div>
+      <ProjectKpiCards base={base} ctl={statusCtl} />
 
       <div className="flex flex-col gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex gap-2 flex-wrap items-center">
-            {(['all', ...statuses] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setFilter(s)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${
-                  filter === s ? 'bg-industrial-blue text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200'
-                }`}
-              >
-                {s === 'all' ? 'Todos os Estados' : STATUS_LABELS[s]}
-              </button>
-            ))}
+            <ProjectStatusChips ctl={statusCtl} />
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
