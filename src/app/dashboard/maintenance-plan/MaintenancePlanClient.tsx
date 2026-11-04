@@ -279,6 +279,20 @@ export default function MaintenancePlanClient({
   function planInfo(p: MaintenancePlan): PlanInfo {
     return planInfoById.get(p.id) ?? computePlanInfo(p)
   }
+  // Técnicos da OT atual do plano (internos e externos); sem OT, o do próprio plano.
+  function planTechIds(p: MaintenancePlan): string[] {
+    const linked = planInfo(p).linked
+    const ids = linked?.assignedToIds?.length ? linked.assignedToIds : linked?.assignedTo ? [linked.assignedTo] : p.assignedTo ? [p.assignedTo] : []
+    return ids.filter(Boolean) as string[]
+  }
+  function techLabel(u: UserRef): string {
+    const n = (u.name || '').trim()
+    return u.isExternal || u.externalCompanyName ? `${n}${u.externalCompanyName ? ` (${u.externalCompanyName})` : ' (ext.)'}` : n
+  }
+  const techOptions = useMemo(
+    () => [...users].filter((u) => (u.name || '').trim() && u.active !== false).sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+    [users],
+  )
   // Histórico do plano (ficha): OT de PM concluídas + execuções concluídas em bloco.
   function planHistory(p: MaintenancePlan): { key: string; date: string; doneAt: string; label: string }[] {
     const fromTasks = tasks
@@ -692,7 +706,11 @@ export default function MaintenancePlanClient({
       if (!inc(assetName(p.assetId), colF.asset)) return false
       if (!inc(p.title, colF.title)) return false
       if (!inc(p.description, colF.description)) return false
-      if (colF.executor && (p.executor ?? 'interno') !== colF.executor) return false
+      if (colF.executor) {
+        if (colF.executor === 'interno' || colF.executor === 'externo') {
+          if ((p.executor ?? 'interno') !== colF.executor) return false
+        } else if (!planTechIds(p).includes(colF.executor)) return false
+      }
       if (!matchesEstado(p, colF.estado)) return false
       if (fLegal && !p.legal) return false
       if (fHaccp && !norm(assetName(p.assetId)).includes('haccp')) return false
@@ -977,7 +995,7 @@ export default function MaintenancePlanClient({
       <div className="hidden md:block card overflow-x-auto shadow-lg border border-slate-200 dark:border-slate-800">
         {/* A tabela (cabeçalhos + linha de filtros) fica sempre visível, mesmo sem resultados —
             senão um filtro mal escrito escondia a própria caixa onde se corrige. */}
-          <table className="w-full text-[11px] min-w-[860px] table-fixed">
+          <table className="w-full text-[11px] min-w-[990px] table-fixed">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
                 <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[50px] px-1 py-1.5 whitespace-nowrap text-left" />
@@ -985,12 +1003,13 @@ export default function MaintenancePlanClient({
                 <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[70px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="EQUIPAMENTO" sortableKey="asset" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[110px] px-1 py-1.5 text-left" />
                 <SortableTh label="AÇÃO / TAREFA" sortableKey="title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[140px] px-1 py-1.5 text-left" />
-                <SortableTh label="TIPO" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[115px] px-1 py-1.5 text-left" />
+                <SortableTh label="TIPO" sortableKey="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1 py-1.5 text-left" />
                 <SortableTh label="PERIODICIDADE" sortableKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[100px] px-1 py-1.5 text-left" />
                 <SortableTh label="CAT" sortableKey="crit" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[45px] px-1 py-1.5 whitespace-nowrap text-left" />
-                <SortableTh label="TÉCNICO" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[55px] px-1 py-1.5 whitespace-nowrap text-left" />
+                <SortableTh label="TÉCNICO" sortableKey="executor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[110px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="ESTADO" sortableKey="estado" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="PRÓXIMA" sortableKey="proxima" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[85px] px-1 py-1.5 whitespace-nowrap text-left" />
+                <th className="w-[70px] px-1 py-1.5 whitespace-nowrap text-left text-[10px] font-bold text-slate-500">CONCLUIR</th>
               </tr>
               {/* Linha de filtros por coluna (estilo Excel) */}
               <tr className="border-b border-slate-200 bg-slate-50">
@@ -1053,6 +1072,9 @@ export default function MaintenancePlanClient({
                     <option value="">Todos</option>
                     <option value="interno">Interno</option>
                     <option value="externo">Externo</option>
+                    {techOptions.map((u) => (
+                      <option key={u.id} value={u.id}>{techLabel(u)}</option>
+                    ))}
                   </Select>
                 </th>
                 <th className="px-0.5 py-0.5">
@@ -1067,12 +1089,14 @@ export default function MaintenancePlanClient({
                 <th className="px-0.5 py-0.5 relative">
                   <ExcelColumnDateFilter values={excelDateFilter} onChange={setExcelDateFilter} />
                 </th>
+                <th className="px-0.5 py-0.5" />
+
               </tr>
             </thead>
             <tbody>
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={12}className="px-5 py-12 text-center text-slate-400">
                     <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />
                     <p className="text-sm">{dict.maintenancePlan.empty}</p>
                   </td>
@@ -1143,18 +1167,53 @@ export default function MaintenancePlanClient({
                       {CRITICIDADE_LABELS[p.criticidade]}
                     </span>
                   </td>
-                  <td className="px-1 py-1.5 text-[10px] whitespace-nowrap">
-                    {p.executor === 'externo' ? (
-                      <span className="inline-flex items-center gap-0.5 font-bold text-amber-800 bg-amber-50 px-1 py-0.5 rounded border border-amber-200"><Building2 className="h-3 w-3" /> Ext.</span>
-                    ) : (
-                      <span className="text-slate-600 font-medium">Int.</span>
-                    )}
+                  <td className="px-1 py-1.5 text-[10px]">
+                    {(() => {
+                      const names = planTechIds(p).map((id) => users.find((u) => u.id === id)).filter(Boolean) as UserRef[]
+                      if (names.length === 0) {
+                        return p.executor === 'externo' ? (
+                          <span className="inline-flex items-center gap-0.5 font-bold text-amber-800 bg-amber-50 px-1 py-0.5 rounded border border-amber-200"><Building2 className="h-3 w-3" /> Ext.</span>
+                        ) : (
+                          <span className="text-slate-600 font-medium">Int.</span>
+                        )
+                      }
+                      return (
+                        <div className="flex flex-col gap-0.5">
+                          {names.map((u) => (
+                            <span
+                              key={u.id}
+                              title={techLabel(u)}
+                              className={u.isExternal || u.externalCompanyName
+                                ? 'font-bold text-amber-800 bg-amber-50 px-1 rounded border border-amber-200 truncate'
+                                : 'text-slate-700 font-medium truncate'}
+                            >
+                              {u.name}
+                            </span>
+                          ))}
+                        </div>
+                      )
+                    })()}
                   </td>
                   <td className="px-1 py-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     {renderPmStatusButton(p)}
                   </td>
                   <td className="px-1 py-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     {renderNextDate(p)}
+                  </td>
+                  <td className="px-1 py-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    {planInfo(p).status === 'done' ? (
+                      <span className="text-emerald-600" title="OT concluída"><CheckCircle2 className="h-4 w-4" /></span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={concludingPlanId === p.id}
+                        onClick={() => handleSetPmStatus(p.id, 'done')}
+                        title="Concluir esta OT de PM sem a abrir"
+                        className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
+                      >
+                        <CheckCircle2 className="h-3 w-3" /> {concludingPlanId === p.id ? '…' : 'Concluir'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
