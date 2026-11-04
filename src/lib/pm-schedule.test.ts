@@ -1,4 +1,4 @@
-import { addStep, planPeriodStep, planCurrentDate, nextPlanDate, planRowStatus, nextStopDate, bianualStopDate } from './pm-schedule'
+import { addStep, planPeriodStep, planCurrentDate, nextPlanDate, planRowStatus, pmTableStatus, nextStopDate, bianualStopDate } from './pm-schedule'
 
 describe('pm-schedule', () => {
   it('soma a periodicidade mantendo o dia (ou o último dia do mês)', () => {
@@ -48,5 +48,20 @@ describe('pm-schedule', () => {
     expect(planRowStatus({ status: 'done' }, null)).toBe('done')
     expect(planRowStatus({ status: 'in_progress' }, '2026-11-15')).toBe('in_progress')
     expect(planRowStatus(null, '2026-11-15')).toBe('pending')
+  })
+
+  it('na tabela do PM fica Concluída até chegar a data da OT seguinte', () => {
+    const today = '2026-11-04'
+    // Acabada de concluir: a seguinte é no futuro.
+    expect(pmTableStatus({ status: 'done' }, '2026-11-11', today, true)).toBe('done')
+    expect(pmTableStatus(null, '2027-08-07', today, true)).toBe('done')
+    // Chegou (ou passou) a data da seguinte: volta a Pendente.
+    expect(pmTableStatus({ status: 'done' }, '2026-11-04', today, true)).toBe('pending')
+    expect(pmTableStatus(null, '2026-11-01', today, true)).toBe('pending')
+    // OT seguinte já criada mas por começar: continua Concluída; nunca executado: Pendente; Em Curso mantém-se.
+    expect(pmTableStatus(null, '2026-12-01', today, false)).toBe('pending')
+    expect(pmTableStatus({ status: 'pending' }, '2026-12-01', today, true)).toBe('done')
+    expect(pmTableStatus({ status: 'pending' }, '2026-12-01', today, false)).toBe('pending')
+    expect(pmTableStatus({ status: 'in_progress' }, '2026-12-01', today, true)).toBe('in_progress')
   })
 })

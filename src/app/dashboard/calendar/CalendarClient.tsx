@@ -408,6 +408,7 @@ export default function CalendarClient({
         description: plan.description || `Plano de Manutenção: ${plan.periodicidadeLabel || plan.periodicidade || 'PM'} | TAG: ${plan.tag || '—'}`,
         assetId: plan.assetId || '',
         assignedTo: plan.assignedTo || '',
+        assignedToIds: plan.assignedToIds?.length ? plan.assignedToIds : plan.assignedTo ? [plan.assignedTo] : [],
         criticidade: plan.criticidade || 'verde',
         tipo: 'plano' as TipoTarefa,
         status: 'pending' as TaskStatus,

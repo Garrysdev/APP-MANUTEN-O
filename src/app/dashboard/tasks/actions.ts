@@ -7,6 +7,7 @@ import {
   listPlanTaskRefs, type PlanTaskRef,
   listStockItems, listAssetRefs, listSafetyRules, listDocuments,
   listCompletedTasksPaged,
+  findOwnedPlanForOccurrence, getMaintenancePlan, updateMaintenancePlan,
 } from '@/lib/firebase/data'
 import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, Executor, DocumentoObrigatorio } from '@/types/models'
 import { TIPOS_TAREFA } from '@/types/models'
@@ -174,7 +175,9 @@ function parseTask(formData: FormData) {
     materialsRequired: parseStringArray('materialsRequired'),
     requiredFRs: parseStringArray('requiredFRs'),
     requiredITs: parseStringArray('requiredITs'),
-    maintenancePlanId,
+    // Só quando o formulário o traz: antes gravava-se sempre null e editar uma OT de PM
+    // (Calendário, lista de OT) desligava-a do plano.
+    ...(formData.has('maintenancePlanId') ? { maintenancePlanId } : {}),
     dependsOn: parseStringArray('dependsOn'),
     // Só as OT STP trazem este campo (data da paragem no Calendário).
     ...(formData.has('calendarDate') ? { calendarDate: /^\d{4}-\d{2}-\d{2}$/.test(String(formData.get('calendarDate'))) ? String(formData.get('calendarDate')) : null } : {}),
@@ -283,7 +286,19 @@ export async function updateTaskAction(
   // altera o estado/fecha a OT através de updateTaskStatusAction, não desta ação.
   if (profile.role !== 'manager') return { error: 'Sem permissão.' }
   try {
-    await updateTask(profile.companyId, id, parseTask(formData))
+    const parsed = parseTask(formData)
+    await updateTask(profile.companyId, id, parsed)
+    // OT de PM com técnico mudado e "Esta e as próximas OT": as próximas OT do plano
+    // herdam os técnicos (ficam gravados no plano).
+    if (formData.get('techScope') === 'all') {
+      const planId = parsed.maintenancePlanId
+        || (id.startsWith('plan_') ? (await findOwnedPlanForOccurrence(profile.companyId, id))?.planId : null)
+      const plan = planId ? await getMaintenancePlan(profile.companyId, planId) : null
+      if (plan) {
+        const ids = parsed.assignedToIds || []
+        await updateMaintenancePlan(profile.companyId, plan.id, { assignedTo: ids[0] || null, assignedToIds: ids, executor: parsed.executor })
+      }
+    }
     revalidatePath('/dashboard/tasks')
     revalidatePath('/dashboard/calendar')
     revalidatePath('/dashboard/projects')

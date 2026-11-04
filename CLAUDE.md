@@ -142,6 +142,18 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   em cache; o técnico só vê o seu). Só aparece se houver algo.
 - **Sino**: notificações de mensagens apagadas deixam de contar como por ler (`withoutOrphanMessageNotifs`).
 - **Setas de voltar** (`BackButton`): voltam à página anterior, não a uma lista fixa.
+- **Tabela do PM (04/11/2026, pedido do Rui)**: coluna TÉCNICO com os técnicos (internos e
+  externos) da OT atual — ou do plano, que as próximas OT herdam (`plan.assignedToIds`);
+  coluna CONCLUIR (fecha a OT sem a abrir); depois de concluir, a linha fica **Concluída até
+  chegar a data da OT seguinte** (`pmTableStatus`; o Calendário continua com `planRowStatus`).
+  Edição direta nas colunas Área/Sistema/Ação (lápis), Tipo/Periodicidade/CAT (clicar no badge)
+  e Técnico (`updatePlanInlineAction`/`setPlanTechsAction`) — grava no plano e na OT aberta.
+  CAT sem valor = Baixa. Mudar o técnico de uma OT de PM pergunta sempre "Só esta OT / Esta e
+  as próximas" (`TechScopeDialog`). `parseTask` só grava `maintenancePlanId` quando o
+  formulário o traz (antes gravava null e desligava a OT do plano). A lista de técnicos do PM
+  **inclui o gestor** (tarefas de supervisão). Na ficha do plano, cada execução concluída tem
+  "Anular" (`undoPmExecution`): sai do histórico, elimina a OT dessa execução e a próxima data
+  volta à data dessa execução.
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso
   acontecer é bug (ver secção de bugs conhecidos abaixo).

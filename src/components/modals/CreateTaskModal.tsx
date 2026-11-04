@@ -10,6 +10,7 @@ import {
 import type { Task, TaskCriticidade, TipoTarefa, TaskStatus, DocumentoObrigatorio } from '@/types/models'
 import { STATUS_LABELS } from '@/types/models'
 import { compressImage } from '@/lib/image'
+import { TechScopeDialog, type TechScope } from '@/components/ui/TechScopeDialog'
 import { uploadImage } from '@/lib/upload'
 import { formatDateTime } from '@/lib/utils'
 import SearchableAssetSelect from '@/components/ui/SearchableAssetSelect'
@@ -363,6 +364,11 @@ export default function CreateTaskModal({
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Pergunta "Só esta OT / Esta e as próximas" ao mudar o técnico de uma OT de PM.
+  const [scopeResolver, setScopeResolver] = useState<((s: TechScope | null) => void) | null>(null)
+  function askTechScope(): Promise<TechScope | null> {
+    return new Promise((resolve) => setScopeResolver(() => resolve))
+  }
 
   const availableRules = useMemo(() => {
     const set = new Set([...dynamicSafetyRules, ...safetyRules])
@@ -509,11 +515,27 @@ export default function CreateTaskModal({
       return
     }
 
+    const formEl = e.currentTarget
+    const isPmOt = Boolean(editingTask && (planForm || editingTask.maintenancePlanId || String(editingTask.id).startsWith('plan_')))
+    let techScope: TechScope | null = null
+    if (isEditingExisting && isPmOt && editingTask) {
+      const before = (editingTask.assignedToIds?.length ? editingTask.assignedToIds : editingTask.assignedTo ? [editingTask.assignedTo] : [])
+      const changed = [...before].sort().join('|') !== [...selectedTechIds].sort().join('|')
+      if (changed) {
+        techScope = await askTechScope()
+        setScopeResolver(null)
+        if (!techScope) return
+      }
+    }
+
     setBusy(true)
     setError('')
 
     try {
-      const formData = new FormData(e.currentTarget)
+      const formData = new FormData(formEl)
+      if (techScope) formData.set('techScope', techScope)
+      // OT de PM: mantém a ligação ao plano ao gravar.
+      if (isEditingExisting && editingTask?.maintenancePlanId) formData.set('maintenancePlanId', editingTask.maintenancePlanId)
       if (!formData.get('assetId')) formData.set('assetId', assetId)
       // Quando o assetId não corresponde a nenhum equipamento real (dados antigos importados,
       // ex. assetId "Varios"), selectedAsset fica undefined — sem este fallback, tag/area eram
@@ -1412,6 +1434,7 @@ export default function CreateTaskModal({
           {busy ? 'A guardar…' : isEditingExisting ? 'Guardar Alterações' : duplicating ? 'Guardar Cópia' : isProjectForm ? 'Criar Projeto' : 'Guardar Nova OT'}
         </button>
       </div>
+      {scopeResolver && <TechScopeDialog planMode={Boolean(planForm)} onChoose={(s) => scopeResolver(s)} />}
     </div>,
     document.body
   )

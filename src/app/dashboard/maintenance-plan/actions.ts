@@ -15,6 +15,10 @@ import {
   setMaintenancePlanOccurrenceStatus,
   setPlanNextDate,
   concludePmUntil,
+  setPlanCurrentOtTechs,
+  setOpenPlanTasksTechs,
+  updatePlanFieldsAndOpenTask,
+  undoPmExecution,
 } from '@/lib/firebase/data'
 import { LIMITS } from '@/lib/plans'
 import type { TaskCriticidade, TipoTarefa, Periodicidade, Executor, TaskStatus, PlanName } from '@/types/models'
@@ -151,6 +155,124 @@ export async function setPmOccurrenceStatusAction(
   }
 }
 
+function revalidatePmPages() {
+  revalidatePath('/dashboard/maintenance-plan')
+  revalidatePath('/dashboard/calendar')
+  revalidatePath('/dashboard/tasks')
+  revalidatePath('/dashboard')
+}
+
+const MAX_TECHS = 20
+function cleanIds(ids: unknown): string[] | null {
+  if (!Array.isArray(ids)) return null
+  const out = ids.map((x) => String(x ?? '').trim()).filter((x) => x && x.length <= 128)
+  return Array.from(new Set(out)).slice(0, MAX_TECHS)
+}
+
+/**
+ * Coluna TÉCNICO da tabela do PM: técnicos da OT atual. scope 'all' = também as próximas
+ * OT do plano (grava no plano).
+ */
+export async function setPlanTechsAction(
+  planId: string,
+  ids: string[],
+  executor: string,
+  scope: 'this' | 'all',
+  // OT aberta que a linha mostra (pode existir só na reserva, sem documento no Firestore).
+  taskId?: string
+): Promise<PlanFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  const clean = cleanIds(ids)
+  if (!clean) return { error: 'Técnicos inválidos.' }
+  try {
+    const plan = await getMaintenancePlan(profile.companyId, planId)
+    if (!plan) return { error: 'Plano de manutenção não encontrado.' }
+    const ex: Executor = executor === 'externo' ? 'externo' : 'interno'
+    const tid = typeof taskId === 'string' && taskId.length <= 200 ? taskId : null
+    await setPlanCurrentOtTechs(profile.companyId, plan, clean, ex, scope === 'all', profile.id, tid)
+    revalidatePmPages()
+    return { ok: true }
+  } catch (e) {
+    return { error: formatPlanActionError(e, 'Erro ao gravar o técnico.') }
+  }
+}
+
+/** Anula uma execução de PM marcada por engano (ficha do plano). */
+export async function undoPmExecutionAction(
+  planId: string,
+  ref: { taskId?: string | null; date: string; doneAt: string }
+): Promise<PlanFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  const date = String(ref?.date ?? '').slice(0, 10)
+  const doneAt = String(ref?.doneAt ?? '').slice(0, 10)
+  const taskId = ref?.taskId ? String(ref.taskId).slice(0, 200) : null
+  if (!YMD.test(date) && !taskId) return { error: 'Execução inválida.' }
+  try {
+    const plan = await getMaintenancePlan(profile.companyId, planId)
+    if (!plan) return { error: 'Plano de manutenção não encontrado.' }
+    await undoPmExecution(profile.companyId, plan, { taskId, date, doneAt })
+    revalidatePmPages()
+    return { ok: true }
+  } catch (e) {
+    return { error: formatPlanActionError(e, 'Erro ao anular a execução.') }
+  }
+}
+
+export type PlanInlinePatch = {
+  area?: string
+  system?: string
+  title?: string
+  tipo?: string
+  periodicidade?: string
+  criticidade?: string
+}
+
+/** Edição direta de uma coluna da tabela do PM (sem abrir a ficha). */
+export async function updatePlanInlineAction(planId: string, patch: PlanInlinePatch): Promise<PlanFormState> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  const out: Parameters<typeof updatePlanFieldsAndOpenTask>[2] = {}
+  const text = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max)
+  if (patch.area !== undefined) out.area = text(patch.area, 40) || null
+  if (patch.system !== undefined) out.system = text(patch.system, 80) || null
+  if (patch.title !== undefined) {
+    const t = text(patch.title, 300)
+    if (!t) return { error: 'A Ação / Tarefa não pode ficar vazia.' }
+    out.title = t
+  }
+  if (patch.tipo !== undefined) {
+    // Só tipos de PM: 'projeto' passava a OT aberta para a lista de Projetos, 'stp' ficava sem data de paragem.
+    if (!PM_TIPOS.includes(patch.tipo as TipoTarefa)) return { error: 'Tipo inválido.' }
+    out.tipo = patch.tipo as TipoTarefa
+  }
+  if (patch.criticidade !== undefined) {
+    if (!CRITICIDADES.includes(patch.criticidade as TaskCriticidade)) return { error: 'Criticidade inválida.' }
+    out.criticidade = patch.criticidade as TaskCriticidade
+  }
+  if (patch.periodicidade !== undefined) {
+    const p = patch.periodicidade as Periodicidade
+    if (!PERIODICIDADES.includes(p)) return { error: 'Periodicidade inválida.' }
+    const { recurrence, recurrenceValue } = periodicidadeToRecurrence(p)
+    Object.assign(out, { periodicidade: p, periodicidadeLabel: null, recurrence, recurrenceValue })
+  }
+  if (Object.keys(out).length === 0) return { ok: true }
+  try {
+    const plan = await getMaintenancePlan(profile.companyId, planId)
+    if (!plan) return { error: 'Plano de manutenção não encontrado.' }
+    await updatePlanFieldsAndOpenTask(profile.companyId, planId, out)
+    revalidatePmPages()
+    return { ok: true }
+  } catch (e) {
+    return { error: formatPlanActionError(e, 'Erro ao gravar a alteração.') }
+  }
+}
+
+const PM_TIPOS: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
 const CRITICIDADES: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
 // Lista canónica em @/types/models — derivada do próprio tipo, nunca escrita à mão.
 const TIPOS = TIPOS_TAREFA
@@ -180,11 +302,23 @@ function parsePlan(formData: FormData) {
     }
   } catch { safetyRules = null }
 
+  // O formulário (CreateTaskModal) envia os técnicos em assignedToIds (JSON) — antes só se
+  // lia "assignedTo", que o formulário não tem, e o técnico do plano nunca era gravado.
+  let assignedToIds: string[] = []
+  try {
+    assignedToIds = cleanIds(JSON.parse(String(formData.get('assignedToIds') ?? '[]'))) || []
+  } catch { assignedToIds = [] }
+  if (assignedToIds.length === 0) {
+    const single = String(formData.get('assignedTo') ?? '').trim()
+    if (single) assignedToIds = [single]
+  }
+
   return {
     title,
     description: String(formData.get('description') ?? '').trim() || null,
     assetId: String(formData.get('assetId') ?? '').trim() || null,
-    assignedTo: String(formData.get('assignedTo') ?? '').trim() || null,
+    assignedTo: assignedToIds[0] || null,
+    assignedToIds,
     criticidade: CRITICIDADES.includes(criticidade) ? criticidade : 'verde',
     tipo: TIPOS.includes(tipo) ? tipo : 'preventiva',
     periodicidade: periodOk,
@@ -417,7 +551,12 @@ export async function updateMaintenancePlanAction(
   const id = String(formData.get('id') ?? '')
   if (!id) return { error: 'ID em falta.' }
   try {
-    await updateMaintenancePlan(profile.companyId, id, parsePlan(formData))
+    const parsed = parsePlan(formData)
+    await updateMaintenancePlan(profile.companyId, id, parsed)
+    // Técnico mudado no plano e o gestor escolheu mudar também a OT atual (aberta).
+    if (formData.get('techScope') === 'all') {
+      await setOpenPlanTasksTechs(profile.companyId, id, parsed.assignedToIds, parsed.executor)
+    }
     // Data da próxima OT mudada na ficha: acompanha no Calendário e na OT aberta.
     const nextDate = String(formData.get('nextDueDate') ?? '').trim()
     if (YMD.test(nextDate)) {

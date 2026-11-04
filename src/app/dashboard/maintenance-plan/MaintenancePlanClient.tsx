@@ -30,10 +30,16 @@ import {
   setPmOccurrenceStatusAction,
   setPlanNextDateAction,
   concludePmUntilAction,
+  updatePlanInlineAction,
+  setPlanTechsAction,
+  undoPmExecutionAction,
+  type PlanInlinePatch,
 } from './actions'
+import { TechScopeDialog, type TechScope } from '@/components/ui/TechScopeDialog'
+import { PlanTechPicker } from './PlanTechPicker'
 import { calculatePlanAnnualDates } from '@/lib/pm-generator'
 import { findPlanLinkedTask, isPlanTask } from '@/lib/pm-status'
-import { planCurrentDate, planRowStatus, isOpenLinkedTask, isOverdue, type PmRowStatus } from '@/lib/pm-schedule'
+import { planCurrentDate, pmTableStatus, isOpenLinkedTask, isOverdue, type PmRowStatus } from '@/lib/pm-schedule'
 import { updateTaskStatusAction, updateTaskAction, loadStockRefsAction, deleteTaskAction, type StockMaterialRef } from '../tasks/actions'
 import PlanDetailModal from './PlanDetailModal'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
@@ -116,6 +122,15 @@ const CRITICIDADE_DOT: Record<TaskCriticidade, string> = {
 const PERIODICIDADE_OPTIONS: Periodicidade[] = ['semanal', 'mensal', 'trimestral', 'bianual', 'anual', 'bienal', 'trianual', 'horas', 'pontual']
 const CRITICIDADE_OPTIONS: TaskCriticidade[] = ['vermelho', 'amarelo', 'verde']
 const TIPO_OPTIONS: TipoTarefa[] = ['preventiva', 'curativa', 'plano', 'inspecao', 'lubrificacao', 'calibracao', 'outro']
+
+/** CAT do plano: sem valor (ou um valor antigo desconhecido) conta como Baixa. */
+function critOf(p: MaintenancePlan): TaskCriticidade {
+  return CRITICIDADE_OPTIONS.includes(p.criticidade) ? p.criticidade : 'verde'
+}
+
+function isExternalUser(u: { isExternal?: boolean; externalCompanyName?: string | null; role?: string | null }): boolean {
+  return Boolean(u.isExternal || (u.externalCompanyName && u.externalCompanyName.trim()) || u.role === 'external')
+}
 
 /** Rótulo de periodicidade: usa a do plano (importada) ou deriva do motor de recorrência. */
 function periodLabel(p: MaintenancePlan): string {
@@ -267,7 +282,8 @@ export default function MaintenancePlanClient({
   function computePlanInfo(p: MaintenancePlan): PlanInfo {
     const linked = findPlanTask(p)
     const current = planCurrentDate(p, todayYMD, linked?.status === 'done' ? linked.completedAt : null)
-    const status = planRowStatus(linked, current)
+    const hasExecution = (p.executionHistory?.length ?? 0) > 0 || linked?.status === 'done'
+    const status = pmTableStatus(linked, current, todayYMD, hasExecution)
     return { linked, current, status, overdue: status !== 'done' && isOverdue(current, todayYMD) }
   }
   // Calculado uma vez por plano (filtros, ordenação e linhas usam-no muitas vezes).
@@ -282,17 +298,128 @@ export default function MaintenancePlanClient({
   // Técnicos da OT atual do plano (internos e externos); sem OT, o do próprio plano.
   function planTechIds(p: MaintenancePlan): string[] {
     const linked = planInfo(p).linked
-    const ids = linked?.assignedToIds?.length ? linked.assignedToIds : linked?.assignedTo ? [linked.assignedTo] : p.assignedTo ? [p.assignedTo] : []
+    const open = isOpenLinkedTask(linked) ? linked : null
+    const ids = open?.assignedToIds?.length ? open.assignedToIds
+      : open?.assignedTo ? [open.assignedTo]
+      : p.assignedToIds?.length ? p.assignedToIds
+      : p.assignedTo ? [p.assignedTo] : []
     return ids.filter(Boolean) as string[]
   }
   function techLabel(u: UserRef): string {
     const n = (u.name || '').trim()
-    return u.isExternal || u.externalCompanyName ? `${n}${u.externalCompanyName ? ` (${u.externalCompanyName})` : ' (ext.)'}` : n
+    return isExternalUser(u) ?`${n}${u.externalCompanyName ? ` (${u.externalCompanyName})` : ' (ext.)'}` : n
   }
   const techOptions = useMemo(
     () => [...users].filter((u) => (u.name || '').trim() && u.active !== false).sort((a, b) => (a.name || '').localeCompare(b.name || '')),
     [users],
   )
+  // Inclui o gestor: há tarefas de supervisão que é ele que faz (pedido do Rui, 04/11/2026).
+  const pickerUsers = useMemo(
+    () => techOptions.map((u) => ({ id: u.id, name: u.name, externalCompanyName: u.externalCompanyName, external: isExternalUser(u) })),
+    [techOptions],
+  )
+
+  // ── Edição direta nas colunas da tabela (sem abrir a OT/ficha) ──
+  const [savingCell, setSavingCell] = useState<string | null>(null)
+  const [textEdit, setTextEdit] = useState<{ planId: string; field: 'area' | 'system' | 'title' } | null>(null)
+  const [techPicker, setTechPicker] = useState<{ plan: MaintenancePlan; anchor: HTMLElement } | null>(null)
+  const [techScopeAsk, setTechScopeAsk] = useState<{ plan: MaintenancePlan; ids: string[] } | null>(null)
+
+  async function saveInline(p: MaintenancePlan, patch: PlanInlinePatch) {
+    const key = `${p.id}:${Object.keys(patch)[0]}`
+    setSavingCell(key)
+    const res = await updatePlanInlineAction(p.id, patch)
+    setSavingCell(null)
+    if (res?.error) alert(res.error)
+    else router.refresh()
+  }
+  const cancelTextRef = useRef(false)
+  function saveText(p: MaintenancePlan, field: 'area' | 'system' | 'title', value: string) {
+    setTextEdit(null)
+    if (cancelTextRef.current) { cancelTextRef.current = false; return }
+    const before = (p[field] || '').trim()
+    if (value.trim() === before) return
+    void saveInline(p, { [field]: value })
+  }
+  function applyTechs(p: MaintenancePlan, ids: string[]) {
+    setTechPicker(null)
+    const before = planTechIds(p)
+    if ([...before].sort().join('|') === [...ids].sort().join('|')) return
+    setTechScopeAsk({ plan: p, ids })
+  }
+  async function saveTechs(scope: TechScope | null) {
+    const ask = techScopeAsk
+    setTechScopeAsk(null)
+    if (!ask || !scope) return
+    const chosen = ask.ids.map((id) => users.find((u) => u.id === id)).filter(Boolean) as UserRef[]
+    const executor = chosen.length > 0 && chosen.every(isExternalUser) ? 'externo' : chosen.length > 0 ? 'interno' : (ask.plan.executor || 'interno')
+    setSavingCell(`${ask.plan.id}:tech`)
+    const linked = planInfo(ask.plan).linked
+    const res = await setPlanTechsAction(ask.plan.id, ask.ids, executor, scope, isOpenLinkedTask(linked) ? linked!.id : undefined)
+    setSavingCell(null)
+    if (res?.error) alert(res.error)
+    else router.refresh()
+  }
+
+  /** Célula de texto editável: lápis ao passar o rato; Enter grava, Esc cancela. */
+  function renderTextCell(p: MaintenancePlan, field: 'area' | 'system' | 'title', content: React.ReactNode) {
+    if (textEdit?.planId === p.id && textEdit.field === field) {
+      return (
+        <input
+          autoFocus
+          defaultValue={p[field] || ''}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={(e) => saveText(p, field, e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            if (e.key === 'Escape') { cancelTextRef.current = true; setTextEdit(null) }
+          }}
+          onFocus={() => { cancelTextRef.current = false }}
+          className="w-full rounded border border-industrial-blue px-1 py-0.5 text-[11px] font-semibold text-slate-900 bg-white"
+        />
+      )
+    }
+    const saving = savingCell === `${p.id}:${field}`
+    return (
+      <div className="flex items-center gap-1 min-w-0">
+        <div className={`min-w-0 flex-1 ${saving ? 'opacity-50' : ''}`}>{content}</div>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setTextEdit({ planId: p.id, field }) }}
+          title="Editar aqui"
+          className="shrink-0 p-0.5 rounded text-slate-400 opacity-0 group-hover:opacity-100 hover:text-industrial-blue hover:bg-blue-100 transition-opacity cursor-pointer"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+      </div>
+    )
+  }
+
+  /** Badge com um <select> invisível por cima: clicar abre a lista e a escolha grava logo. */
+  function renderSelectCell(
+    p: MaintenancePlan,
+    field: 'tipo' | 'periodicidade' | 'criticidade',
+    value: string,
+    options: { value: string; label: string }[],
+    badge: React.ReactNode,
+  ) {
+    const saving = savingCell === `${p.id}:${field}`
+    return (
+      <div className={`relative inline-flex max-w-full ${saving ? 'opacity-50' : ''}`} onClick={(e) => e.stopPropagation()} title="Clique para alterar">
+        {badge}
+        <select
+          value={value}
+          disabled={saving}
+          onChange={(e) => { if (e.target.value !== value) void saveInline(p, { [field]: e.target.value }) }}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          aria-label={`Alterar ${field}`}
+        >
+          {!options.some((o) => o.value === value) && <option value={value}>{value || '—'}</option>}
+          {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+    )
+  }
   // Histórico do plano (ficha): OT de PM concluídas + execuções concluídas em bloco.
   function planHistory(p: MaintenancePlan): { key: string; date: string; doneAt: string; label: string }[] {
     const fromTasks = tasks
@@ -343,7 +470,8 @@ export default function MaintenancePlanClient({
         />
       )
     }
-    if (!current || status === 'done') return <span className="text-slate-400">—</span>
+    // Concluída: mostra a data da OT seguinte (é quando volta a ficar Pendente).
+    if (!current) return <span className="text-slate-400">—</span>
     return (
       <button
         type="button"
@@ -383,6 +511,15 @@ export default function MaintenancePlanClient({
   const detailPlan = detailPlanId ? plans.find((x) => x.id === detailPlanId) ?? null : null
   function openPlanRow(p: MaintenancePlan) {
     setDetailPlanId(p.id)
+  }
+  async function handleUndoExecution(p: MaintenancePlan, ref: { taskId: string | null; date: string; doneAt: string }) {
+    const msg = `Anular a execução prevista para ${formatDate(ref.date)}${ref.doneAt ? ` (concluída a ${formatDate(ref.doneAt)})` : ''}?\n\n`
+      + 'Sai do histórico do plano' + (ref.taskId ? ', a OT concluída é eliminada' : '')
+      + ' e a próxima execução volta a essa data, se for anterior.'
+    if (!confirm(msg)) return
+    const res = await undoPmExecutionAction(p.id, ref)
+    if (res?.error) alert(res.error)
+    else router.refresh()
   }
   async function handleDeleteTask(t: Task) {
     if (!confirm(`Eliminar a OT "${t.title}"?`)) return
@@ -636,7 +773,7 @@ export default function MaintenancePlanClient({
         p.title,
         p.description ?? '—',
         periodLabel(p),
-        CRITICIDADE_LABELS[p.criticidade] || p.criticidade,
+        CRITICIDADE_LABELS[critOf(p)],
         p.executor ? EXECUTOR_LABELS[p.executor] : EXECUTOR_LABELS.interno,
         p.legal ? 'SIM' : 'NÃO',
         p.safetyRules ? p.safetyRules.join('; ') : '—',
@@ -699,8 +836,8 @@ export default function MaintenancePlanClient({
       } else if (colF.period && !inc(periodLabel(p), colF.period)) return false
 
       if (selectedCrits.length > 0) {
-        if (!selectedCrits.includes(p.criticidade)) return false
-      } else if (colF.crit && p.criticidade !== colF.crit) return false
+        if (!selectedCrits.includes(critOf(p))) return false
+      } else if (colF.crit && critOf(p) !== colF.crit) return false
 
       if (!inc(p.system, colF.system)) return false
       if (!inc(assetName(p.assetId), colF.asset)) return false
@@ -733,8 +870,8 @@ export default function MaintenancePlanClient({
       title: (p) => p.title?.toLowerCase(),
       description: (p) => p.description?.toLowerCase() ?? null,
       period: (p) => periodLabel(p),
-      crit: (p) => p.criticidade,
-      executor: (p) => (p.executor ? EXECUTOR_LABELS[p.executor] : ''),
+      crit: (p) => ({ vermelho: 0, amarelo: 1, verde: 2 } as const)[critOf(p)],
+      executor: (p) => planTechIds(p).map((id) => users.find((u) => u.id === id)?.name || '').join(', ') || (p.executor ? EXECUTOR_LABELS[p.executor] : ''),
       estado: (p) => ({ pending: 0, in_progress: 1, done: 2 } as const)[planInfo(p).status],
       proxima: (p) => planInfo(p).current,
       data: (p) => toNormalizedIsoDate(p.nextDueDate || p.calendarStartDate || p.createdAt),
@@ -1109,7 +1246,9 @@ export default function MaintenancePlanClient({
                   className={`border-b border-slate-100 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group ${!p.active ? 'opacity-50' : ''}`}
                   title="Clique para abrir a ficha do plano (histórico das OT, editar, eliminar)"
                 >
-                  <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">{p.area || '—'}</td>
+                  <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">
+                    {renderTextCell(p, 'area', <span>{p.area || '—'}</span>)}
+                  </td>
                   <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     {p.assetId || getPlanTag(p) ? (
                       <Link
@@ -1124,7 +1263,9 @@ export default function MaintenancePlanClient({
                       <span className="bg-slate-100 px-1 py-0.5 rounded border border-slate-200">{getPlanTag(p) || '—'}</span>
                     )}
                   </td>
-                  <td className="px-1 py-1.5 text-slate-800 font-semibold whitespace-nowrap">{p.system || '—'}</td>
+                  <td className="px-1 py-1.5 text-slate-800 font-semibold whitespace-nowrap">
+                    {renderTextCell(p, 'system', <span className="block truncate" title={p.system || ''}>{p.system || '—'}</span>)}
+                  </td>
                   <td className="px-1 py-1.5 text-slate-900 font-bold max-w-[110px]" onClick={(e) => e.stopPropagation()}>
                     {p.assetId ? (
                       <Link
@@ -1140,34 +1281,52 @@ export default function MaintenancePlanClient({
                     )}
                   </td>
                   <td className="px-1 py-1.5 font-bold text-slate-900 max-w-[140px]">
-                    <div className="flex items-center gap-1">
-                      <span className="line-clamp-2 group-hover:text-industrial-blue group-hover:underline transition-colors" title={p.title}>{p.title}</span>
-                      {p.legal && (
-                        <span title="Inspeção legal/obrigatória" className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[9px] text-red-800 font-bold border border-red-300 shrink-0">
-                          <Scale className="h-2.5 w-2.5" /> Legal
-                        </span>
-                      )}
-                    </div>
+                    {renderTextCell(p, 'title', (
+                      <div className="flex items-center gap-1">
+                        <span className="line-clamp-2 group-hover:text-industrial-blue group-hover:underline transition-colors" title={p.title}>{p.title}</span>
+                        {p.legal && (
+                          <span title="Inspeção legal/obrigatória" className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 py-0.5 text-[9px] text-red-800 font-bold border border-red-300 shrink-0">
+                            <Scale className="h-2.5 w-2.5" /> Legal
+                          </span>
+                        )}
+                      </div>
+                    ))}
                   </td>
                   <td className="px-1 py-1.5">
-                    <TipoBadge tipo={p.tipo || 'plano'} codeOnly={true} />
+                    {renderSelectCell(
+                      p, 'tipo', p.tipo || 'plano',
+                      TIPO_OPTIONS.map((value) => ({ value, label: TIPO_LABELS[value] })),
+                      <TipoBadge tipo={p.tipo || 'plano'} codeOnly={true} />,
+                    )}
                   </td>
                   <td className="px-1 py-1.5 text-slate-800 dark:text-slate-200">
-                    <span className="inline-flex items-start gap-1 text-[11px] font-semibold leading-tight">
-                      <CalendarClock className="h-3 w-3 text-slate-500 shrink-0 mt-0.5" />
-                      <span>{periodLabel(p)}</span>
-                    </span>
+                    {renderSelectCell(
+                      p, 'periodicidade', p.periodicidade || '',
+                      PERIODICIDADE_OPTIONS.map((value) => ({ value, label: PERIODICIDADE_LABELS[value] })),
+                      <span className="inline-flex items-start gap-1 text-[11px] font-semibold leading-tight rounded px-0.5 hover:bg-slate-100">
+                        <CalendarClock className="h-3 w-3 text-slate-500 shrink-0 mt-0.5" />
+                        <span>{periodLabel(p)}</span>
+                      </span>,
+                    )}
                   </td>
                   <td className="px-1 py-1.5 whitespace-nowrap">
-                    <span title={CRITICIDADE_LABELS[p.criticidade]} className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold ${
-                      p.criticidade === 'vermelho' ? 'bg-red-100 text-red-800 border border-red-300' :
-                      p.criticidade === 'amarelo' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                      'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                    }`}>
-                      {CRITICIDADE_LABELS[p.criticidade]}
-                    </span>
+                    {renderSelectCell(
+                      p, 'criticidade', critOf(p),
+                      CRITICIDADE_OPTIONS.map((value) => ({ value, label: CRITICIDADE_LABELS[value] })),
+                      <span title={CRITICIDADE_LABELS[critOf(p)]} className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold ${
+                        critOf(p) === 'vermelho' ? 'bg-red-100 text-red-800 border border-red-300' :
+                        critOf(p) === 'amarelo' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                        'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      }`}>
+                        {CRITICIDADE_LABELS[critOf(p)]}
+                      </span>,
+                    )}
                   </td>
-                  <td className="px-1 py-1.5 text-[10px]">
+                  <td
+                    className={`px-1 py-1.5 text-[10px] cursor-pointer hover:bg-blue-100/60 ${savingCell === `${p.id}:tech` ? 'opacity-50' : ''}`}
+                    title="Clique para escolher os técnicos (internos e externos)"
+                    onClick={(e) => { e.stopPropagation(); setTechPicker({ plan: p, anchor: e.currentTarget }) }}
+                  >
                     {(() => {
                       const names = planTechIds(p).map((id) => users.find((u) => u.id === id)).filter(Boolean) as UserRef[]
                       if (names.length === 0) {
@@ -1183,8 +1342,8 @@ export default function MaintenancePlanClient({
                             <span
                               key={u.id}
                               title={techLabel(u)}
-                              className={u.isExternal || u.externalCompanyName
-                                ? 'font-bold text-amber-800 bg-amber-50 px-1 rounded border border-amber-200 truncate'
+                              className={isExternalUser(u)
+                                ?'font-bold text-amber-800 bg-amber-50 px-1 rounded border border-amber-200 truncate'
                                 : 'text-slate-700 font-medium truncate'}
                             >
                               {u.name}
@@ -1265,6 +1424,17 @@ export default function MaintenancePlanClient({
         )}
       </div>
 
+      {techPicker && (
+        <PlanTechPicker
+          anchor={techPicker.anchor}
+          users={pickerUsers}
+          initial={planTechIds(techPicker.plan)}
+          onApply={(ids) => applyTechs(techPicker.plan, ids)}
+          onClose={() => setTechPicker(null)}
+        />
+      )}
+      {techScopeAsk && <TechScopeDialog onChoose={(s) => void saveTechs(s)} />}
+
       {detailPlan && (
         <PlanDetailModal
           plan={detailPlan}
@@ -1280,6 +1450,7 @@ export default function MaintenancePlanClient({
           onEdit={() => openEdit(detailPlan)}
           onDelete={() => handleDelete(detailPlan)}
           onDeleteTask={handleDeleteTask}
+          onUndoExecution={(ref) => handleUndoExecution(detailPlan, ref)}
           userName={userName}
         />
       )}

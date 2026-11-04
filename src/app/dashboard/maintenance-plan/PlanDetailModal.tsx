@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { X, Pencil, Trash2, CalendarClock, CheckCircle2, AlertTriangle, History, ExternalLink, Scale, Building2 } from 'lucide-react'
+import { X, Pencil, Trash2, CalendarClock, CheckCircle2, AlertTriangle, History, ExternalLink, Scale, Building2, Undo2 } from 'lucide-react'
 import type { MaintenancePlan, Task } from '@/types/models'
 import { CRITICIDADE_LABELS, STATUS_LABELS, statusBadgeClass } from '@/types/models'
 import { isPlanTask } from '@/lib/pm-status'
@@ -24,7 +24,7 @@ const fmt = (v?: string | null) => {
  */
 export default function PlanDetailModal({
   plan, tasks, tag, assetName, periodLabel, current, overdue, statusButton, nextDateControl,
-  onClose, onEdit, onDelete, onDeleteTask, userName,
+  onClose, onEdit, onDelete, onDeleteTask, onUndoExecution, userName,
 }: {
   plan: MaintenancePlan
   tasks: Task[]
@@ -39,6 +39,7 @@ export default function PlanDetailModal({
   onEdit: () => void
   onDelete: () => void
   onDeleteTask: (t: Task) => void
+  onUndoExecution: (ref: { taskId: string | null; date: string; doneAt: string }) => void
   userName: (id?: string | null) => string
 }) {
   const rows = useMemo<Row[]>(() => {
@@ -85,7 +86,7 @@ export default function PlanDetailModal({
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button type="button" onClick={onEdit} className="btn-secondary flex items-center gap-1.5 !py-1.5 !text-xs"><Pencil className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Editar plano</span></button>
+            <button type="button" onClick={onEdit} className="btn-secondary flex items-center gap-1.5 !py-1.5 !text-xs"><Pencil className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Editar</span></button>
             <button type="button" onClick={onDelete} className="flex items-center gap-1.5 rounded-xl border border-red-300 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950"><Trash2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Eliminar</span></button>
             <button type="button" onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-slate-200" aria-label="Fechar"><X className="h-5 w-5" /></button>
           </div>
@@ -112,7 +113,7 @@ export default function PlanDetailModal({
               <p className="text-xs font-semibold text-gray-500 dark:text-slate-400">Periodicidade</p>
               <p className="mt-1 text-sm font-bold text-gray-900 dark:text-slate-100">{periodLabel}</p>
               <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1">
-                {CRITICIDADE_LABELS[plan.criticidade] || plan.criticidade}
+                {CRITICIDADE_LABELS[plan.criticidade] || CRITICIDADE_LABELS.verde}
                 {plan.executor === 'externo' && <span className="inline-flex items-center gap-0.5 font-bold text-amber-800"><Building2 className="h-3 w-3" /> Externo</span>}
               </p>
             </div>
@@ -174,10 +175,20 @@ export default function PlanDetailModal({
                         </td>
                         <td className="px-3 py-2 text-right whitespace-nowrap">
                           {r.task && (
-                            <>
-                              <Link href={`/dashboard/tasks/${r.task.id}`} className="inline-flex p-1 text-gray-400 hover:text-[#2E86C1]" title="Abrir / editar a OT"><ExternalLink className="h-4 w-4" /></Link>
-                              <button type="button" onClick={() => onDeleteTask(r.task!)} className="inline-flex p-1 text-gray-400 hover:text-red-600" title="Eliminar esta OT"><Trash2 className="h-4 w-4" /></button>
-                            </>
+                            <Link href={`/dashboard/tasks/${r.task.id}`} className="inline-flex p-1 text-gray-400 hover:text-[#2E86C1]" title="Abrir / editar a OT"><ExternalLink className="h-4 w-4" /></Link>
+                          )}
+                          {r.task && r.task.status !== 'done' && (
+                            <button type="button" onClick={() => onDeleteTask(r.task!)} className="inline-flex p-1 text-gray-400 hover:text-red-600" title="Eliminar esta OT"><Trash2 className="h-4 w-4" /></button>
+                          )}
+                          {(!r.task || r.task.status === 'done') && (
+                            <button
+                              type="button"
+                              onClick={() => onUndoExecution({ taskId: r.task?.id ?? null, date: r.date, doneAt: r.doneAt })}
+                              className="inline-flex p-1 text-gray-400 hover:text-red-600"
+                              title="Anular esta execução (dada como concluída por engano): sai do histórico e a OT volta a ficar por fazer"
+                            >
+                              <Undo2 className="h-4 w-4" />
+                            </button>
                           )}
                         </td>
                       </tr>

@@ -2647,6 +2647,9 @@ export async function setMaintenancePlanOccurrenceStatus(
       dueDate: planCurrentDate(plan, todayStr) || todayStr,
       maintenancePlanId: plan.id,
       source: 'plano_manutencao',
+      // A OT nasce com os técnicos do plano.
+      assignedToIds: planTechIds(plan),
+      executor: plan.executor || 'interno',
     } as any)
   }
 
@@ -2808,6 +2811,146 @@ export async function setPlanNextDate(companyId: string, planId: string, date: s
     await touch('tasks', companyId, open.map((d) => d.id))
     invalidateTasksForChange(companyId, null, { dueDate: date })
   }
+}
+
+/**
+ * Anula uma execução de PM dada por engano (ficha do plano): tira-a do histórico do plano,
+ * elimina a OT concluída dessa execução (se houver) e a próxima data do plano volta à data
+ * prevista dessa execução, quando é anterior — fica outra vez por fazer.
+ */
+export async function undoPmExecution(
+  companyId: string,
+  plan: MaintenancePlan,
+  ref: { taskId?: string | null; date: string; doneAt: string }
+): Promise<void> {
+  const history = [...(plan.executionHistory || [])]
+  const idx = history.findIndex((e) => ref.taskId
+    ? e.taskId === ref.taskId
+    : !e.taskId && e.date === ref.date && e.doneAt === ref.doneAt)
+  if (idx >= 0) history.splice(idx, 1)
+  if (ref.taskId) {
+    const t = await getTask(companyId, ref.taskId)
+    if (!t || t.maintenancePlanId !== plan.id) throw new Error('OT não encontrada neste plano.')
+    await deleteTask(companyId, ref.taskId)
+  } else if (idx < 0) {
+    throw new Error('Execução não encontrada.')
+  }
+  const lastDone = history.map((e) => e.doneAt).filter(Boolean).sort().pop() || null
+  await updateMaintenancePlan(companyId, plan.id, { executionHistory: history, lastGeneratedAt: lastDone })
+  const current = (plan.nextDueDate || '').slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ref.date) && (!current || ref.date < current)) {
+    await setPlanNextDate(companyId, plan.id, ref.date)
+  }
+}
+
+function planTechIds(plan: Pick<MaintenancePlan, 'assignedTo' | 'assignedToIds'>): string[] {
+  if (plan.assignedToIds?.length) return plan.assignedToIds
+  return plan.assignedTo ? [plan.assignedTo] : []
+}
+
+async function openPlanTaskDocs(companyId: string, planId: string) {
+  const snap = await (await adminDbFor(companyId))
+    .collection('tasks')
+    .where('companyId', '==', companyId)
+    .where('maintenancePlanId', '==', planId)
+    .get()
+  return snap.docs.filter((d) => d.data().status !== 'done' && d.data().status !== 'cancelled')
+}
+
+/**
+ * Técnicos da OT atual de um plano (tabela do PM). `alsoPlan`: as próximas OT do plano
+ * também ficam com estes técnicos. Sem OT aberta como documento, cria-a (Pendente, na data
+ * atual do plano) para os técnicos ficarem gravados nela.
+ */
+export async function setPlanCurrentOtTechs(
+  companyId: string,
+  plan: MaintenancePlan,
+  ids: string[],
+  executor: Executor,
+  alsoPlan: boolean,
+  userId: string,
+  taskId?: string | null
+): Promise<void> {
+  const now = new Date().toISOString()
+  const open = await openPlanTaskDocs(companyId, plan.id)
+  const known = taskId && !open.some((d) => d.id === taskId) ? taskId : null
+  if (known) {
+    // OT aberta da reserva (sem documento): updateTask cria o documento a partir dela.
+    const t = await getTask(companyId, known)
+    if (!t || (t.maintenancePlanId !== plan.id && !known.startsWith(`plan_${plan.id}`))) throw new Error('OT não encontrada')
+    await updateTask(companyId, known, { assignedTo: null, assignedToIds: ids, executor })
+    await touch('tasks', companyId, [known])
+  } else if (open.length > 0) {
+    for (const d of open) {
+      await d.ref.update({ assignedTo: null, assignedToIds: ids, executor, companyId, updatedAt: now })
+    }
+    await touch('tasks', companyId, open.map((d) => d.id))
+    invalidateTasksForChange(companyId, null, { assignedToIds: ids })
+  } else if (ids.length > 0) {
+    const today = now.slice(0, 10)
+    await createTask(companyId, userId, {
+      title: plan.title,
+      description: plan.description || null,
+      area: plan.area || null,
+      tag: plan.tag || null,
+      assetId: plan.assetId || null,
+      tipo: plan.tipo || 'preventiva',
+      criticidade: plan.criticidade || 'verde',
+      status: 'pending',
+      dueDate: planCurrentDate(plan, today) || today,
+      maintenancePlanId: plan.id,
+      source: 'plano_manutencao',
+      assignedToIds: ids,
+      executor,
+    } as any)
+  } else if (!alsoPlan) {
+    throw new Error('Esta linha ainda não tem OT aberta. Para tirar o técnico das próximas OT escolhe "Esta e as próximas OT".')
+  }
+  if (alsoPlan) {
+    await updateMaintenancePlan(companyId, plan.id, { assignedTo: ids[0] || null, assignedToIds: ids, executor })
+  }
+}
+
+/** Técnicos das OT abertas do plano (o plano já foi gravado à parte). */
+export async function setOpenPlanTasksTechs(companyId: string, planId: string, ids: string[], executor: Executor): Promise<void> {
+  const open = await openPlanTaskDocs(companyId, planId)
+  if (open.length === 0) return
+  const now = new Date().toISOString()
+  for (const d of open) {
+    await d.ref.update({ assignedTo: null, assignedToIds: ids, executor, companyId, updatedAt: now })
+  }
+  await touch('tasks', companyId, open.map((d) => d.id))
+  invalidateTasksForChange(companyId, null, { assignedToIds: ids })
+}
+
+/**
+ * Edição direta numa coluna da tabela do PM: grava no plano e passa os campos que a OT
+ * também tem (título, tipo, criticidade, área) para a OT aberta do plano.
+ */
+export async function updatePlanFieldsAndOpenTask(
+  companyId: string,
+  planId: string,
+  patch: Partial<Pick<MaintenancePlan, 'area' | 'system' | 'title' | 'tipo' | 'periodicidade' | 'periodicidadeLabel' | 'recurrence' | 'recurrenceValue' | 'criticidade'>>
+): Promise<void> {
+  await updateMaintenancePlan(companyId, planId, patch)
+  const taskFields: Record<string, unknown> = {}
+  if (patch.tipo !== undefined) taskFields.tipo = patch.tipo
+  if (patch.criticidade !== undefined) taskFields.criticidade = patch.criticidade
+  if (patch.area !== undefined) taskFields.area = patch.area
+  if (patch.periodicidade !== undefined) taskFields.periodicidade = patch.periodicidade
+  if (Object.keys(taskFields).length === 0 && patch.title === undefined) return
+  const open = await openPlanTaskDocs(companyId, planId)
+  if (open.length === 0) return
+  const now = new Date().toISOString()
+  for (const d of open) {
+    const fields: Record<string, unknown> = { ...taskFields, companyId, updatedAt: now }
+    if (patch.title !== undefined) {
+      fields.title = String(d.data().title || '').startsWith('[PM] ') ? `[PM] ${patch.title}` : patch.title
+    }
+    await d.ref.update(fields)
+  }
+  await touch('tasks', companyId, open.map((d) => d.id))
+  invalidateTasksForChange(companyId, null, taskFields as Partial<Task>)
 }
 
 async function finishPmOccurrence(companyId: string, plan: MaintenancePlan, userId: string, now: string): Promise<void> {

@@ -285,6 +285,8 @@ export interface MaintenancePlan {
   description?: string | null
   assetId?: string | null
   assignedTo?: string | null
+  /** Técnicos (internos e externos) que as próximas OT do plano herdam. */
+  assignedToIds?: string[] | null
   criticidade: TaskCriticidade
   tipo: TipoTarefa
   recurrence: RecurrenceType

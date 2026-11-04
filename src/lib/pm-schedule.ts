@@ -138,6 +138,24 @@ export function planRowStatus(linkedTask: Pick<Task, 'status'> | null, currentDa
   return 'pending'
 }
 
+/**
+ * Estado na tabela do PM (pedido do Rui, 04/11/2026): depois de concluir a OT, a linha
+ * mostra "Concluída" até chegar a data da OT seguinte — antes passava logo a "Pendente"
+ * (a OT seguinte) e parecia que o Concluir não tinha feito nada. O Calendário continua a
+ * usar planRowStatus (mostra a OT seguinte na data dela).
+ */
+export function pmTableStatus(
+  linkedTask: Pick<Task, 'status'> | null,
+  currentDate: string | null,
+  today: string,
+  hasExecution: boolean
+): PmRowStatus {
+  const s = planRowStatus(linkedTask, currentDate)
+  // Também com a OT seguinte já criada (ex. ao atribuir-lhe um técnico) mas ainda por começar.
+  if (s === 'pending' && hasExecution && currentDate && currentDate > today) return 'done'
+  return s
+}
+
 /** A OT ligada é a OT atual (aberta) — senão a OT atual ainda não existe como documento. */
 export function isOpenLinkedTask(linkedTask: Pick<Task, 'status'> | null): boolean {
   return Boolean(linkedTask && linkedTask.status !== 'done' && linkedTask.status !== 'cancelled')
