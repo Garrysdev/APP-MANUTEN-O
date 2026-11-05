@@ -4615,3 +4615,29 @@ export async function repairPmOtsBeforeLastExecution(
   invalidateTasks(companyId, { historyYears: [] })
   return { changes }
 }
+
+/**
+ * Acerto único (05/11/2026): arrastar no Gantt o marco de um Projeto por iniciar gravava
+ * a data largada também como início (plannedStartDate = dueDate) e a coluna INÍCIO dos
+ * Projetos mostrava a Data Limite. Limpa esse início nos Projetos ainda não começados.
+ */
+export async function repairProjectStartEqualsDue(
+  companyId: string,
+  dryRun: boolean
+): Promise<{ changes: { id: string; otNumber: number | null; title: string; date: string }[] }> {
+  const { isProjectTask } = await import('../task-assignment')
+  const tasks = await listTasks(companyId, 20000)
+  const changes = tasks
+    .filter((t) => isProjectTask(t) && t.status === 'pending' && !t.startedAt && t.plannedStartDate && t.dueDate
+      && String(t.plannedStartDate).slice(0, 10) === String(t.dueDate).slice(0, 10))
+    .map((t) => ({ id: t.id, otNumber: typeof t.otNumber === 'number' ? t.otNumber : null, title: t.title, date: String(t.dueDate).slice(0, 10) }))
+  if (dryRun || changes.length === 0) return { changes }
+  const db = await adminDbFor(companyId)
+  const now = new Date().toISOString()
+  for (const c of changes) {
+    await db.collection('tasks').doc(c.id).set({ plannedStartDate: null, companyId, updatedAt: now }, { merge: true })
+  }
+  await touch('tasks', companyId, changes.map((c) => c.id))
+  invalidateTasks(companyId, { historyYears: [] })
+  return { changes }
+}

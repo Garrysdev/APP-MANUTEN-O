@@ -136,7 +136,8 @@ function GanttChartView({
   toggleSort?: (key: string) => void
   onEdit: (task: Task) => void
   onToggleStatus?: (taskId: string, currentStatus: TaskStatus) => void
-  onRescheduleTask?: (taskId: string, newStartDate: string, newDueDate: string) => void
+  /** newStartDate null = não mexe no início (marco de um projeto por iniciar). */
+  onRescheduleTask?: (taskId: string, newStartDate: string | null, newDueDate: string) => void
   areaFilter: string
   setAreaFilter: (v: string) => void
   tagFilter: string
@@ -532,6 +533,8 @@ function GanttChartView({
                                     const newDueStr = d.endDateStr || d.dateStr
                                     const newStartStr = anchorStart && newDueStr < anchorStart ? newDueStr : (anchorStart || newDueStr)
                                     onRescheduleTask(taskId, newStartStr, newDueStr)
+                                  } else if (actionType === 'move-milestone') {
+                                    onRescheduleTask(taskId, null, d.endDateStr || d.dateStr)
                                   } else if (actionType === 'move-due') {
                                     const keepStart = anchorStart || d.dateStr
                                     onRescheduleTask(taskId, keepStart > d.dateStr ? d.dateStr : keepStart, d.endDateStr || d.dateStr)
@@ -556,7 +559,10 @@ function GanttChartView({
                           onDragStart={(e) => {
                             e.stopPropagation()
                             e.dataTransfer.setData('taskId', t.id)
-                            e.dataTransfer.setData('actionType', isInProgress ? 'move-due' : 'move')
+                            // Por iniciar = só o marco da Data Limite: arrastá-lo muda só a Data Limite
+                            // (antes gravava também essa data como início e a coluna INÍCIO dos
+                            // Projetos ficava igual à Data Limite — 05/11/2026).
+                            e.dataTransfer.setData('actionType', isInProgress ? 'move-due' : range.started ? 'move' : 'move-milestone')
                             e.dataTransfer.setData('anchorStart', (t.plannedStartDate || sDateStr).slice(0, 10))
                             e.dataTransfer.setData('durationDays', String(range.started ? durationDays : 1))
                             e.dataTransfer.effectAllowed = 'move'
@@ -1071,7 +1077,9 @@ export default function GanttClient({
         }}
         onRescheduleTask={(taskId, newStart, newDue) => {
           setTaskList((prev) => {
-            const updated = prev.map((t) => (t.id === taskId ? { ...t, plannedStartDate: newStart, dueDate: newDue } : t))
+            const updated = prev.map((t) => (t.id === taskId
+              ? { ...t, ...(newStart !== null ? { plannedStartDate: newStart } : {}), dueDate: newDue }
+              : t))
             return cascadeLocalTasks(updated, taskId, newDue)
           })
           startStatusTransition(async () => {

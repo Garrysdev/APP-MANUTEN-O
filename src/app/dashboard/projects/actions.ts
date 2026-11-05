@@ -277,31 +277,33 @@ async function cascadeDependencyUpdates(companyId: string, predecessorId: string
 
 export async function updateProjectTaskDatesAction(
   taskId: string,
-  plannedStartDate: string,
+  // null = não mexe no início (marco de um projeto por iniciar arrastado no Gantt).
+  plannedStartDate: string | null,
   dueDate: string
 ): Promise<TaskFormState> {
   const profile = await getCurrentProfile()
   if (!profile) return { error: 'Sessão expirada.' }
   try {
+    const startPatch = plannedStartDate !== null ? { plannedStartDate } : {}
     if (taskId.startsWith('plan_')) {
       // Só planos desta empresa (antes gravava em qualquer plano pelo id).
       const owned = await findOwnedPlanForOccurrence(profile.companyId, taskId)
       if (owned?.hasDoc) {
         const db = await adminDbFor(profile.companyId)
         await db.collection('maintenance_plans').doc(owned.planId).update({
-          calendarStartDate: plannedStartDate,
+          calendarStartDate: plannedStartDate ?? dueDate,
           nextDueDate: dueDate,
-          scheduledDate: plannedStartDate,
+          scheduledDate: plannedStartDate ?? dueDate,
           updatedAt: new Date().toISOString(),
         }).catch(() => null)
       }
       await updateTask(profile.companyId, taskId, {
-        plannedStartDate,
+        ...startPatch,
         dueDate,
       })
     } else {
       await updateTask(profile.companyId, taskId, {
-        plannedStartDate,
+        ...startPatch,
         dueDate,
       })
       await cascadeDependencyUpdates(profile.companyId, taskId, dueDate)

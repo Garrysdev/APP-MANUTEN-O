@@ -132,7 +132,9 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   formulário/ações dos Projetos; há seletor de mês, ano e "ir para data".
 - **Gantt (03/11/2026)**: Em curso = barra do início real até à Data Limite (ou hoje, se passou);
   Concluído = início→fim reais; por iniciar = só marco na Data Limite (`barRange` em GanttClient).
-  Arrastar um Em curso muda a Data Limite; um marco muda para a data largada. Coluna Descrição em
+  Arrastar um Em curso muda a Data Limite; um marco muda para a data largada — **só a Data
+  Limite** (`move-milestone`, 05/11/2026: antes gravava também `plannedStartDate` e a coluna
+  INÍCIO dos Projetos ficava igual à Data Limite). Coluna Descrição em
   vez de Técnico; cartão "Em Curso".
 - **listTasks e OT antigas da reserva**: a versão gravada vem de todos os documentos, não só das
   2000 mais recentes — antes uma OT/Projeto antigo (ex. 2021) editado mostrava a cópia da reserva
