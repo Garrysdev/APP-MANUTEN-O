@@ -42,6 +42,7 @@ import { findPlanLinkedTask, isPlanTask } from '@/lib/pm-status'
 import { planCurrentDate, pmTableStatus, isOpenLinkedTask, isOverdue, type PmRowStatus } from '@/lib/pm-schedule'
 import { updateTaskStatusAction, updateTaskAction, loadStockRefsAction, deleteTaskAction, type StockMaterialRef } from '../tasks/actions'
 import PlanDetailModal from './PlanDetailModal'
+import DeletedItemsModal from './DeletedItemsModal'
 import { planHas, TEASER_LIMITS, type FeatureKey } from '@/lib/plans'
 import UpgradeModal from '@/components/ui/UpgradeModal'
 import { useLanguage } from '@/components/providers/LanguageProvider'
@@ -111,6 +112,7 @@ type UserRef = Ref & {
   isExternal?: boolean
   externalCompanyId?: string | null
   externalCompanyName?: string | null
+  isTestAccount?: boolean
 }
 
 const CRITICIDADE_DOT: Record<TaskCriticidade, string> = {
@@ -310,7 +312,7 @@ export default function MaintenancePlanClient({
     return isExternalUser(u) ?`${n}${u.externalCompanyName ? ` (${u.externalCompanyName})` : ' (ext.)'}` : n
   }
   const techOptions = useMemo(
-    () => [...users].filter((u) => (u.name || '').trim() && u.active !== false).sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+    () => [...users].filter((u) => (u.name || '').trim() && u.active !== false && !u.isTestAccount).sort((a, b) => (a.name || '').localeCompare(b.name || '')),
     [users],
   )
   // Inclui o gestor: há tarefas de supervisão que é ele que faz (pedido do Rui, 04/11/2026).
@@ -321,6 +323,7 @@ export default function MaintenancePlanClient({
 
   // ── Edição direta nas colunas da tabela (sem abrir a OT/ficha) ──
   const [savingCell, setSavingCell] = useState<string | null>(null)
+  const [showDeleted, setShowDeleted] = useState(false)
   const [textEdit, setTextEdit] = useState<{ planId: string; field: 'area' | 'system' | 'title' } | null>(null)
   const [techPicker, setTechPicker] = useState<{ plan: MaintenancePlan; anchor: HTMLElement } | null>(null)
   const [techScopeAsk, setTechScopeAsk] = useState<{ plan: MaintenancePlan; ids: string[] } | null>(null)
@@ -979,12 +982,22 @@ export default function MaintenancePlanClient({
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             <span>{concludingUntil ? 'A concluir…' : 'Concluir PM até…'}</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setShowDeleted(true)}
+            className="btn-secondary flex items-center gap-1.5 cursor-pointer"
+            title="Planos e OT apagados — recuperar"
+          >
+            <Trash2 className="h-4 w-4 shrink-0 text-red-500" />
+            <span>Apagados</span>
+          </button>
           <button onClick={openCreate} className="btn-primary flex items-center gap-1.5">
             <Plus className="h-4 w-4 shrink-0" />
             <span>Criar Tarefa</span>
           </button>
         </div>
       </div>
+      {showDeleted && <DeletedItemsModal onClose={() => setShowDeleted(false)} />}
 
       {importError && (
         <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-xs text-red-700 font-medium">

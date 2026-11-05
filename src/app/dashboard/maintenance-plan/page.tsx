@@ -7,6 +7,22 @@ import MaintenancePlanClient from './MaintenancePlanClient'
 
 export const dynamic = 'force-dynamic'
 
+const KEEP_TEST_EMAILS = new Set(['tecnico@teste.rg'])
+
+function isPlanTestAccount(
+  u: { id: string; name?: string | null; role?: string | null; email?: string | null; companyId?: string | null },
+  companyId: string,
+): boolean {
+  const email = String(u.email || '').toLowerCase().trim()
+  if (KEEP_TEST_EMAILS.has(email)) return false
+  // Gestores não são técnicos (pedido do Rui, 05/11/2026) — nem o próprio Rui: as tarefas de
+  // supervisão atribuem-se à conta de técnico dele, RuiG (tecnico@teste.rg).
+  if (u.role === 'manager') return true
+  if (email.endsWith('@teste.rg')) return true
+  // Utilizadores de outra empresa de demo (entram na lista da UR por isDemoCompany).
+  return !!u.companyId && u.companyId !== companyId
+}
+
 export default async function MaintenancePlanPage() {
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
@@ -48,6 +64,10 @@ export default async function MaintenancePlanPage() {
           isExternal: u.isExternal,
           externalCompanyId: (u as any).externalCompanyId,
           externalCompanyName: (u as any).externalCompanyName,
+          // Contas de teste dos planos (Free/Starter/QA Starter/RGB…, seed-test) e de outras
+          // empresas de demo não são técnicos — ficam fora das listas de escolha (pedido do Rui, 05/11/2026).
+          // A RuiG (tecnico@teste.rg) é o técnico de teste do telemóvel e fica.
+          isTestAccount: isPlanTestAccount(u, profile.companyId),
         }))}
         tasks={pmTasks}
         plan={plan}

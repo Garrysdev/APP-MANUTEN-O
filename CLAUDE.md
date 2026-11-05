@@ -151,9 +151,19 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   CAT sem valor = Baixa. Mudar o técnico de uma OT de PM pergunta sempre "Só esta OT / Esta e
   as próximas" (`TechScopeDialog`). `parseTask` só grava `maintenancePlanId` quando o
   formulário o traz (antes gravava null e desligava a OT do plano). A lista de técnicos do PM
-  **inclui o gestor** (tarefas de supervisão). Na ficha do plano, cada execução concluída tem
+  **não tem gestores** (05/11/2026: nem o Rui — as tarefas de supervisão vão para a conta de
+  técnico dele, RuiG) nem contas de teste dos planos (`*@teste.rg`, exceto `tecnico@teste.rg`)
+  ou de outras empresas de demo (`isPlanTestAccount` em `maintenance-plan/page.tsx`). Na ficha do plano, cada execução concluída tem
   "Anular" (`undoPmExecution`): sai do histórico, elimina a OT dessa execução e a próxima data
   volta à data dessa execução.
+- **Apagados (05/11/2026)**: `deleteTask`/`deleteMaintenancePlan` gravam o marcador `deleted`
+  **junto aos dados** (merge, `deletedAt`) — nunca substituir o documento só pelo marcador.
+  PM → botão "Apagados" lista planos e OT apagados com "Recuperar" (`restoreDeletedItem`); os
+  apagados antes desta data (só marcador) recuperam-se das cópias de segurança no Blob
+  (`backup-lookup.ts`) ou da reserva. Consultas por `maintenancePlanId` têm de ignorar `deleted`.
+- **`planCurrentDate` conta o `executionHistory`** (05/11/2026): sem isso, num plano sem
+  `nextDueDate`, criar a OT seguinte (ex. gravar o técnico "para o futuro") voltava a data
+  para a execução já feita (13/08/2027 → 13/08/2026).
 - **"Concluir PM"**: fecha uma OT de PM **individualmente** (a que foi
   clicada). Nunca deve afetar/ocultar outras linhas — se isso
   acontecer é bug (ver secção de bugs conhecidos abaixo).

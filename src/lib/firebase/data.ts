@@ -1548,7 +1548,10 @@ export async function deleteTask(companyId: string, id: string): Promise<void> {
   // na reserva (scripts/import/tasks.json) e já tinha documento voltava logo a aparecer
   // quando o documento era apagado — o merge com a reserva repunha-a (mesma causa e mesma
   // correção de deleteMaintenancePlan, 30/10/2026).
-  await ref.set({ id, companyId, deleted: true, updatedAt: new Date().toISOString() })
+  // Desde 05/11/2026 o marcador junta-se aos dados (merge) em vez de os substituir: a OT
+  // fica "Apagada" e pode ser recuperada (PM → Apagados). Antes perdia-se tudo.
+  const now = new Date().toISOString()
+  await ref.set({ id, companyId, deleted: true, deletedAt: now, updatedAt: now }, { merge: true })
   await touch('tasks', companyId, [id])
   const before = doc.exists
     ? (doc.data() as Partial<Task>)
@@ -2504,9 +2507,9 @@ export async function createMaintenancePlan(
       .limit(1)
       .get()
       .catch(() => null)
-    if (snapCode && !snapCode.empty) {
-      existingDocId = snapCode.docs[0].id
-    }
+    // Um plano apagado (marcador com os dados, ver deleteMaintenancePlan) não é reaproveitado.
+    const liveByCode = snapCode?.docs.find((d) => !d.data().deleted)
+    if (liveByCode) existingDocId = liveByCode.id
   }
 
   if (!existingDocId && data.title) {
@@ -2521,6 +2524,7 @@ export async function createMaintenancePlan(
     if (snapTitle && !snapTitle.empty) {
       const match = snapTitle.docs.find((d) => {
         const dData = d.data()
+        if (dData.deleted) return false
         return String(dData.area || '').trim() === String(data.area || '').trim() &&
                String(dData.tag || '').trim() === String(data.tag || '').trim()
       })
@@ -2623,7 +2627,7 @@ export async function setMaintenancePlanOccurrenceStatus(
 
   // Só reaproveita uma OT ainda aberta: uma concluída é de uma execução anterior (a OT atual
   // é a da próxima data — pm-schedule.ts) e reabri-la apagava o registo dessa execução.
-  const openDocs = (snap?.docs || []).filter((d) => d.data().status !== 'cancelled' && d.data().status !== 'done')
+  const openDocs = (snap?.docs || []).filter((d) => !d.data().deleted && d.data().status !== 'cancelled' && d.data().status !== 'done')
   const existing = openDocs.sort((a, b) => (String(b.data().updatedAt || '')).localeCompare(String(a.data().updatedAt || '')))[0]
 
   if (existing) {
@@ -2805,7 +2809,7 @@ export async function setPlanNextDate(companyId: string, planId: string, date: s
     .where('maintenancePlanId', '==', planId)
     .get()
     .catch(() => null)
-  const open = (snap?.docs || []).filter((d) => d.data().status !== 'done' && d.data().status !== 'cancelled')
+  const open = (snap?.docs || []).filter((d) => !d.data().deleted && d.data().status !== 'done' && d.data().status !== 'cancelled')
   for (const d of open) {
     await d.ref.update({ dueDate: date, updatedAt: new Date().toISOString() })
   }
@@ -2856,7 +2860,7 @@ async function openPlanTaskDocs(companyId: string, planId: string) {
     .where('companyId', '==', companyId)
     .where('maintenancePlanId', '==', planId)
     .get()
-  return snap.docs.filter((d) => d.data().status !== 'done' && d.data().status !== 'cancelled')
+  return snap.docs.filter((d) => !d.data().deleted && d.data().status !== 'done' && d.data().status !== 'cancelled')
 }
 
 /**
@@ -2986,7 +2990,8 @@ export async function deleteMaintenancePlan(companyId: string, id: string): Prom
   }
   // Sempre marcador `deleted` (nunca apagar o documento): os planos da reserva (JSON) voltavam
   // a aparecer assim que o documento do Firestore desaparecia (ex.: os 507 gravados a 29/10).
-  await ref.set({ id, companyId, deleted: true, updatedAt: now })
+  // Desde 05/11/2026 junta-se aos dados (merge): o plano fica "Apagado" e pode ser recuperado.
+  await ref.set({ id, companyId, deleted: true, deletedAt: now, updatedAt: now }, { merge: true })
   await touch('maintenance_plans', companyId, [id])
   revalidateTag(plansTag(companyId))
 }
@@ -4477,4 +4482,136 @@ export async function importHistoricalTasks(
   await patch('tasks', companyId, docs.map((d) => ({ id: d.id, data: d })))
   invalidateTasks(companyId, { historyYears: years, completed: true })
   return { created: docs.length, skipped, years }
+}
+
+// ── Apagados (05/11/2026, pedido do Rui) ──
+// Eliminar uma OT ou um plano deixa o registo "Apagado" (marcador `deleted` junto aos
+// dados). Daqui listam-se e recuperam-se. Os apagados antes desta data só têm o marcador:
+// os dados vêm das cópias de segurança diárias ou, sem elas, da reserva (JSON).
+
+export type DeletedItem = {
+  kind: 'plan' | 'task'
+  id: string
+  title: string | null
+  tag: string | null
+  area: string | null
+  otNumber: number | null
+  date: string | null
+  deletedAt: string | null
+  maintenancePlanId: string | null
+  hasData: boolean
+}
+
+const MAX_DELETED_LISTED = 300
+
+function toDeletedItem(kind: DeletedItem['kind'], id: string, d: Record<string, any>, reserve: Record<string, any> | null): DeletedItem {
+  const src = d.title ? d : (reserve || {})
+  return {
+    kind,
+    id,
+    title: src.title || null,
+    tag: src.tag || null,
+    area: src.area || null,
+    otNumber: typeof src.otNumber === 'number' ? src.otNumber : null,
+    date: String(src.nextDueDate || src.dueDate || src.completedAt || src.createdAt || '').slice(0, 10) || null,
+    deletedAt: d.deletedAt || d.updatedAt || null,
+    maintenancePlanId: src.maintenancePlanId || null,
+    hasData: Boolean(d.title),
+  }
+}
+
+export async function listDeletedItems(companyId: string): Promise<DeletedItem[]> {
+  const db = await adminDbFor(companyId)
+  const [plans, tasks] = await Promise.all([
+    db.collection('maintenance_plans').where('companyId', '==', companyId).where('deleted', '==', true).limit(MAX_DELETED_LISTED).get(),
+    db.collection('tasks').where('companyId', '==', companyId).where('deleted', '==', true).limit(MAX_DELETED_LISTED).get(),
+  ])
+  const demo = isDemoCompany(companyId)
+  const reservePlans = demo ? new Map(getFallbackPlans().map((p) => [p.id, p])) : new Map()
+  const reserveTasks = demo ? new Map(getFallbackTasks().map((t) => [t.id, t])) : new Map()
+  const items = [
+    ...plans.docs.map((s) => toDeletedItem('plan', s.id, s.data(), reservePlans.get(s.id) || null)),
+    ...tasks.docs.map((s) => toDeletedItem('task', s.id, s.data(), reserveTasks.get(s.id) || null)),
+  ]
+  return items.sort((a, b) => String(b.deletedAt || '').localeCompare(String(a.deletedAt || '')))
+}
+
+/** Recupera um plano/OT apagado. Devolve de onde vieram os dados. */
+export async function restoreDeletedItem(
+  companyId: string,
+  kind: DeletedItem['kind'],
+  id: string
+): Promise<'record' | 'backup' | 'reserve'> {
+  const coll = kind === 'plan' ? 'maintenance_plans' : 'tasks'
+  const ref = (await adminDbFor(companyId)).collection(coll).doc(id)
+  const snap = await ref.get()
+  const data = snap.data()
+  if (!snap.exists || data?.companyId !== companyId || !data?.deleted) throw new Error('Registo apagado não encontrado.')
+  const now = new Date().toISOString()
+  const { FieldValue } = await import('firebase-admin/firestore')
+  let source: 'record' | 'backup' | 'reserve'
+  if (data.title) {
+    await ref.update({ deleted: FieldValue.delete(), deletedAt: FieldValue.delete(), updatedAt: now })
+    source = 'record'
+  } else {
+    const { findInBackups } = await import('./backup-lookup')
+    const fromBackup = await findInBackups(coll, id, companyId)
+    const inReserve = isDemoCompany(companyId) && (kind === 'plan'
+      ? getFallbackPlans().some((p) => p.id === id)
+      : getFallbackTasks().some((t) => t.id === id))
+    if (fromBackup) {
+      const { deleted: _d, deletedAt: _da, ...rest } = fromBackup
+      await ref.set(JSON.parse(JSON.stringify({ ...rest, id, companyId, updatedAt: now })))
+      source = 'backup'
+    } else if (inReserve) {
+      // Sem documento, a lista volta a mostrar a versão da reserva.
+      await ref.delete()
+      source = 'reserve'
+    } else {
+      throw new Error('Não há dados para recuperar: não está em nenhuma cópia de segurança (só se guardam 30 dias).')
+    }
+  }
+  if (kind === 'plan') {
+    await touch('maintenance_plans', companyId, [id])
+    revalidateTag(plansTag(companyId))
+  } else {
+    await touch('tasks', companyId, [id])
+    invalidateTasksForChange(companyId, null, (await ref.get()).data() as Partial<Task> | undefined)
+  }
+  return source
+}
+
+/**
+ * Acerto único (05/11/2026): ao gravar o técnico "para o futuro" num plano sem
+ * nextDueDate, a OT nova nascia na data de uma execução já feita (ex. 13/08/2026 em vez
+ * de 13/08/2027 — ver planCurrentDate). Repõe essas OT abertas (com os técnicos) e o
+ * plano na data certa. Só mexe em OT abertas com data até à última execução do plano.
+ */
+export async function repairPmOtsBeforeLastExecution(
+  companyId: string,
+  dryRun: boolean
+): Promise<{ changes: { planId: string; title: string; tag: string | null; taskId: string; from: string; to: string }[] }> {
+  const [plans, tasks] = await Promise.all([listMaintenancePlans(companyId), listTasks(companyId, 20000)])
+  const today = new Date().toISOString().slice(0, 10)
+  const planById = new Map(plans.map((p) => [p.id, p]))
+  const changes: { planId: string; title: string; tag: string | null; taskId: string; from: string; to: string }[] = []
+  for (const t of tasks) {
+    const plan = t.maintenancePlanId ? planById.get(t.maintenancePlanId) : null
+    if (!plan || t.status === 'done' || t.status === 'cancelled') continue
+    const lastExec = (plan.executionHistory || []).flatMap((e) => [e.doneAt, e.date]).filter(Boolean).map((d) => String(d).slice(0, 10)).sort().pop()
+    const due = String(t.dueDate || '').slice(0, 10)
+    if (!lastExec || !due || due > lastExec) continue
+    const to = planCurrentDate(plan, today)
+    if (!to || to <= due) continue
+    changes.push({ planId: plan.id, title: plan.title, tag: plan.tag || null, taskId: t.id, from: due, to })
+  }
+  if (dryRun || changes.length === 0) return { changes }
+  const db = await adminDbFor(companyId)
+  const now = new Date().toISOString()
+  for (const c of changes) {
+    await db.collection('tasks').doc(c.taskId).set({ dueDate: c.to, companyId, updatedAt: now }, { merge: true })
+  }
+  await touch('tasks', companyId, changes.map((c) => c.taskId))
+  invalidateTasks(companyId, { historyYears: [] })
+  return { changes }
 }

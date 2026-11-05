@@ -57,7 +57,11 @@ function ymd(v: string | null | undefined): string | null {
 export function planCurrentDate(plan: PlanDates, today: string, lastDone?: string | null): string | null {
   const next = ymd(plan.nextDueDate)
   if (next) return next
-  const last = [ymd(plan.lastGeneratedAt), ymd(lastDone)].filter(Boolean).sort().pop() || null
+  // Também o histórico de execuções do plano: sem ele, criar a OT seguinte (ex. ao gravar o
+  // técnico "para o futuro") tirava a OT concluída de `lastDone` e a data voltava para a
+  // execução já feita (13/08/2027 → 13/08/2026, 05/11/2026).
+  const executed = (plan.executionHistory || []).flatMap((e) => [ymd(e.doneAt), ymd(e.date)])
+  const last = [ymd(plan.lastGeneratedAt), ymd(lastDone), ...executed].filter(Boolean).sort().pop() || null
   const startYear = Number((last || today).slice(0, 4))
   const candidates = new Set<string>()
   for (let y = startYear; y <= startYear + 6; y++) {

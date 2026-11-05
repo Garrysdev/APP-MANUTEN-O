@@ -19,6 +19,9 @@ import {
   setOpenPlanTasksTechs,
   updatePlanFieldsAndOpenTask,
   undoPmExecution,
+  listDeletedItems,
+  restoreDeletedItem,
+  type DeletedItem,
 } from '@/lib/firebase/data'
 import { LIMITS } from '@/lib/plans'
 import type { TaskCriticidade, TipoTarefa, Periodicidade, Executor, TaskStatus, PlanName } from '@/types/models'
@@ -602,5 +605,37 @@ export async function toggleMaintenancePlanActiveAction(
     return { ok: true }
   } catch (e) {
     return { error: formatPlanActionError(e, 'Erro ao atualizar estado.') }
+  }
+}
+
+/** Planos e OT apagados (PM → Apagados). */
+export async function listDeletedItemsAction(): Promise<{ error?: string; items?: DeletedItem[] }> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  try {
+    return { items: await listDeletedItems(profile.companyId) }
+  } catch (e) {
+    return { error: formatPlanActionError(e, 'Erro ao ler os apagados.') }
+  }
+}
+
+const SOURCE_MSG = {
+  record: 'Recuperado.',
+  backup: 'Recuperado a partir da cópia de segurança mais recente.',
+  reserve: 'Recuperado a partir dos dados importados (as alterações feitas na app depois da importação perderam-se).',
+} as const
+
+export async function restoreDeletedItemAction(kind: 'plan' | 'task', id: string): Promise<PlanFormState & { message?: string }> {
+  const profile = await getCurrentProfile()
+  if (!profile) return { error: 'Sessão expirada.' }
+  if (profile.role !== 'manager') return { error: 'Sem permissão.' }
+  if ((kind !== 'plan' && kind !== 'task') || typeof id !== 'string' || !id || id.length > 200) return { error: 'Pedido inválido.' }
+  try {
+    const source = await restoreDeletedItem(profile.companyId, kind, id)
+    revalidatePmPages()
+    return { ok: true, message: SOURCE_MSG[source] }
+  } catch (e) {
+    return { error: formatPlanActionError(e, 'Erro ao recuperar.') }
   }
 }
