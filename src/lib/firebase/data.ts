@@ -2644,6 +2644,8 @@ export async function setMaintenancePlanOccurrenceStatus(
       tipo: plan.tipo || 'preventiva',
       criticidade: plan.criticidade || 'verde',
       status,
+      // Sem isto a OT criada já concluída ficava sem data de fim ("Concluída em —").
+      ...(status === 'done' ? { startedAt: now, completedAt: now } : status === 'in_progress' ? { startedAt: now } : {}),
       dueDate: planCurrentDate(plan, todayStr) || todayStr,
       maintenancePlanId: plan.id,
       source: 'plano_manutencao',
