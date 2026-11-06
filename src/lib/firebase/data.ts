@@ -306,16 +306,8 @@ function getFallbackUsers(): User[] {
     { id: 'zmDAeoGTzIWPavraKu0f', name: 'Carlos Branco', abbreviation: 'CB', email: 'cb@rgmaintenance.pt', role: 'technician', active: true, isExternal: false, specialty: 'Eletricidade & Automação' },
     { id: 'mWSsTRtgq5QcOHusTdVYgDVrwHt2', name: 'RuiG', abbreviation: 'RU', email: 'tecnico@teste.rg', role: 'technician', active: true, isExternal: false, specialty: 'Eletromecânica' },
     { id: 'nLqzaMwMu1OR4CKZzatjTlNBWt82', name: 'Rui Garrido', abbreviation: 'RG', email: 'garrido.rui@gmail.com', role: 'manager', active: true, isExternal: false, specialty: 'Gestão de Manutenção' },
-    { id: 'q17h5HdG3R8dfjWiUZ6V', name: 'Eng. João Ramos', abbreviation: 'JR', email: 'jr@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_jr', externalCompanyName: 'João Ramos Engenharia', specialty: 'Engenharia Geral', phone: '910 000 000' },
-    { id: 'twtQs1sAj0RFc9KI2S0n', name: 'Miguel', abbreviation: 'OX2', email: 'ox2@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_ox2', externalCompanyName: 'OX2 Especialista', specialty: 'Caldeiras & Sobreaquecimento', phone: '912 345 678' },
-    // active: false — o Rui marcou este técnico (registo real, email carrier@externo.local,
-    // ID diferente deste) como Inativo na página Equipa. Como esta lista de reserva tem o
-    // seu próprio ID, o merge em listUsers() não via o registo real e este fantasma
-    // continuava sempre ativo, aparecendo a mais no filtro de Técnico das OTs.
-    { id: '2pL85QsrLpaNwYXZdVOP', name: 'Carrier (Ricardo)', abbreviation: 'CAR', email: 'carrier@rgmaintenance.pt', role: 'technician', active: false, isExternal: true, externalCompanyId: 'comp_car', externalCompanyName: 'Carrier Portugal', specialty: 'HVAC / Climatização', phone: '965 432 109' },
-    { id: 'tech_BlockControl', name: 'Nuno / João (BlockControl)', abbreviation: 'BLK', email: 'blockcontrol@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_blk', externalCompanyName: 'BlockControl Automação', specialty: 'Automação & Eletrónica', phone: '934 567 890' },
-    { id: 'tech_Schindler', name: 'Equipa Téc. (Schindler)', abbreviation: 'SCH', email: 'schindler@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_sch', externalCompanyName: 'Schindler Elevadores', specialty: 'Elevadores & Cargas', phone: '210 987 654' },
-    { id: 'tech_Helenos', name: 'Heleno (Helenos)', abbreviation: 'HEL', email: 'helenos@rgmaintenance.pt', role: 'technician', active: true, isExternal: true, externalCompanyId: 'comp_hel', externalCompanyName: 'Helenos S.A.', specialty: 'Construção & Estruturas', phone: '921 112 233' }
+    // Os técnicos externos de exemplo (João Ramos, OX2, Carrier, BlockControl, Schindler,
+    // Helenos) saíram a 06/11/2026: os externos vêm só das empresas registadas na Equipa.
   ]
   cachedFallbackUsers = techs.map(t => ({
     ...t,
@@ -1663,15 +1655,27 @@ const listUsersCached = withFallback(unstable_cache(
       // não eliminada), os técnicos externos de exemplo deixam de ser inventados
       // — o utilizador já está a gerir prestadores reais, por isso a lista de
       // técnicos que aparece ao atribuir uma OT tem de vir só das fichas reais.
-      let hasRealExternalCompany = false
-      if (isDemoCompany(finalCompanyId)) {
-        const compSnap = await firestoreWithTimeout(
-          async () => (await adminDbFor(companyId)).collection('external_companies').where('companyId', '==', finalCompanyId).get(),
-          null,
-          3000
-        )
-        if (!compSnap) throw new FirestoreUnavailable()
-        hasRealExternalCompany = compSnap.docs.some((d) => !d.data()?.deleted)
+      // As empresas externas registadas (página Equipa) também decidem que técnicos externos
+      // existem: um técnico externo sem empresa registada não aparece em lado nenhum
+      // (pedido do Rui, 06/11/2026 — "têm que desaparecer").
+      const compSnap = await firestoreWithTimeout(
+        async () => (await adminDbFor(companyId)).collection('external_companies').where('companyId', '==', finalCompanyId).get(),
+        null,
+        3000
+      )
+      if (!compSnap) throw new FirestoreUnavailable()
+      const externalCompanies = compSnap.docs
+        .filter((d) => !d.data()?.deleted)
+        .map((d) => ({ id: d.id, name: String(d.data()?.name || '').toLowerCase().trim() }))
+      const hasRealExternalCompany = externalCompanies.length > 0
+      const hasRegisteredCompany = (u: User) => {
+        const ext = u as User & { externalCompanyId?: string | null; externalCompanyName?: string | null }
+        const compName = String(ext.externalCompanyName || '').toLowerCase()
+        return externalCompanies.some((c) => ext.externalCompanyId === c.id || (!!c.name && compName.includes(c.name)))
+      }
+      const isExternalUser = (u: User) => {
+        const ext = u as User & { externalCompanyName?: string | null }
+        return Boolean(u.isExternal || String(ext.externalCompanyName || '').trim() || (u.role as string) === 'external')
       }
 
       // Merge fallback users with DB users: DB doc with matching ID or email takes precedence
@@ -1701,7 +1705,9 @@ const listUsersCached = withFallback(unstable_cache(
         }
       })
 
-      return Array.from(userMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'))
+      return Array.from(userMap.values())
+        .filter((u) => !isExternalUser(u) || hasRegisteredCompany(u))
+        .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'))
     }
   },
   ['users'],
