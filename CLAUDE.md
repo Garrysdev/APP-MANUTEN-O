@@ -102,7 +102,8 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   escreve em lotes. 2022 importado a 30/10 (999 OT).
 - **Manutenção Preditiva (30/10/2026)**: período livre (De/Até + 48 h/7 d/30 d/
   90 d/Tudo, máx. 366 dias, lido em blocos de 31 dias e guardado por dia no
-  cliente), zoom por arrasto partilhado por todos os gráficos, exportação
+  cliente), zoom por arrasto partilhado por todos os gráficos, altura dos valores
+  e ecrã inteiro em cada gráfico (06/11/2026, Esc volta ao normal), exportação
   .csv da janela, estatísticas e tabela filtrável no fim
   (`src/lib/vibration-window.ts`, `VibrationTable.tsx`). Botão "Resumo" em cada
   gráfico liga/desliga a caixa das leituras (todos os gráficos); cursor de lupa /
