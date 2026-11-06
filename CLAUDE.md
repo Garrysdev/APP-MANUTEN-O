@@ -157,6 +157,8 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   técnico dele, RuiG) nem contas de teste dos planos (`*@teste.rg`, exceto `tecnico@teste.rg`)
   ou de outras empresas de demo, nem técnicos externos sem empresa externa registada na Equipa
   (06/11/2026 — a lista é a da página Equipa; `hideFromTechPicker` em `maintenance-plan/page.tsx`).
+  Desde 06/11/2026 o próprio `listUsers()` deixa de fora os externos sem empresa registada (em toda
+  a app) e `getFallbackUsers()` já não tem externos de exemplo — não os repor.
   Coluna OT (1ª) com o nº da OT de PM ligada ao plano (06/11/2026, pedido do Rui). Na ficha do plano, cada execução concluída tem
   "Anular" (`undoPmExecution`): sai do histórico, elimina a OT dessa execução e a próxima data
   volta à data dessa execução.

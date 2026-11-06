@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { MessageSquare, MessageSquareOff } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronsDown, ChevronsUp, Maximize2, MessageSquare, MessageSquareOff, Minimize2, RotateCcw } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceArea, ReferenceLine } from 'recharts'
 import type { ChartPoint } from '@/lib/vibration-view'
 
@@ -58,6 +58,19 @@ export default function MetricChart({
   // A seleção também num ref: os eventos do rato podem chegar antes de o estado redesenhar.
   const selRef = useRef<{ a: number; b: number } | null>(null)
   const setSelBoth = (v: { a: number; b: number } | null) => { selRef.current = v; setSel(v) }
+  // Escala vertical deste gráfico (pedido do Rui, 06/11/2026): >1 aproxima os valores
+  // (o topo do eixo desce), <1 afasta. 1 = escala automática.
+  const [yScale, setYScale] = useState(1)
+  // Ecrã inteiro só deste gráfico; Esc ou o botão voltam ao normal.
+  const [full, setFull] = useState(false)
+  useEffect(() => {
+    if (!full) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFull(false) }
+    window.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
+  }, [full])
   if (points.length === 0 || series.length === 0) return null
   const from = view.window?.from ?? points[0].t
   const to = view.window?.to ?? points[points.length - 1].t
@@ -68,7 +81,10 @@ export default function MetricChart({
     const v = view.showMax ? p[`${s.key}_max`] ?? p[s.key] : p[s.key]
     if (typeof v === 'number' && v > yMax) yMax = v
   }
-  const top = zones ? Math.max(yMax * 1.15, zones.bc * 1.1) : limitLine ? Math.max(yMax * 1.1, limitLine * 1.05) : undefined
+  const autoTop = zones ? Math.max(yMax * 1.15, zones.bc * 1.1) : limitLine ? Math.max(yMax * 1.1, limitLine * 1.05) : undefined
+  const baseTop = autoTop ?? (yMax > 0 ? yMax * 1.1 : undefined)
+  const top = yScale === 1 || baseTop === undefined ? autoTop : Number((baseTop / yScale).toPrecision(3))
+  const scaleBtn = 'inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 px-1.5 py-1 text-[11px] font-semibold text-gray-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
   const labelOf = (key: string) => [...series, ...rightSeries].find((s) => s.key === key)?.label ?? key
   // Instante sob o rato, pela posição na área do gráfico (a grelha marca a área útil).
   const tAt = (clientX: number): number | null => {
@@ -80,15 +96,33 @@ export default function MetricChart({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+    <div className={full
+      ? 'fixed inset-0 z-50 flex flex-col bg-white dark:bg-slate-900 p-4 sm:p-6'
+      : 'rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4'}>
       <div className="mb-3 flex items-start gap-2">
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">{title}{unit ? ` (${unit})` : ''}</h3>
           {subtitle && <p className="text-[11px] text-gray-500 dark:text-slate-400">{subtitle}</p>}
         </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="hidden sm:inline text-[10px] text-gray-400 mr-0.5">Valores</span>
+          <button type="button" className={scaleBtn} title="Aumentar a altura dos valores (aproxima o eixo vertical)"
+            onClick={() => setYScale((s) => Math.min(s * 1.5, 50))}><ChevronsUp className="h-3.5 w-3.5" /></button>
+          <button type="button" className={scaleBtn} title="Diminuir a altura dos valores (afasta o eixo vertical)"
+            onClick={() => setYScale((s) => Math.max(s / 1.5, 0.2))}><ChevronsDown className="h-3.5 w-3.5" /></button>
+          {yScale !== 1 && (
+            <button type="button" className={scaleBtn} title="Voltar à escala automática" onClick={() => setYScale(1)}>
+              <RotateCcw className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <button type="button" className={`${scaleBtn} ml-1`} title={full ? 'Voltar ao normal (Esc)' : 'Ampliar este gráfico para o ecrã inteiro'}
+            onClick={() => setFull((f) => !f)}>
+            {full ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </button>
+        </div>
       </div>
       {/* Cursor de lupa sobre o gráfico; de redimensionar enquanto se arrasta a zona a ampliar. */}
-      <div ref={boxRef} className={`h-64 select-none ${sel ? '[&_.recharts-surface]:!cursor-col-resize' : '[&_.recharts-surface]:!cursor-zoom-in'}`} title="Arrasta sobre o gráfico para ampliar essa zona"
+      <div ref={boxRef} className={`${full ? 'flex-1 min-h-0' : 'h-64'} select-none ${sel ? '[&_.recharts-surface]:!cursor-col-resize' : '[&_.recharts-surface]:!cursor-zoom-in'}`} title="Arrasta sobre o gráfico para ampliar essa zona"
         onMouseDown={(e) => { if (e.button !== 0) return; const t = tAt(e.clientX); if (t !== null) setSelBoth({ a: t, b: t }) }}
         onMouseMove={(e) => { const cur = selRef.current; if (!cur) return; const t = tAt(e.clientX); if (t !== null) setSelBoth({ a: cur.a, b: t }) }}
         onMouseUp={() => {
@@ -116,7 +150,7 @@ export default function MetricChart({
             )}
             {limitLine !== undefined && <ReferenceLine y={limitLine} stroke="#ef4444" strokeDasharray="4 4" label={{ value: 'Limite', position: 'insideTopRight', fontSize: 10, fill: '#ef4444' }} />}
             <XAxis dataKey="t" type="number" scale="time" domain={[from, to]} allowDataOverflow tickFormatter={(t) => fmtTick(t, spanDays)} tick={{ fontSize: 10 }} minTickGap={30} />
-            <YAxis tick={{ fontSize: 10 }} domain={[0, top ?? 'auto']} allowDataOverflow={false} />
+            <YAxis tick={{ fontSize: 10 }} domain={[0, top ?? 'auto']} allowDataOverflow={yScale > 1} />
             {rightSeries.length > 0 && (
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} label={rightUnit ? { value: rightUnit, angle: 90, position: 'insideRight', fontSize: 10 } : undefined} />
             )}
