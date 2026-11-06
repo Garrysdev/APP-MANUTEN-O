@@ -171,7 +171,7 @@ export default function MaintenancePlanClient({
   const datalistId = useId()
 
   // Filtros por coluna (estilo Excel - alinhados com a folha PM)
-  const emptyCol = { area: '', tag: '', system: '', asset: '', title: '', description: '', tipo: '', period: '', crit: '', executor: '', estado: '' }
+  const emptyCol = { ot: '', area: '', tag: '', system: '', asset: '', title: '', description: '', tipo: '', period: '', crit: '', executor: '', estado: '' }
   const [colF, setColF] = useState(emptyCol)
   const setCol = (k: keyof typeof emptyCol, v: string) => setColF((c) => ({ ...c, [k]: v }))
   const [excelDateFilter, setExcelDateFilter] = useState<ExcelDateFilterValues>(DEFAULT_EXCEL_DATE_FILTER)
@@ -842,6 +842,7 @@ export default function MaintenancePlanClient({
         if (!selectedCrits.includes(critOf(p))) return false
       } else if (colF.crit && critOf(p) !== colF.crit) return false
 
+      if (colF.ot && !inc(String(planInfo(p).linked?.otNumber ?? ''), colF.ot)) return false
       if (!inc(p.system, colF.system)) return false
       if (!inc(assetName(p.assetId), colF.asset)) return false
       if (!inc(p.title, colF.title)) return false
@@ -1145,9 +1146,10 @@ export default function MaintenancePlanClient({
       <div className="hidden md:block card overflow-x-auto shadow-lg border border-slate-200 dark:border-slate-800">
         {/* A tabela (cabeçalhos + linha de filtros) fica sempre visível, mesmo sem resultados —
             senão um filtro mal escrito escondia a própria caixa onde se corrige. */}
-          <table className="w-full text-[11px] min-w-[990px] table-fixed">
+          <table className="w-full text-[11px] min-w-[1040px] table-fixed">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">
+                <th className="w-[50px] px-1 py-1.5 whitespace-nowrap text-left" title="Nº da OT de PM ligada ao plano">OT</th>
                 <SortableTh label="ÁREA" sortableKey="area" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[50px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="TAG" sortableKey="tag" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[70px] px-1 py-1.5 whitespace-nowrap text-left" />
                 <SortableTh label="SISTEMA" sortableKey="system" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-[70px] px-1 py-1.5 whitespace-nowrap text-left" />
@@ -1163,6 +1165,9 @@ export default function MaintenancePlanClient({
               </tr>
               {/* Linha de filtros por coluna (estilo Excel) */}
               <tr className="border-b border-slate-200 bg-slate-50">
+                <th className="px-0.5 py-0.5">
+                  <input value={colF.ot} onChange={(e) => setCol('ot', e.target.value)} placeholder="nº…" className={colFilterCls} />
+                </th>
                 <th className="px-0.5 py-0.5">
                   <MultiSelectPopoverFilter
                     label="Área"
@@ -1246,7 +1251,7 @@ export default function MaintenancePlanClient({
             <tbody>
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={12}className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={13} className="px-5 py-12 text-center text-slate-400">
                     <ClipboardList className="h-10 w-10 mx-auto mb-3 opacity-40" />
                     <p className="text-sm">{dict.maintenancePlan.empty}</p>
                   </td>
@@ -1259,6 +1264,9 @@ export default function MaintenancePlanClient({
                   className={`border-b border-slate-100 hover:bg-blue-50/70 dark:hover:bg-slate-800/80 transition-colors cursor-pointer group ${!p.active ? 'opacity-50' : ''}`}
                   title="Clique para abrir a ficha do plano (histórico das OT, editar, eliminar)"
                 >
+                  <td className="px-1 py-1.5 font-mono font-bold text-slate-700 whitespace-nowrap" title="OT de PM ligada ao plano (a da ficha)">
+                    {planInfo(p).linked?.otNumber ?? '—'}
+                  </td>
                   <td className="px-1 py-1.5 font-mono font-bold text-slate-900 whitespace-nowrap">
                     {renderTextCell(p, 'area', <span>{p.area || '—'}</span>)}
                   </td>

@@ -155,7 +155,9 @@ achares que Y também devia mudar, diz e pergunta — não mudes.
   formulário o traz (antes gravava null e desligava a OT do plano). A lista de técnicos do PM
   **não tem gestores** (05/11/2026: nem o Rui — as tarefas de supervisão vão para a conta de
   técnico dele, RuiG) nem contas de teste dos planos (`*@teste.rg`, exceto `tecnico@teste.rg`)
-  ou de outras empresas de demo (`isPlanTestAccount` em `maintenance-plan/page.tsx`). Na ficha do plano, cada execução concluída tem
+  ou de outras empresas de demo, nem técnicos externos sem empresa externa registada na Equipa
+  (06/11/2026 — a lista é a da página Equipa; `hideFromTechPicker` em `maintenance-plan/page.tsx`).
+  Coluna OT (1ª) com o nº da OT de PM ligada ao plano (06/11/2026, pedido do Rui). Na ficha do plano, cada execução concluída tem
   "Anular" (`undoPmExecution`): sai do histórico, elimina a OT dessa execução e a próxima data
   volta à data dessa execução.
 - **Apagados (05/11/2026)**: `deleteTask`/`deleteMaintenancePlan` gravam o marcador `deleted`
